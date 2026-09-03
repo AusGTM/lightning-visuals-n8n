@@ -1,8 +1,15 @@
 # Phase 51 — API Coverage Matrix
 
-External APIs integrated by this phase: **ZoomInfo GTM** (OAuth, usage, company enrich) and
-**HubSpot CRM v3** (company search + read). No new library is installed; `requirements.txt` is
-unchanged.
+External APIs integrated by this phase: **ZoomInfo GTM** (OAuth, usage, company enrich),
+**HubSpot CRM v3** (company search + read), and **Anthropic Messages** (web research via the native
+`web_search` tool, plus the Sonnet judge escalation added at 51-03's checkpoint round 3). No new
+library is installed; `requirements.txt` is unchanged.
+
+> **Scope line corrected 2026-09-03.** It previously named only ZoomInfo and HubSpot, while the
+> phase made **103 live Anthropic calls** (`51-03-SUMMARY.md:612`) — a documentation gap sitting
+> directly on the audit surface, recorded at `51-SECURITY.md:49` and fixed here under operator
+> grant. Anthropic is not a write-side surface, so nothing in the "dry-run only" framing below
+> changes: the phase still performed zero HubSpot writes and zero n8n executions.
 
 `INTEGRATE` is the default. Every `OPT-OUT` carries a one-line reason. This matrix is the
 subtraction record for a phase that is deliberately **dry-run only** — every write-side capability

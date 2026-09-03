@@ -2,7 +2,7 @@
 phase: 53-operator-openable-write-grant
 plan: 04
 subsystem: operator-plugin
-tags: [write-grant, skills, operator-surface, release, d-53-05, checkpoint-outstanding]
+tags: [write-grant, skills, operator-surface, release, d-53-05]
 
 # Dependency graph
 requires:
@@ -132,12 +132,14 @@ coverage:
     verification:
       - kind: manual
         ref: "53-04-PLAN.md Task 3 (checkpoint:human-verify, gate=blocking)"
-        status: OUTSTANDING
+        status: DISCHARGED  # operator walk run 3, 2026-08-29; see 53-VERIFICATION.md
+                            # (status: passed, gaps: [], verification_basis: operator_walk).
+                            # Field corrected 2026-09-03 -- record-lag only, no work changed.
     human_judgment: true
 
 duration: ~25min
 completed: 2026-08-25
-status: blocked-on-checkpoint
+status: complete
 ---
 
 # Phase 53 Plan 04: Skills, Docs, Release Summary

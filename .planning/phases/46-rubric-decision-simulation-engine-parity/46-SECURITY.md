@@ -4,8 +4,9 @@ slug: "rubric-decision-simulation-engine-parity"
 status: verified
 # threats_open = count of OPEN threats at or above workflow.security_block_on severity (high).
 # No threat was found OPEN by this audit. Three register-ACCURACY findings were raised
-# (FINDING-1, FINDING-2, WARNING-2); none removes a control, and each carries a proposed
-# disposition for the operator rather than a correction applied by the audit.
+# (FINDING-1, FINDING-2, WARNING-2); none removes a control. Each carried a PROPOSED disposition
+# rather than a correction applied by the audit. 2026-09-03, AFTER the audit: the operator granted
+# all three and they are now APPLIED — see "Register corrections applied" at the end of this file.
 threats_open: 0
 threats_open_below_threshold: 0
 asvs_level: 1
@@ -53,8 +54,9 @@ Consolidated from the five PLAN threat models.
 
 ## Threat Register
 
-25 register rows across five plans — 20 numbered rows (16 **distinct** threats; see FINDING-1 on
-the ID collision, and the continuation count below) plus 5 per-plan supply-chain entries.
+25 register rows across five plans — 20 numbered rows (17 **distinct** threats; the ID collision
+FINDING-1 reported was resolved on 2026-09-03 by re-keying plan 03's row to `T-46-16`, so the count is no
+longer depressed by it — see the continuation count below) plus 5 per-plan supply-chain entries.
 
 ### 46-01 — rubric decision foundations
 
@@ -62,8 +64,8 @@ the ID collision, and the continuation count below) plus 5 per-plan supply-chain
 |-----------|----------|-----------|----------|-------------|------------|--------|
 | T-46-01 | Tampering | `scripts/simulate_rubric_weights.py` | high | mitigate | Verified three ways at HEAD. `tests/test_simulate_rubric_weights.py:431` static source scan, `:448` import-namespace scan (catches the wildcard/alias case the text scan misses), `:461` behavioural stub asserting `calls == ids`. The write-name list is **self-updating** — `_write_capable_hubspot_client_names()` (`:413-418`) derives it by introspecting `src.hubspot_client` for functions carrying a `dry_run` parameter, pinned by `:421` to `[batch_update_companies, create_record, delete_record, patch_record]`. Suite green: 28 passed. Observed-failing-when-violated recorded at `46-01-SUMMARY.md:170-180` with the literal assertion text. | closed |
 | T-46-02 | Tampering | portal targeting | medium | mitigate | `scripts/simulate_rubric_weights.py:80` `EXPECTED_PORTAL_ID = "22617666"`, no env override; `_portal_ok()` `:112`; refusal at `:498-501` **precedes** `_select_row_ids()` (`:504`, the only network call) and `build_simulation` (`:505`). | closed |
-| T-46-03 | Tampering | rubric drift between engines | high | mitigate | `tests/test_n8n_org_type_absence.py:68/:81/:93` — no org-type weight table in `n8n/wf_*.json`, `scripts/build_cloud_workflows.py`, or `n8n/code/mergeCompanies.js`; the key list is derived from the rubric (`:41-44`), not hardcoded. New `defaultBranch` assertion at `tests/test_flow_rubric_conformance.py:155-178`. **Not vacuous** — a `-rs` run confirms 4 non-skipped cases against real flow archives. Register enumeration is incomplete: see WARNING-2 (third mirror). | closed |
-| T-46-04 **(a)** | Information Disclosure | HubSpot private-app token | low | accept | Premise verified: `src/hubspot_client.py` dry-run branches print payload dicts only, never `hs_headers`/token (`:28-31`, `:49-53`, `:69-72`). The simulation's only credential contact is `bool(os.getenv(...))` at `:109` and a print of the **variable name** at `:495`. No new credential handling. → AR-46-01 | closed (accepted) |
+| T-46-03 | Tampering | rubric drift between engines | high | mitigate | `tests/test_n8n_org_type_absence.py:68/:81/:93` — no org-type weight table in `n8n/wf_*.json`, `scripts/build_cloud_workflows.py`, or `n8n/code/mergeCompanies.js`; the key list is derived from the rubric (`:41-44`), not hardcoded. New `defaultBranch` assertion at `tests/test_flow_rubric_conformance.py:155-178`. **Not vacuous** — a `-rs` run confirms 4 non-skipped cases against real flow archives. **Enumeration corrected 2026-09-03 (WARNING-2): the org-type score table has THREE mirrors, not two** — `config/icp_scoring.yaml`, the HubSpot flow, and `config/taxonomy.yaml` (`:86` score 15, `:100` score −20). The third is guarded by `tests/test_taxonomy_conformance.py:49 test_tx1_scores_match`, a pre-existing test this cell previously failed to name. `taxonomy.yaml` is a third MIRROR, not a third computing engine — `scripts/gen_taxonomy_js.py` never emits `score:` into generated n8n JS, so `46-ENGINE-INVENTORY.md`'s two-engine finding stands. | closed |
+| T-46-04 **(sole holder of this ID since the 2026-09-03 re-key; was (a))** | Information Disclosure | HubSpot private-app token | low | accept | Premise verified: `src/hubspot_client.py` dry-run branches print payload dicts only, never `hs_headers`/token (`:28-31`, `:49-53`, `:69-72`). The simulation's only credential contact is `bool(os.getenv(...))` at `:109` and a print of the **variable name** at `:495`. No new credential handling. → AR-46-01 | closed (accepted) |
 | T-46-SC | Tampering | npm/pip/cargo installs | low | accept | Cited section exists: `46-RESEARCH.md:563 ## Package Legitimacy Audit`. Independently: `git log 55225e4~1..d66068e -- requirements.txt package.json` → **empty** across every phase-46 commit. → AR-46-02 | closed (accepted) |
 
 ### 46-02 — simulation expansion and live run
@@ -80,9 +82,9 @@ the ID collision, and the continuation count below) plus 5 per-plan supply-chain
 
 | Threat ID | Category | Component | Severity | Disposition | Mitigation | Status |
 |-----------|----------|-----------|----------|-------------|------------|--------|
-| T-46-04 **(b)** — **ID COLLISION**, see FINDING-1 | Repudiation | `46-DECISION.md` | high | mitigate | Structure verified: 10 `##` sections (`grep -c "^## " 39-DECISION.md` also returns 10 — the precedent matches; the register's "nine-section" label undercounts by one). Dated evidence index at `:393` with 12 artefacts and per-lever roles. Signed operator block at `:412`: decision, date 2026-08-11, an explicit "Substituted values (if override): None", what the operator was shown, and a provenance paragraph naming the relay channel. | closed |
+| T-46-16 **(re-keyed 2026-09-03; was `T-46-04` (b) — ID COLLISION, see FINDING-1)** | Repudiation | `46-DECISION.md` | high | mitigate | Structure verified: 10 `##` sections (`grep -c "^## " 39-DECISION.md` also returns 10 — the precedent matches; the register's "nine-section" label undercounts by one). Dated evidence index at `:393` with 12 artefacts and per-lever roles. Signed operator block at `:412`: decision, date 2026-08-11, an explicit "Substituted values (if override): None", what the operator was shown, and a provenance paragraph naming the relay channel. | closed |
 | T-46-07 | Tampering | closed-deal evidence in `docs/business/icp-scoring.md` | high | mitigate | 19% / n=36 survives verbatim in three places: `:13` ("36 … 19%"), `:41` ("Club/Team 19% (n=36)"), `:59` ("19% win over 36 deals"). The GTM override is recorded **alongside**, not in place of: `:59` — "a deliberate GTM decision against the win-rate evidence above, not a data disagreement; the underlying finding is preserved verbatim, not softened." | closed |
-| T-46-08 | Elevation of Privilege | weights reaching an engine without authorisation | high | mitigate | `46-03-PLAN.md:185` `<task type="checkpoint:human-verify" gate="blocking">`, acceptance criterion at `:204` (`git diff config/icp_scoring.yaml config/hubspot_flows/` empty at resume), `<resume-signal>` at `:244-251`. **Independently proven rather than taken on the record's word:** `git merge-base --is-ancestor c95fdf6 caae5d6` → true. Sign-off (`c95fdf6`, "record operator sign-off — accept all three rubric weights") strictly precedes the engine write (`caae5d6`, "land signed-off rubric weights"). Re-verified by this record's author, independently of the auditor. The row's `depends_on` literal is inaccurate — see FINDING-2; the control itself is intact and gates transitively. | closed |
+| T-46-08 | Elevation of Privilege | weights reaching an engine without authorisation | high | mitigate | `46-03-PLAN.md:185` `<task type="checkpoint:human-verify" gate="blocking">`, acceptance criterion at `:204` (`git diff config/icp_scoring.yaml config/hubspot_flows/` empty at resume), `<resume-signal>` at `:244-251`. **Independently proven rather than taken on the record's word:** `git merge-base --is-ancestor c95fdf6 caae5d6` → true. Sign-off (`c95fdf6`, "record operator sign-off — accept all three rubric weights") strictly precedes the engine write (`caae5d6`, "land signed-off rubric weights"). Re-verified by this record's author, independently of the auditor. **Corrected 2026-09-03 (FINDING-2):** `46-04-PLAN.md:6` declares `depends_on: [46-03]`; `46-05-PLAN.md:6` declares `[46-04]`, **not** `[46-03]` as this row originally asserted — the authorisation gates transitively (05 → 04 → 03) and closes on the ancestry proof above, not on the declaration the row misnamed. | closed |
 | T-46-SC | Tampering | npm/pip/cargo installs | low | accept | Same evidence. → AR-46-02 | closed (accepted) |
 
 ### 46-04 — weight commit and live flow PUT
@@ -254,7 +256,30 @@ closes would need `security_asvs_level: 2` and a re-run.
 - [x] Accepted risks documented in Accepted Risks Log
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
-- [ ] FINDING-1, FINDING-2 and WARNING-2 carry **proposed** register corrections awaiting operator
-      disposition — non-blocking, no control is absent
+- [x] FINDING-1, FINDING-2 and WARNING-2's proposed register corrections **APPLIED 2026-09-03**
+      under operator grant, exactly as proposed — see "Register corrections applied" below
 
-**Approval:** verified 2026-09-03 at HEAD `8ffe359`
+**Approval:** verified 2026-09-03 at HEAD `8ffe359`; register corrections applied later the same
+day by operator grant. No control changed — all three were corrections to the register's own
+*description* of controls that were verified present throughout.
+
+---
+
+## Register corrections applied — 2026-09-03, operator grant
+
+The audit recorded all three as **proposed** and applied none, on the principle that an auditor may
+not self-author a corrected register. The operator granted them, verbatim:
+
+> execute the following, grant is authorised: … **Item 4 · phase 46, three corrections** — T-46-04
+> ID collision; T-46-08 asserts a `depends_on` that does not exist (46-05 declares `[46-04]`);
+> `config/taxonomy.yaml` is an unregistered third rubric mirror. No control is absent in any of the
+> three, and ordering still holds transitively.
+
+| Finding | Applied | Note |
+|---|---|---|
+| FINDING-1 | Plan 03's colliding row re-keyed **`T-46-04` (b) → `T-46-16`**; plan 01's row keeps `T-46-04`. | The **PLAN text retains the original ID**, per the proposed disposition — this register is the corrected surface, the plan is history. |
+| FINDING-2 | **`T-46-08`**'s mitigation cell now states the real declarations (`46-04` → `[46-03]`, `46-05` → `[46-04]`) and closes on the `git merge-base` ancestry proof. | The control was always intact; only the register's claim about it was false. |
+| WARNING-2 | `T-46-03`'s cell now states **three** mirrors and names `test_tx1_scores_match` as the third's guard. | Still `closed`, not OPEN — every mirror is guarded and green, and `taxonomy.yaml` is a mirror rather than a computing engine. |
+
+Nothing was composed here: each correction is the disposition the audit itself proposed, applied as
+written.

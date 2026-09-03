@@ -128,9 +128,15 @@ def test_research_failed_and_recompute_refused_render_as_failed_never_unknown(ac
 
 
 # =====================================================================================
-# Phase 54-02 (T-54-05) — the two legitimate two-pass shapes must never render "unknown".
-# Neither is a success (nothing was written on either path), and each must say plainly
-# that proceeding costs a second full pass.
+# Phase 54-02 (T-54-05) — the two legitimate two-pass shapes must never render "unknown",
+# and each must say plainly what it costs.
+#
+# Corrected 2026-09-03: this block used to read "Neither is a success (nothing was written
+# on either path)", which 57-02's D-57-03 reclassification made false for `proposed` while
+# the test three lines below already asserted the opposite. They differ:
+#   - needs_match_review -> "held", NOT a success, and proceeding costs a second full pass
+#   - proposed           -> "no_action", IS a success — a preview is the outcome the
+#                           operator asked for, not a failure to write
 # =====================================================================================
 
 def test_needs_match_review_row_renders_as_held_never_unknown_or_a_success():

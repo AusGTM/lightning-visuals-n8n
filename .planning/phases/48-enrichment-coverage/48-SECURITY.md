@@ -131,7 +131,9 @@ Consolidated from the seven PLAN threat models.
 
 ## Threat Register
 
-38 rows across seven plans.
+40 rows across seven plans — 38 from the plans themselves, plus `T-48-24` and `T-48-25`
+registered retrospectively on 2026-09-03 by operator grant for the two surfaces the WARNINGS
+section had only flagged. Both are `low`, so `threats_open` is unchanged at 0.
 
 > **ID collisions — do not collapse these when merging registers.** Plans 48-06 and 48-07 both
 > allocate `T-48-19` … `T-48-22` with **different meanings**; they are disambiguated below as
@@ -223,6 +225,8 @@ Consolidated from the seven PLAN threat models.
 | AR-48-02 | T-48-SC(01) … (07) | No plan in this phase installs a package or adds a dependency, so no package legitimacy audit is required. `git diff --stat f312f1d^ 44f154e` over `requirements.txt`, `package.json`, `package-lock.json`, `Cargo.toml` and `pyproject.toml` → **empty** across the full range. | plan-time disposition, premise re-verified this audit | 2026-09-03 |
 | AR-48-03 | T-48-11 | **Operator's recorded rationale:** both threats declared the mitigation as operator-exclusive key control; the evidence shows Claude ran the deploy+bounce and armed both surfaces. D-48-01 (`48-CONTEXT.md:387-429`, verified to exist) is a written, phase-scoped, self-expiring waiver granted **before** the act, explicitly a new waiver and not a revival of the expired D-47.5-01. Its declared bounds were honoured exactly (1 deploy+bounce, 1 armed window, 5-record cap, per-shell-only keys, disclosed rather than exceeded), every mechanical safeguard was verified closed independently, and it expired with the phase, so there is no live exposure. *Supporting facts independently verified: waiver commit `375e919` precedes both acts `f76abdf` and `1ff80b9`; `ALLOW_HUBSPOT_RECORD_WRITES = "false"` and `TEST_RECORD_IDS = ""` at HEAD.* | **operator** | 2026-09-03 |
 | AR-48-04 | T-48-04(05) | Same waiver and same operator rationale as AR-48-03, **plus** the mechanical controls that stand independently of who typed the command: the two-key default-deny gate (`enrich_coverage_companies.py:489-492`), `assert_allowlist_exact` (`:577-644`, fresh GET, five refusal branches, all unit-tested at `:433-467`), disarm-in-`finally` (`:838-850`), and three independent post-window re-reads all agreeing closed (`48-ARM-RECORD.md:194-222`). One window opened, one closed, *"no excess to disclose"*. Only the **who-typed-it** clause ever rode on the waiver. | **operator** | 2026-09-03 |
+| AR-48-05 | T-48-24 | The override's default IS the shipped prompt (`src/web_research.py:129`), so an absent argument changes nothing, and the parameter is reachable in-process only — never from a webhook, a CSV column, or any remote input. Accepted as a code-shape convenience, not a trust boundary. Registered so a future change removing the `or RESEARCH_SYSTEM` default has a row to be noticed against. | **operator grant, 2026-09-03** | 2026-09-03 |
+| AR-48-06 | T-48-25 | `config/taxonomy.yaml` is a committed, code-reviewed file in this repository, not external or user-supplied input; its content reaching a research prompt is the intended mechanism (48-07 exists to make the vocabulary drive classification). The residual risk is a bad edit to a reviewed config, which the repo's own review path already covers. | **operator grant, 2026-09-03** | 2026-09-03 |
 
 ---
 
@@ -232,10 +236,31 @@ No phase-48 SUMMARY contains a `## Threat Flags` section (grep for "threat" acro
 hits), so the executor declared nothing. That absence was not treated as a complete list. Two items
 found; **neither blocks**, and both are recorded rather than dispositioned by the audit.
 
+**Dispositioned 2026-09-03 by operator grant** — both registered as `T-48-24` / `T-48-25` and
+accepted (AR-48-05 / AR-48-06). See "Registered 2026-09-03" below the table.
+
 | Flag | Evidence | Why unregistered | Severity |
 |---|---|---|---|
 | `system_prompt` override on the shared production research function | `src/web_research.py:118` — `claude_web_research(record, system_prompt: str = None)`, added by `d239258` (48-03) | 48-03's register has no row for a caller-supplied system prompt entering a production LLM call path. **Fails safe by default** (`:129` — `system_prompt = system_prompt or RESEARCH_SYSTEM`) and is in-process only, not remotely reachable. | low |
 | taxonomy content rendering into both production research prompts | `89c362a` touches `config/taxonomy.yaml` (+41) and `src/web_research.py` (+10/−2) | 48-07 **declares the boundary** (*"`config/taxonomy.yaml` → both research prompts"*) but allocates no threat row to it; T-48-23 covers only consumer breakage (DoS), not content influence. | low |
+
+### Registered 2026-09-03 — operator grant
+
+The audit recorded both rather than dispositioning them. The operator granted, verbatim:
+
+> execute the following, grant is authorised: … **Item 5 · phase 48, two unregistered low surfaces**
+> — a `system_prompt` override on the shared production research function; taxonomy content
+> rendering into both research prompts. Both fail safe by default and are in-process only.
+
+| Threat ID | Category | Component | Severity | Disposition | Mitigation | Status |
+|-----------|----------|-----------|----------|-------------|------------|--------|
+| T-48-24 | Tampering | `system_prompt` override on `claude_web_research` | low | accept | `src/web_research.py:118` accepts a caller-supplied system prompt into a production LLM call path, added by `d239258` (48-03) with no register row. **Fails safe by default** — `:129` `system_prompt = system_prompt or RESEARCH_SYSTEM`, so an absent argument is the shipped prompt, and the parameter is reachable in-process only, never remotely. → AR-48-05 | closed (accepted) |
+| T-48-25 | Tampering | `config/taxonomy.yaml` → both research prompts | low | accept | 48-07 declares the boundary in its trust-boundary table but allocates no threat row; `T-48-23` covers only consumer breakage (DoS), not content influence. Config content rendering into a prompt is a real influence path, and it is a **committed, reviewed file in this repo** rather than external input. → AR-48-06 | closed (accepted) |
+
+Both are `low`, below `security_block_on: high`, so `threats_open` is unchanged at 0. What the
+registration buys is not a new control — it is that these surfaces now have register entries, so a
+future change that removed their fail-safe defaults would have something to be noticed against.
+That was the audit's stated reason for surfacing them.
 
 **Failure shapes #1, #2 and #5: none found in phase 48**, stated affirmatively since all five were
 hunted. (#1) Every asserted control was located on the path it names. (#2) No acceptance premise
@@ -294,7 +319,8 @@ would classify properly rather than merely surface.
 - [x] `status: verified` set in frontmatter
 - [x] T-48-11 and T-48-04(05) carried to the operator, **not** re-closed by the audit; accepted by
       operator decision on 2026-09-03 as AR-48-03 / AR-48-04
-- [ ] Two unregistered low-severity surfaces (WARNINGS) await an operator disposition —
-      non-blocking
+- [x] The two unregistered low-severity surfaces (WARNINGS) were **registered and accepted
+      2026-09-03** by operator grant as T-48-24 / T-48-25 (AR-48-05 / AR-48-06)
 
-**Approval:** verified 2026-09-03 at HEAD `8ffe359`
+**Approval:** verified 2026-09-03 at HEAD `8ffe359`; the two WARNINGS dispositioned later the same
+day by operator grant. `threats_open` unchanged at 0 — both are `low`.

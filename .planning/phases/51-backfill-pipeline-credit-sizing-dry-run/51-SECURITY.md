@@ -103,7 +103,7 @@ register entry for them to be open against.
 | T-51-13 | Tampering | a wrong-portal baseline | high | mitigate | `EXPECTED_PORTAL_ID = "22617666"` hard-coded at `:46` with **no env override**; `capture_snapshot()` records `portal_id_verified`, confirmed `"22617666"` in the committed `51-BEFORE-SNAPSHOT.json`. A baseline captured against the wrong portal cannot be mistaken for this one. | closed |
 | T-51-14 | Elevation of Privilege | phase advance without approval | high | mitigate | `51-03-PLAN.md:13` — `autonomous: false`; `:240` — `<task type="checkpoint:human-verify" gate="blocking">`. The summary records **five** non-self-approved checkpoint rounds, final approval 2026-08-19. | closed |
 | T-51-15 | Information Disclosure | the baseline artifact | medium | mitigate | Grepped clean (see T-51-01). | closed |
-| **T-51-16** | **Information Disclosure** | **Sonnet judge escalation wired at checkpoint round 3** | **medium** | **proposed: accept — awaiting operator** | **Added by this audit; absent from the plan-time register.** `backfill_dry_run.py:388-454` sends real company identity plus disagreeing candidate values to `validator_sonnet.validate_conflict_with_sonnet`. Recipient is not new (the same function is already called live by `src/merge_policy.py`), and real controls exist — a pre-spend cap asserted at `:415-417` and a fail-safe-absent pattern on confidence < 80 or a missing `evidence_url`. But no register entry and no accepted-risk row was ever created, so nothing would have caused those controls to be reviewed or noticed their removal. | **unregistered — see the finding above** |
+| **T-51-16** | **Information Disclosure** | **Sonnet judge escalation wired at checkpoint round 3** | **medium** | **accept — GRANTED by operator 2026-09-03 → AR-51-02** | **Added by this audit; absent from the plan-time register.** `backfill_dry_run.py:388-454` sends real company identity plus disagreeing candidate values to `validator_sonnet.validate_conflict_with_sonnet`. Recipient is not new (the same function is already called live by `src/merge_policy.py`), and real controls exist — a pre-spend cap asserted at `:415-417` and a fail-safe-absent pattern on confidence < 80 or a missing `evidence_url`. But no register entry and no accepted-risk row was ever created, so nothing would have caused those controls to be reviewed or noticed their removal. **Registered and accepted 2026-09-03 under operator grant — see AR-51-02.** | **closed (accepted)** |
 | T-51-SC | Tampering | npm/pip/cargo installs | low | accept | Same evidence as 51-01. See AR-51-01. | closed (accepted) |
 
 *Status: closed · closed (accepted) · unregistered (no plan-time entry)*
@@ -115,10 +115,18 @@ register entry for them to be open against.
 | Risk ID | Threat Ref | Rationale | Accepted By | Date |
 |---------|------------|-----------|-------------|------|
 | AR-51-01 | T-51-SC (all three plans) | No plan in this phase installs a package or adds a dependency; none of the phase's ~20 commits touches `requirements.txt` or `package.json`. | plan-time disposition, re-confirmed this audit | 2026-09-03 |
+| AR-51-02 | T-51-16 | The judge escalation sends payloads to **the same vendor under the same key** the phase already uses for web research — no new recipient and no new data class, the rationale AR-63-03 records for the same shape. Real controls are present and were verified, not assumed: a pre-spend cap asserted at `backfill_dry_run.py:415-417`, and a fail-safe-absent pattern on confidence < 80 or a missing `evidence_url`. What was missing was the register entry, which is what this row supplies — the surface is now covered, so a future removal of those controls has something to be noticed against. | **operator grant, 2026-09-03** | 2026-09-03 |
 
-**No AR is recorded for T-51-16.** Deliberate — an acceptance for surface the register never
-covered is the operator's to grant, not this audit's to assume. The proposed disposition mirrors
-AR-63-03 (same vendor, same key, no new recipient, evidence otherwise unobtainable).
+~~**No AR is recorded for T-51-16.**~~ **Superseded 2026-09-03: AR-51-02 above.** The audit
+deliberately recorded no acceptance, on the principle that an acceptance for surface the register
+never covered is the operator's to grant and not the audit's to assume. The operator granted it,
+verbatim:
+
+> execute the following, grant is authorised: … **Item 6 · T-51-16** — unregistered Sonnet-judge
+> surface from 51-03 checkpoint round 3. Proposed `accept` mirroring AR-63-03 (same vendor, same
+> key, no new recipient).
+
+AR-51-02 transcribes that grant and its stated rationale. It composes no new justification.
 
 ---
 
@@ -146,8 +154,9 @@ producing a benign result.
 - [x] All registered threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
 - [x] `threats_open: 0` confirmed
-- [ ] **T-51-16 awaiting an operator disposition — unregistered surface, non-blocking**
-- [ ] `COVERAGE.md`'s scope line omits Anthropic despite 103 live calls — documentation gap, unfixed
+- [x] **T-51-16 dispositioned 2026-09-03 by operator grant — accepted as AR-51-02**
+- [x] `COVERAGE.md`'s scope line corrected 2026-09-03 — Anthropic Messages now named in scope
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-09-03, with T-51-16 outstanding and non-blocking
+**Approval:** verified 2026-09-03 with T-51-16 outstanding; **both open items closed later the
+same day** by operator grant (AR-51-02; COVERAGE.md scope line).
