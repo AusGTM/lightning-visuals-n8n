@@ -423,7 +423,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       existing `name_company` weak-key → `needs_review` path — a wrongly matched person is worse
       than an unmatched one.
 
-- [ ] **Phase 60: Review-lane authority** - Split out of Phase 59 by operator decision
+- [x] **Phase 60: Review-lane authority** - Split out of Phase 59 by operator decision (completed 2026-09-03)
       2026-08-28 (`59-CONTEXT.md` D-59-03), to run **after** Phase 53's operator walk.
       Approving a flagged record is human triage, not unattended running — it is not on the
       ingest → enrich → write path and does not belong in a phase about that path.
@@ -1099,7 +1099,7 @@ Plans:
 | 57. Ceilings, Refusal-before-start, Post-run Proof | v1.1 | 4/5 | In Progress|  |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
-| 60. Review-lane Authority | v1.1 | 5/5 | In Progress|  |
+| 60. Review-lane Authority | v1.1 | 5/5 | Complete    | 2026-09-03 |
 | 61. Autonomous Batch Runs (absorbs 55 + 56) | v1.1 | 6/6 | Complete (verified 12/12) | 2026-08-30 |
 
 ## Ledger gaps (known)

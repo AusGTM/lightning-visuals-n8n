@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 60
-current_phase_name: Review-lane authority
+current_phase: 61
+current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: Completed 60-05-PLAN.md (G-60-1, G-60-2 gap closure)
-last_updated: "2026-09-03T10:46:39.912Z"
+stopped_at: Phase 60 complete, ready to plan Phase 61
+last_updated: "2026-09-03T11:09:06.761Z"
 last_activity: 2026-09-03
-last_activity_desc: T-47-08 armed-loop ordering folded back and put under test; six granted register corrections applied across phases 46/48/51/53
-state_head: 020148b3bfd55c16a3a2be64a1eb862e37e43f89
+last_activity_desc: Phase 60 complete, transitioned to Phase 61
+state_head: 74e829f26e42304e71f1382290e618ca06ac2613
 progress:
   total_phases: 13
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 56
   completed_plans: 56
-  percent: 54
+  percent: 62
 ---
 
 # Project State
@@ -251,7 +251,7 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 60 — Review-lane authority
+Phase: 61 — Autonomous batch runs
   PHASE-VERIFIED (2026-09-02)
 
 **63-05 outcome (2026-09-02, wave 3, deploy).** Deployed the committed `n8n/wf_*_cloud.json` set
@@ -481,7 +481,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-03 — Phase 63 complete, transitioned to Phase 60
+Last activity: 2026-09-03 — Phase 60 complete, transitioned to Phase 61
   items blocked. Next: `/gsd-verify-work 62`, then Phase 63. ~~Next: Phase 57.~~ (57 complete
   2026-09-01.)
 
@@ -507,7 +507,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-03T10:46:21.765Z
-**Stopped at:** Completed 60-05-PLAN.md (G-60-1, G-60-2 gap closure)
+**Stopped at:** Phase 60 complete, ready to plan Phase 61
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
