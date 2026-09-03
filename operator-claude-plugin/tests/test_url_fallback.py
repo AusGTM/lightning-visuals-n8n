@@ -107,12 +107,90 @@ def test_same_host_ignores_a_scheme_difference():
     assert same_host("https://gctc.com.au/x", "http://gctc.com.au/y") is True
 
 
-def test_same_host_rejects_a_www_variant():
-    assert same_host("https://gctc.com.au/x", "https://www.gctc.com.au/y") is False
-
-
 def test_same_host_rejects_a_different_host():
     assert same_host("https://gctc.com.au/x", "https://evil.example/y") is False
+
+
+# --- gap closure (62-10, G-62-2): apex and www are one host, and nothing wider is --------
+#
+# Operator ruling, 2026-09-03: "Accept apex and www as one and the same (redirects
+# accepted)." Measured live: Gladstone Turf Club is recorded as
+# `www.gladstoneturfclub.com.au`; its own sitemap index points at the apex
+# `gladstoneturfclub.com.au`, and `same_host` refused every one of those URLs. The rule
+# (62-10-PLAN.md Decision 1): a single leading `www.` label is dropped from a netloc only
+# when what remains still contains a dot, before the two casefolded netlocs are compared.
+# Every fixture here is a FULL URL with a scheme — a bare authority string parses to an
+# EMPTY netloc under `urlsplit`, so a bare-string pair would compare `"" == ""` and pass
+# or fail vacuously rather than exercising this rule.
+
+
+def test_same_host_treats_apex_and_www_as_the_same_host_recorded_www_direction():
+    # REPLACES test_same_host_rejects_a_www_variant (62-10-PLAN.md Decision 2) — the
+    # operator's ruling directly overrules the behaviour that test pinned.
+    assert same_host(
+        "https://www.gladstoneturfclub.com.au/x",
+        "https://gladstoneturfclub.com.au/dt_staff-sitemap.xml",
+    ) is True
+
+
+def test_same_host_treats_apex_and_www_as_the_same_host_reverse_direction():
+    assert same_host(
+        "https://gladstoneturfclub.com.au/dt_staff-sitemap.xml",
+        "https://www.gladstoneturfclub.com.au/x",
+    ) is True
+
+
+def test_same_host_still_refuses_the_attacker_suffix_host():
+    # The assertion that proves the guard was not weakened into a suffix match — its own
+    # test, not one line inside a table.
+    assert same_host(
+        "https://www.gladstoneturfclub.com.au/x",
+        "https://evil.gladstoneturfclub.com.au.attacker.tld/x",
+    ) is False
+
+
+def test_same_host_still_refuses_a_real_subdomain_as_not_the_apex():
+    assert same_host(
+        "https://gladstoneturfclub.com.au/x",
+        "https://board.gladstoneturfclub.com.au/y",
+    ) is False
+
+
+def test_same_host_port_travels_with_the_authority():
+    assert same_host(
+        "https://www.x.example:8080/a", "https://x.example:8080/b"
+    ) is True
+
+
+def test_same_host_a_differing_port_is_still_a_different_authority():
+    assert same_host(
+        "https://www.x.example:8080/a", "https://x.example/b"
+    ) is False
+
+
+def test_same_host_never_strips_www_down_to_a_dotless_remainder():
+    assert same_host("https://www.com/x", "https://com/y") is False
+
+
+def test_same_host_strips_exactly_one_leading_www_label():
+    assert same_host(
+        "https://www.www.x.example/a", "https://www.x.example/b"
+    ) is False
+
+
+def test_filter_candidates_accepts_the_measured_apex_sitemap_and_still_refuses_the_attacker_host():
+    result = filter_candidates(
+        "https://www.gladstoneturfclub.com.au/",
+        [
+            "https://gladstoneturfclub.com.au/dt_staff-sitemap.xml",
+            "https://evil.gladstoneturfclub.com.au.attacker.tld/x",
+        ],
+    )
+    assert result["accepted"] == ["https://gladstoneturfclub.com.au/dt_staff-sitemap.xml"]
+    assert len(result["refused"]) == 1
+    reason = result["refused"][0]["reason"]
+    assert "evil.gladstoneturfclub.com.au.attacker.tld" in reason
+    assert "www.gladstoneturfclub.com.au" in reason
 
 
 # --- filter_candidates: the guard on page-derived candidates ------------------------------

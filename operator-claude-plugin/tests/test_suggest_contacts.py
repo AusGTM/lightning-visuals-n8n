@@ -275,6 +275,42 @@ def test_next_candidates_threads_this_companys_own_budget():
     assert same_host_url in result["accepted"]
 
 
+# --- gap closure (62-10, G-62-2): apex and www are one host, at the real seam -----------
+#
+# next_candidates routes through url_fallback.filter_candidates unmodified (Decision 1), so
+# these are seam-level fixtures for the same shared fix, not a second implementation.
+
+
+def test_next_candidates_accepts_the_recorded_www_companys_own_apex_sitemap():
+    company_row = _company_row(row_id="c1", website="www.gladstoneturfclub.com.au")
+    result = suggest_contacts.next_candidates(
+        company_row, attempts=[],
+        sitemap_urls=["https://gladstoneturfclub.com.au/dt_staff-sitemap.xml"],
+    )
+    assert result["accepted"] == ["https://gladstoneturfclub.com.au/dt_staff-sitemap.xml"]
+    assert result["refused"] == []
+
+
+def test_next_candidates_accepts_the_reverse_direction_recorded_apex_site_serves_www():
+    company_row = _company_row(row_id="c1", website="gladstoneturfclub.com.au")
+    result = suggest_contacts.next_candidates(
+        company_row, attempts=[],
+        sitemap_urls=["https://www.gladstoneturfclub.com.au/dt_staff-sitemap.xml"],
+    )
+    assert result["accepted"] == ["https://www.gladstoneturfclub.com.au/dt_staff-sitemap.xml"]
+    assert result["refused"] == []
+
+
+def test_next_candidates_still_refuses_the_attacker_host_naming_both_hosts():
+    company_row = _company_row(row_id="c1", website="www.gladstoneturfclub.com.au")
+    attacker = "https://evil.gladstoneturfclub.com.au.attacker.tld/x"
+    result = suggest_contacts.next_candidates(company_row, attempts=[], sitemap_urls=[attacker])
+    assert result["accepted"] == []
+    reason = result["refused"][0]["reason"]
+    assert "evil.gladstoneturfclub.com.au.attacker.tld" in reason
+    assert "www.gladstoneturfclub.com.au" in reason
+
+
 def test_no_candidates_records_give_up_messages_own_text():
     company_row = _company_row()
     pasted_url = company_row["website"]

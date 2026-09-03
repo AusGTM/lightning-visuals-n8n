@@ -111,13 +111,33 @@ def plan_ladder(pasted_url):
     }
 
 
+def _canonical_authority(url):
+    """The netloc of `url`, casefolded, with a single leading `www.` label dropped only
+    when what remains still contains a dot (operator ruling 2026-09-03, G-62-2,
+    62-10-PLAN.md Decision 1). Boundaries, each pinned by its own test in
+    test_url_fallback.py: a real subdomain (`board.example.com`) is untouched — only the
+    literal `www.` label is special; a suffix/attacker host
+    (`evil.example.com.attacker.tld`) is untouched — this is string equality on the
+    authority, never a suffix match; the port travels with the authority, so a differing
+    port is still a different authority; and stripping never leaves a dotless remainder
+    (`www.com` stays `www.com`), so exactly one label is ever dropped."""
+    netloc = urlsplit(url).netloc.casefold()
+    if netloc.startswith("www.") and "." in netloc[len("www."):]:
+        return netloc[len("www."):]
+    return netloc
+
+
 def same_host(pasted_url, candidate_url):
-    """True only when `candidate_url` is on exactly `pasted_url`'s host: netloc (host and
-    port together), case-folded. A `www.` variant is a DIFFERENT netloc and is refused —
-    the deliberate strictness is the safe side of the line, because the alternative is a
-    rule that has to guess which host variants are "really" the same site. Scheme is not
-    required to match (http vs. https is not a different host)."""
-    return urlsplit(pasted_url).netloc.casefold() == urlsplit(candidate_url).netloc.casefold()
+    """True when `candidate_url` is on `pasted_url`'s host, comparing CANONICAL
+    authorities rather than raw netlocs: apex and a single leading `www.` label on the
+    same remaining dotted authority are treated as the one host they are (operator ruling
+    2026-09-03, G-62-2) — port included, since the port travels with the authority. This
+    is NOT a suffix match, NOT a subdomain match, and NOT a registrable-domain
+    computation: `board.example.com` is still a different host than `example.com`, and
+    `evil.example.com.attacker.tld` is still refused. See `_canonical_authority` for the
+    exact rule. Scheme is not required to match (http vs. https is not a different
+    host)."""
+    return _canonical_authority(pasted_url) == _canonical_authority(candidate_url)
 
 
 def filter_candidates(pasted_url, urls, already_fetched=0):
