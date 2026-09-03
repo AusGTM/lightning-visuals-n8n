@@ -1,7 +1,7 @@
 ---
 phase: 57-ceilings-refusal-before-start-and-post-run-proof
 verified: 2026-09-01T00:46:58Z
-status: human_needed
+status: passed
 score: 8/9 must-haves verified (1 partial-by-design, disclosed, not a defect)
 behavior_unverified: 0
 overrides_applied: 0
@@ -22,7 +22,7 @@ read afterwards exactly what happened to every row — with a record that would 
 never reading as one that was."
 
 **Verified:** 2026-09-01T00:46:58Z
-**Status:** human_needed (no code-level gaps found; one disclosed partial-by-design and one
+**Status:** passed — both human-verification items discharged 2026-09-03 (57-UAT.md) (no code-level gaps found; one disclosed partial-by-design and one
 administrative-sealing item need a human look, per the escalation-gate pattern this agent runs
 under)
 **Re-verification:** No — initial verification.
@@ -136,6 +136,17 @@ compared against `datetime.now()` in test logic — not a second instance of the
   the plan's intent.
 
 ### Human Verification Required
+
+> **BOTH ITEMS DISCHARGED 2026-09-03 — see `57-UAT.md`.** Item 1 was already resolved when this
+> report was written against a pre-seal snapshot: every condition it names is sealed at HEAD
+> (all five plan checkboxes ticked including 57-05, `Phase 57 ... COMPLETE 2026-09-01`,
+> `current_phase: 60` not 61, `stopped_at` off 57-03). The verifier's question was "queued or
+> skipped?" — the answer is neither: it was DONE, on 2026-09-01/02. Item 2 was discharged by the
+> operator reading the end-of-run report format in session on 2026-09-03.
+>
+> **The read precondition is the ONLY thing discharged.** 57-05 Task 4's other limit still binds:
+> the first live batch outside this phase must be SMALL and OPERATOR-SUPERVISED. Nothing here
+> authorises an unattended run.
 
 1. **Administrative sealing is stale.** `STATE.md` still reads `current_phase: 61`,
    `stopped_at: Completed 57-03-PLAN.md`, and `ROADMAP.md` still shows 57-05's checkbox
