@@ -207,10 +207,26 @@ Same-class readers this plan does NOT touch, named for the record:
   rigor Leg A gave the enrichment workflow, and no live execution of it was examined).
 - `Merge Company` (`n8n/wf_enrichment_cloud.json`, company lane) — the structural
   mirror of `Merge Winners` (3 inbound edges: `IF Research Needed`, `IF Needs Judge`,
-  `Apply Judge Verdict`), feeding `Decide Company Action` the same way. No company row
-  was in this batch, so this plan has no live evidence it ever splits, but the shape is
-  identical and `report_enrichment.enrichment_row_ledger`'s fix (Task 2) benefits it
-  automatically since the fix reads by node name, not by lane.
+  `Apply Judge Verdict`), feeding `Decide Company Action` the same way. **Now an
+  OBSERVED split, not merely a structural mirror**: execution 12103 (2026-09-04)
+  showed `Merge Company` running more than once with run 0 carrying a strict subset
+  of its items. `report_enrichment.enrichment_row_ledger`'s fix (Task 2) already
+  covers it — the fix reads by node name across every run, not by lane — so no
+  further change is needed, but the "no live evidence" caveat above no longer holds.
+- **The run-0 reader trap, second live occurrence (quick task 260904-5a8, execution
+  12103, 2026-09-04, three executions after 12096/12098).** The shape: a hand-rolled
+  `runData[node][0]["data"]["main"][0]` read — indexing run 0 directly instead of
+  concatenating every run, the same idiom this diagnosis's Verdict names above. The
+  fix: `operator-claude-plugin/scripts/report.py::all_node_items(run_data,
+  node_name)`, which concatenates every run in order and tolerates an absent node, a
+  non-list run collection, and a malformed run entry as `[]`. The occurrence: an
+  ad-hoc probe on execution 12103 read `Merge Company` run 0, saw 1 of 2 items, and
+  the resulting report claimed `Merge Company` was collapsing two null-id company
+  rows and silently dropping a record. It is not — `Merge Company` is a single
+  `$input.all().map(...)` with no filter, group, Set, Map, or slice, so it
+  structurally cannot emit fewer items than it receives. An investigation was spent
+  on a node that had done nothing wrong. The reader defect is the whole cost of the
+  trap.
 - `Enrichment Gate` (5 inbound edges: id-fetch / linkedin-search / name-search /
   search lanes) — genuinely per-row data-dependent, upstream of `Merge Winners`, and
   therefore capable of its own independent multi-run split before a batch ever reaches
