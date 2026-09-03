@@ -69,6 +69,49 @@ session — the same statement all four phase-60 plan summaries make.
    CLAUDE.md §13.0.2: Phase 62 regenerated six workflows and committed them WITHOUT
    deploying, so committed JSON may be ahead of what is running.
 
+## Precondition results (discharged 2026-09-03, read-only — nothing armed)
+
+1. **Baseline gate state — PASS.** `scripts/verify_live_write_safety.py --expectation
+   disarmed` (creds injected in-process from `operator.local.json`, never through a shell
+   arg): `coverage: 5 workflow(s) fetched, 15 declaring node(s) found` →
+   `VERDICT: disarmed PASS`. All three `Review*` nodes in `LV Review Decision (Cloud)` read
+   `ALLOW_HUBSPOT_REVIEW_WRITES='false'`, `TEST_RECORD_IDS=''`, `TEST_RECORD_DOMAINS=''`.
+   `ALLOW_SJ3_DRAIN_WRITES='true'` across 14 nodes, as D-05 requires.
+
+2. **Record pinned.** `review_queue.fetch_queue` — companies `available=true, total=19`;
+   contacts `available=true, total=0`. Contacts hold nothing, so the walk is necessarily a
+   company (which is what test 1 wants: a contacts approve hits `no_candidate` and promotes
+   nothing). Candidate proposed to the operator: **Bunbury Turf Club, `9604738976`,
+   `bunburyturfclub.com.au`** — one review reason (`lv_produces_content: Best confidence 65
+   below threshold 85.`), so the patch is small enough to read in full.
+
+3. **`would_write` captured BEFORE any arming.** `review_decision.preview_decision(...,
+   "approve")` returned `available=true, outcome=applied` with an 8-key patch. Preview is a
+   dry run and is deliberately ungated; nothing was written.
+
+   ```
+   lv_produces_content                 = true          ← the only business-data field
+   lv_enrichment_needs_review          = false
+   lv_enrichment_review_approved       = false
+   lv_enrichment_review_reason         = ""
+   lv_enrichment_review_candidate_json = ""
+   lv_enrichment_reviewed_at           = 2026-09-03T09:55:50.209Z
+   lv_enrichment_reviewed_by           = "operator (unnamed)"
+   lv_enrichment_provenance            = {…887 chars — the audit-trail entry}
+   ```
+
+   Test 1's field-match assertion is against this captured patch, re-read from the live
+   record after the write.
+
+4. **Deployed vs committed — PASS, no drift on this lane.** Fetched `LV Review Decision
+   (Cloud)` live and hashed every node's `jsCode`/`jsonBody` against
+   `n8n/wf_review_decision_cloud.json`: **26 nodes each side, zero differing bodies.** This
+   matters because phase 60 itself changed that file (`9d514a7 fix(60-04): correct the
+   review-decision not_allowlisted refusal message`) and phase 62 changed it again
+   (`050b8a3`) — the §13.0.2 caveat predicted the running instance might be behind both.
+   Empirically it is not: the deployed artifact is the one this phase built, so the walk
+   tests the right thing.
+
 ## Gaps
 
 <!-- none yet — no test has been run -->
