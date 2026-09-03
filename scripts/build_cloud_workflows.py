@@ -3078,8 +3078,17 @@ return $input.all().map((it) => {
     const v = winners[f];
     if (v != null && String(v).trim() !== "") candidate[f] = v;
   }
+  // 260904-pav: rowConflicted is the harveynorman.com.au franchisor guard, threaded into
+  // mergeCompanies' provenance-aware manual_protected correction rather than reinvented —
+  // `conflicts` is the SAME array computed 30 lines above. On the waterfall fold ONLY: it
+  // is the one call whose field allowlist includes `domain`, and the correction path is
+  // the only thing that reads the flag. The native-band, June and research folds cannot
+  // carry a domain candidate (their field lists are lv_* / firmographic only), so passing
+  // it there would be decoration. mergeCompanies requires `=== false` strictly, so those
+  // three folds keep today's behaviour by omission rather than by a permissive default.
   const merged = mergeCompanies(existingRecord, candidate, undefined,
-                                { source: "waterfall", confidence: 85 });
+                                { source: "waterfall", confidence: 85,
+                                  rowConflicted: conflicts.length > 0 });
 
   let finalMerge = merged;
 
@@ -3357,10 +3366,42 @@ return $input.all().map((it) => {
   let properties = {};
   if (merge) {
     properties = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}), ...(row.lusha_ids || {}) };
-    if (merge.provenance && Object.keys(merge.provenance).length) {
-      properties.lv_enrichment_provenance = stableStringify(merge.provenance).slice(0, 60000);
-    }
   }
+
+  // 260904-pav: the outgoing provenance blob is built ONCE here and serialized ONCE
+  // below, AFTER the create branch has had its chance to add the seed entry — a second
+  // serialization site is exactly how a seed gets clobbered.
+  //
+  // ADDITIVE (this was a destructive replace). merge.provenance only ever carries the
+  // fields in THIS run's candidate set, so the old write deleted every other field's
+  // entry — including the create seed the correction path keys on, and every field's
+  // audit history generally. Existing entries spread first, this run's over them: the
+  // same collision order the review lane's buildHumanProvenance uses (n8n/code/
+  // reviewDecision.js), so the two additive writers agree on who wins.
+  //
+  // Fails CLOSED on an unreadable blob: {} means "replace exactly as before", never a
+  // throw. No consumer treats the mere PRESENCE of an entry as "this run wrote it" —
+  // judge.js's isIndependentPrior reads `source` (a surviving entry can only ever flip a
+  // prior from independent to NOT independent, i.e. tighten the guard) and its recency/
+  // accuracy reads take the entry's own verified_at/confidence, which are now accurate
+  // where they previously fell back to null.
+  function _parseOutgoingProvenance(raw) {
+    if (raw === null || raw === undefined || raw === "") return {};
+    let parsed = raw;
+    if (typeof raw === "string") {
+      try { parsed = JSON.parse(raw); } catch (e) { return {}; }
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed;
+  }
+  const runProvenance = (merge && merge.provenance) || {};
+  const outgoingProvenance = {
+    ..._parseOutgoingProvenance(row.existingRecord && row.existingRecord.lv_enrichment_provenance),
+    ...runProvenance,
+  };
+  // Unchanged condition: only write the property when this run has something to SAY. A
+  // recompute row (merge: null, no seed) must not start rewriting the blob it just read.
+  let provenanceDirty = Object.keys(runProvenance).length > 0;
 
   // D-01 (40-03): lv_anti_icp_flag/lv_anti_icp_reason are derived HERE, not supplied as a
   // mergeCompanies() candidate (40-RESEARCH.md Pitfall 4 — the veto derives from three
@@ -3451,6 +3492,23 @@ return $input.all().map((it) => {
     // carries only what the waterfall discovered, never the caller's own identity.
     if (id.domain) properties.domain = id.domain;
     if (id.companyName) properties.name = id.companyName;
+    // 260904-pav: stamp the seeded domain's provenance, or nothing downstream can ever
+    // tell this system-written value from a human-curated one — and manual_protected
+    // refuses both. A DISTINCT source (`create_seed`) and a status of `request_echo`
+    // because the seed is an identity echo of the caller's own request, not a researched
+    // or provider-supplied value; confidence 0 is the honest reading of an unverified
+    // echo. `name` is deliberately not stamped: no policy class protects it, so there is
+    // nothing for a provenance entry there to unlock.
+    if (id.domain) {
+      outgoingProvenance.domain = {
+        source: "create_seed", confidence: 0, verified_at: new Date().toISOString(),
+        validation_status: "request_echo", value: id.domain,
+      };
+      provenanceDirty = true;
+    }
+  }
+  if (provenanceDirty) {
+    properties.lv_enrichment_provenance = stableStringify(outgoingProvenance).slice(0, 60000);
   }
   let action = row.action;
   if (returnOnly) {
