@@ -490,3 +490,98 @@ are now measured rather than assumed.
 Regression after the full round: 2339 plugin, 1727 root pytest (149 skipped), 867 node — all
 passing. `git status --porcelain n8n/ scripts/build_cloud_workflows.py` silent. The three
 `scripts/uat62_*.py` diagnostics are gone.
+
+## Round 2 live sitting (2026-09-04) — the three fixes re-tested, two NEW defects found
+
+run_id `15ea995a2ae44f7097ac938356cf95bb`. Same 4 companies as round 1, deliberately, so each
+is a live regression test for a different fix. Grant over 4 companies, cap 2, 11 role families.
+Gate `disarmed PASS` before and after; all five cloud workflows zero-drift.
+
+**G-62-2 CONFIRMED FIXED, live.** Gladstone Turf Club (recorded `www.`, serves apex):
+`next_candidates` now ACCEPTS `https://gladstoneturfclub.com.au/dt_staff-sitemap.xml` and still
+REFUSES `https://evil.gladstoneturfclub.com.au.attacker.tld/x`. The sitemap was fetched; its
+contents are marquee/table/beer-garden booking pages, so the company yields no people. Reach
+succeeded, content is a dead end — reported as such, not as a failure.
+
+**G-62-3 CONFIRMED FIXED, live.** Same three people pages, same 43 people:
+
+    round 1 (exact-match, 8 families) : 43 named ->  2 selected
+    round 2 (token matcher, 17 families): 43 named -> 41 selected -> 6 rows after the cap
+
+    Lismore      13 named -> 13 selected -> 2 rows
+    Muswellbrook 14 named -> 12 selected -> 2 rows
+    Roma         16 named -> 16 selected -> 2 rows   (was 0)
+    Gladstone     0                        0 rows
+
+Over-match guard holds live: `Track Manager` classifies as `Track & Facilities`, NOT
+`General Manager`.
+
+**G-62-4 CONFIRMED FIXED, live.** `mint_row_ids` minted `row-1`..`row-6` once for the batch;
+`plan_chunks` produced 3 chunks; **all 3 dispatched ok=True**. Round 1 could not dispatch at
+all. `rejoin_enriched` returned 6 records carrying their merged rows and did not raise.
+
+**The cap now actually binds** — 13/12/16 selected truncated to 2 each — which is what test 3
+needed in order to mean anything. In round 1 it never bound.
+
+## Gaps found by round 2
+
+- gap_id: G-62-6
+  truth: "Every row dispatched to the enrichment lane comes back with a verdict"
+  status: failed
+  reason: |
+    2 of 6 rows (33%) produced NO verdict, while provider credit was spent on the batch.
+    `merge_enriched` reports them honestly rather than as "nothing found":
+      row-2 Tim Curry (Lismore, Deputy Chairman)  — "no verdict was received for this row"
+      row-5 Brett Ashney (Roma, President)        — same
+    Both were correctly HELD, so nothing wrong was written. The cost is real credit spent for
+    no answer, and a person the operator will never see proposed.
+  severity: major
+  test: 2
+  root_cause: |
+    The row is lost INSIDE the workflow, not in recovery and not in the client. Read directly
+    off the three executions:
+      12096  Parse HubSpot Event: 2 rows [row-1,row-2] -> Build Response: 1 [row-1]
+      12097  Parse HubSpot Event: 2 rows [row-3,row-4] -> Build Response: 2 [row-3,row-4]
+      12098  Parse HubSpot Event: 2 rows [row-5,row-6] -> Build Response: 1 [row-6]
+    Two of three chunks dropped one row between `Parse HubSpot Event` and `Build Response`.
+    Not positional (12096 lost the 2nd, 12098 lost the 1st) and not "no provider match"
+    (row-3 and row-4 both returned with `email: None` and survived).
+    This is the CONTACTS propose lane. It is the same CLASS as the long-standing suspected
+    companies research-lane row-loss note in project memory, but that one is about
+    `existingRecord`/`scored` being stripped across HTTP hops in the companies branch and has
+    never been proven live. This one is proven live, on contacts, with execution ids.
+  missing:
+    - "Diagnose where between `Parse HubSpot Event` and `Build Response` the item is dropped — walk the node list of 12096 and 12098 and find the first node whose output count is 1 where its input was 2"
+    - "Determine whether the lost row still consumed provider credit (the batch spent 7 credits for 6 rows, so almost certainly yes) — a row that costs money and returns nothing is the worst shape available"
+    - "Once found, decide whether the fix belongs in the node or in a fan-in guard; regenerate via scripts/build_cloud_workflows.py, never by hand-editing n8n/wf_*.json"
+    - "A regression test that dispatches a 2-row chunk through the stub transport and asserts TWO verdicts come back"
+  debug_session: ""
+
+- gap_id: G-62-7
+  truth: "A suggested contact's enriched email belongs to the person named on that company's own page"
+  status: failed
+  reason: |
+    Live, on 1 of the 2 rows that got an email. Roma Turf Club's committee page names
+    **Craig Smith, Vice President**. The waterfall returned
+    **`craig.smith@thehartford.com`** — The Hartford is a US insurance company, not a
+    Queensland racing club. A different Craig Smith entirely.
+    The system flagged it: `needs_review: true`, `match.tier: none`, `agreedBy: []`. Nothing
+    was written. That part worked.
+    **But the false match is the row that gets PROMOTED.** `partition_for_dispatch` splits on
+    having an email, so of 6 rows the 2 sendable ones are exactly the 2 with emails — and one
+    of those two is a stranger. The wrong row is the one that advances.
+  severity: major
+  test: 2
+  root_cause: |
+    A stage-1 row carries firstname + lastname + company + jobtitle and NO email, so it
+    resolves through identity group 2 (`[firstname, lastname, company]`). For a common name
+    this is weak: the provider matches the person, not the person-at-this-company. Nothing
+    downstream re-checks that the returned email's domain bears any relation to the company
+    whose page named them — `craig.smith@thehartford.com` against Roma Turf Club is not
+    questioned by anything except the generic `needs_review` flag every unmatched row gets.
+  missing:
+    - "Decide the policy: should a suggested row whose enriched email domain is unrelated to the company's own domain be HELD rather than made sendable? This is an operator decision about precision vs recall, not a code detail"
+    - "If yes, the check belongs where sendability is decided, not in the provider adapters"
+    - "Consider surfacing the mismatch in the operator report explicitly — 'this email's domain does not match the company' is far more actionable than a bare needs_review"
+    - "Note the interaction with G-62-3: widening the role filter multiplies the number of common-name rows going through identity group 2, so this gets WORSE as the vocabulary improves"
+  debug_session: ""
