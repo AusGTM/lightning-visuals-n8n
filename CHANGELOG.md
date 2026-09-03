@@ -6,6 +6,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-09-04
+
+### Fixed
+- **`scripts/role_vocabulary.py --dry-run` now prints the drop-list and the `cp` adoption
+  command.** `main()` returned from the `--dry-run` branch *before* reaching
+  `_print_drop_list`, which sat on the writing path only — so the warning that adopting the
+  derived vocabulary would drop curated families was absent from the one mode built for
+  **evaluating** an adoption, and present only on the path taken after that decision was
+  already made. Found by the operator running the live UAT for quick task 260904-39r. The
+  disclosure now prints on both paths, against `DERIVED_PATH` (the file a real run would
+  write); `--dry-run` still writes nothing, re-verified live. Regression test
+  `tests/test_role_vocabulary_derivation.py::test_dry_run_prints_the_drop_list_too`.
+
+  Live output after the fix names **14** shipped families an adoption would drop —
+  Administration, Board & Committee, CEO, CMO, Catering & Events, Chair, Communications
+  Manager, Head of Broadcast, Head of Marketing, Marketing Manager, Operations Manager,
+  Secretary, Track & Facilities, Treasurer — i.e. every racing-governance family, which
+  independently reconfirms quick task 260904-447's decision to REJECT the derived
+  vocabulary (`.planning/decisions/2026-09-04-derived-role-vocabulary-rejected.md`).
+
+### Changed
+- **The derivation summary line no longer overstates what it clustered.** It read
+  `CLUSTERED: <N> distinct jobtitle values into <M> top families` directly beneath
+  `clustered 200/<N> distinct titles`, claiming all of them. Only the recurrence head is
+  clustered; the line now reads `READ <N> distinct jobtitle values; clustered the
+  recurrence head into <M> top families`.
+
+### Notes
+- **No client release accompanies this.** `role_vocabulary.py` lives at the repo root, holds
+  the HubSpot credential, and writes the cache; the plugin's `role_classify.py` only ever
+  *reads* the shipped file and is unchanged. `operator-claude-plugin` stays at 0.39.0 —
+  bumping it would ship a byte-identical client.
+- **A retraction, recorded so it is not rediscovered.** An earlier note in this session's UAT
+  claimed the derived output carried raw `&amp;` HTML entities. It does not, and neither does
+  the shipped file: `role_vocabulary.yaml` holds `Board & Committee` on disk (verified
+  programmatically — 3 labels contain `&`, zero contain the literal entity) while the same
+  terminal output rendered it escaped. The escaping was the transcript channel, not the data.
+  Do not chase an encoding bug in the derivation path on the strength of a pasted terminal line.
+
 ## [0.20.0] - 2026-09-04
 
 ### Added
