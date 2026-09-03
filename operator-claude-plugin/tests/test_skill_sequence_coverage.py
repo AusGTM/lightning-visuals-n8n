@@ -298,19 +298,37 @@ COVERED = {
         "enrich-records",
         ("remainder_queue.build_entry", "remainder_queue.save"),
     ): "test_remainder_queue.py::test_save_writes_a_0600_file_with_the_right_document_shape",
-    # Phase 62 Plan 05 Task 2 (amended by Plan 06 Task 2, gap closure): the
-    # suggest-contacts/SKILL.md's one documented python block -- the round's real join,
-    # eligibility feeding discovery_plan, the discovered people feeding select_people
-    # with load_families' own family list, the survivors' cap resolved through
-    # agreed_cap() before feeding synthesise_rows, a simulated stage-2 merge, then
-    # partition_for_dispatch splitting sendable from held before extraction.validate()
-    # runs once per sendable row.
+    # Phase 62 Plan 05 Task 2 (amended by Plan 06 Task 2, then by Plan 08 -- gap
+    # closure, G-62-4): the suggest-contacts/SKILL.md block was rewritten to fix a
+    # blocker -- following the documented sequence, stage 2 could not dispatch at all,
+    # because nothing ever minted `row_id`. The block now resolves the role vocabulary
+    # and the per-company cap ONCE before the per-company loop (round-level,
+    # D-62-12/SUGGEST-02), accumulates every eligible company's synthesised records,
+    # then -- once, over the whole batch -- calls `suggest_contacts.mint_row_ids`
+    # (which calls `preingest.build_rows_spec` under the hood) and builds the chunk
+    # plan through `chunking.plan_chunks`/`chunking.chunk_ceiling`. After stage 2's
+    # dispatch (handed `plan` by reference; `enrich-before-ingest/SKILL.md` step 5's own
+    # dispatch block, not re-documented here), `suggest_contacts.rejoin_enriched` gives
+    # each record its own merged row back -- `preingest.merge_enriched` returns FRESH
+    # rows and never mutates its input, so without this join every enriched row would
+    # be reported as held -- before `partition_for_dispatch` splits sendable from held
+    # and `extraction.validate()` runs once per sendable row.
+    #
+    # The sink is still `suggest_contacts.round_artifact`, unchanged, so the covering
+    # nodeid is unchanged too; the new mint/rejoin/chunking calls this tuple gained are
+    # driven end to end, through a real `chunking.dispatch_plan` with a stub transport
+    # and a real `preingest.merge_enriched`, by
+    # `test_suggest_contacts_composition.py::test_the_documented_round_reaches_an_accepted_chunk_and_an_enriched_sendable_row`
+    # (62-08-PLAN.md Task 1), which reaches `ChunkResult(ok=True)` -- the property
+    # G-62-4 is about.
     (
         "suggest-contacts",
         (
-            "suggest_contacts.eligibility", "suggest_contacts.discovery_plan",
-            "role_classify.load_families", "suggest_contacts.select_people",
-            "suggest_contacts.agreed_cap", "suggest_contacts.synthesise_rows",
+            "suggest_contacts.eligibility", "role_classify.load_families",
+            "suggest_contacts.agreed_cap", "suggest_contacts.discovery_plan",
+            "suggest_contacts.select_people", "suggest_contacts.synthesise_rows",
+            "suggest_contacts.mint_row_ids", "chunking.plan_chunks",
+            "chunking.chunk_ceiling", "suggest_contacts.rejoin_enriched",
             "suggest_contacts.partition_for_dispatch",
             "extraction.validate", "suggest_contacts.round_artifact",
         ),

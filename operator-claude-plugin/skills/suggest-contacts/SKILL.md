@@ -132,23 +132,54 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    its provenance locator — never the company's homepage, and never the page the
    operator originally pasted if the ladder had to escalate past it.
 
+   Each company's synthesised records are **accumulated** into the round's own list, not
+   dispatched one company at a time — the round dispatches once, for the whole batch,
+   only after every eligible company has gone through steps 5-6 (G-62-4).
+
 7. **Stage 2 — enrich the people stage 1 named.** No confirmation between the stages
-   (D-62-02) — the round moves straight from a named person to enriching their contact
-   details. This uses the SAME machinery `enrich-before-ingest/SKILL.md` step 5 already
+   (D-62-02) — the round moves straight from named people to enriching their contact
+   details.
+
+   **The mint, first.** After every eligible company's stage 1 has finished and before
+   the first stage-2 call, `suggest_contacts.mint_row_ids(records)` gives the WHOLE batch
+   its join keys in one call, by calling `preingest.build_rows_spec` once. This cannot
+   happen per company: `build_rows_spec` mints `row-1`, `row-2`, ... by position over the
+   list it is given, and refuses a row that already carries one — a per-company call
+   would mint `row-1` at every company and join two different people onto one id with no
+   error. `mint_row_ids`'s returned `spec` is the exact chunking spec the round's chunk
+   plan is built from.
+
+   Stage 2 itself uses the SAME machinery `enrich-before-ingest/SKILL.md` step 5 already
    calls for its own enrich pass — `enrichment.resolve_providers`,
    `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
    `watch.recover_async_dispatch`, `preingest.merge_enriched` — and builds no second
-   dispatch path. The stage-1 rows (firstname, lastname, company, jobtitle, no email)
-   are exactly what the waterfall needs to resolve a person by identity group 2.
+   dispatch path; that reuse is load-bearing, not incidental, since this skill hands that
+   block a plan rather than re-documenting its grant/arming/ceiling machinery. The
+   stage-1 rows (firstname, lastname, company, jobtitle, no email) are exactly what the
+   waterfall needs to resolve a person by identity group 2.
+
+   **The re-join, after.** `preingest.merge_enriched` returns FRESH rows and never
+   mutates the ones it was given, so `suggest_contacts.rejoin_enriched(records,
+   merge_report.rows)` gives each record its own merged row back — joined on `row_id`,
+   never on position — before anything is partitioned. Without it, a row the waterfall
+   just filled with an email would be reported to the operator as held, because the
+   round's own records would still be pointing at their pre-merge rows.
 
 8. **Land as proposals.** `suggest_contacts.partition_for_dispatch(rows)` splits the
    sendable rows from the held ones, unchanged from any other lane — a suggested row
    still missing an email after stage 2 is held exactly like a CSV row, no special case
    anywhere for a suggestion's origin. `extraction.validate()` runs **once per sendable
    row**, after stage 2 has merged its fields on — never before, and never twice for the
-   same row. The held half is handled exactly as `enrich-before-ingest/SKILL.md`'s own
-   held-row path: `confidence.assess()`, then `held_queue.build_entry()`, then
-   `run_manifest.save()`.
+   same row. This ordering is correct and unchanged: `validate()` never minted `row_id`
+   and never will — the mint is `build_rows_spec`'s, done once at the batch level in step
+   7, before stage 2 runs — so by the time `validate()` sees a row, its identity/
+   provenance check is exactly what it should be: a check on the row as it finally
+   stands, not a decision point. `row_id` is a plugin-internal join key, not a canonical
+   prop, so `validate()` reports it among each record's `dropped_keys` and still accepts
+   the record; `extraction.strip_row_id` is the boundary strip before a dispatch CSV,
+   exactly where `enrich-before-ingest/SKILL.md` step 7 already places it. The held half
+   is handled exactly as `enrich-before-ingest/SKILL.md`'s own held-row path:
+   `confidence.assess()`, then `held_queue.build_entry()`, then `run_manifest.save()`.
 
    Send the round's per-field source map with the final dispatch — `dispatch.dispatch(...,
    source_by_field=...)` — so the written contacts carry mixed provenance: `claude_web`
@@ -158,33 +189,41 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    either clears the gates a spreadsheet upload clears, or it is held, named individually,
    for the operator to see in the report.
 
-   The whole documented sequence, in one pass, over one eligible company:
+   The whole documented sequence, in one pass, over the batch:
 
    ```python
+   import chunking
    import extraction
    import role_classify
    import suggest_contacts
 
    verdicts = suggest_contacts.eligibility(company_rows)
-   plan = suggest_contacts.discovery_plan(eligible_company)
-   # The operator approves candidates from `plan`, in the order shown, stopping at the
-   # first that yields people (the INGEST-05 contract, inherited unchanged). `people`
-   # below is whatever that approved fetch actually returned.
+   # Round-level (D-62-12, SUGGEST-02): the vocabulary and the cap are resolved ONCE,
+   # before the per-company loop -- never re-asked per company.
    vocabulary = role_classify.load_families()
-   selection = suggest_contacts.select_people(
-       people, vocabulary["families"], chosen_families, known_contacts)
-   # figures is the open grant's own envelope (step 4); chosen_cap is what the operator
-   # picked in step 3. agreed_cap() is the ONLY number the rest of this round spends
-   # against -- it raises CapRefused rather than letting a too-high or malformed cap
-   # reach synthesise_rows.
    per_company_cap = suggest_contacts.agreed_cap(chosen_cap, figures)
-   records = suggest_contacts.synthesise_rows(
-       eligible_company, selection["selected"], fetched_url, per_company_cap)
-   # Stage 2 -- the SAME dispatch machinery `enrich-before-ingest` already uses
-   # (`enrichment.resolve_providers`, `chunking.dispatch_plan(..., async_ack=True,
-   # execution_ceiling=...)`, `watch.recover_async_dispatch`, `preingest.merge_enriched`)
-   # -- merges each named person's email/phone onto their own record's "row" dict here,
-   # never a second dispatch path.
+
+   records = []
+   for eligible_company in eligible_companies:
+       plan = suggest_contacts.discovery_plan(eligible_company)
+       # The operator approves candidates from `plan`, in the order shown, stopping at
+       # the first that yields people (the INGEST-05 contract, inherited unchanged).
+       # `people` below is whatever that approved fetch actually returned.
+       selection = suggest_contacts.select_people(
+           people, vocabulary["families"], chosen_families, known_contacts)
+       records.extend(suggest_contacts.synthesise_rows(
+           eligible_company, selection["selected"], fetched_url, per_company_cap))
+
+   # The mint -- ONCE, over the whole accumulated batch, never per company.
+   minted = suggest_contacts.mint_row_ids(records)
+   plan = chunking.plan_chunks(minted["spec"], chunking.chunk_ceiling(cfg))
+   # Stage 2 -- hand `plan` and `minted["spec"]["rows"]` to `enrich-before-ingest/
+   # SKILL.md` step 5's dispatch block verbatim: `enrichment.resolve_providers`,
+   # `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
+   # `watch.recover_async_dispatch`, `preingest.merge_enriched` -- no second dispatch
+   # path here. `merge_report` below is that block's own `preingest.merge_enriched`
+   # result.
+   records = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
    sendable, held = suggest_contacts.partition_for_dispatch(
        [record["row"] for record in records])
    for record in records:
