@@ -499,7 +499,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             round's records, and an end-to-end test that reaches an ACCEPTED chunk (wave 1,
             tracer-led)
 
-      - [ ] 62-09-PLAN.md — **gap closure** (G-62-3, operator ruling): the role filter selected 2
+      - [x] 62-09-PLAN.md — **gap closure** (G-62-3, operator ruling): the role filter selected 2
             of 43 people named on real racing-club board pages — expanded governance vocabulary
             plus contiguous-token partial matching that cannot sweep "Track Manager" into
             "General Manager" (wave 1, tracer-led)

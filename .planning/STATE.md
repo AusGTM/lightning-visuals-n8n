@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: "Gap-closure 62-07 landed (G-62-1): bare-domain suggestion-round fix, plugin 0.38.1"
-last_updated: "2026-09-03T12:23:08.422Z"
+stopped_at: "Gap-closure 62-09 landed (G-62-3): role vocabulary matcher + expanded governance fallback"
+last_updated: "2026-09-03T14:12:53.189Z"
 last_activity: 2026-09-03
 last_activity_desc: Phase 60 complete, transitioned to Phase 61
-state_head: 2d99cfa33f9d33f26a887295e5da25df8f89097f
+state_head: 7fd44327c35ce4baccfcadf1e0b985c2299d8a4b
 progress:
   total_phases: 13
   completed_phases: 8
-  total_plans: 57
-  completed_plans: 57
+  total_plans: 60
+  completed_plans: 58
   percent: 62
 ---
 
@@ -41,6 +41,27 @@ do not re-plan them.
   (867 passed), zero `n8n/` diff. The code is done; the live UAT re-run (tests 2 and 3, both
   previously `blocked_by: prior-phase`) is still the operator's supervised sitting, not run
   here. Resume with `/gsd-verify-work 62`.
+
+- **Gap-closure plan 62-09 landed 2026-09-04 (G-62-3, major, operator ruling 2026-09-03):**
+  "expand default fallback positions in role_vocabulary.py list to match and partial match
+  what was observed." Live sitting measured 43 people named across three racing-club board
+  pages, 2 selected — the old vocabulary was 8 generic corporate roles matched EXACT-LABEL
+  only, and racing clubs use governance vocabulary. `role_classify.classify_title` now does
+  contiguous-token-run, longest-wins, entity-aware partial matching (normalising
+  `html.unescape`/`&`/punctuation/case identically on both sides), never substring and never
+  bag-of-tokens overlap — "Track Manager" cannot be swept into "General Manager" on the
+  shared word. The shipped `role_vocabulary.yaml` grew from 8 to 17 families (9 governance
+  families added beneath the untouched original 8), covering all 17 titles measured in the
+  sitting plus the HTML-entity-escaped spelling. A structural test permanently forbids a bare
+  grade-noun single-token member (`Manager`, `Officer`, `Executive`, `Assistant`,
+  `Coordinator`, `Supervisor`, `Head`, `Lead`). **SUGGEST-03 stays AMENDED, not closed**
+  (D-62-07) — the vocabulary is still `evidenced: false`/`source: generic_fallback`;
+  expanding a generic list does not make it portal-derived. G-62-5 (the `role_vocabulary.py`
+  derivation-script crash) deliberately NOT touched — operator's own sequencing, out of
+  scope for this plan. TDD: RED observed first (2 of 8 new assertions failed against the old
+  exact-match matcher), GREEN after the rewrite. Full plugin suite 2328 passed / 5 skipped;
+  `node --test tests/n8n/*.test.mjs` 867 pass / 0 fail; zero `n8n/` diff, zero live call of
+  any kind. Full record: `62-09-SUMMARY.md`.
 
 - **60 — Review-lane authority** (split out of 59). Executed, but **not complete**: 2 UAT items
   (`testing`) and 2 verification items (`human_needed`). All four need an armed HubSpot write
@@ -515,12 +536,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T12:23:07.654Z
-**Stopped at:** Gap-closure 62-07 landed (G-62-1): bare-domain suggestion-round fix, plugin 0.38.1
+**Last session:** 2026-09-03T14:12:52.564Z
+**Stopped at:** Gap-closure 62-09 landed (G-62-3): role vocabulary matcher + expanded governance fallback
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** .planning/phases/62-suggest-the-contacts-nobody-named/62-UAT.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -639,6 +660,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 63 P04 | ~20 min | 2 tasks | 2 files |
 | Phase 63 P05 | 30min | 2 tasks | 1 files |
 | Phase 60 P05 | 90m | 3 tasks | 8 files |
+| Phase 62 P09 | 8min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -743,6 +765,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 63]: Judge lever 2 (cheaper-model routing) DROP verdict acted on: 63-JUDGE-LEVER-DROP-RECORD.md written, throughput todo amended, builder/n8n untouched. — 63-JUDGE-REPLAY-VERDICT.json read material_disagreement + insufficient_corpus; per D-63-06 accepted as-is, no re-run.
 - [Phase 60]: 60-05: verify_decision splits into two legs over a closed PREVIEW_UNPINNABLE_KEYS set (leg 1 vs backend's own submit-time patch, leg 2 vs the independent refetch) to fix the false-failed verdict G-60-1 diagnosed on every successful review approve
 - [Phase 60]: 60-05: verify_live_write_safety.verify() gained an optional armed_workflow scoping parameter (default None = today's unscoped verdict) so an operator can pin a single-workflow armed window without narrowing scan coverage, closing G-60-2
+- [Phase 61]: 62-09: classify_title matcher rewritten to contiguous-token-run, longest-wins, entity-aware (closes G-62-3)
 
 ### Roadmap Evolution
 
