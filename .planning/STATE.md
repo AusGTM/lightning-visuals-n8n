@@ -5,10 +5,10 @@ milestone_name: Unattended Session Runs
 current_phase: 63
 current_phase_name: The unattended lane actually runs unattended
 status: executing
-stopped_at: Completed 63-05-PLAN.md (deploy Phase 62's undeployed workflow JSON disarmed, bounced, proved with disarmed execution 12070; DROP branch, one deploy carrying Phase 62's change alone)
-last_updated: "2026-09-02T06:47:06.612Z"
+stopped_at: context exhaustion at 84% (2026-09-03)
+last_updated: "2026-09-03T01:47:55.673Z"
 last_activity: 2026-09-02
-state_head: e86642c462bad6d6e62496f411d93bebee6a97ee
+state_head: 548215ef51d806d5e5c76fe017e6772c81058685
 progress:
   total_phases: 13
   completed_phases: 6
@@ -449,8 +449,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-02T06:47:06.196Z
-**Stopped at:** Completed 63-05-PLAN.md (deploy Phase 62's undeployed workflow JSON disarmed, bounced, proved with disarmed execution 12070; DROP branch, one deploy carrying Phase 62's change alone)
+**Last session:** 2026-09-03T01:47:55.013Z
+**Stopped at:** context exhaustion at 84% (2026-09-03)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
