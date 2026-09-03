@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 15
+open_count: 17
 waived_count: 3
-fixed_count: 6
-total_count: 24
-last_updated: 2026-08-25T06:10:09.525Z
+fixed_count: 8
+total_count: 28
+last_updated: 2026-09-03T07:16:45.755Z
 ---
 
 # Broken Windows Ledger
@@ -37,8 +37,12 @@ last_updated: 2026-08-25T06:10:09.525Z
 | 20 | 260823-ono | deviation | scripts/check_tier_derived_parity.py |  | Quick task 260823-ono (metro peak-body named-account override): MRC (Melbourne Racing Club, 9604614548) now diverges between lv_icp_tier (archived, frozen at 'C') and lv_icp_tier_derived (correctly floors to 'B' via lv_named_account_score_floor=60). Pre-registered in KNOWN_STUCK_TRANSITIONS before the CP2 formula push / CP3 record PATCH, not discovered after. Permanent by construction: lv_icp_tier was archived in Phase 50 (D-24) and can never be recalculated again -- unlike WINDOWS.md ids 9-12/14 (WF1-staleness, fixable in principle by a fresh non-identical write), this divergence never closes. The derived value is the correct one. | waived | deliberate consequence of the approved lv_named_account_score_floor=60 override; the archived enum is frozen by construction and the derived value is the correct one | 2026-08-23T08:58:13.393Z | 2026-08-23T08:58:35.792Z |
 | 21 | 260823-ono | deviation | scripts/check_tier_derived_parity.py |  | Quick task 260823-ono (metro peak-body named-account override): Perth Racing (9604794662) now diverges between lv_icp_tier (archived; live-read 2026-08-23 shows the key entirely absent -- it was never enriched before this override, so the archived enum never held a value) and lv_icp_tier_derived (correctly floors to 'B' via lv_named_account_score_floor=60 on all-blank inputs). Pre-registered in KNOWN_STUCK_TRANSITIONS as (None, 'B') before the CP2 formula push / CP3 record PATCH, not discovered after. Same class as MRC's entry (permanent by construction, archived property frozen forever) and the same polarity as WINDOWS.md id 14, NOT the WF1-staleness cause of ids 9-12: the derived value is the correct one. | waived | deliberate consequence of the approved lv_named_account_score_floor=60 override; the archived enum is frozen by construction and the derived value is the correct one | 2026-08-23T08:58:20.790Z | 2026-08-23T08:58:35.944Z |
 | 22 | 260823-ono | deviation | scripts/backfill_dry_run.py |  | Quick task 260823-ono (metro peak-body named-account override): a forward-looking CLASS, not one script (same pattern as WINDOWS.md id 18) -- oracle consumers whose fetch lists lack lv_named_account_score_floor will under-score the five named accounts (ATC, MRC, SSR, BRC, Perth Racing), scoring them without the score floor. scripts/backfill_dry_run.py is the Phase-52-urgent instance: build_dry_run_row builds HubSpotRecord(properties={}) and PAYLOAD_INPUT_PROPS has no entry for the number property, so a dry-run row for any of the five would compute the pre-floor score. simulate_rubric_weights.py and enrich_coverage_companies.py are in the same family (same missing-fetch-list shape). tests/scoring_fixtures.py::FIT_SCORE_PROPS was updated in this same commit (the oracle's own comparison-harness read path), but that fix does not propagate to these other consumers. | open |  | 2026-08-23T08:58:29.783Z |  |
-| 23 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | grant['envelope'] is always None -- GRANT-02's arithmetic is 53-02 T1 (deliberate seam, initialised so 53-02 fills rather than reshapes) | open |  | 2026-08-25T06:10:09.375Z |  |
-| 24 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | grant['consecutive_disarm_failures'] is always 0 -- D-53-04's guardrail B is 53-02 T2/T3 (deliberate seam) | open |  | 2026-08-25T06:10:09.525Z |  |
+| 23 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | grant['envelope'] is always None -- GRANT-02's arithmetic is 53-02 T1 (deliberate seam, initialised so 53-02 fills rather than reshapes) | fixed | filled by 53-02 T1: plan_grant computes write_grant.envelope() and attaches it | 2026-08-25T06:10:09.375Z | 2026-08-25T00:00:00.000Z |
+| 24 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | grant['consecutive_disarm_failures'] is always 0 -- D-53-04's guardrail B is 53-02 T2/T3 (deliberate seam) | fixed | filled by 53-02 T2/T3: record_send_outcome writes the counter and guardrail B bounds it | 2026-08-25T06:10:09.525Z | 2026-08-25T00:00:00.000Z |
+| 25 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | CLOSED_CEILING_BREACH has no producer in Phase 53 -- nothing here measures spend as it happens, so the reason is reachable only by a caller that supplies it. Phase 57 makes it fire on its own. | open |  | 2026-08-25T00:00:00.000Z |  |
+| 26 | 53 | deviation | operator-claude-plugin/scripts/write_grant.py |  | envelope()'s projected_executions (1 webhook execution per chunk + 1 sub-execution per record) is PROJECTED, never measured -- nobody has counted executions for a multi-chunk grant end to end. NARROWED 2026-08-27 (Phase 54-01, 54-MEASUREMENT.md): the chunk_count==1 (single-record) case IS now measured against live execution history (executions 11934/11935/11937 pre-F2, 11956/11958/11960 post-fix; execution 11960 isolates one bare-object dispatch to exactly one measured n8n execution) -- and the measurement DIFFERS from the projection (measured 1, projected chunk_count+record_count=2 for that same record set), the first real data point against this formula. What remains genuinely open, unchanged from the original claim: the MULTI-CHUNK case (chunk_count > 1, several webhook executions in one grant) has still never been counted end to end -- this plan's execution budget named no multi-chunk send in reachable history to read. | open |  | 2026-08-25T00:00:00.000Z |  |
+| 27 | 54 | deviation | operator-claude-plugin/scripts/scheduled_arm.py |  | The SJ-3 scheduled-poller companion's double pass, recorded per OP-54-02: scheduled_arm.py's companion cannot straddle SJ-3's own in-n8n Execute-Workflow dispatch (that dispatch runs unarmed, always returns write_blocked, inside SJ-3's own single n8n execution with no external hook point), so every record SJ-3 matches costs one unarmed full waterfall that is always refused, plus one armed re-run through this companion's own external webhook path -- two full passes per flagged record, daily (the SJ-3 cadence), bounded by the flagged-record count, arming admin-only via ALLOW_N8N_ARM (the headless/cron authority, unchanged, D-1.1-01). This is architecturally the same full-pass-refused-then-full-pass-again shape G-3 names for the interactive lanes, and it is NOT fixed by F2 (F2 only touches the interactive lane skills' arm-before-dispatch ordering) or by this phase's measurement task. DELIBERATELY LEFT UNFIXED BY OPERATOR RULING OP-54-02, not overlooked -- the v1.1 milestone's D-1.1-01 explicitly carves headless/cron paths out of the grant redesign, and this phase's scope is measuring and naming the interactive case honestly, not rebuilding the scheduled companion's architecture. | open |  | 2026-08-27T00:00:00.000Z |  |
+| 28 | 49 | deviation | scripts/rescore_population.py |  | Phase 49's W1 armed window made one undeclared batch_update_companies() call directly against 4 company ids, OUTSIDE the driver's own two-key (DRY_RUN=false + ALLOW_SCORE_BACKFILL=true) arming ceremony -- a plain Python call in a diagnostic shell with no arm keys set. Genuinely disclosed at the time in 49-W1-ARM-RECORD.md:200-210 and 49-RUN-REPORT.md:23, and the declared-vs-actual accounting tables correctly recorded HubSpot batch calls Declared 2 / Actual 3, but it was never registered in this cross-phase ledger -- the register /gsd-ship actually gates on. Same shape as id 16, whose closing sentence is the precedent: a per-phase disclosure is not a ledger entry. Recorded retrospectively 2026-09-03 by the cross-phase secure-phase sweep (49-SECURITY.md Divergence 2), 21 days late. NO RECORD WAS HARMED: the bypass call mutated nothing (byte-identical values, confirmed by an unchanged hs_lastmodifieddate before and after) and the values sent were the five legitimate component properties. The gate was not defeated -- it was bypassed by not using the driver. MECHANISM NOW CLOSED (2026-09-03, commit a4de6f4, threat T-49-43): src/hubspot_client.py::batch_update_companies gained the generalized two-key arm gate (DRY_RUN=false AND one of four registered arm keys, BATCH_WRITE_ARM_KEYS) plus a FORBIDDEN_PROPS disjointness floor, both unconditional ValueError raises on the live-POST path, so the gate now travels with the write and this exact call would be refused today. Five refusal tests, all perturbation-proved RED-then-GREEN. The historical call itself is not undone -- it cannot be; what is fixed is the reachable path. NOT registered here and left to operator judgement: the same run report's W2 arm-cycle excess (2) and Anthropic call excess (2 vs 1). | open |  | 2026-09-03T07:16:45.755Z |  |
 
 ````json
 [
@@ -313,7 +317,7 @@ last_updated: 2026-08-25T06:10:09.525Z
     "file": "operator-claude-plugin/scripts/write_grant.py",
     "line": null,
     "description": "grant['envelope'] is always None -- GRANT-02's arithmetic is 53-02 T1 (deliberate seam, initialised so 53-02 fills rather than reshapes)",
-    "status": "resolved",
+    "status": "fixed",
     "reason": "filled by 53-02 T1: plan_grant computes write_grant.envelope() and attaches it",
     "recorded_at": "2026-08-25T06:10:09.375Z",
     "resolved_at": "2026-08-25T00:00:00.000Z"
@@ -325,7 +329,7 @@ last_updated: 2026-08-25T06:10:09.525Z
     "file": "operator-claude-plugin/scripts/write_grant.py",
     "line": null,
     "description": "grant['consecutive_disarm_failures'] is always 0 -- D-53-04's guardrail B is 53-02 T2/T3 (deliberate seam)",
-    "status": "resolved",
+    "status": "fixed",
     "reason": "filled by 53-02 T2/T3: record_send_outcome writes the counter and guardrail B bounds it",
     "recorded_at": "2026-08-25T06:10:09.525Z",
     "resolved_at": "2026-08-25T00:00:00.000Z"
@@ -364,6 +368,18 @@ last_updated: 2026-08-25T06:10:09.525Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-27T00:00:00.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 28,
+    "kind": "deviation",
+    "phase": "49",
+    "file": "scripts/rescore_population.py",
+    "line": null,
+    "description": "Phase 49's W1 armed window made one undeclared batch_update_companies() call directly against 4 company ids, OUTSIDE the driver's own two-key (DRY_RUN=false + ALLOW_SCORE_BACKFILL=true) arming ceremony -- a plain Python call in a diagnostic shell with no arm keys set. Genuinely disclosed at the time in 49-W1-ARM-RECORD.md:200-210 and 49-RUN-REPORT.md:23, and the declared-vs-actual accounting tables correctly recorded HubSpot batch calls Declared 2 / Actual 3, but it was never registered in this cross-phase ledger -- the register /gsd-ship actually gates on. Same shape as id 16, whose closing sentence is the precedent: a per-phase disclosure is not a ledger entry. Recorded retrospectively 2026-09-03 by the cross-phase secure-phase sweep (49-SECURITY.md Divergence 2), 21 days late. NO RECORD WAS HARMED: the bypass call mutated nothing (byte-identical values, confirmed by an unchanged hs_lastmodifieddate before and after) and the values sent were the five legitimate component properties. The gate was not defeated -- it was bypassed by not using the driver. MECHANISM NOW CLOSED (2026-09-03, commit a4de6f4, threat T-49-43): src/hubspot_client.py::batch_update_companies gained the generalized two-key arm gate (DRY_RUN=false AND one of four registered arm keys, BATCH_WRITE_ARM_KEYS) plus a FORBIDDEN_PROPS disjointness floor, both unconditional ValueError raises on the live-POST path, so the gate now travels with the write and this exact call would be refused today. Five refusal tests, all perturbation-proved RED-then-GREEN. The historical call itself is not undone -- it cannot be; what is fixed is the reachable path. NOT registered here and left to operator judgement: the same run report's W2 arm-cycle excess (2) and Anthropic call excess (2 vs 1).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-03T07:16:45.755Z",
     "resolved_at": null
   }
 ]

@@ -399,10 +399,32 @@ true when the audit ran, and rewriting it would erase the finding that produced 
 
 ### Divergence 2 — fixed by appending the row
 
-Appended in row-16 style. It records both halves honestly: the historical W1 call is **not** undone
-(it was disclosed at the time, and no record was harmed — the values were byte-identical and
-`hs_lastmodifieddate` was unchanged), while the reachable mechanism **is** now closed by T-49-43's
-gate.
+Appended as **`.planning/WINDOWS.md` id 28**, in row-16 style. It records both halves honestly: the
+historical W1 call is **not** undone (it was disclosed at the time, and no record was harmed — the
+values were byte-identical and `hs_lastmodifieddate` was unchanged), while the reachable mechanism
+**is** now closed by T-49-43's gate.
+
+**Left `open`, deliberately.** The audit's proposed disposition said the row should be "waived or
+fixed at the operator's discretion", so this disposition appends the row — the part that was
+granted — and does not pick its status. `fixed` would imply the historical call was undone; it was
+not, it was disclosed. `waived` is row 16's shape and is available. Leaving it open costs nothing
+operationally: `open_count` was already 16 before this row, so `/gsd-ship` was already gated.
+
+**Ledger repairs required to append at all** (surfaced by this work, not by the audit):
+
+- Ids **23 and 24 carried `status: "resolved"`**, which is not in the schema's vocabulary
+  (`open` / `fixed` / `waived`). `gsd-tools windows` refused to load the ledger at all until they
+  were normalized to `fixed`. Verified before changing: both stubs are genuinely filled —
+  `write_grant.py:1193` computes and attaches `envelope`, and `:1658-1674` resets/increments
+  `consecutive_disarm_failures` with guardrail B bounding at `>= 2`.
+- The **markdown table was stale by three entries.** The JSON block held ids 25, 26 and 27 (phases
+  53 and 54, recorded 2026-08-27 onward); the rendered table stopped at 24, and the frontmatter
+  counts were computed from the stale table. Table and counts re-rendered from the JSON, which is
+  the authoritative half.
+
+**This does not undercut Divergence 2's own finding.** The audit read the table and concluded "26
+table lines, exactly four are Phase 49" — ids 25/26/27 are phases 53 and 54, so the phase-49 count
+of four was correct despite the stale rendering.
 
 **Not registered here, and left to operator judgement:** the W2 arm-cycle excess (2) and the
 Anthropic call excess (2 vs 1), both sitting in the same `49-RUN-REPORT.md` accounting table. The
