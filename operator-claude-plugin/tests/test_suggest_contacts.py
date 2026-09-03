@@ -399,3 +399,118 @@ def test_agreed_cap_refuses_a_malformed_chosen_cap(bad_chosen_cap):
     figures = {"suggestion_allowance": {"priced_cap": 3}}
     with pytest.raises(suggest_contacts.CapRefused):
         suggest_contacts.agreed_cap(bad_chosen_cap, figures)
+
+
+# =====================================================================================
+# Gap closure (62-07, G-62-1) — a company recorded with a BARE domain (measured live on
+# this portal at 83.5% of companies-with-a-website) must reach a fetchable, host-bound
+# ladder through BOTH discovery_plan and next_candidates. Every fixture below is a bare
+# domain: today's suite has none, which is exactly how this shipped broken.
+# =====================================================================================
+
+from urllib.parse import urlsplit  # noqa: E402 — grouped with this gap-closure section
+
+
+def test_bare_domain_discovery_plan_is_host_bound_and_sitemap_only():
+    plan = suggest_contacts.discovery_plan({
+        "row_id": "c1", "name": "Bunbury Turf Club",
+        "website": "bunburyturfclub.com.au", "num_associated_contacts": 0,
+    })
+    assert plan["host"] == "bunburyturfclub.com.au"
+    assert plan["pasted_url"] == "https://bunburyturfclub.com.au"
+    urls = [c["url"] for c in plan["candidates"]]
+    assert urls == [
+        "https://bunburyturfclub.com.au/sitemap.xml",
+        "https://bunburyturfclub.com.au/wp-sitemap.xml",
+    ]
+
+
+def test_bare_domain_discovery_plan_candidates_have_no_empty_authority():
+    plan = suggest_contacts.discovery_plan({
+        "row_id": "c1", "name": "Bunbury Turf Club",
+        "website": "bunburyturfclub.com.au", "num_associated_contacts": 0,
+    })
+    for candidate in plan["candidates"]:
+        assert urlsplit(candidate["url"]).netloc == "bunburyturfclub.com.au"
+
+
+def test_bare_domain_with_www_prefix_survives_verbatim():
+    plan = suggest_contacts.discovery_plan({
+        "row_id": "c2", "name": "Alice Springs Turf Club",
+        "website": "www.alicespringsturfclub.org.au", "num_associated_contacts": 0,
+    })
+    assert plan["host"] == "www.alicespringsturfclub.org.au"
+
+
+@pytest.mark.parametrize("scheme_bearing_value", [
+    "https://bunburyturfclub.com.au",
+    "https://www.bunburyturfclub.com.au/",
+    "https://gctc.com.au/board-of-directors/",
+])
+def test_scheme_bearing_website_is_a_byte_identical_no_op(scheme_bearing_value):
+    row = {
+        "row_id": "c3", "name": "Example", "website": scheme_bearing_value,
+        "num_associated_contacts": 0,
+    }
+    assert suggest_contacts.discovery_plan(row) == url_fallback.plan_ladder(scheme_bearing_value)
+
+
+def test_scheme_bearing_wordpress_url_still_leads_with_its_rest_rung():
+    row = {
+        "row_id": "c3", "name": "GCTC",
+        "website": "https://gctc.com.au/board-of-directors/",
+        "num_associated_contacts": 0,
+    }
+    plan = suggest_contacts.discovery_plan(row)
+    assert plan["candidates"][0]["url"] == (
+        "https://gctc.com.au/wp-json/wp/v2/pages?slug=board-of-directors"
+    )
+
+
+def test_next_candidates_second_call_site_accepts_a_same_host_sitemap_url_for_a_bare_domain():
+    company_row = {"row_id": "c1", "website": "bunburyturfclub.com.au"}
+    result = suggest_contacts.next_candidates(
+        company_row, attempts=[], sitemap_urls=["https://bunburyturfclub.com.au/board/"]
+    )
+    assert result["accepted"] == ["https://bunburyturfclub.com.au/board/"]
+    assert result["refused"] == []
+
+
+def test_next_candidates_bare_domain_budget_threading_is_unaffected():
+    company_row = {"row_id": "c1", "website": "bunburyturfclub.com.au"}
+    attempts = [{"url": f"u{i}", "outcome": "empty"} for i in range(4)]
+    result = suggest_contacts.next_candidates(
+        company_row, attempts, ["https://bunburyturfclub.com.au/board/"]
+    )
+    assert result["budget_remaining"] == 1
+
+
+@pytest.mark.parametrize("unusable_value", [
+    "linkedin.com/company/futsal-australia",
+    "unknown",
+])
+def test_unusable_recorded_value_takes_the_documented_no_candidates_path(unusable_value):
+    row = {"row_id": "c4", "name": "Mystery", "website": unusable_value,
+           "num_associated_contacts": 0}
+    plan = suggest_contacts.discovery_plan(row)
+    assert plan["candidates"] == []
+    assert any(unusable_value in note for note in plan["notes"])
+
+    with pytest.raises(ValueError) as excinfo:
+        suggest_contacts.next_candidates(row, attempts=[], sitemap_urls=[])
+    assert unusable_value in str(excinfo.value)
+
+
+def test_discovery_plan_with_no_website_or_domain_is_unchanged():
+    row = {"row_id": "c5", "name": "No Site Co", "num_associated_contacts": 0}
+    plan = suggest_contacts.discovery_plan(row)
+    assert plan == {
+        "pasted_url": None,
+        "host": None,
+        "cap": url_fallback.MAX_FOLLOWUP_FETCHES,
+        "candidates": [],
+        "notes": [
+            "this company has no usable website or domain -- cannot build a "
+            "discovery ladder"
+        ],
+    }

@@ -15,6 +15,13 @@ same validator every other ingest lane uses -- so a suggested person gets no spe
 treatment (D-62-09): whatever identity the round produces is what `extraction.validate()`
 decides, weak or strong.
 
+A company's `website`/`domain` is a bare CRM property, not a pasted URL, so it is
+normalised at THIS seam (`_ladder_source`, below) before either call site hands it to
+`url_fallback.py` -- one helper, used by both `discovery_plan` and `next_candidates`
+(62-07-PLAN.md Decision 1). The host rule and its non-goals (scheme prefixed only when
+absent; `www.`, case, path and query preserved exactly as recorded; no redirect
+following, no host-variant retry) are 62-07-PLAN.md Decision 2.
+
 `MAX_FOLLOWUP_FETCHES` (imported from `url_fallback`) bounds ONE company's whole
 discovery ladder. This is a different axis from `WEB_RESEARCH_MAX_SEARCHES` (the
 backend's own `web_search` budget) -- unrelated to this module, never referenced here.
@@ -24,9 +31,46 @@ plan's concern.
 import json
 import sys
 
+import enrichment
 import extraction
 import role_classify
 import url_fallback
+
+_NO_USABLE_WEBSITE_REASON = (
+    "this company has no usable website or domain -- cannot build a discovery ladder"
+)
+
+
+def _ladder_source(company_row):
+    """`(url, reason)`, exactly one set. `website` wins over `domain` -- the existing
+    first-non-empty precedence, UNCHANGED, with no fall-through from a failing `website`
+    to `domain` (62-07-PLAN.md Decision 2 sub-decision): a value that fails the guard
+    below is reported by name, never silently retried against the other property.
+
+    The guard is `enrichment._clean_domain`, called as a BOOLEAN test only -- its return
+    value (scheme and `www.` stripped) is never the host that gets built, because
+    Decision 2 forbids rewriting either. A `None` return, or a return with no dot in it
+    (e.g. "unknown"), means the recorded value cannot be a company's own site.
+
+    A value that already carries a scheme (http/https, case-insensitive) is returned
+    unchanged. Otherwise `https://` is prefixed and nothing else is touched -- no path
+    drop, no query drop, no case change, no `www` edit -- so this is a byte-identical
+    no-op for every value that already works today.
+    """
+    recorded = company_row.get("website") or company_row.get("domain")
+    if not recorded:
+        return None, _NO_USABLE_WEBSITE_REASON
+
+    cleaned = enrichment._clean_domain(recorded)
+    if cleaned is None or "." not in cleaned:
+        return None, (
+            f"{recorded!r} does not look like this company's own website -- cannot "
+            f"build a discovery ladder"
+        )
+
+    if recorded.lower().startswith(("http://", "https://")):
+        return recorded, None
+    return f"https://{recorded}", None
 
 # D-62-16's tri-state verdict, branching on readability BEFORE magnitude: a count that
 # could not be read is `UNKNOWN`, never silently treated as `ELIGIBLE`.
@@ -90,22 +134,27 @@ def eligibility(company_rows):
 
 
 def discovery_plan(company_row):
-    """`url_fallback.plan_ladder(website)` for this company's website/domain -- called,
-    never rebuilt. A company with no usable website/domain yields a plan with no
-    candidates and a reason, never a constructed guess at a path."""
-    website = company_row.get("website") or company_row.get("domain")
-    if not website:
+    """`url_fallback.plan_ladder(...)` for this company's website/domain -- called, never
+    rebuilt. The CRM value is normalised at the seam first (`_ladder_source`); a company
+    with no usable website/domain, or a recorded value that cannot be its own site,
+    yields a plan with no candidates and a reason naming the recorded value, never a
+    constructed guess at a path."""
+    recorded = company_row.get("website") or company_row.get("domain")
+    url, reason = _ladder_source(company_row)
+    if reason:
         return {
             "pasted_url": None,
             "host": None,
             "cap": url_fallback.MAX_FOLLOWUP_FETCHES,
             "candidates": [],
-            "notes": [
-                "this company has no usable website or domain -- cannot build a "
-                "discovery ladder"
-            ],
+            "notes": [reason],
         }
-    return url_fallback.plan_ladder(website)
+    plan = url_fallback.plan_ladder(url)
+    if url != recorded:
+        plan["notes"] = list(plan["notes"]) + [
+            f"{recorded!r} had no scheme; every candidate below is bound to {url!r}."
+        ]
+    return plan
 
 
 def _name_key(person):
@@ -286,10 +335,17 @@ def company_budget(attempts):
 
 def next_candidates(company_row, attempts, sitemap_urls):
     """`url_fallback.filter_candidates`, called unmodified, with this company's own
-    budget threaded through `company_budget`. Returns its result verbatim -- including
-    `refused` entries with their original reasons -- never re-worded, re-ordered or
-    re-checked."""
-    pasted_url = company_row.get("website") or company_row.get("domain")
+    budget threaded through `company_budget`. The pasted URL comes from the SAME seam
+    helper `discovery_plan` uses (`_ladder_source`) -- the second broken call site
+    (62-07-PLAN.md Decision 1) -- so a bare-domain company's sitemap candidates are
+    checked against the same host they were actually built for, rather than an empty
+    authority. A recorded value the helper cannot turn into a URL raises `ValueError`
+    naming it, rather than handing `filter_candidates` something unusable. Otherwise
+    returns `url_fallback.filter_candidates`'s result verbatim -- including `refused`
+    entries with their original reasons -- never re-worded, re-ordered or re-checked."""
+    pasted_url, reason = _ladder_source(company_row)
+    if reason:
+        raise ValueError(reason)
     return url_fallback.filter_candidates(
         pasted_url, sitemap_urls, already_fetched=company_budget(attempts)
     )
