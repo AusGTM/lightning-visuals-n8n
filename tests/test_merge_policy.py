@@ -243,3 +243,83 @@ def test_group_candidates_buckets_by_field():
     assert set(grouped.keys()) == {"a", "b"}
     assert len(grouped["a"]) == 2
     assert choose_best(grouped["a"], PRIORITY).provider == "zoominfo"
+
+
+# --- Provenance-aware manual_protected (quick task 260904-pav) ---------------
+# JS twin: tests/n8n/mergeCompanies.test.mjs's "Provenance-aware manual_protected"
+# block. A `domain` the enrichment system parked itself (provenance source
+# `create_seed`) may be corrected by the system's own later, better answer; every
+# other provenance story refuses exactly as before.
+PAV_SEEDED = "brisbanelions.com.au"
+PAV_CORRECTED = "lions.com.au"
+PAV_POLICY = {"class": "manual_protected", "min_confidence": 95,
+              "system_correctable_sources": ["create_seed"]}
+
+
+def pav_entry(**overrides):
+    entry = {"source": "create_seed", "confidence": 0,
+             "verified_at": "2026-09-04T00:00:00.000Z",
+             "validation_status": "request_echo", "value": PAV_SEEDED}
+    entry.update(overrides)
+    return entry
+
+
+def pav_record(blob):
+    props = {"domain": PAV_SEEDED}
+    if blob is not None:
+        props["lv_enrichment_provenance"] = blob
+    return HubSpotRecord(object_type="companies", id="285583534546", properties=props)
+
+
+def pav_gate(blob, candidates=None, policy=None):
+    candidates = candidates or [make_candidate("domain", "zoominfo", PAV_CORRECTED, 95)]
+    return deterministic_gate(pav_record(blob), "domain", PAV_SEEDED, candidates,
+                              policy or PAV_POLICY, PRIORITY)
+
+
+def test_pav_create_seed_provenance_allows_correction():
+    g = pav_gate(json.dumps({"domain": pav_entry()}))
+    assert g["decision"] == "promote"
+
+
+def test_pav_human_provenance_still_refuses():
+    g = pav_gate(json.dumps({"domain": pav_entry(source="human")}))
+    assert g["decision"] == "stage_only"
+    assert g["reason"] == "Field is manual_protected."
+
+
+def test_pav_no_provenance_refuses_fail_closed():
+    assert pav_gate(None)["decision"] == "stage_only"
+
+
+def test_pav_unparseable_blob_refuses_and_does_not_raise():
+    assert pav_gate("{not json")["decision"] == "stage_only"
+
+
+def test_pav_stale_recorded_value_refuses():
+    # A human has since retyped the domain, or a previously REFUSED candidate left the
+    # entry behind — either way the recorded value is no longer the current one.
+    g = pav_gate(json.dumps({"domain": pav_entry(value="someone-elses.example")}))
+    assert g["decision"] == "stage_only"
+
+
+def test_pav_conflicting_candidates_block_the_correction():
+    # The Python twin of the JS engine's opts.rowConflicted: this function has no
+    # row-level conflict object, only its own candidate list.
+    candidates = [make_candidate("domain", "zoominfo", PAV_CORRECTED, 95),
+                  make_candidate("domain", "apollo", "franchisor.example", 95)]
+    assert pav_gate(json.dumps({"domain": pav_entry()}),
+                    candidates=candidates)["decision"] == "stage_only"
+
+
+def test_pav_correction_still_held_to_min_confidence():
+    candidates = [make_candidate("domain", "zoominfo", PAV_CORRECTED, 94)]
+    g = pav_gate(json.dumps({"domain": pav_entry()}), candidates=candidates)
+    assert g["decision"] == "needs_review"
+
+
+def test_pav_field_without_system_correctable_sources_is_unchanged():
+    policy = {"class": "manual_protected", "min_confidence": 95}
+    g = pav_gate(json.dumps({"domain": pav_entry()}), policy=policy)
+    assert g["decision"] == "stage_only"
+    assert g["reason"] == "Field is manual_protected."

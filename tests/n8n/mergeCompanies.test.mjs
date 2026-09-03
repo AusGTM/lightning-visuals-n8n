@@ -357,3 +357,111 @@ test("TA-4/TS-1 via the PRODUCTION confidenceByField path: fresh vs stale page_a
   assert.equal(fresh.merged.provenance[field].confidence, 88);
   assert.equal(stale.merged.provenance[field].confidence, 88);
 });
+
+// --- Provenance-aware manual_protected (quick task 260904-pav) ------------------------
+// A `domain` the enrichment system parked itself (provenance source `create_seed`) may be
+// corrected by the system's own later, better answer; every other provenance story refuses
+// exactly as before. Four conjuncts, each asserted to refuse on its own:
+//   allowlisted source AND recorded value still == current value AND opts.rowConflicted
+//   === false (strictly) AND the field's own min_confidence (95, unchanged).
+const PAV_SEEDED = "brisbanelions.com.au";
+const PAV_CORRECTED = "lions.com.au";
+
+function pavEntry(overrides) {
+  return {
+    source: "create_seed", confidence: 0, verified_at: "2026-09-04T00:00:00.000Z",
+    validation_status: "request_echo", value: PAV_SEEDED, ...overrides,
+  };
+}
+
+// existingProvenance: a raw string written straight onto lv_enrichment_provenance, or an
+// object serialized for you, or undefined for "the record has no blob at all".
+function pavRun({ existingProvenance, entry, opts, policy } = {}) {
+  const existing = { domain: PAV_SEEDED };
+  if (existingProvenance !== undefined) {
+    existing.lv_enrichment_provenance = existingProvenance;
+  } else if (entry !== undefined) {
+    existing.lv_enrichment_provenance = JSON.stringify({ domain: entry });
+  }
+  return mergeCompanies(existing, { domain: PAV_CORRECTED }, policy,
+    { source: "waterfall", confidence: 95, rowConflicted: false, ...opts });
+}
+
+test("mergeCompanies: a create_seed-provenanced domain whose recorded value still matches is CORRECTED", () => {
+  const { canonicalPatch, decisions } = pavRun({ entry: pavEntry() });
+  assert.equal(canonicalPatch.domain, PAV_CORRECTED,
+    "the system's own parked domain must be correctable by its own better answer");
+  assert.equal(decisions.find((d) => d.field === "domain").decision, "promote");
+});
+
+test("mergeCompanies: a human-provenanced domain is refused exactly as today", () => {
+  const { canonicalPatch, decisions } = pavRun({ entry: pavEntry({ source: "human" }) });
+  assert.ok(!("domain" in canonicalPatch));
+  const d = decisions.find((x) => x.field === "domain");
+  assert.equal(d.decision, "stage_only");
+  assert.equal(d.reason, "Field is manual_protected.");
+});
+
+test("mergeCompanies: a domain with NO provenance entry at all is refused (fail closed)", () => {
+  const { canonicalPatch, decisions } = pavRun({});
+  assert.ok(!("domain" in canonicalPatch));
+  assert.equal(decisions.find((x) => x.field === "domain").decision, "stage_only");
+});
+
+test("mergeCompanies: an unparseable provenance blob refuses and does not throw", () => {
+  let result;
+  assert.doesNotThrow(() => { result = pavRun({ existingProvenance: "{not json" }); });
+  assert.ok(!("domain" in result.canonicalPatch));
+  assert.equal(result.decisions.find((x) => x.field === "domain").decision, "stage_only");
+});
+
+test("mergeCompanies: a create_seed entry whose recorded value no longer matches is refused", () => {
+  // A human has since retyped the domain (or a previously REFUSED candidate left the entry
+  // behind — mergeCompanies provenances every field, promoted or not, so the value-match
+  // conjunct is what stops a refusal authorising its own later promotion).
+  const { canonicalPatch, decisions } =
+    pavRun({ entry: pavEntry({ value: "someone-elses.example" }) });
+  assert.ok(!("domain" in canonicalPatch));
+  assert.equal(decisions.find((x) => x.field === "domain").decision, "stage_only");
+});
+
+test("mergeCompanies: a material conflict on the row blocks the correction", () => {
+  // The harveynorman.com.au guard: providers disagree on SIZE exactly when the domain is a
+  // franchisor's or a parent's, so a conflicted row must never let a domain win on confidence.
+  const { canonicalPatch, decisions } =
+    pavRun({ entry: pavEntry(), opts: { rowConflicted: true } });
+  assert.ok(!("domain" in canonicalPatch));
+  assert.equal(decisions.find((x) => x.field === "domain").decision, "stage_only");
+});
+
+test("mergeCompanies: a caller that omits rowConflicted entirely gets NO correction (fail closed)", () => {
+  const { canonicalPatch, decisions } =
+    pavRun({ entry: pavEntry(), opts: { rowConflicted: undefined } });
+  assert.ok(!("domain" in canonicalPatch),
+    "a caller that has not opted in must not get the correction path with the conflict guard off");
+  assert.equal(decisions.find((x) => x.field === "domain").decision, "stage_only");
+});
+
+test("mergeCompanies: the correction is still held to the field's own min_confidence (95)", () => {
+  const { canonicalPatch, decisions } =
+    pavRun({ entry: pavEntry(), opts: { confidence: 94 } });
+  assert.ok(!("domain" in canonicalPatch));
+  assert.equal(decisions.find((x) => x.field === "domain").decision, "needs_review");
+});
+
+test("mergeCompanies: a manual_protected field with NO system_correctable_sources key is byte-identically refused", () => {
+  // A synthetic field name, deliberately not one HubSpot validates as an enum — the enum
+  // guard would otherwise stage it for its own unrelated reason and prove nothing here.
+  const policy = { ...DEFAULT_COMPANY_POLICY,
+                   pav_unlisted_field: { class: "manual_protected", min_confidence: 0 } };
+  const { canonicalPatch, decisions } = mergeCompanies(
+    { pav_unlisted_field: "old",
+      lv_enrichment_provenance: JSON.stringify({
+        pav_unlisted_field: pavEntry({ value: "old" }) }) },
+    { pav_unlisted_field: "new" }, policy,
+    { source: "waterfall", confidence: 100, rowConflicted: false });
+  assert.ok(!("pav_unlisted_field" in canonicalPatch));
+  const d = decisions.find((x) => x.field === "pav_unlisted_field");
+  assert.equal(d.decision, "stage_only");
+  assert.equal(d.reason, "Field is manual_protected.");
+});
