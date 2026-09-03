@@ -678,7 +678,7 @@ review became grantable (plan 02), and `n8n/code/reviewDecision.js`'s `not_allow
 becomes false once a grant can set the allowlist dynamically (plan 04, changed at its source and
 regenerated — never a hand-edit of the JSON).
 
-**Plans**: 4/4 plans executed
+**Plans**: 5 plans (4/5 executed; 60-05 is gap closure from the 2026-09-03 supervised walk)
 
 - [x] 60-01-PLAN.md — TRACER: `"review"` becomes a grantable lane end-to-end (LANES, `REVIEW_FLAGS`,
       `arm_for_review`, `submit_decision`'s grant gate), with the two reversed-design tests rewritten
@@ -693,6 +693,11 @@ regenerated — never a hand-edit of the JSON).
 - [x] 60-04-PLAN.md — operator surfaces and release: the corrected backend message (regenerated), the
       review-triage skill on the grant, three-lane grants in the dispatch skills, truthful gate tables,
       CHANGELOG and version `0.35.0`. Wave 3.
+
+- [ ] 60-05-PLAN.md — GAP CLOSURE (G-60-1, G-60-2) from the 2026-09-03 supervised operator walk:
+      `verify_decision` compares on two legs so a successful approve stops reporting a false
+      `failed`, and `verify_live_write_safety.py` gains a scoped armed expectation that cannot
+      blind the scan. Client-side only — no n8n change. Wave 1.
 
 **Nothing in these plans arms, deploys, writes to HubSpot or calls a provider.** This phase's own
 live proof is a supervised operator walk (`60-VALIDATION.md` § Manual-Only Verifications), not an
