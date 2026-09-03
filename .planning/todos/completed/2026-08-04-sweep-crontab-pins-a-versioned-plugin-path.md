@@ -11,7 +11,33 @@ files:
   - operator-claude-plugin/scripts/durable_paths.py
 ---
 
-## Status (rewritten 2026-09-02) — still open, and materially worse
+## RESOLVED 2026-09-03 — Phase 63 (plans 63-01, 63-02)
+
+Everything below this section was written **before Phase 63 executed** and is preserved verbatim
+as the case for the work, not as current state. All three sketched mitigations shipped, and each
+was re-confirmed on disk at closure rather than taken from a SUMMARY claim:
+
+| Sketched fix | State 2026-09-03 |
+|---|---|
+| Stable launcher shim under the durable home | **shipped** — `operator-claude-plugin/scripts/sweep_shim.py` installs `lv-sweep-launcher.sh` at the durable path and resolves the newest install at every fire, reusing `durable_paths.py`'s ordering rather than reimplementing it (D-63-04) |
+| Self-check in the wrapper | **shipped** — `lv-sweep-run.sh`'s staleness block stamps both roots and banners when running an old root, and never refuses (D-63-02) |
+| Re-point step in the update docs | **shipped** — `SWEEP-CRON-TEMPLATE.md`'s cron line and launchd `ProgramArguments` both name the shim, plus a "Already have a schedule installed under the old shape? Re-point it once." subsection |
+
+Proven under a real scheduler, not asserted: `63-SWEEP-SHIM-SCHEDULER-PROOF.md` (three live
+launchd runs resolving the newest install and following a simulated update, no schedule or shim
+edit) and `63-SWEEP-SHIM-CONCURRENCY-PROOF.md` (an interrupted fire leaves no partial state; two
+genuinely overlapping fires each resolve independently and each stamp a complete, uninterleaved
+line). Phase 63 verification: 28/28, `passed`.
+
+**What this closure does NOT claim.** The twelve already-installed version directories on the
+operator's machine are untouched, and D-63-03 forbids this project rewriting any crontab. The
+schedule on that machine still names whatever path it was written with. Reaching it is the
+**one-time admin re-point** the template now documents — an operator action, not something this
+phase performed.
+
+---
+
+## Status (rewritten 2026-09-02, superseded by the section above) — still open, and materially worse
 
 Re-verified against the tree and the machine. **Nothing about this has been fixed**, and the
 evidence for it is now much stronger than when it was captured.

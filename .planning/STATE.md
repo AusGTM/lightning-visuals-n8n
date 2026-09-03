@@ -22,22 +22,31 @@ progress:
 
 ## 🚧 CURRENT MILESTONE — v1.1 Unattended Session Runs (IN FLIGHT; Phase 62 executed 2026-09-02)
 
-**Phases:** 53–63. Complete: 53, 54, **57**, 58, 59, **61**. Absorbed into 61 by operator decision
-D-61-08: **55** (async run) and **56** (unattended pair pipeline) — neither is open work, do not
-re-plan them.
+**Phases:** 53–63. Complete: 53, 54, **57**, 58, 59, **61**, **63**. Absorbed into 61 by operator
+decision D-61-08: **55** (async run) and **56** (unattended pair pipeline) — neither is open work,
+do not re-plan them.
 
-**Open work, as of 2026-09-02:**
+**Open work, as of 2026-09-03:**
 
 - **62 — Suggest the contacts nobody named.** Executed (6/6 plans) and verified 13/13, but **NOT
   complete**: verification is `human_needed` and UAT is `partial`. Three items are blocked on a
   live attended sitting (real `web_fetch`, real Lusha credit spend). The code is done; only the
   live proof is outstanding. Resume with `/gsd-verify-work 62`.
 
-- **60 — Review-lane authority** (split out of 59). Open.
-- **63 — The unattended lane actually runs unattended.** Executed, all 5 plans complete
-  (2026-09-02): 63-A (sweep launcher shim + self-check), 63-B (judge lever 2 evaluated by offline
-  replay and dropped — see 63-04), and 63-05's deploy/bounce/prove closing the Phase 62 divergence.
-  Not yet phase-verified (`/gsd-verify-work 63`).
+- **60 — Review-lane authority** (split out of 59). Executed, but **not complete**: 2 UAT items
+  (`testing`) and 2 verification items (`human_needed`). All four need an armed HubSpot write
+  window. This is NOT a plan-it-next phase — `phase.complete 63` advanced `current_phase` to 60
+  mechanically, by roadmap order, not because 60 needs planning.
+
+**Phase 63 — COMPLETE 2026-09-03.** All 5 plans, verification **28/28 `passed`**, UAT `complete`.
+63-A (sweep launcher shim + wrapper staleness self-check), 63-B (judge lever 2 evaluated by
+offline replay and **dropped** — see 63-04), 63-05's deploy/bounce/prove closing the Phase 62
+divergence, plus the backstop item that had held the phase at `human_needed`: interruption and
+overlapping-fire behaviour proved by direct observation under real launchd fires
+(`scripts/verify_sweep_shim_concurrency.sh`, record in `63-SWEEP-SHIM-CONCURRENCY-PROOF.md`).
+Todos: `sweep-crontab-pins-a-versioned-plugin-path` closed; **`enrichment-throughput-ceiling`
+deliberately NOT closed** and its `resolves_phase` key removed — 63 evaluated its lever 2 and
+dropped it, levers 1 and 3 are untouched, so the phase did not resolve it.
 
 ~~Open: **57 — the next phase**~~ — **Phase 57 completed 2026-09-01.** It is no longer the gate on
 anything. Phase 52 stays v1.0's and stays deferred indefinitely.
@@ -62,7 +71,13 @@ The first live UNATTENDED, credit-spending batch has NOT run and is gated on Pha
 v1.0's). Suites at close: root python 3539 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
 844 pass / 0 fail.
 
-**Next action: finish Phase 62's live UAT (`/gsd-verify-work 62`), or plan Phase 63.**
+**Next action (2026-09-03): every remaining item needs the operator, not another phase.** With 63
+closed, all 17 items in `gsd_run query audit-uat` are operator-gated: **60, 40, 20** (6 items) need
+an armed HubSpot write window; **62** (3 items) needs a Lusha credit spend; **57** (2) and **16.9**
+(1) need operator judgment. There is nothing left that code alone can close — 63's backstop was the
+last one, and it is done.
+~~Next action: finish Phase 62's live UAT (`/gsd-verify-work 62`), or plan Phase 63.~~ — superseded,
+63 completed 2026-09-03.
 ~~Next action: plan Phase 57.~~ — superseded, 57 completed 2026-09-01.
 
 ### Original milestone-definition note (2026-08-25) — retained as history
@@ -218,7 +233,8 @@ Phase: 60 — Review-lane authority
   `max_uses` is 5 — unchanged, not a deliverable here. Nothing armed; write allowlist stayed
   empty throughout. `node --test tests/n8n/*.test.mjs`: 862 pass / 0 fail. Full record:
   `63-DEPLOY-RECORD.md`; full plan record: `63-05-SUMMARY.md`.
-  All five plans in Phase 63 (63-01 through 63-05) are now complete. Next: `/gsd-verify-work 63`.
+  All five plans in Phase 63 (63-01 through 63-05) are complete, and the phase itself closed
+  2026-09-03 at 28/28 `passed` — see the milestone section above.
 
 **63-02 outcome (2026-09-02, wave 2, 63-A half).** `scripts/verify_sweep_shim_scheduler.sh` —
   a self-contained, re-runnable harness — proved 63-01's shim under a REAL launchd fire, not an
