@@ -131,8 +131,9 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
         if record["row"]["firstname"] == "Jamie":
             record["row"]["email"] = "jamie.fox@example-club.example"
 
+    company_domains = {company_row["name"]: company_row["website"]}
     sendable, held = suggest_contacts.partition_for_dispatch(
-        [record["row"] for record in records])
+        [record["row"] for record in records], company_domains)
     assert len(sendable) == 1 and sendable[0]["firstname"] == "Jamie"
     assert len(held) == 1 and held[0]["row"]["firstname"] == "Robin"
 
@@ -245,8 +246,11 @@ def test_the_documented_round_reaches_an_accepted_chunk_and_an_enriched_sendable
     merge_report = preingest.merge_enriched(minted["spec"]["rows"], responses)
 
     rejoined = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+    company_domains = {
+        company_a["name"]: company_a["website"], company_b["name"]: company_b["website"],
+    }
     sendable, held = suggest_contacts.partition_for_dispatch(
-        [record["row"] for record in rejoined])
+        [record["row"] for record in rejoined], company_domains)
     assert len(sendable) == 1 and sendable[0]["firstname"] == "Jamie", (
         "without rejoin_enriched, both rows would still be held -- the quiet wrong "
         "answer Decision 2 names"

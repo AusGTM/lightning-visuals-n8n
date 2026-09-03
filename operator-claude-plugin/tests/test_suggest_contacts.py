@@ -387,21 +387,141 @@ def test_select_people_dedupe_is_case_and_whitespace_insensitive_exact_match_onl
     assert selection["dropped"][0]["reason"] == "already_associated"
 
 
-def test_partition_for_dispatch_is_a_thin_call_to_hold_emailless():
+# =====================================================================================
+# Gap closure (62-12, G-62-7) — operator ruling 2026-09-04: "the email domain should be
+# related to the company." Replaces the removed
+# test_partition_for_dispatch_is_a_thin_call_to_hold_emailless, which asserted the exact
+# property this plan removes (partition_for_dispatch == hold_emailless, unconditionally).
+# =====================================================================================
+
+def test_partition_for_dispatch_agrees_with_hold_emailless_when_every_email_is_on_its_own_company_domain():
+    """The replacement property: when every row's email is on its own company's
+    domain, partition_for_dispatch's split matches hold_emailless's -- the new rule
+    adds no extra holds it does not need to."""
     rows = [
         {"firstname": "Jamie", "lastname": "Fox", "company": "Example Racing Club"},
         {"firstname": "Alex", "lastname": "Nguyen", "company": "Example Racing Club",
-         "email": "alex@example.com"},
+         "email": "alex@example-racing-club.example"},
     ]
+    company_domains = {"Example Racing Club": "https://example-racing-club.example"}
 
-    sendable, held = suggest_contacts.partition_for_dispatch(rows)
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
     expected_sendable, expected_held = extraction.hold_emailless(rows)
 
     assert sendable == expected_sendable
-    assert held == expected_held
+    assert [h["row"] for h in held] == [h["row"] for h in expected_held]
+    assert held[0]["reason_code"] == "no_email"
+    assert held[0]["reason"] == expected_held[0]["reason"]
+
+
+def test_partition_for_dispatch_holds_the_stranger_hold_emailless_alone_would_send():
+    """The measured defect, pinned as a fixture: Craig Smith's row has an email, so
+    hold_emailless ALONE reports it sendable. partition_for_dispatch holds it because
+    that email's domain belongs to a US insurer, not the club whose committee page
+    named him."""
+    rows = [{"firstname": "Craig", "lastname": "Smith", "company": "The Roma Turf Club",
+             "email": "craig.smith@thehartford.com"}]
+    company_domains = {"The Roma Turf Club": "romaturfclub.com.au"}
+
+    # hold_emailless alone still returns the stranger as sendable -- proves
+    # contact-upload and enrich-before-ingest (which call hold_emailless directly, never
+    # partition_for_dispatch) are unaffected by this rule.
+    alone_sendable, alone_held = extraction.hold_emailless(rows)
+    assert alone_sendable == rows
+    assert alone_held == []
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == []
     assert len(held) == 1
-    assert held[0]["row"]["firstname"] == "Jamie"
+    assert held[0]["reason_code"] == "email_domain_mismatch"
+    assert held[0]["reason"] == (
+        "email domain thehartford.com does not match romaturfclub.com.au"
+    )
+
+
+@pytest.mark.parametrize("email,website,expected_relation", [
+    ("craig.smith@thehartford.com", "romaturfclub.com.au", "mismatch"),
+    ("markoaten@oatens.com", "lismoreturfclub.com.au", "mismatch"),
+    # Decision 3's accepted cost: this is plausibly the one genuinely correct address
+    # in the round, and the strict rule holds it anyway (.com vs .com.au).
+    ("kdaniel@lismoreturfclub.com", "lismoreturfclub.com.au", "mismatch"),
+    ("kdaniel@lismoreturfclub.com.au", "lismoreturfclub.com.au", "related"),
+    ("staff@mail.romaturfclub.com.au", "www.romaturfclub.com.au", "related"),
+    # the send-direction sibling of 62-10's fetch-guard suffix trap
+    ("x@romaturfclub.com.au.attacker.tld", "romaturfclub.com.au", "mismatch"),
+])
+def test_email_domain_relation_pins_the_measured_fixtures(email, website, expected_relation):
+    assert suggest_contacts.email_domain_relation(email, website) == expected_relation
+
+
+def test_email_domain_relation_tests_freemail_before_relatedness():
+    """A gmail address must never be reported as a mismatch -- freemail is checked
+    first, so the held pile can tell strangers from personal mailboxes at a glance."""
+    assert suggest_contacts.email_domain_relation(
+        "someone@gmail.com", "romaturfclub.com.au") == "freemail"
+
+
+def test_email_domain_relation_company_domain_unknown():
+    assert suggest_contacts.email_domain_relation(
+        "someone@example.com", None) == "company_domain_unknown"
+    assert suggest_contacts.email_domain_relation(
+        "someone@example.com",
+        "https://www.linkedin.com/company/x") == "company_domain_unknown"
+
+
+def test_email_domain_relation_no_email():
+    assert suggest_contacts.email_domain_relation("", "romaturfclub.com.au") == "no_email"
+    assert suggest_contacts.email_domain_relation(None, "romaturfclub.com.au") == "no_email"
+
+
+def test_partition_for_dispatch_labels_freemail_distinctly_from_mismatch():
+    rows = [{"firstname": "Pat", "lastname": "Lee", "company": "The Roma Turf Club",
+             "email": "pat.lee@gmail.com"}]
+    company_domains = {"The Roma Turf Club": "romaturfclub.com.au"}
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == []
+    assert held[0]["reason_code"] == "email_domain_freemail"
+    assert "does not match" not in held[0]["reason"]
+    assert "gmail.com" in held[0]["reason"]
+
+
+def test_partition_for_dispatch_holds_when_the_company_has_no_usable_recorded_domain():
+    rows = [{"firstname": "Pat", "lastname": "Lee", "company": "Unknown Co",
+             "email": "pat.lee@example.com"}]
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, {})
+    assert sendable == []
+    assert held[0]["reason_code"] == "company_domain_unknown"
+
+
+def test_partition_for_dispatch_index_discipline_across_both_passes():
+    """Every held entry's index is its ORIGINAL position in `rows`, for both the
+    no-email pass and the relatedness pass -- never a position renumbered against the
+    sendable sublist."""
+    rows = [
+        {"firstname": "A", "lastname": "One", "company": "Acme"},  # no email -> held@0
+        {"firstname": "B", "lastname": "Two", "company": "Acme",
+         "email": "b@acme.example"},  # related -> sendable
+        {"firstname": "C", "lastname": "Three", "company": "Acme",
+         "email": "c@stranger.example"},  # mismatch -> held@2
+    ]
+    company_domains = {"Acme": "acme.example"}
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
     assert sendable == [rows[1]]
+    assert [h["index"] for h in held] == [0, 2]
+    assert held[0]["reason_code"] == "no_email"
+    assert held[1]["reason_code"] == "email_domain_mismatch"
+
+
+def test_partition_for_dispatch_requires_company_domains_with_no_default():
+    """Decision 4: an optional company_domains defaulting to None would be a
+    one-keyword bypass of the operator ruling."""
+    import inspect
+    params = list(inspect.signature(suggest_contacts.partition_for_dispatch).parameters.values())
+    assert len(params) == 2
+    assert params[1].default is inspect.Parameter.empty
 
 
 def test_suggest_contacts_has_no_branch_keyed_on_a_suggestion_origin_flag():

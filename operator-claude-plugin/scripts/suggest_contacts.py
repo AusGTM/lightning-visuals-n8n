@@ -417,13 +417,168 @@ def no_candidates(company_row, pasted_url, attempts):
     }
 
 
-def partition_for_dispatch(rows):
-    """A thin call to `extraction.hold_emailless(rows)`, unchanged. A suggested row still
-    without an email after stage 2 is held exactly the way a CSV row is -- no branch
-    anywhere in this module reads "is this a suggestion" to change that outcome
-    (D-62-09, SUGGEST-04). This function exists only to give the sitting one named seam
-    to call; it adds no logic, filtering, re-ordering or annotation of its own."""
-    return extraction.hold_emailless(rows)
+_RELATION_REASON_CODES = {
+    "freemail": "email_domain_freemail",
+    "mismatch": "email_domain_mismatch",
+    "company_domain_unknown": "company_domain_unknown",
+}
+
+
+def email_domain_relation(email, company_website):
+    """One of `"no_email"`, `"freemail"`, `"company_domain_unknown"`, `"related"`,
+    `"mismatch"` -- evaluated in that order (62-12, G-62-7, operator ruling
+    2026-09-04: "the email domain should be related to the company").
+
+    "related" <=> ed == cd or ed.endswith("." + cd) -- equal, or a label-boundary
+    SUBDOMAIN of the company's own domain. Both sides go through
+    `enrichment._clean_domain` (lowercase, scheme and `www.` stripped, host only), the
+    one domain-normalisation guard the client, the ingest lane, and this check all
+    already agree on -- so `www.romaturfclub.com.au` and `romaturfclub.com.au` are the
+    same string with no extra helper, and `staff@mail.romaturfclub.com.au` is that
+    club's own domain.
+
+    The subdomain direction is deliberate and single-directional:
+    `ed.endswith("." + cd)` accepts a host UNDER the company's own domain (which the
+    company's own DNS controls), and refuses `romaturfclub.com.au.attacker.tld` --
+    that string does not end with `.romaturfclub.com.au`. This is the send-direction
+    sibling of `url_fallback`'s fetch-guard suffix trap. The reverse (company recorded
+    at a subdomain, email at the apex) is NOT related -- fail-closed; a company
+    recorded at a subdomain is a rarity and holding it is cheap.
+
+    Freemail is tested BEFORE relatedness, so a personal-mailbox address is never
+    reported as a mismatch -- that is what lets the held pile separate strangers from
+    people with Gmail at a glance.
+
+    Accepted, measured cost (Decision 3, 62-12-PLAN.md): `kdaniel@lismoreturfclub.com`
+    against a company recorded at `lismoreturfclub.com.au` is a MISMATCH under this
+    rule -- `.com` is not `.com.au` and is not a subdomain of it. Relating the two
+    would need registrable-domain (public-suffix) logic this repo does not carry, or a
+    heuristic that could relate a domain the company never registered. The operator
+    accepted this cost, with the round's own zero-sendable consequence in view, rather
+    than widen the rule. Widening path, if ever asked for: one small
+    registrable-domain-equivalence helper plus its own fixture set -- not a change to
+    this function's ordering.
+
+    Deliberately NOT `url_fallback._canonical_authority` (62-10) -- that comparator is
+    built for a security guard on what the agent will FETCH (parses a netloc, carries
+    the port, refuses a dotless remainder). This question has no URLs and no ports; it
+    compares an email's domain to a CRM property to decide what to SEND. Importing a
+    fetch-guard's port semantics here would borrow the wrong invariant.
+
+    No public-suffix / registrable-domain dependency is used or considered.
+    """
+    stripped = str(email or "").strip().lower()
+    if "@" not in stripped:
+        return "no_email"
+    raw = stripped.rsplit("@", 1)[-1]
+    if not raw:
+        return "no_email"
+    if raw in enrichment.FREEMAIL_DOMAINS:
+        return "freemail"
+    cd = enrichment._clean_domain(company_website)
+    if cd is None or "." not in cd:
+        return "company_domain_unknown"
+    ed = enrichment._clean_domain(raw)
+    if ed is None:
+        return "mismatch"
+    if ed == cd or ed.endswith("." + cd):
+        return "related"
+    return "mismatch"
+
+
+def _relation_reason(relation, email, company_website):
+    """The prose text for a held entry, per 62-12-PLAN.md Decision 5's table. Every
+    branch names what was compared -- no bare flag ever reaches the operator."""
+    stripped = str(email or "").strip().lower()
+    domain = stripped.rsplit("@", 1)[-1] if "@" in stripped else stripped
+
+    if relation == "freemail":
+        return (
+            f"{domain} is a personal mailbox, not this company's own domain -- held "
+            f"and labelled separately from a stranger's domain so the held pile stays "
+            f"legible"
+        )
+    if relation == "mismatch":
+        cd = enrichment._clean_domain(company_website)
+        if cd is None:
+            return f"email domain {domain} does not match this company's recorded domain"
+        return f"email domain {domain} does not match {cd}"
+    if relation == "company_domain_unknown":
+        if not company_website:
+            return (
+                f"this company has no recorded website or domain -- nothing to "
+                f"compare {domain} against"
+            )
+        return (
+            f"{company_website!r} does not look like this company's own domain -- "
+            f"nothing to compare {domain} against"
+        )
+    return f"{email!r} does not look like a usable email address"
+
+
+def partition_for_dispatch(rows, company_domains):
+    """Split `rows` into `(sendable, held)`, holding a row whose enriched email is not
+    related to the company that named the person (62-12, G-62-7, operator ruling
+    2026-09-04: "the email domain should be related to the company").
+
+    This is scoped to THIS suggestion round only: `extraction.hold_emailless` -- shared
+    by `contact-upload` and `enrich-before-ingest`, where the operator supplied the
+    email themselves -- is called unchanged and untouched. A suggested row's email came
+    from a provider resolving a weak identity-group-2 key (firstname+lastname+company);
+    an operator-typed address carries no such risk, and the ruling was made about the
+    former, not the latter.
+
+    `company_domains` maps a company NAME (normalised the same way `select_people`'s
+    dedupe already normalises names -- case-folded, whitespace-collapsed) to that
+    company's recorded `website`/`domain` string. It is REQUIRED, with no default: an
+    optional argument here would be a one-keyword bypass of the operator's ruling. A
+    row whose company is absent from the map, or whose recorded value cannot be turned
+    into a domain, is held with `reason_code: "company_domain_unknown"` -- never sent.
+
+    Runs `extraction.hold_emailless(rows)` first, stamping its held entries with
+    `reason_code: "no_email"` and keeping their reasons verbatim. Every remaining row
+    is then classified by `email_domain_relation`; `"related"` stays sendable, and
+    every other verdict becomes a held entry naming the ORIGINAL index in `rows` (never
+    a position in the sendable sublist, which would renumber this pass's holds).
+    Returns `(sendable, held)` with `held` ordered by original index, so the two passes
+    read as one list.
+
+    Every held entry carries `{"index", "row", "reason", "reason_code"}` -- a uniform
+    shape across both passes. `confidence.ALL_HOLD_CODES` is not widened by these
+    codes: they describe why a SUGGESTION round declined to send, not a held-queue
+    class, and the held-row path downstream (`confidence.assess()` ->
+    `held_queue.build_entry()`) is unchanged.
+    """
+    _, no_email_held = extraction.hold_emailless(rows)
+    held_indices = {entry["index"] for entry in no_email_held}
+    for entry in no_email_held:
+        entry["reason_code"] = "no_email"
+
+    domains_by_name = {
+        _normalize_name(name): website for name, website in (company_domains or {}).items()
+    }
+
+    sendable = []
+    held = list(no_email_held)
+    for i, row in enumerate(rows):
+        if i in held_indices:
+            continue
+        company_website = domains_by_name.get(_normalize_name(row.get("company")))
+        relation = email_domain_relation(row.get("email"), company_website)
+        if relation == "related":
+            sendable.append(row)
+            continue
+        held.append(
+            {
+                "index": i,
+                "row": row,
+                "reason": _relation_reason(relation, row.get("email"), company_website),
+                "reason_code": _RELATION_REASON_CODES.get(relation, relation),
+            }
+        )
+
+    held.sort(key=lambda entry: entry["index"])
+    return sendable, held
 
 
 if __name__ == "__main__":
