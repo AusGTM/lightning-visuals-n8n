@@ -310,6 +310,114 @@ test("mergeCompanies: require_evidence_url_for gates only the listed values", ()
   assert.equal(canonicalPatch.lv_org_type, "other");
 });
 
+// --- mergeCompanies: provenance-aware manual_protected (quick task 260904-pav) -------
+// GENUINE Python parity, not expected-outcome: one fixture table drives BOTH engines and
+// the outcomes are compared to each other. Pinned here because this is the first shared
+// merge predicate whose two engines take DIFFERENT conflict inputs by design — JS reads
+// an explicit `opts.rowConflicted` (its wrapper has already computed a row-level
+// cross-provider conflict set before calling), Python has only its own candidate list and
+// gates on the has_conflict(candidates) it already computes. The fixture states the
+// candidate list once, and each engine derives its own input from it, so a drift in
+// either engine's conjuncts shows up as a decision mismatch rather than as two suites
+// quietly disagreeing.
+const PAV_POLICY = { class: "manual_protected", min_confidence: 95,
+                     system_correctable_sources: ["create_seed"] };
+const PAV_SEEDED = "brisbanelions.com.au";
+
+function pavEntry(overrides) {
+  return { source: "create_seed", confidence: 0, verified_at: "2026-09-04T00:00:00.000Z",
+           validation_status: "request_echo", value: PAV_SEEDED, ...overrides };
+}
+
+// { name, blob (raw string written onto lv_enrichment_provenance, or null for absent),
+//   candidates: [{provider, value, confidence}], expected }
+const PAV_CASES = [
+  { name: "create_seed entry, value still matches, one candidate at 95 -> corrected",
+    blob: JSON.stringify({ domain: pavEntry() }),
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 95 }],
+    expected: "promote" },
+  { name: "human-provenanced -> refused",
+    blob: JSON.stringify({ domain: pavEntry({ source: "human" }) }),
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 95 }],
+    expected: "stage_only" },
+  { name: "no provenance entry at all -> refused (fail closed)",
+    blob: null,
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 95 }],
+    expected: "stage_only" },
+  { name: "unparseable blob -> refused, no throw",
+    blob: "{not json",
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 95 }],
+    expected: "stage_only" },
+  { name: "recorded value no longer matches -> refused",
+    blob: JSON.stringify({ domain: pavEntry({ value: "someone-elses.example" }) }),
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 95 }],
+    expected: "stage_only" },
+  { name: "sources conflict -> refused (the franchisor guard)",
+    blob: JSON.stringify({ domain: pavEntry() }),
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 95 },
+                 { provider: "apollo", value: "franchisor.example", confidence: 95 }],
+    expected: "stage_only" },
+  { name: "below the field's own min_confidence -> needs_review",
+    blob: JSON.stringify({ domain: pavEntry() }),
+    candidates: [{ provider: "zoominfo", value: "lions.com.au", confidence: 94 }],
+    expected: "needs_review" },
+];
+
+function pavConflicted(candidates) {
+  // The shared definition both engines' inputs derive from: distinct normalized values.
+  return new Set(candidates.map((c) => String(c.value).toLowerCase())).size > 1;
+}
+
+function jsPavDecision(testCase) {
+  const existing = { domain: PAV_SEEDED };
+  if (testCase.blob !== null) existing.lv_enrichment_provenance = testCase.blob;
+  // JS merges ONE candidate per field; the priority order below matches the Python
+  // oracle's choose_best (provider priority asc, then confidence desc).
+  const best = testCase.candidates[0];
+  const policy = { ...DEFAULT_COMPANY_POLICY_PARITY, domain: PAV_POLICY };
+  const { decisions } = mergeCompanies(existing, { domain: best.value }, policy,
+    { source: best.provider, confidence: best.confidence,
+      rowConflicted: pavConflicted(testCase.candidates) });
+  return decisions.find((d) => d.field === "domain").decision;
+}
+
+function pyPavDecision(testCase) {
+  const script = `
+import json, sys
+from src.schemas import HubSpotRecord, CandidateValue, ProviderEvidence
+from src.merge_policy import deterministic_gate
+inp = json.loads(sys.argv[1])
+props = {"domain": inp["current"]}
+if inp["blob"] is not None:
+    props["lv_enrichment_provenance"] = inp["blob"]
+record = HubSpotRecord(object_type="companies", id="285583534546", properties=props)
+candidates = [CandidateValue(canonical_field="domain", provider=c["provider"],
+                             value=c["value"], normalized_value=c["value"],
+                             confidence=c["confidence"], evidence=ProviderEvidence())
+              for c in inp["candidates"]]
+gate = deterministic_gate(record, "domain", inp["current"], candidates, inp["policy"],
+                          ["zoominfo", "apollo", "lusha", "claude_web"])
+print(json.dumps(gate["decision"]))
+`;
+  const payload = JSON.stringify({ current: PAV_SEEDED, blob: testCase.blob,
+                                   candidates: testCase.candidates, policy: PAV_POLICY });
+  return JSON.parse(execFileSync(PY, ["-c", script, payload], { cwd: ROOT }).toString().trim());
+}
+
+const DEFAULT_COMPANY_POLICY_PARITY =
+  require(path.join(ROOT, "n8n/code/mergeCompanies.js")).DEFAULT_COMPANY_POLICY;
+
+for (const testCase of PAV_CASES) {
+  test(`manual_protected correction parity: ${testCase.name}`, () => {
+    const js = jsPavDecision(testCase);
+    const py = pyPavDecision(testCase);
+    assert.equal(js, testCase.expected, "JS engine");
+    assert.equal(py, testCase.expected, "Python oracle");
+    assert.equal(js, py, "the two engines must agree on the correction path, not only on "
+      + "the paths they already shared");
+  });
+}
+
 // --- dedupeSweep --------------------------------------------------------------
 test("dedupeSweep: cross-format phone dup collapses; garbage -> mangled", () => {
   const records = [

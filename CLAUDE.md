@@ -388,7 +388,13 @@ human_approved
 conflicting
 rejected
 stale
+request_echo
 ```
+
+`request_echo` (added 2026-09-04, quick task 260904-pav): an identity echo of the caller's
+own request — the value the caller asked us to create the record WITH, recorded so a later
+run can tell a system-parked value from a human-curated one. Never evidence: it carries
+confidence 0 and no source ever researched or verified it.
 
 ## 6.2 Global source properties
 
@@ -2948,7 +2954,7 @@ PROMOTE if:
 
 STAGE_ONLY if:
 - Current canonical value exists and field is fill_blank_only.
-- Field is manual_protected.
+- Field is manual_protected (unless the correction clause above applies).
 - Candidate is useful but insufficient to overwrite.
 - Provider confidence is moderate but not high.
 
@@ -2967,6 +2973,47 @@ REJECT if:
 - Candidate mismatches identity anchors.
 - Provider result does not match the current record.
 ```
+
+### 17.2.1 As-built delta — the "previously written by the enrichment system" PROMOTE
+### clause is now implemented (quick task 260904-pav, 2026-09-04)
+
+That clause sat in this list unimplemented: `manual_protected` refused unconditionally,
+without ever asking WHO wrote the existing value, so a `domain` the pipeline parked itself
+was protected against the pipeline's own later, better answer. Both merge engines
+(`n8n/code/mergeCompanies.js` and `src/merge_policy.py`, Phase 46 parity, one commit) now
+implement it, gated on a per-field policy key:
+
+```yaml
+# config/field_policy.yaml — companies.domain, the ONLY field that opts in today
+system_correctable_sources:
+  - create_seed
+```
+
+**Four conjuncts, ALL required.** "Higher confidence" alone is not the rule:
+
+1. the field's policy carries a non-empty `system_correctable_sources`, and the existing
+   value's provenance entry names a source on that list;
+2. the entry's recorded `value` is STILL the record's current value — a human retype, or a
+   previously REFUSED candidate's own leftover entry (both engines provenance every field,
+   promoted or not), refuses;
+3. no material conflict — the JS engine reads `opts.rowConflicted` (`=== false` strictly;
+   omitting it refuses), the Python oracle its own `has_conflict(candidates)`. Different
+   inputs, deliberately: the JS wrapper has a row-level conflict set, `deterministic_gate`
+   has only its candidate list. This is the `harveynorman.com.au` franchisor guard reused;
+4. the field's OWN `min_confidence` (95 for `domain`) — the check sits inside the
+   `manual_protected` branch, which the gate only reaches after its confidence test, so no
+   new threshold key exists.
+
+`create_seed` is the list's only member on purpose: it is the only source in the system
+that ever writes a canonical `domain` (§13.0.1's create branch, which stamps
+`{source: "create_seed", validation_status: "request_echo", confidence: 0}`). Every other
+source's `domain` entry is a staged refusal, so admitting one would let a refused candidate
+authorise its own promotion.
+
+**The mechanism is live but INERT today.** No `normalizeProviders.js` branch pushes a
+company `domain` candidate, and the company providers are looked up BY the record's domain,
+so none can contradict it — see
+`.planning/todos/pending/2026-09-04-company-domain-has-no-candidate-source.md`.
 
 ## 17.3 Minimal PATCH example
 
