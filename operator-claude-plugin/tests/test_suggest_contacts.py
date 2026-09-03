@@ -525,6 +525,125 @@ def test_partition_for_dispatch_requires_company_domains_with_no_default():
     assert params[1].default is inspect.Parameter.empty
 
 
+# =====================================================================================
+# Quick 260905-ad2 — a company may carry MORE THAN ONE domain (D-ad2-01..05). The
+# per-domain rule is byte-identical to today's; only the number of domains it is
+# applied to changes. Roma Turf Club: site `romaturfclub.com.au`, published contact
+# address `INFO@romaturfclub.org.au` — same organisation, two registrable domains.
+# =====================================================================================
+
+ROMA_BOTH = ["romaturfclub.com.au", "romaturfclub.org.au"]
+
+
+def test_email_domain_relation_relates_an_alternate_domain_the_operator_supplied():
+    """D-ad2-01/02: the Roma committee address passes WITH the alternate present."""
+    assert suggest_contacts.email_domain_relation(
+        "INFO@romaturfclub.org.au", ROMA_BOTH) == "related"
+
+
+def test_email_domain_relation_still_holds_the_alternate_when_it_was_not_supplied():
+    """The widening comes ONLY from what the operator supplied, never from the rule --
+    and the one-element LIST form adds no leniency of its own over the bare string."""
+    assert suggest_contacts.email_domain_relation(
+        "INFO@romaturfclub.org.au", "romaturfclub.com.au") == "mismatch"
+    assert suggest_contacts.email_domain_relation(
+        "INFO@romaturfclub.org.au", ["romaturfclub.com.au"]) == "mismatch"
+
+
+def test_email_domain_relation_holds_the_stranger_with_or_without_the_alternate():
+    """The refusal that prompted the ruling survives untouched: `thehartford.com` is a
+    US insurer, and a second Roma domain does not make it Roma's."""
+    assert suggest_contacts.email_domain_relation(
+        "craig.smith@thehartford.com", ROMA_BOTH) == "mismatch"
+    assert suggest_contacts.email_domain_relation(
+        "craig.smith@thehartford.com", "romaturfclub.com.au") == "mismatch"
+
+
+def test_email_domain_relation_suffix_trap_is_refused_by_every_member_of_the_set():
+    """T-ad2-01, direction 1 (send-direction): refused by EVERY member, not merely by
+    the first one checked."""
+    assert suggest_contacts.email_domain_relation(
+        "x@romaturfclub.com.au.attacker.tld", ROMA_BOTH) == "mismatch"
+
+
+def test_email_domain_relation_stays_fail_closed_in_the_reverse_direction():
+    """T-ad2-01, direction 2: a company recorded only at a SUBDOMAIN does not relate an
+    apex email. Single-directional, exactly as before."""
+    assert suggest_contacts.email_domain_relation(
+        "staff@romaturfclub.com.au", ["mail.romaturfclub.com.au"]) == "mismatch"
+
+
+def test_email_domain_relation_relates_a_subdomain_of_an_alternate():
+    assert suggest_contacts.email_domain_relation(
+        "staff@mail.romaturfclub.org.au", ROMA_BOTH) == "related"
+
+
+def test_email_domain_relation_reports_unknown_for_a_set_with_no_usable_domain():
+    """D-ad2-04 / T-ad2-03: an all-unusable list and an empty list are
+    `company_domain_unknown`, NEVER `mismatch` -- the assertion that proves a list never
+    reaches `enrichment._clean_domain`'s `str(raw)` and reads as a pseudo-domain."""
+    assert suggest_contacts.email_domain_relation(
+        "someone@example.com", ["https://www.linkedin.com/company/x", ""]
+    ) == "company_domain_unknown"
+    assert suggest_contacts.email_domain_relation(
+        "someone@example.com", []) == "company_domain_unknown"
+
+
+def test_email_domain_relation_normalises_and_dedupes_the_set():
+    """`_clean_domain` per member, order preserved, duplicates collapsed."""
+    messy = ["romaturfclub.com.au", "https://www.ROMATURFCLUB.com.au/",
+             "romaturfclub.org.au"]
+    assert suggest_contacts.email_domain_relation(
+        "info@romaturfclub.org.au", messy) == "related"
+    reason = suggest_contacts._relation_reason(
+        "mismatch", "craig.smith@thehartford.com", messy)
+    assert reason == (
+        "email domain thehartford.com does not match "
+        "romaturfclub.com.au or romaturfclub.org.au"
+    )
+
+
+def test_partition_for_dispatch_reason_names_every_domain_that_was_compared():
+    """D-ad2-05: two or more domains join with ` or `; ONE domain is today's string
+    byte for byte, which is why the join only engages at two."""
+    rows = [{"firstname": "Craig", "lastname": "Smith", "company": "The Roma Turf Club",
+             "email": "craig.smith@thehartford.com"}]
+
+    _, held_two = suggest_contacts.partition_for_dispatch(
+        rows, {"The Roma Turf Club": ROMA_BOTH})
+    assert held_two[0]["reason"] == (
+        "email domain thehartford.com does not match "
+        "romaturfclub.com.au or romaturfclub.org.au"
+    )
+
+    _, held_one = suggest_contacts.partition_for_dispatch(
+        rows, {"The Roma Turf Club": ["romaturfclub.com.au"]})
+    assert held_one[0]["reason"] == (
+        "email domain thehartford.com does not match romaturfclub.com.au"
+    )
+
+
+def test_partition_for_dispatch_roma_sends_only_with_the_alternate_supplied():
+    """Same rows, same rule, different supplied facts."""
+    rows = [
+        {"firstname": "Info", "lastname": "Desk", "company": "The Roma Turf Club",
+         "email": "INFO@romaturfclub.org.au"},
+        {"firstname": "Craig", "lastname": "Smith", "company": "The Roma Turf Club",
+         "email": "craig.smith@thehartford.com"},
+    ]
+
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        rows, {"The Roma Turf Club": ROMA_BOTH})
+    assert sendable == [rows[0]]
+    assert [h["index"] for h in held] == [1]
+    assert held[0]["reason_code"] == "email_domain_mismatch"
+
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        rows, {"The Roma Turf Club": "romaturfclub.com.au"})
+    assert sendable == []
+    assert [h["reason_code"] for h in held] == [
+        "email_domain_mismatch", "email_domain_mismatch"]
+
 def test_suggest_contacts_has_no_branch_keyed_on_a_suggestion_origin_flag():
     source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
     for forbidden in ("is_suggestion", "suggestion_origin", "from_suggestion"):
