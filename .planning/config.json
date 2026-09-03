@@ -2,7 +2,9 @@
   "workflow": {
     "_auto_chain_active": false,
     "use_worktrees": false,
-    "plan_review_convergence": true
+    "plan_review_convergence": true,
+    "nyquist_validation": true,
+    "security_enforcement": false
   },
   "review": {
     "reviewer_instances": {
