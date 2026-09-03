@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 60-review-lane-authority
 source: [60-VERIFICATION.md "Human Verification Required" items 1-2, 60-VALIDATION.md § Manual-Only Verifications]
 started: 2026-09-03T08:20:00Z
