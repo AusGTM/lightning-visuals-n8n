@@ -419,6 +419,47 @@ test("a failed search AND a never-run search are BOTH unknown, distinguishable f
 });
 
 // ============================================================================================
+// Quick task 260904-5a8: summarizeMatch's "company" arm — a CALL-SITE LITERAL, never a
+// `laneOf` return value and never carried on a row (premise_corrections C1). Fixes a false
+// sentence: a companies row used to fall through to the "none" arm and report contacts
+// vocabulary ("no email, object id, or name+company pair") about a row that was never
+// searched by any of those keys. gating_boundary: `match.tier` gates downstream behaviour,
+// `match.reason` does not — this arm keeps tier "unknown"/auto false, same as the
+// fallthrough it replaces, and reads no `existingRecord`.
+// ============================================================================================
+
+test("lane company is unknown/non-auto and its reason names domain-then-name resolution, not contacts vocabulary", () => {
+  const out = summarizeMatch({ lane: "company" });
+  assert.equal(out.tier, "unknown");
+  assert.equal(out.auto, false);
+  assert.deepEqual(out.candidates, []);
+  assert.match(out.reason, /domain/i);
+  assert.match(out.reason, /company name/i);
+  assert.doesNotMatch(out.reason, /email/i);
+  assert.doesNotMatch(out.reason, /object id/i);
+  assert.doesNotMatch(out.reason, /name\+company/i);
+});
+
+test("lane company with lookupFailed true still returns the lookupFailed verdict — the failure arm runs first, unchanged", () => {
+  const out = summarizeMatch({ lane: "company", lookupFailed: true });
+  assert.equal(out.tier, "unknown");
+  assert.equal(out.auto, false);
+  assert.equal(out.reason, "the match search failed to run");
+  assert.deepEqual(out.candidates, []);
+});
+
+test("lane none is byte-identical to today, reason string included, after the company arm was added", () => {
+  const out = summarizeMatch({ lane: "none" });
+  assert.equal(out.tier, "unknown");
+  assert.equal(out.auto, false);
+  assert.equal(
+    out.reason,
+    "no searchable identity — the row has no email, object id, or name+company pair"
+  );
+  assert.deepEqual(out.candidates, []);
+});
+
+// ============================================================================================
 // Phase 36 Plan 04, Task 1: isReturnOnly — the two-state write-guard predicate. Not an
 // allow-list of mode names: `mode` is either the write literal (case/whitespace-
 // insensitive) or it is return-only, with no third state. A typo therefore fails safe

@@ -225,3 +225,16 @@ def test_refusal_reaches_build_response_via_the_existing_unsupported_object_type
     conns = doc["connections"]
     assert conns["IF Object Type Supported"]["main"][1][0]["node"] == "Unsupported Object Type"
     assert conns["Unsupported Object Type"]["main"][0][0]["node"] == "Build Response"
+
+
+# --- Quick task 260904-5a8: Decide Company Action carries the "company" call-site literal ---
+
+def test_decide_company_action_carries_the_company_lane_literal():
+    """`Decide Company Action` must call summarizeMatch with the "company" call-site
+    literal, never `row.lane` — this branch stamps no `lane` on any row (C1 in
+    260904-5a8-PLAN.md's premise_corrections), so `row.lane` would always resolve
+    `undefined` and misreport contacts vocabulary about a company row."""
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Decide Company Action")["parameters"]["jsCode"])
+    assert 'summarizeMatch({ lane: "company" })' in code
+    assert "summarizeMatch({ lane: row.lane })" not in code

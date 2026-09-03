@@ -3457,9 +3457,9 @@ return $input.all().map((it) => {
     // Phase 36-04 Task 2 (36-CONTEXT.md §7 step 4): set BEFORE _writeSafetyAllows,
     // unconditionally on the mode predicate alone — no ALLOW_* constant is read on this
     // branch. A propose envelope naming objectType:"company" must not write either.
-    // No medium-tier guard here: the companies branch has no match lane (Task 1's is
-    // contacts-only), so no companies row can ever carry a medium tier — there is
-    // nothing to demote.
+    // No medium-tier guard here: the companies branch's match verdict is a fixed
+    // non-medium company-lane summary (260904-5a8's "company" call-site literal, always
+    // tier "unknown") — there is still nothing to demote.
     action = "proposed";
   }
   if ((action === "create" || action === "enrich") &&
@@ -3487,7 +3487,12 @@ return $input.all().map((it) => {
     needs_review: needsReview.length > 0,
     row_id: row.row_id ?? null,
     mode: row.mode ?? null,
-    match: row.match ?? summarizeMatch({ lane: row.lane }),
+    // 260904-5a8: "company" is a CALL-SITE LITERAL, never `row.lane` — this branch
+    // stamps no lane on any row (C1 in the quick task's premise_corrections), so passing
+    // `row.lane` here would always resolve `undefined` and hit summarizeMatch's generic
+    // "none" fallthrough, which speaks contacts vocabulary about a row that was never
+    // searched by email/object id/name+company. See matchProposal.js's "company" arm.
+    match: row.match ?? summarizeMatch({ lane: "company" }),
     properties,
   }};
 });

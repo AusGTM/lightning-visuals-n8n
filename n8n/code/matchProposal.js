@@ -171,6 +171,9 @@ function verifiedLinkedinHits(searchResults, rawLinkedinUrl) {
 //   -> { tier: "high"|"medium"|"none"|"unknown", auto, reason, candidates }
 // `unknown` is not `none` (36-CONTEXT.md §6): "we did not find one" (none) and "we could
 // not look" (unknown — the search failed or never ran) must stay distinguishable.
+// Accepts every `laneOf` value ("fetch_by_id" | "email" | "linkedin" | "name" | "none")
+// plus one CALL-SITE-ONLY literal, "company" (260904-5a8) — never a `laneOf` return value,
+// never carried on a row, see the "company" arm below for why.
 function summarizeMatch(input) {
   const opts = isPlainObject(input) ? input : {};
   const lane = opts.lane;
@@ -211,8 +214,32 @@ function summarizeMatch(input) {
     return { tier: "none", auto: false, reason: "searched, no hit", candidates: [] };
   }
 
-  // lane "none" (or anything unrecognized): there was no searchable identity, so the
-  // search never ran — this is a "could not look", not a "did not find one".
+  // lane "company": quick task 260904-5a8. `laneOf` NEVER returns this value and no row
+  // ever carries it — it is a CALL-SITE LITERAL passed only by `ENRICH_DECIDE_CO_CLOUD`'s
+  // `match:` line, so it can never reach the four `lane ===` routing IFs/adapters that
+  // gate on a row's own `.lane` (matchProposal.js header, laneOf docstring). Before this
+  // arm, a companies row fell through to the "none" arm below and reported contacts
+  // vocabulary ("no email, object id, or name+company pair") about a row that was never
+  // searched by any of those keys — false and misdirecting (260904-5a8-PLAN.md). The
+  // companies branch resolves identity upstream in HubSpot nodes (domain, then exact
+  // company name) that this module never sees, so `tier: "unknown"` ("we could not look")
+  // is still the correct tier, same as the fallthrough it replaces — only the reason
+  // string changes. Keeps `auto: false`, `candidates: []`, and reads no `existingRecord`
+  // (gating_boundary: `match.reason` does not gate anything downstream, only `match.tier`
+  // does, and this arm does not touch tier).
+  if (lane === "company") {
+    return {
+      tier: "unknown",
+      auto: false,
+      reason: "company identity resolves upstream by domain, then exact company name — see this row's own hs_object_id/action for the outcome",
+      candidates: [],
+    };
+  }
+
+  // lane "none" (or anything unrecognized — in practice only `undefined`, since the
+  // companies branch stamps no `lane` at all and now uses the "company" arm above via a
+  // call-site literal): there was no searchable identity, so the search never ran — this
+  // is a "could not look", not a "did not find one".
   return { tier: "unknown", auto: false, reason: "no searchable identity — the row has no email, object id, or name+company pair", candidates: [] };
 }
 
