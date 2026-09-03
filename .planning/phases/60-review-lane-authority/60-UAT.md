@@ -3,7 +3,7 @@ status: complete
 phase: 60-review-lane-authority
 source: [60-VERIFICATION.md "Human Verification Required" items 1-2, 60-VALIDATION.md § Manual-Only Verifications]
 started: 2026-09-03T08:20:00Z
-updated: 2026-09-03T10:48:23Z
+updated: 2026-09-03T11:08:41Z
 ---
 
 ## Current Test
@@ -19,8 +19,48 @@ expected: |
   (`review_decision.verify_decision`'s post-PATCH refetch) that the approved fields hold on
   the live record. The record's fields must match the previewed `would_write` patch —
   confirmed by re-fetching from HubSpot, never by trusting the POST response.
-result: issue
-reported: |
+result: pass
+resolved_on: second run, 2026-09-03, after the G-60-1 fix shipped
+evidence: |
+  **Re-run 2026-09-03 after commit `2d1c881`, on a second real record — `verified`.**
+
+  The Alice Springs Turf Club, `9604787229`, run_id `8ce8dde4b82a477caea16b691d29c305`,
+  operator-authorized grant (`lanes=["review"]`, one record id, `allow_create=false`,
+  `providers=[]`), operator reason "UAT Alice Springs Turf Club is target company, but not
+  named account". Deliberately the same shape as the first walk — one review reason, one
+  business field — so the only meaningful variable was the fixed code.
+
+  Predicted before the run, in writing: `verified`. Actual:
+
+      [8] VERDICT status=verified
+          message: Confirmed: the record was re-read after the write and all 8 field(s)
+                   hold the approved values.
+
+  All 8 keys, including the two that produced the false `failed` this morning. Three
+  independent confirmations again, none of them the POST status code: the companies review
+  queue dropped 18 → 17 with the record absent, a fresh `preview_decision` now answers
+  `not_flagged`, and the backend's post-PATCH refetch shows `lv_produces_content="true"`.
+
+  This discharges the residual recorded under "Gap closure" below: a real approve has now
+  been observed reporting `verified` under the fixed code. The n8n side was byte-unchanged
+  between the two walks (`git diff --stat` over `n8n/` and `scripts/build_cloud_workflows.py`
+  across every commit since the first walk is empty), so the fixed client is the only
+  difference between `failed` and `verified`.
+
+  **What this re-run did NOT exercise, stated so it is not mistaken for proven:**
+    - `lv_enrichment_reviewed_by`, the fourth unpinnable key. The operator declined to stamp
+      a name, so preview and submit both carried `"operator (unnamed)"` and the key matched
+      on both sides. It is excluded by the fix and unit-tested, but no live approve has yet
+      had preview and submit disagree on it.
+    - **G-60-2's fix.** The in-window armed verification in this walk re-used the ORIGINAL
+      invocation (no `--armed-workflow`), so it reported `armed FAIL` exactly as it did on
+      the first walk — the pre-fix behaviour, not a regression. The new scoped expectation
+      shipped in `408ccf5` was not run live. It is unit-tested and the verifier read the
+      shipped logic directly, but proving it live needs an arm-only window (no decision
+      submitted, so no HubSpot write) and was not done.
+
+first_run_result: issue
+first_run_reported: |
   The write LANDED and is independently confirmed — but the phase's own prescribed
   verification call reported `failed` on it, so the test's stated expectation ("the
   record's fields match the previewed `would_write` patch") is literally not met.
@@ -41,7 +81,7 @@ reported: |
   What failed: `verify_decision(preview["would_write"], response)` → `status: failed`,
   "The backend reported `applied`, but re-reading the record shows 2 field(s) did not take
   the approved value: lv_enrichment_provenance, lv_enrichment_reviewed_at."
-severity: major
+first_run_severity: major
 
 ### 2. No stuck-open review authorization survives the run
 expected: |
@@ -72,8 +112,8 @@ evidence: |
 ## Summary
 
 total: 2
-passed: 1
-issues: 1
+passed: 2
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -310,3 +350,23 @@ a live observation, and this repo's standing rule is that live behaviour earns l
 This does not need its own armed walk. 18 companies remain in the review queue, so the next
 ordinary triage sitting confirms it at zero extra cost: the operator should see `verified`
 where this walk saw `failed`. Recording it so the distinction is not lost, not to gate anything.
+
+## Second run account — the re-test that closed test 1
+
+run_id: `8ce8dde4b82a477caea16b691d29c305`
+
+```json
+[{"chunk_index": 0, "object_type": "companies", "action": "review_approve",
+  "hs_object_id": "9604787229", "outcome": "write_attempted",
+  "reason": null, "row_id": null, "association": null}]
+```
+
+Test 2 was re-confirmed on this run too: `window.disarm_result` reported `disarmed` with all
+three review flags false and both allowlists empty, and a separate process afterwards returned
+`VERDICT: disarmed PASS`. Two armed windows have now been opened and closed on this portal in
+one day with no residue after either.
+
+Two real records were approved across the two walks — `9604738976` (Bunbury Turf Club) and
+`9604787229` (The Alice Springs Turf Club). Both were genuine review decisions the queue was
+holding, not throwaway data; both promoted `lv_produces_content = true` with the operator's
+reason recorded in the provenance blob. Review queue: 19 → 17.
