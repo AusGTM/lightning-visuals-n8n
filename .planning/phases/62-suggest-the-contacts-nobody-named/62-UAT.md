@@ -599,8 +599,22 @@ needed in order to mean anything. In round 1 it never bound.
     downstream re-checks that the returned email's domain bears any relation to the company
     whose page named them — `craig.smith@thehartford.com` against Roma Turf Club is not
     questioned by anything except the generic `needs_review` flag every unmatched row gets.
+  operator_ruling: |
+    OPERATOR RULING, 2026-09-04: "the email domain should be related to the company."
+    A suggested row whose enriched email domain is unrelated to the company that named the
+    person is HELD, not made sendable.
+
+    **Measured consequence, surfaced to the operator before this was recorded:** applied to
+    this sitting's own results the rule holds BOTH emails and yields zero sendable rows
+    instead of two —
+        Craig Smith  romaturfclub.com.au    vs thehartford.com  -> hold (a stranger; correct)
+        Mark Oaten   lismoreturfclub.com.au vs oatens.com       -> hold (plausibly his own
+                                                                   business, not the club)
+    That is a deliberate precision-for-recall trade, accepted with the numbers in view.
   missing:
-    - "Decide the policy: should a suggested row whose enriched email domain is unrelated to the company's own domain be HELD rather than made sendable? This is an operator decision about precision vs recall, not a code detail"
+    - "Implement the operator's ruling: hold a row whose enriched email domain is not the company's domain or a close variant of it"
+    - "Decide the freemail case explicitly and label it DISTINCTLY. Racing-club officials commonly use gmail/bigpond; those match no company domain and are held under any strict reading. `company_domain.py` already treats freemail and AU ISP domains as resolving nothing — reuse that classification rather than writing a second list. The operator should be able to see at a glance whether the held pile is strangers or just people with Gmail"
+    - "Say the reason in the operator report, not just a flag: 'email domain thehartford.com does not match romaturfclub.com.au' is actionable; a bare needs_review is not"
     - "If yes, the check belongs where sendability is decided, not in the provider adapters"
     - "Consider surfacing the mismatch in the operator report explicitly — 'this email's domain does not match the company' is far more actionable than a bare needs_review"
     - "Note the interaction with G-62-3: widening the role filter multiplies the number of common-name rows going through identity group 2, so this gets WORSE as the vocabulary improves"
