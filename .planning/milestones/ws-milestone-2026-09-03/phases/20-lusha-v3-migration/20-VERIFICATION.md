@@ -123,6 +123,9 @@ These do not affect the phase-goal verdict (the underlying code/tests/live-deplo
 **Test:** Run the documented armed command (`DRY_RUN=false ALLOW_HUBSPOT_PROPERTY_WRITES=true` against `scripts/sync_hubspot_properties.py`), then `scripts/snapshot_hubspot_schema.py` to confirm.
 **Expected:** Exactly 2 properties created (`lusha_contact_id`, `lusha_company_id`), undo manifest written under `config/hubspot_migration/`, read-back confirms both exist in the right groups.
 **Why human:** Classifier-blocked for agents in this environment (the phase's own orchestrator confirmed this by direct attempt). Re-confirmed live by this verification: dry-run still shows the identical 2 pending creates documented in 20-04-SUMMARY.md.
+**RESULT (verified live 2026-09-03): PASSED — the properties were already created on 2026-07-30, and this report was stale.** A read-only GET against portal 22617666 confirms both exist: `lusha_contact_id` (contacts, group `lv_enrichment_contacts`, string/text, createdAt `2026-07-30T09:35:00.653Z`) and `lusha_company_id` (companies, group `lv_enrichment`, string/text, createdAt `2026-07-30T09:34:58.490Z`). Both timestamps are Phase 20's own date, so Task 3 was performed inside the phase; only the record lagged.
+
+**The "2 pending creates" line above is what went stale, and it is worth naming how.** `sync_hubspot_properties.py`'s dry-run now reports **0 properties to create** on both objects — it diffs `config/hubspot_properties.yaml` against the live portal, so once the properties existed the diff emptied. This report asserted the pending state from the 20-04-SUMMARY.md prose rather than from a live run. An operator authorised the creation on 2026-09-03; the authorisation went unused because the dry-run found nothing to create. No write was made. Evidence: `.planning/quick/20260903-lusha-id-properties-verify/`.
 
 ### 2. Full staged-ID free-reuse loop, live, through the new properties
 
