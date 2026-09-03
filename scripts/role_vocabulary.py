@@ -25,6 +25,7 @@ Usage:
     python scripts/role_vocabulary.py --dry-run     # print the would-be YAML, write nothing
 """
 import argparse
+import html
 import json
 import os
 import sys
@@ -47,6 +48,12 @@ PAGE_LIMIT = 100
 
 # D-62-06: offer the top N roles by recurrence, N fixed and scannable.
 TOP_N_FAMILIES = 8
+
+# Quick task 260904-39r, D-1: only the recurrence HEAD is ever sent to the clustering
+# call -- ranking runs first, over ALL distinct titles (cheap, no model call); clustering
+# runs second, over the head only. Fixed N, not a "count >= k" cutoff -- see D-1 for why a
+# fixed size is the actual fix and a recurrence cutoff would not be.
+HEAD_N = 200
 
 # D-62-07: the minimum distinct-title count needed to evidence a vocabulary. Below it,
 # the portal cannot support a derived list.
@@ -93,22 +100,54 @@ def _search_contacts_page(after, limit=PAGE_LIMIT) -> dict:
     return r.json()
 
 
+def _normalize_title(raw) -> str:
+    """Quick task 260904-39r, D-3: html.unescape then collapse internal whitespace then
+    strip. Applied ONCE at count time (inside sweep_all_jobtitles) so `counts` KEYS are
+    already the exact strings sent to the model -- and applied AGAIN to each member the
+    model returns before the `in counts` check in rank_top_families. That is the whole
+    fix: the same normalisation on both sides of the exact-match seam, so
+    'AV &amp; Broadcast Senior Executive' and 'AV & Broadcast Senior Executive' become one
+    key instead of two competing (and silently-dropped) head slots.
+
+    Deliberately nothing heavier: no `&`-to-`and`, no punctuation stripping, no
+    case-folding. role_classify.py's _tokenize does that at MATCH time; doing it here
+    would mangle the verbatim titles the model is required to echo back."""
+    text = html.unescape(str(raw or ""))
+    return " ".join(text.split())
+
+
+def _is_junk_title(title: str) -> bool:
+    """D-3's deliberately conservative junk rule: fewer than 2 alphabetic characters.
+    Drops phone numbers and punctuation-only values ('+61407 911 185'). Keeps a bare 'AV'
+    on purpose -- two letters, may be a real department label, and an unrecurring value
+    never reaches the head anyway (see D-3's stated divergence from the UAT)."""
+    return sum(c.isalpha() for c in title) < 2
+
+
 def sweep_all_jobtitles() -> Counter:
     """Read-only paged sweep of every contact's jobtitle. Returns a Counter mapping each
-    non-blank, whitespace-trimmed distinct value to its recurrence."""
+    normalised (D-3), non-junk distinct value to its recurrence."""
     counts: Counter = Counter()
     after = None
     while True:
         page = _search_contacts_page(after)
         for result in page.get("results", []):
             raw = (result.get("properties", {}) or {}).get(JOBTITLE_PROPERTY)
-            title = (raw or "").strip()
-            if title:
+            title = _normalize_title(raw)
+            if title and not _is_junk_title(title):
                 counts[title] += 1
         after = page.get("paging", {}).get("next", {}).get("after")
         if not after:
             break
     return counts
+
+
+def head_titles(counts: Counter, n: int = HEAD_N) -> list:
+    """Quick task 260904-39r, D-1: the n most-recurrent titles, ordered `(-count, title)`
+    so the selection (and any tie-break) is deterministic and never depends on dict
+    order. Titles outside the head never reach the clustering call and so can never join
+    or become a family."""
+    return sorted(counts.keys(), key=lambda t: (-counts[t], t))[:n]
 
 
 # Quick task 260904-39r, D-2: sized from the measured live failure (2,045 titles /
@@ -196,10 +235,18 @@ def cluster_titles(distinct_titles: list) -> list:
 def rank_top_families(families: list, counts: Counter, top_n: int = TOP_N_FAMILIES) -> list:
     """Rank clustered families by summed recurrence (D-62-06) and keep the top N. Drops
     any member the model returned that was not actually in the sampled titles -- a
-    defensive backstop for the system prompt's own "never invent a title" rule."""
+    defensive backstop for the system prompt's own "never invent a title" rule.
+
+    D-3's exact-match seam: each returned member is normalised with the SAME
+    `_normalize_title` used to build `counts`, before the `in counts` check -- otherwise
+    an HTML-escaped or re-whitespaced echo of a real title is silently dropped."""
     ranked = []
     for family in families:
-        members = [m for m in (family.get("members") or []) if m in counts]
+        members = []
+        for raw_member in family.get("members") or []:
+            normalized = _normalize_title(raw_member)
+            if normalized in counts:
+                members.append(normalized)
         if not members:
             continue
         recurrence = sum(counts[m] for m in members)
@@ -233,16 +280,27 @@ def build_generic_fallback(distinct_titles_sampled: int = 0) -> dict:
     }
 
 
-def build_portal_vocabulary(counts: Counter) -> dict:
-    families = cluster_titles(sorted(counts))
+def build_portal_vocabulary(counts: Counter, head_n: int = HEAD_N) -> dict:
+    head = head_titles(counts, head_n)
+    families = cluster_titles(head)
     top_families = rank_top_families(families, counts)
+
+    distinct_total = len(counts)
+    contacts_total = sum(counts.values())
+    contacts_covered = sum(counts[t] for t in head)
+    # D-1's honesty requirement: a MEASURED coverage line, not an assumption that head_n
+    # was enough.
+    print(f"HEAD COVERAGE: clustered {len(head)}/{distinct_total} distinct titles; "
+          f"covers {contacts_covered}/{contacts_total} titled contacts.")
+
     return {
         "version": VOCABULARY_VERSION,
         "built_on": date.today().isoformat(),
         "source": "portal_jobtitle_inventory",
         "evidenced": True,
         "top_n": TOP_N_FAMILIES,
-        "distinct_titles_sampled": len(counts),
+        "distinct_titles_sampled": distinct_total,
+        "head_titles_clustered": len(head),
         "families": top_families,
     }
 
@@ -256,6 +314,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true",
                          help="Print the would-be YAML to stdout without writing the cache.")
+    parser.add_argument("--head", type=int, default=HEAD_N,
+                         help=f"Recurrence head size to cluster (default {HEAD_N}, D-1).")
     args = parser.parse_args(argv)
 
     if not _has_credentials():
@@ -269,12 +329,15 @@ def main(argv=None) -> int:
 
     counts = sweep_all_jobtitles()
 
+    # Sparse check runs on the already-cleaned (normalised, junk-dropped) counts, since
+    # sweep_all_jobtitles now does that cleaning itself -- junk is not evidence of a
+    # vocabulary (D-3's ordering decision).
     if len(counts) < SPARSE_THRESHOLD:
         vocabulary = build_generic_fallback(distinct_titles_sampled=len(counts))
         print(f"SPARSE PORTAL: {len(counts)} distinct jobtitle values found, below the "
               f"threshold of {SPARSE_THRESHOLD}. Serving the disclosed generic fallback.")
     else:
-        vocabulary = build_portal_vocabulary(counts)
+        vocabulary = build_portal_vocabulary(counts, head_n=args.head)
         print(f"CLUSTERED: {len(counts)} distinct jobtitle values into "
               f"{len(vocabulary['families'])} top families.")
 

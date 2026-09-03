@@ -149,3 +149,97 @@ def test_two_unparseable_responses_raise_named_error(monkeypatch):
     with pytest.raises(role_vocabulary.RoleVocabularyDerivationError):
         role_vocabulary.cluster_titles(["Ops Manager"])
 
+# ============================== Task 2 ==============================
+
+def test_normalize_title_merges_html_entity_variants():
+    a = role_vocabulary._normalize_title("AV &amp; Broadcast Senior Executive")
+    b = role_vocabulary._normalize_title("AV & Broadcast Senior Executive")
+    assert a == b == "AV & Broadcast Senior Executive"
+
+
+def test_sweep_merges_entity_variants_and_drops_junk_but_keeps_av(monkeypatch):
+    page = {
+        "results": [
+            {"properties": {"jobtitle": "AV &amp; Broadcast Senior Executive"}},
+            {"properties": {"jobtitle": "AV & Broadcast Senior Executive"}},
+            {"properties": {"jobtitle": "+61407 911 185"}},
+            {"properties": {"jobtitle": "AV"}},
+        ],
+        "paging": {},
+    }
+    monkeypatch.setattr(role_vocabulary, "_search_contacts_page", lambda after, limit=100: page)
+
+    counts = role_vocabulary.sweep_all_jobtitles()
+
+    assert counts["AV & Broadcast Senior Executive"] == 2
+    assert "+61407 911 185" not in counts
+    assert counts["AV"] == 1
+
+
+def test_head_titles_returns_exactly_n_ordered_by_count_then_title():
+    counts = role_vocabulary.Counter()
+    # 2045-key-scale counter: 5 titles with distinct high counts, then 200 titles all
+    # sharing a lower count (so ordering within the tie must fall back to title asc).
+    for i in range(5):
+        counts[f"top-{i}"] = 1000 - i
+    for i in range(2040):
+        counts[f"tail-{i:04d}"] = 1
+
+    head = role_vocabulary.head_titles(counts, 200)
+
+    assert len(head) == 200
+    assert head[:5] == ["top-0", "top-1", "top-2", "top-3", "top-4"]
+    # Remaining 195 slots come from the tied tail, ascending by title.
+    expected_tail = sorted(f"tail-{i:04d}" for i in range(2040))[:195]
+    assert head[5:] == expected_tail
+    # The 201st-ranked title must be absent.
+    all_ranked = sorted(counts.keys(), key=lambda t: (-counts[t], t))
+    assert all_ranked[200] not in head
+
+
+def test_build_portal_vocabulary_clusters_only_the_head(monkeypatch):
+    counts = role_vocabulary.Counter()
+    for i in range(5):
+        counts[f"top-{i}"] = 100 - i
+    for i in range(300):
+        counts[f"tail-{i:04d}"] = 1
+
+    captured = {}
+
+    def fake_cluster_titles(titles):
+        captured["titles"] = list(titles)
+        return []
+
+    monkeypatch.setattr(role_vocabulary, "cluster_titles", fake_cluster_titles)
+
+    role_vocabulary.build_portal_vocabulary(counts, head_n=10)
+
+    assert len(captured["titles"]) == 10
+    assert captured["titles"][:5] == ["top-0", "top-1", "top-2", "top-3", "top-4"]
+    for t in captured["titles"]:
+        assert t.startswith("top-") or t.startswith("tail-")
+
+
+def test_rank_top_families_keeps_html_escaped_member_when_counts_holds_unescaped():
+    counts = role_vocabulary.Counter({"AV & Broadcast Senior Executive": 3})
+    families = [{"label": "AV", "members": ["AV &amp; Broadcast Senior Executive"]}]
+
+    ranked = role_vocabulary.rank_top_families(families, counts)
+
+    assert len(ranked) == 1
+    assert ranked[0]["members"] == ["AV & Broadcast Senior Executive"]
+    assert ranked[0]["recurrence"] == 3
+
+
+def test_sparse_path_never_constructs_anthropic_client(monkeypatch):
+    monkeypatch.setattr(anthropic, "Anthropic", _RaisingAnthropicClient)
+    monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+    monkeypatch.setenv("HUBSPOT_PORTAL_ID", role_vocabulary.EXPECTED_PORTAL_ID)
+
+    sparse_counts = role_vocabulary.Counter({f"title-{i}": 1 for i in range(5)})
+    monkeypatch.setattr(role_vocabulary, "sweep_all_jobtitles", lambda: sparse_counts)
+
+    rc = role_vocabulary.main(["--dry-run"])
+
+    assert rc == 0  # no AssertionError from _RaisingAnthropicClient escaped
+
