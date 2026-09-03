@@ -3,7 +3,7 @@ status: diagnosed
 phase: 62-suggest-the-contacts-nobody-named
 source: [62-VERIFICATION.md]
 started: 2026-09-02T01:30:00Z
-updated: 2026-09-03T14:47:48Z
+updated: 2026-09-03T16:12:28Z
 ---
 
 ## Current Test
@@ -348,7 +348,10 @@ and it held.
 
 - gap_id: G-62-2
   truth: "A company's own sitemap is reachable when the site serves it from the apex while HubSpot records www (or vice versa)"
-  status: failed
+  status: resolved
+  resolved_by: 62-10-PLAN.md
+  resolved_at: 2026-09-04
+  live_confirmed: "round-2 sitting 2026-09-04 — see '## Round 2 live sitting'"
   origin: OPERATOR RULING, 2026-09-03 — "Accept apex and www as one and the same (redirects accepted)"
   reason: |
     Live, on 1 of 4 companies in the first real batch (25%). Gladstone Turf Club is recorded
@@ -374,7 +377,10 @@ and it held.
 
 - gap_id: G-62-3
   truth: "The default role vocabulary matches the job titles that actually appear on this portal's companies' people pages"
-  status: failed
+  status: resolved
+  resolved_by: 62-09-PLAN.md
+  resolved_at: 2026-09-04
+  live_confirmed: "round-2 sitting 2026-09-04 — see '## Round 2 live sitting'"
   origin: OPERATOR RULING, 2026-09-03 — "expand default fallback positions in role_vocabulary.py list to match and partial match what was observed"
   reason: |
     43 people were named across three racing-club board/committee pages. TWO survived the
@@ -401,7 +407,10 @@ and it held.
 
 - gap_id: G-62-4
   truth: "A suggestion round can dispatch its stage-2 enrichment by following the documented skill sequence"
-  status: failed
+  status: resolved
+  resolved_by: 62-08-PLAN.md
+  resolved_at: 2026-09-04
+  live_confirmed: "round-2 sitting 2026-09-04 — see '## Round 2 live sitting'"
   reason: |
     It cannot. Following `suggest-contacts/SKILL.md` exactly, stage 2 dies on the first chunk:
       ChunkResult(index=0, rows=1, ok=False,
@@ -547,7 +556,9 @@ needed in order to mean anything. In round 1 it never bound.
 
 - gap_id: G-62-6
   truth: "Every row dispatched to the enrichment lane comes back with a verdict"
-  status: failed
+  status: resolved
+  resolved_by: 62-11-PLAN.md
+  resolved_at: 2026-09-04
   reason: |
     2 of 6 rows (33%) produced NO verdict.
 
@@ -595,7 +606,9 @@ needed in order to mean anything. In round 1 it never bound.
 
 - gap_id: G-62-7
   truth: "A suggested contact's enriched email belongs to the person named on that company's own page"
-  status: failed
+  status: resolved
+  resolved_by: 62-12-PLAN.md
+  resolved_at: 2026-09-04
   reason: |
     Live, on 1 of the 2 rows that got an email. Roma Turf Club's committee page names
     **Craig Smith, Vice President**. The waterfall returned
@@ -635,3 +648,64 @@ needed in order to mean anything. In round 1 it never bound.
     - "Consider surfacing the mismatch in the operator report explicitly — 'this email's domain does not match the company' is far more actionable than a bare needs_review"
     - "Note the interaction with G-62-3: widening the role filter multiplies the number of common-name rows going through identity group 2, so this gets WORSE as the vocabulary improves"
   debug_session: ""
+
+## Round 3 (2026-09-04) — G-62-6 and G-62-7 closed, verified independently
+
+Plans `62-11` (diagnosis + fix) and `62-12` (operator ruling + freemail parity + release
+0.38.3). Regression after: **2362 plugin, 1727 root pytest (149 skipped), 867 node**, all
+passing. `git status --porcelain n8n/ scripts/build_cloud_workflows.py` silent — zero backend
+change in the whole round, and no deploy is needed for either fix.
+
+**G-62-6 — proven fixed against the ORIGINAL data, at zero cost.** Re-ran
+`watch.recover_async_dispatch` on the same run_id from the round-2 sitting
+(`15ea995a2ae44f7097ac938356cf95bb`) after the fix:
+
+    before: 4 responses  [row-1, row-3, row-4, row-6]
+    after : 6 responses  [row-1, row-2, row-3, row-4, row-5, row-6]
+    still missing: NONE
+
+`row-2` (Tim Curry) and `row-5` (Brett Ashney) were recovered from the ORIGINAL execution
+data — no re-dispatch, no provider credit, same input, different reader. That is the
+strongest form this proof could take: the executions were never the problem.
+
+**G-62-7 — the shipped rule, checked by the orchestrator against every measured case:**
+
+    craig.smith@thehartford.com        vs romaturfclub.com.au    -> mismatch  HELD
+    markoaten@oatens.com               vs lismoreturfclub.com.au -> mismatch  HELD
+    kdaniel@lismoreturfclub.com        vs lismoreturfclub.com.au -> mismatch  HELD  (accepted cost)
+    x@romaturfclub.com.au.attacker.tld vs romaturfclub.com.au    -> mismatch  HELD  (suffix trap)
+    sec@mail.romaturfclub.com.au       vs romaturfclub.com.au    -> related   SENDABLE
+    someone@gmail.com                  -> freemail HELD   (labelled distinctly, NOT a mismatch)
+    someone@bigpond.com                -> freemail HELD   (the parse hazard did not bite)
+    office@romaturfclub.com.au         -> related  SENDABLE
+
+Three properties confirmed by direct call, not by reading the plan:
+- `partition_for_dispatch(rows, company_domains)` — the parameter is genuinely REQUIRED;
+  calling with one argument raises. No one-keyword bypass of the operator's ruling.
+- `enrichment.FREEMAIL_DOMAINS` mirrors the JS at 33 entries and CONTAINS `bigpond.com` — the
+  parity-test parse hazard (a `// AU consumer ISPs` comment line silently swallowing
+  `bigpond.com` onward) did not materialise.
+- `extraction.hold_emailless` still returns the stranger as sendable when called alone, which
+  is what proves `contact-upload` and `enrich-before-ingest` are unaffected by this change.
+
+### Status of every gap this phase raised
+
+    G-62-1  resolved  62-07  schemeless website -> empty host ladder
+    G-62-2  resolved  62-10  apex/www treated as different hosts
+    G-62-3  resolved  62-09  role vocabulary missed governance titles
+    G-62-4  resolved  62-08  stage 2 could not dispatch (no row_id)
+    G-62-5  OPEN      —      role_vocabulary.py clustering crash (operator-deferred)
+    G-62-6  resolved  62-11  reader discarded rows split across n8n runs
+    G-62-7  resolved  62-12  false-match email was the row promoted to sendable
+
+Six of seven closed. G-62-5 remains deferred by operator sequencing, not by oversight: it is
+an offline derivation script no round path calls, its chosen remedy (G-62-3) shipped and was
+confirmed live at 41/43, and its real fix can only be proven against a live Anthropic call.
+
+### What has NOT been live-proven in round 3
+
+Both round-3 fixes are verified against real recorded data, but neither has run in a live
+sitting: G-62-6's proof replays stored executions rather than dispatching new ones, and
+G-62-7's rule has never decided a real round's sendable set. On this phase's own record —
+four defects found by live walks, three of them at seams where every component passed its own
+tests — that distinction is worth keeping until a sitting closes it.
