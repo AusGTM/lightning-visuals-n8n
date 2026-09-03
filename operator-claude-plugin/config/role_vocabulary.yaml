@@ -1,8 +1,8 @@
-version: lv-role-vocabulary-v1
-built_on: '2026-09-02'
+version: lv-role-vocabulary-v2
+built_on: '2026-09-04'
 source: generic_fallback
 evidenced: false
-top_n: 8
+top_n: 17
 distinct_titles_sampled: 0
 families:
 - label: CEO
@@ -45,3 +45,66 @@ families:
   evidenced: false
   members:
   - Communications Manager
+- label: Chair
+  recurrence: 0
+  evidenced: false
+  members:
+  - Chairman
+  - Chairperson
+  - Deputy Chairman
+  - Vice Chairman
+- label: President
+  recurrence: 0
+  evidenced: false
+  members:
+  - President
+- label: Vice President
+  recurrence: 0
+  evidenced: false
+  members:
+  - Vice President
+- label: Board & Committee
+  recurrence: 0
+  evidenced: false
+  members:
+  - Director
+  - Directors
+  - Board Of Directors
+  - Board Member
+  - Committee Member
+- label: Secretary
+  recurrence: 0
+  evidenced: false
+  members:
+  - Secretary
+  - Secretary Manager
+  - Company Secretary
+  - Club Secretary
+- label: Treasurer
+  recurrence: 0
+  evidenced: false
+  members:
+  - Treasurer
+  - Finance and Admin Officer
+  - Finance Officer
+- label: Track & Facilities
+  recurrence: 0
+  evidenced: false
+  members:
+  - Track Manager
+  - Racecourse Track Curator
+  - Trackwork Supervisor
+  - Racecourse Manager
+- label: Catering & Events
+  recurrence: 0
+  evidenced: false
+  members:
+  - Catering Manager
+  - Functions Manager
+- label: Administration
+  recurrence: 0
+  evidenced: false
+  members:
+  - Executive Assistant
+  - Office Manager
+  - Administration Officer
