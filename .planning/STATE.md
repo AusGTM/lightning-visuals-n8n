@@ -5,10 +5,10 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: Completed 62-10-PLAN.md (G-62-2 gap closure, released 0.38.2)
-last_updated: "2026-09-03T14:27:28.188Z"
+stopped_at: Completed 62-11-PLAN.md (G-62-6 diagnosis + reader fix, verdict reader_reads_run_0)
+last_updated: "2026-09-04T02:00:00.000Z"
 last_activity: 2026-09-04
-last_activity_desc: 62-10 closed G-62-2 (apex/www same_host) and released plugin 0.38.2
+last_activity_desc: 62-11 diagnosed and closed G-62-6's row-loss reader defect (all_node_items)
 state_head: ce9e1fe3b0746e8c37713793a4ae9a7d80c5f84b
 progress:
   total_phases: 13
@@ -83,6 +83,32 @@ do not re-plan them.
   section naming G-62-2, G-62-3 and G-62-4 together.** Full plugin suite green (2339
   passed/5 skipped); `node --test tests/n8n/*.test.mjs` 867 pass/0 fail; zero `n8n/` diff.
   Full record: `62-10-SUMMARY.md`.
+
+- **Gap-closure plan 62-11 landed 2026-09-04 (G-62-6, major, diagnose-then-fix).**
+  2 of 6 rows a 2026-09-04 sitting dispatched came back with NO verdict at all
+  (`row-2`, `row-5`). Diagnosed read-only (`GET` only, no dispatch, no arming, no
+  HubSpot write) against executions `12096`/`12097`/`12098`: `Merge Winners` fans in
+  from 3 edges and runs once per branch when a batch's rows diverge (one row needs
+  research, one does not) — live-confirmed, `12096`/`12098` split into two runs of
+  one item each all the way to `Build Response`, while `12097` (neither row lost)
+  never splits. No node anywhere ever drops an item; `watch._build_response_rows`
+  itself returned 1 row against a summed `Build Response` total of 2. **Verdict:
+  `reader_reads_run_0`.** Added `report.all_node_items(run_data, node_name)`
+  (concatenates every run in order) and pointed `watch._build_response_rows` +
+  `report_enrichment.enrichment_row_ledger` at it — a 2-row chunk that splits now
+  yields two verdicts, not one. Also answered two questions the UAT left open: Q3,
+  did the lost rows still cost credit — **no**, `Lusha Enrich`'s own billing block
+  shows both at `creditsCharged: 0` (`NOT_FOUND`), contradicting the UAT's
+  balance-delta inference; Q4, is the synchronous path exposed the same way —
+  **yes**, `preingest.rerequest_unanswered` (and `enrich-records`/`contact-upload`'s
+  enrich pass) call `dispatch_plan` with `async_ack` defaulted `False` and would lose
+  a row on the wire via `Respond to Webhook`'s first-arrival-wins semantics, recorded
+  as a standing UAT item, not fixed here (needs a workflow-topology regeneration
+  through `scripts/build_cloud_workflows.py` plus an operator deploy). RED observed
+  before the fix (`assert ['row-a'] == ['row-a', 'row-b']`). Full plugin suite 2347
+  passed / 5 skipped; `node --test tests/n8n/*.test.mjs` 867 pass / 0 fail; zero
+  `n8n/` diff. Full record: `62-11-SUMMARY.md`. **62-12 (G-62-7) is next, wave 2,
+  depends on this plan.**
 
 - **60 — Review-lane authority** (split out of 59). Executed, but **not complete**: 2 UAT items
   (`testing`) and 2 verification items (`human_needed`). All four need an armed HubSpot write

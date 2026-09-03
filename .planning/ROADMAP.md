@@ -509,11 +509,15 @@ variable), and a design that runs the provider waterfall twice per written recor
             in the shared `same_host` guard — narrowly, so a suffix or subdomain is still refused
             — plus the UAT scratch removed and the 0.38.2 release covering all three gaps (wave 2)
 
-      - [ ] 62-11-PLAN.md — **gap closure** (G-62-6, live sitting 2026-09-04): 2 of 6 dispatched
-            rows came back with no verdict while credit was spent — diagnose the mechanism from
-            executions 12096/12097/12098 read-only FIRST (the diagnosis may legitimately find no
-            node drops an item, only that the items split across n8n runs and the client reads
-            run 0), then fix only what the evidence names (wave 1)
+      - [x] 62-11-PLAN.md — **gap closure** (G-62-6, live sitting 2026-09-04): 2 of 6 dispatched
+            rows came back with no verdict — diagnosed read-only against executions
+            12096/12097/12098 FIRST (`Merge Winners`' 3-edge fan-in runs once per branch when a
+            batch's rows diverge; verdict `reader_reads_run_0`, no node ever drops an item),
+            then fixed exactly what the evidence named: `report.all_node_items` concatenating
+            every run, wired into `watch._build_response_rows` and
+            `report_enrichment.enrichment_row_ledger`. Also found the lost rows cost 0 Lusha
+            credit (not the UAT's inferred spend) and named the synchronous path's identical
+            exposure as a standing UAT item (wave 1)
 
       - [ ] 62-12-PLAN.md — **gap closure** (G-62-7, operator ruling 2026-09-04, *"the email
             domain should be related to the company"*): a suggested row whose enriched email is
