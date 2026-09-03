@@ -73,6 +73,12 @@ HEAD_N = 200
 # the portal cannot support a derived list.
 SPARSE_THRESHOLD = 20
 
+# Quick task 260904-447: the portal stores DOUBLE-encoded HTML entities (measured
+# 2026-09-04, e.g. 'Finance &amp;amp; Admin Officer'), so a single html.unescape() pass
+# leaves one layer behind. This bounds the fixed-point unescape loop in _normalize_title
+# so a pathologically nested input still terminates in fixed time.
+MAX_UNESCAPE_PASSES = 5
+
 VOCABULARY_VERSION = "lv-role-vocabulary-v2"
 
 # D-62-07's disclosed fallback: a generic B2B buying-committee list, served ONLY when the
@@ -125,8 +131,23 @@ def _normalize_title(raw) -> str:
 
     Deliberately nothing heavier: no `&`-to-`and`, no punctuation stripping, no
     case-folding. role_classify.py's _tokenize does that at MATCH time; doing it here
-    would mangle the verbatim titles the model is required to echo back."""
-    text = html.unescape(str(raw or ""))
+    would mangle the verbatim titles the model is required to echo back.
+
+    Quick task 260904-447: the portal stores DOUBLE-encoded entities (measured
+    2026-09-04, e.g. 'Finance &amp;amp; Admin Officer'), so a single unescape pass left
+    one layer of encoding behind. This loop now unescapes to a bounded fixed point
+    (MAX_UNESCAPE_PASSES) instead of once. The sibling copy of this loop is
+    operator-claude-plugin/scripts/role_classify.py::_tokenize -- deliberate duplication
+    across two trees (the plugin ships standalone, so no cross-tree import), pinned equal
+    by test_both_trees_unescape_to_the_same_bounded_fixed_point. Accepted cost: a title
+    whose literal intended text is '&amp;' would be decoded to '&' -- vanishingly
+    unlikely in a job title."""
+    text = str(raw or "")
+    for _ in range(MAX_UNESCAPE_PASSES):
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
     return " ".join(text.split())
 
 

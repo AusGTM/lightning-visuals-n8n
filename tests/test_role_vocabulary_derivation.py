@@ -158,6 +158,36 @@ def test_normalize_title_merges_html_entity_variants():
     assert a == b == "AV & Broadcast Senior Executive"
 
 
+# ==================== Quick task 260904-447 (double-encoded entities) ====================
+
+def test_normalize_title_fully_decodes_double_encoded_entities():
+    assert role_vocabulary._normalize_title("President &amp;amp; Chief Executive Officer") == \
+        "President & Chief Executive Officer"
+
+
+def test_normalize_title_unescape_is_bounded_at_max_passes():
+    assert role_vocabulary.MAX_UNESCAPE_PASSES == 5
+    seven_times_encoded = "&" + "amp;" * 7
+    two_times_encoded = "&" + "amp;" * 2
+    assert role_vocabulary._normalize_title(seven_times_encoded) == two_times_encoded
+
+
+def test_sweep_merges_double_encoded_and_plain_spellings_into_one_key(monkeypatch):
+    page = {
+        "results": [
+            {"properties": {"jobtitle": "President &amp;amp; CEO"}},
+            {"properties": {"jobtitle": "President & CEO"}},
+        ],
+        "paging": {},
+    }
+    monkeypatch.setattr(role_vocabulary, "_search_contacts_page", lambda after, limit=100: page)
+
+    counts = role_vocabulary.sweep_all_jobtitles()
+
+    assert counts["President & CEO"] == 2
+    assert not any("amp" in key for key in counts)
+
+
 def test_sweep_merges_entity_variants_and_drops_junk_but_keeps_av(monkeypatch):
     page = {
         "results": [
