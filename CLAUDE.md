@@ -627,7 +627,7 @@ persona_group_validation_status
 
 | Class                 | Meaning                                     | Default overwrite rule                        |
 | --------------------- | ------------------------------------------- | --------------------------------------------- |
-| `manual_protected`  | Sales/CS/user-maintained field              | Never overwrite automatically                 |
+| `manual_protected`  | Sales/CS/user-maintained field              | Never overwrite automatically — **except a value the pipeline itself parked, under §17.2.1's four conjuncts** |
 | `system_owned`      | Enrichment/scoring pipeline owns this field | Can overwrite if confidence threshold passes  |
 | `fill_blank_only`   | Pipeline may populate blanks                | Only write if current value is empty          |
 | `stale_refreshable` | Pipeline can refresh after TTL              | Overwrite only if stale and higher confidence |
@@ -2475,6 +2475,14 @@ start) and AFTER-03 (full end-of-run report).
 > `num_associated_contacts` search property and its `sourceByField` provenance wiring. Do not
 > read the 2026-08-30 "deployed and bounced" line as current parity. Node count is unchanged at
 > 123 — Phase 62 edited existing nodes' `jsonBody`/`jsCode` strings, adding and removing none.
+>
+> **Extended 2026-09-04 (quick tasks 260904-5a8 and 260904-pav).** Two more regenerate-and-
+> commit-without-deploying rounds land on the same JSON, so the undeployed delta is now
+> larger, not stale: `summarizeMatch`'s `lane === "company"` arm and its call-site literal
+> in `ENRICH_DECIDE_CO_CLOUD` (5a8), and provenance-aware `manual_protected` plus the
+> create-seed provenance stamp and the additive `lv_enrichment_provenance` write (pav).
+> **Node count is still 123** — both rounds edited existing nodes only, verified by
+> counting the committed file. Nothing deployed, nothing armed.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 

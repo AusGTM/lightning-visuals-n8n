@@ -16,6 +16,30 @@ Both are generated from the Wave-A modules by `scripts/build_cloud_workflows.py`
 Code-node body, then wraps them with the n8n Code I/O contract
 (`$input.all()` → `return [{json:...}]`).
 
+## Currency of this file (read first)
+
+**Its node-level maps were last redrawn 2026-08-10 and are behind the committed JSON.** Since
+then Phase 61 added nine nodes to `wf_enrichment_cloud.json` (`Build Async Ack`,
+`IF Linkedin Searchable`, `HubSpot Linkedin Search`, `Adapt Linkedin Search`,
+`Adapt Company Create`, `IF Scale Up Route`, `Build Scale Up Fan-Out`, `Dispatch Self`,
+`Build Scale Up Ack`) and re-pointed `Parse HubSpot Event`'s first fan target; Phase 62 and
+quick tasks `260904-5a8` / `260904-pav` edited existing nodes' `jsCode` and `jsonBody`
+without changing the node count. Treat the diagrams below as orientation, and **the committed
+`wf_*.json` as authority** for what a node contains.
+
+**Two further currency facts, both load-bearing:**
+
+- **The committed JSON is itself AHEAD of the running n8n Cloud instance** — regenerated and
+  committed without deploying since 2026-09-02 (CLAUDE.md §13.0.2). So the file is not
+  evidence of what n8n is executing either. Only a live read is.
+- **Never hand-edit `wf_*.json`.** Change `n8n/code/*.js` (or the builder) and re-run
+  `.venv/bin/python scripts/build_cloud_workflows.py`.
+
+Request-level signals now number **four**, not the one §13.0's original text describes:
+`recompute`, `async_ack`, `scale_up` (booleans normalized in `Parse HubSpot Event`) and
+`source_by_field` (a multipart form field read downstream by `Merge Contacts`). No scheduled
+path carries any of them — all four are on-demand only.
+
 ## Pipeline
 
 ```

@@ -545,6 +545,49 @@ to an **admin**, naming the missing key, never a value — rather than raising a
 returning nothing. That notice is not the backend being healthy; it is the sweep telling
 you it cannot check anything yet. Do not read the two as the same thing.
 
+## Suggesting people at companies with nobody named
+
+A company sitting in HubSpot with no people on it cannot be worked. After a company batch
+finishes, the client offers to go and find some — you can also ask directly ("who's at
+these companies?", "find contacts for these") or invoke
+`/operator-claude-plugin:suggest-contacts`.
+
+**It reads the company's OWN website first.** From the site's sitemap it walks toward the
+pages that name people — about, board, team, contact — and reads them. Everything it
+proposes comes from an actual page it fetched, never from a search snippet, and every
+proposal names the page it came from so you can check it.
+
+**When that finds nobody, it may fall back to web search — but only after a clean ending.**
+The distinction is the point:
+
+- The page was fetched and simply named nobody, or the crawl ran out of *our own* fetch
+  budget → the fallback opens. A budget we set ourselves is not a fence the site put up.
+- **The site refused us** — robots, a block, a hard error → **the fallback stays shut**,
+  and one refusal anywhere in the crawl shuts it, wherever in the sequence it appeared. We
+  do not go looking for the same information somewhere else after being told no.
+- Anything the client cannot read confidently — an ending it does not recognise, or no
+  recorded attempt at all — is treated as *not* clean, and the fallback stays shut.
+
+**Search results are judged by where they live, not by what they say.** The client reads
+only the address of each result, never its title or blurb, because a blurb is not something
+it can verify — a person only ever comes from actually fetching an accepted page. Addresses
+rank:
+
+1. **The company's own site** (including its subdomains) — strongest.
+2. **LinkedIn.**
+3. **A curated list of industry sites**, every entry marked as assumed rather than verified.
+4. **Anywhere else — rejected outright**, and the client tells you which address it turned
+   down. Not quietly ranked last; refused.
+
+**Anything found on an industry site (rank 3) is shown to you but always held**, no matter
+how confident the rest of the check was, and the hold reason quotes the address it came
+from. An industry site can name the right person and still be years out of date about
+whether they are still in that role — that is your call to make, not the client's. Only
+people found on the company's own site or on LinkedIn are offered as ready to send.
+
+The fallback is capped at three searches per company, and those searches cost no provider
+credit. The existing limit on how many people you can add per company is unchanged.
+
 ## Working the review queue
 
 The enrichment pipeline holds a decision back whenever it isn't sure enough to write it.
@@ -635,6 +678,7 @@ operator-claude-plugin/
     backend-status/        # plain-language read of what the backend is doing, text or dashboard artifact
     backend-control/       # run-now / on-off / cadence over the allowlisted mutations, confirmed and read-back verified
     review-triage/         # the review queue: render conflicts, adjudicate one record, gated writeback
+    suggest-contacts/      # after a company batch: find and propose people at companies with nobody named, crawling each company's OWN site first and falling back to web search only when that ladder ends cleanly
     backend-sweep/
       SKILL.md             # the sweep's conversational entry point (on-demand)
       SWEEP-CRON-TEMPLATE.md  # admin-only: install the schedule that fires the sweep unattended
@@ -660,9 +704,13 @@ operator-claude-plugin/
     write_grant.py written_records.py
     # autonomous batch runs: confidence verdicts, held rows, run scope and resume
     confidence.py held_queue.py run_manifest.py run_state.py
+    # suggesting people at companies with nobody named
+    suggest_contacts.py role_classify.py url_fallback.py search_fallback.py
   config/
     operator.local.example.json  # tracked template — copy to operator.local.json (gitignored) per setup above
     cost_rates.json        # dated cost-rate table the previews price from
+    role_vocabulary.yaml   # the curated role families a discovered job title is matched against
+    source_allowlist.yaml  # operator-curated search-source ranks; every rank-3 entry is [ASSUMED]
   tests/                   # this plugin's own test suite, run under the repo's .venv
 ```
 

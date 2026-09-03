@@ -16,6 +16,69 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-09-04
+
+### Added
+
+- **A search fallback for `suggest-contacts`, for when a company's own site will not
+  give up a person.** The sitemap ladder is still tried first and is still preferred;
+  this only opens when the ladder finishes and has found nobody. New module
+  `scripts/search_fallback.py` and a committed, operator-curated
+  `config/source_allowlist.yaml`.
+
+  **It opens only after a CLEAN ending, and that distinction is the whole safety
+  story.** `eligible_after_ladder` reads the ladder's recorded `attempts`:
+
+  - `empty` — the page was fetched and simply named nobody. **Eligible.**
+  - `cap_exhausted` — we hit our own `MAX_FOLLOWUP_FETCHES` budget. **Eligible.** A
+    budget we imposed on ourselves is not a fence the site put up.
+  - `refused` — the site said no (robots, a block, a hard error). **Ineligible, and a
+    single refusal anywhere in the list blocks the whole ladder, whatever order it
+    appears in.** We do not route around a refusal by searching for the same
+    information somewhere else.
+
+  Everything ambiguous is ineligible and **never raises**: a disposition value outside
+  that closed vocabulary, an entry with no `disposition` key at all, an empty list, a
+  `None`, a non-list, or an entry that is not a dict. An empty list is ineligible
+  specifically because nothing then establishes that the crawl actually completed.
+
+- **Results are ranked by SOURCE, and the rank is decided on the URL host alone.** The
+  ranker never reads a search result's title or snippet — a snippet is not verifiable,
+  and reading one would let an unverifiable transcription become a field on a contact
+  row. A person always comes from a real fetch of an accepted URL.
+
+  - **Rank 1 — the company's own host.** Apex and `www` are accepted in both
+    directions; real subdomains (`board.example.com`) count.
+  - **Rank 2 — LinkedIn.** `linkedin.com` is simultaneously in
+    `enrichment.NOT_A_COMPANY_DOMAIN`; that is not a contradiction, because LinkedIn is
+    never a company's own domain and *is* a legitimate place to find a person.
+  - **Rank 3 — a curated industry allowlist**, every entry marked `[ASSUMED]` (proposed
+    from domain knowledge, not verified live).
+  - **Rank 4 does not exist: a host on no rank is REJECTED**, with a reason naming it —
+    not quietly ranked last.
+
+  Matching is on label boundaries, so `linkedin.com.attacker.tld` and
+  `example.com.attacker.tld` are both rejected while a genuine subdomain of a listed
+  host is accepted.
+
+- **A rank-3 person is always HELD, however confident the enrichment was.**
+  `hold_weak_sources` is a second, records-level gate that runs independently of the
+  waterfall's own hold logic — both must pass for a row to be sendable. The hold reason
+  quotes the source URL so you can judge it yourself: an industry site can name someone
+  correctly and still be years out of date on whether they are still in the role.
+  `MAX_FALLBACK_SEARCHES = 3` bounds the whole fallback per company; these searches
+  spend no provider credit, and the existing per-company people cap is unchanged.
+
+  A record that does not declare itself search-sourced is passed through untouched, so
+  every ladder-sourced row behaves exactly as it did before this release.
+
+### Notes
+
+- Operator-facing wording says **rank**, not "tier". In this system "tier" means the ICP
+  tier, and a shipped guard keeps that word out of skill bodies. The internal naming
+  (`source_tier`) is unchanged; the split is documented at both ends so nobody "fixes"
+  the apparent inconsistency.
+
 ## [0.38.4] - 2026-09-04
 
 ### Fixed

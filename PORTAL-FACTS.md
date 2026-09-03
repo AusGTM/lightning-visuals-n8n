@@ -95,3 +95,22 @@ instance did it. Sources: `.planning/phases/61-autonomous-batch-runs/61-PREMISE-
 | The `chunk_count + record_count` execution-cost formula **OVER-states** cost: a real historical 2-record chunk (execution `11950`) projected 3 executions; the executions list showed 1. Nothing found suggests it under-projects — the direction that would matter for a budget guard. | measured |
 
 
+---
+
+## 2026-09-04 (Phase 62-11 + quick 260904-5a8) — **n8n Cloud** platform facts (not HubSpot): a node with several inbound edges runs several times, and `runData[node][0]` is a trap
+
+Recorded here because it has now cost two investigations, and the second one manufactured a
+defect that did not exist. Sources: `.planning/phases/62-suggest-the-contacts-nobody-named/62-11-DIAGNOSIS.md`,
+`.planning/quick/260904-5a8-laneof-domain-lane-vs-companies-appropri/`, live executions
+`12103` and the 62-11 evidence set.
+
+| Fact | Basis |
+| --- | --- |
+| **A node whose inbound edges all land on `main[0]` executes ONCE PER DELIVERING BRANCH, not once per workflow run.** `Merge Company` has three such edges, so `runData["Merge Company"]` is an ARRAY OF RUNS, each carrying only the items that branch delivered. Run 0 is routinely a strict SUBSET of the row set. | observed live (executions `12103` and the 62-11 set) |
+| **Therefore `runData[node][0]["data"]["main"][0]` — indexing run 0 directly — silently under-reads.** An ad-hoc probe on execution `12103` did exactly this, saw 1 of 2 items, and reported `Merge Company` as "collapsing rows and dropping a record". It was not: `Merge Company` is a single `$input.all().map(...)` with no filter, group, `Set`, `Map` or `slice`, so it structurally **cannot** emit fewer items than it receives. The reader was wrong, not the node. | observed live, twice (`47.5-02-SUMMARY.md`, `58-SPIKE-VERDICT.md`, then `12103`) |
+| **The correct reader is `report.all_node_items(...)`, which folds every run.** Use it for any node with more than one inbound edge. `62-11-DIAGNOSIS.md`'s remaining-exposure list names the sibling hand-rolled readers that were never converted; an executable guard was declined in-plan with its cost stated (two shipped `runs[0]` readers would trip it on day one and need an allowlist). | fixed in `report.all_node_items`; siblings recorded, not fixed |
+
+**Operational rule:** before concluding from an execution dump that a node dropped rows, count
+that node's inbound edges. More than one means you must fold the runs before the item count
+means anything.
+

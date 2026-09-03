@@ -152,6 +152,32 @@ the admin-set submit switch is on — the write is made and then **re-read to co
 landed**; reject and your reason is recorded and the record stays queued (rejection never silently clears anything). Protected fields are
 labelled; the backend, not the client, is what enforces protection.
 
+## Who's at these companies?
+
+> "Who's at these companies?" · "Find contacts for these" · "Fill in who works there"
+
+Offered automatically after a company batch, for any company with nobody named on it.
+
+It reads **the company's own website first** — from the sitemap, toward the about / board /
+team / contact pages — and everything it proposes comes from a page it actually fetched,
+with that page shown next to the person so you can check it.
+
+If the site names nobody, it may fall back to a web search, **but only when the crawl ended
+cleanly**: the page was read and simply had no names, or it ran out of our own fetch budget.
+If the site *refused* us — robots, a block, an error — the fallback stays shut, and one
+refusal shuts it no matter where in the crawl it happened. We don't go looking somewhere
+else after being told no.
+
+Search results are judged by **where they live, not what they say** — the client reads only
+the address, never the blurb, because a blurb isn't something it can verify. Best is the
+company's own site, then LinkedIn, then a curated list of industry sites; anything else is
+refused outright and named.
+
+**Anyone found on an industry site is shown but always held**, however confident everything
+else looked, with the address quoted in the reason. Those sites can name the right person
+and still be years out of date about whether they still hold the role — your call, not the
+client's. Only people from the company's own site or LinkedIn come through ready to send.
+
 ## Why are we losing deals?
 
 > "Why are deals being lost?" · "Loss reasons against ICP tier"
