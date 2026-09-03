@@ -82,7 +82,12 @@ observed_after_fix: re-run live — drop-list prints, naming **14** shipped fami
 ### 8. 260904-5sd — the search fallback on a real company with no findable staff page
 expected: on a company whose sitemap ladder ends clean-but-empty, `suggest-contacts` offers search-sourced people; a rank-3 row is shown but HELD with its source URL quoted; only own-host or LinkedIn rows are sendable
 result: skipped
-reason: **the fallback was never reached, because the ladder found people.** Run live 2026-09-04 against Brisbane Roar FC (company `285507657175`): 4 of 5 fetches — `sitemap.xml` → `page-sitemap.xml` → `/the-club/` (no staff) → `/about/contact-us/` — which named 3 staff. `eligible_after_ladder` was therefore never consulted; there was nothing to fall back from. Correct behaviour, but it exercises the ladder, not this task's code.
+reason: **the fallback was never reached on EITHER attempt, because the ladder found people both times.**
+
+  - **Attempt 1 — Brisbane Roar FC** (`285507657175`), 4 of 5 fetches: `sitemap.xml` → `page-sitemap.xml` → `/the-club/` (no staff) → `/about/contact-us/`, which named 3 staff.
+  - **Attempt 2 — The Roma Turf Club**, 3 of 5 fetches: `sitemap.xml` → `page-sitemap.xml` → `/our-committee/`, which named 16.
+
+  `eligible_after_ladder` was never consulted in either round — there was nothing to fall back from. Correct behaviour both times, but it exercises the ladder, not this task's code. Two attempts on real AU sporting clubs suggests the fallback is genuinely hard to reach on this segment: a club that publishes a committee or contact page defeats it by succeeding.
 blocked_by: prior-condition
 follow_up: |
   Re-run on a company whose site has NO findable staff page. Until then 260904-5sd's live
@@ -90,6 +95,33 @@ follow_up: |
   including the 8/8 fail-closed disposition matrix and the suffix trap in both directions),
   and has never opened against a real site. Do NOT record it as live-proven on this round's
   evidence.
+second_round_findings: |
+  The Roma round (attempt 2) was the more valuable of the two despite also not reaching the
+  fallback, because it exercised the REFUSAL side of the domain rule on real data:
+  - Role filter worked here — committee office-bearer titles ("President", "Vice President")
+    classify cleanly, unlike Brisbane Roar's one-word titles. Cap 2 selected Brett Ashney
+    (President) and Craig Smith (Vice President).
+  - **The documented Craig Smith case reproduced exactly.** The waterfall resolved
+    `craig.smith@thehartford.com` — a US insurer, a different Craig Smith — and the
+    domain-relatedness rule HELD it. `0 sendable, 2 held, 0 written, no dispatch ran.`
+    This is the precision-for-recall trade the operator accepted in view, behaving as agreed.
+  - Two defects filed, neither in 5sd's code:
+    - **Step 8 routes partition holds into a queue that deliberately refuses them.**
+      `held_queue.save` raised `HeldQueueError` on `no_email` / `email_domain_mismatch`.
+      The CODE is right — `partition_for_dispatch`'s docstring says outright that
+      `ALL_HOLD_CODES` is not widened by these codes, because they mean "identified fine,
+      declined to send", not "could not identify". The SKILL instruction is what is wrong.
+      Do not fix by widening the frozenset.
+      `.planning/todos/pending/2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md`
+    - **A company can legitimately have more than one domain.** Roma's website is
+      `romaturfclub.com.au` (correct — the ladder fetched it) but its published contact
+      address is `INFO@romaturfclub.org.au`. Every genuine club email would be held as
+      `email_domain_mismatch`. The record is INCOMPLETE, not incorrect — distinct from the
+      Brisbane Lions wrong-domain bug, and NOT fixable by loosening the match rule, since
+      `<label>.com.au` and `<label>.org.au` are separately registrable and can be different
+      organisations.
+      `.planning/todos/pending/2026-09-04-a-company-can-have-more-than-one-domain.md`
+
 what_the_round_DID_prove: |
   Everything downstream of the ladder, end to end, first live suggest-contacts round:
   - Eligibility: Brisbane Roar FC selected on `num_associated_contacts = 0`.
