@@ -113,6 +113,21 @@ def _empty_review_counts():
     return {"needs_review": 0, "clear": 0, "unknown": 0}
 
 
+def _empty_contactability_counts():
+    """Phase 66 Plan 03 (D-66-05/D-66-06): a CONTACTS-ONLY tally of the backend's
+    per-row phone+email completeness marker. `unknown` is not a fourth completeness
+    state — it means the backend never stamped the value on this row, either because
+    the deployed workflow predates it, or because this row came from the
+    executions-API ledger (`enrichment_row_ledger` reads `Decide Action`/`Decide
+    Company Action`, a node BEFORE `Build Response` computes the marker). A row this
+    tally cannot classify must never be folded into `complete` or `email_only` — the
+    same "never infer when the backend is silent" rule `_review_state_for_row`
+    already applies. This is a FLAG, not a gate (D-66-05): nothing reads this tally to
+    hold, filter, refuse, prompt or reorder a row — Phase 68's rule already applies to
+    this surface: a report reports, it does not halt."""
+    return {"complete": 0, "email_only": 0, "none": 0, "unknown": 0}
+
+
 # =====================================================================================
 # Reading the decision nodes (Pattern 1) — never the terminal write nodes.
 # =====================================================================================
@@ -204,6 +219,23 @@ def _match_info_for_row(row):
     return match.get("tier"), match.get("reason")
 
 
+# Phase 66 Plan 03 (D-66-06): the backend's per-row phone+email completeness marker,
+# read the same defensively-tolerant way `_match_info_for_row` reads an optional
+# nested value — absent or malformed -> None, never inferred, never raised. Present
+# only on a row that came from `Build Response`'s own output (build_sync_report's
+# synchronous webhook-body path); a row read from the executions-API ledger
+# (`enrichment_row_ledger`, which reads `Decide Action`/`Decide Company Action` — a
+# node BEFORE `Build Response` computes this value) is always None here, by
+# construction, not by staleness. Either way, None is the correct, honest answer: the
+# report must never guess a completeness state the backend did not actually compute.
+_CONTACTABILITY_STATES = {"complete", "email_only", "none"}
+
+
+def _contactability_for_row(row):
+    value = row.get("contactability")
+    return value if value in _CONTACTABILITY_STATES else None
+
+
 def _build_row_report(row, row_number):
     outcome = _outcome_for_row(row)
     match_level, match_reason = _match_info_for_row(row)
@@ -220,6 +252,7 @@ def _build_row_report(row, row_number):
         "reason": _OUTCOME_REASON.get(outcome),
         "match_level": match_level,
         "match_reason": match_reason,
+        "contactability": _contactability_for_row(row),
     }
 
 
@@ -339,6 +372,7 @@ def build_enrichment_report(execution, handle=None):
             "reason": "the execution could not be fetched (pruned run, or not found)",
             "counts": _empty_counts(),
             "review_counts": _empty_review_counts(),
+            "contactability_counts": _empty_contactability_counts(),
             "total": 0,
             "rows": [],
             "failing_rows": [],
@@ -352,11 +386,17 @@ def build_enrichment_report(execution, handle=None):
     ledger, reason = enrichment_row_ledger(execution)
     counts = _empty_counts()
     review_counts = _empty_review_counts()
+    contactability_counts = _empty_contactability_counts()
     rows = []
     for i, row in enumerate(ledger, start=1):
         report_row = _build_row_report(row, i)
         counts[report_row["outcome"]] += 1
         review_counts[report_row["review_state"]] += 1
+        # D-66-06: contacts only — a companies row's contactability is always None
+        # (Build Response stamps explicit absence for it) and must never be counted
+        # here at all, not even into "unknown".
+        if report_row["lane"] == "contacts":
+            contactability_counts[report_row["contactability"] or "unknown"] += 1
         rows.append(report_row)
 
     failing_rows = [
@@ -372,6 +412,7 @@ def build_enrichment_report(execution, handle=None):
         "reason": reason,
         "counts": counts,
         "review_counts": review_counts,
+        "contactability_counts": contactability_counts,
         "total": total,
         "rows": rows if not adaptive else None,
         "failing_rows": failing_rows,

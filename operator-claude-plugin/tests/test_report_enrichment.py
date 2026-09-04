@@ -192,6 +192,38 @@ def test_a_row_with_no_match_field_at_all_renders_match_info_as_none_not_missing
 
 
 # =====================================================================================
+# contactability (Phase 66 Plan 03, D-66-05/D-66-06) — the backend's per-row
+# phone+email completeness marker, surfaced by `_build_row_report` for both callers.
+# =====================================================================================
+
+def test_contactability_is_surfaced_on_the_row_report_when_the_backend_stamped_it():
+    row = {"_lane": "contacts", "action": "enrich", "contactability": "complete"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["contactability"] == "complete"
+
+
+def test_contactability_absent_from_the_backend_row_surfaces_as_none_never_raises():
+    """A row from a backend that never stamped the marker (an unrefreshed deployment,
+    or the executions-API ledger, which reads a node before Build Response computes
+    it) must read as unknown, never a guessed false negative."""
+    row = {"_lane": "contacts", "action": "enrich"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["contactability"] is None
+
+
+def test_contactability_carries_an_unrecognised_value_as_none_not_the_raw_string():
+    row = {"_lane": "contacts", "action": "enrich", "contactability": "some-future-value"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["contactability"] is None
+
+
+# =====================================================================================
 # build_sync_report — the SYNCHRONOUS webhook body, live-shaped from execution 11948.
 # =====================================================================================
 
@@ -223,6 +255,18 @@ def test_build_sync_report_relays_write_blocked_as_gated_with_the_no_hit_match_r
     assert row["match_level"] == "none"
     assert row["match_reason"] == "searched, no hit"
     assert row["lane"] == "contacts"
+
+
+def test_build_sync_report_carries_contactability_when_the_body_stamped_it():
+    """The synchronous webhook body IS Build Response's own output — the one path
+    where contactability is genuinely present (66-03), proving one edit in
+    `_build_row_report` serves both callers, not two implementations."""
+    body = [{**_walk_11948_body()[0], "contactability": "email_only"}]
+
+    rows, reason = report_enrichment.build_sync_report(body)
+
+    assert reason is None
+    assert rows[0]["contactability"] == "email_only"
 
 
 def test_build_sync_report_accepts_a_bare_object_never_only_an_array():
@@ -404,6 +448,57 @@ def test_build_enrichment_report_failing_rows_include_gated_created_id_unknown_a
     assert "created_id_unknown" in failing_outcomes
     assert "no_action" not in failing_outcomes, "skip/proposed are successes (D-57-03)"
     assert any(row["review_state"] == "needs_review" for row in r["failing_rows"])
+
+
+def test_build_enrichment_report_contactability_counts_unstamped_fixture_rows_are_unknown():
+    """The fixture predates 66-03 — its two contacts rows carry no `contactability`
+    key at all, exactly the "backend didn't stamp it" shape this tally must handle.
+    Both land in the unknown bucket, never complete/email_only, and the fixture's four
+    companies rows are excluded from this contacts-only tally entirely (2, not 6)."""
+    r = report_enrichment.build_enrichment_report(_enrichment_execution(), handle=None)
+
+    assert r["contactability_counts"] == {"complete": 0, "email_only": 0, "none": 0, "unknown": 2}
+    assert sum(r["contactability_counts"].values()) == 2
+
+
+def test_build_enrichment_report_contactability_counts_bucket_stamped_rows_correctly():
+    execution = {
+        "status": "success",
+        "data": {"resultData": {"runData": {
+            "Decide Action": [{
+                "executionStatus": "success",
+                "data": {"main": [[
+                    {"json": {"action": "enrich", "hs_object_id": "1", "contactability": "complete"}},
+                    {"json": {"action": "enrich", "hs_object_id": "2", "contactability": "email_only"}},
+                    {"json": {"action": "enrich", "hs_object_id": "3", "contactability": "none"}},
+                    {"json": {"action": "enrich", "hs_object_id": "4"}},
+                ]]},
+            }],
+            "Decide Company Action": [{
+                "executionStatus": "success",
+                "data": {"main": [[
+                    # A companies row must never be counted here, even with a
+                    # (structurally impossible in practice, but defensively checked)
+                    # contactability value present.
+                    {"json": {"action": "enrich", "hs_object_id": "co-1", "contactability": "complete"}},
+                ]]},
+            }],
+        }}},
+    }
+
+    r = report_enrichment.build_enrichment_report(execution, handle=None)
+
+    assert r["contactability_counts"] == {"complete": 1, "email_only": 1, "none": 1, "unknown": 1}
+    assert sum(r["contactability_counts"].values()) == 4, "the companies row must not be counted"
+
+
+def test_build_enrichment_report_never_raises_over_a_malformed_row_missing_contactability():
+    """Behavior spec: build_enrichment_report never raises for a malformed row, a
+    missing node, or a non-mapping payload — including one with no contactability
+    key at all, the ordinary shape for every row read before 66-03."""
+    for bad in (None, "garbage", 42, []):
+        r = report_enrichment.build_enrichment_report(bad, handle=None)
+        assert r["contactability_counts"] == {"complete": 0, "email_only": 0, "none": 0, "unknown": 0}
 
 
 def test_build_enrichment_report_credits_present_and_distinguishable():
