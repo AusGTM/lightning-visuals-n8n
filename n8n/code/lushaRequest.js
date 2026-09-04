@@ -24,36 +24,41 @@
 // normalizeProviders.js's module convention).
 
 // Fixed allow-list: HubSpot field name (as it appears in the enrichment gate's
-// `missingFields` array) -> the Lusha v3 reveal value string. ONLY two entries.
+// `missingFields` array) -> the Lusha v3 reveal value string. THREE entries.
 //
 // - `jobtitle` is deliberately absent: docs/LUSHA-V3-CONTRACT.md's contacts response
 //   (§4) returns `jobTitle` in the free preview (no reveal gate covers it) — it is never
 //   a billed/gated reveal field, so it must never appear in a reveal list.
-// - landline `phone` is deliberately absent: it is not in the contacts gate's REQUIRED
-//   list (scripts/build_cloud_workflows.py ENRICH_GATE: ["email","jobtitle","mobilephone"]),
-//   so it can never legitimately appear in `missingFields` — omitting it here is a second,
-//   independent line of defense (belt-and-braces, not load-bearing on its own).
+// - landline `phone` (D-66-01, RICH-01): chased as of this plan. It maps to the SAME
+//   reveal value the mobile key maps to (Lusha's v3 contract has one `phones` reveal
+//   flag covering both phone types, docs/LUSHA-V3-CONTRACT.md §4/§6) — `lushaReveal`
+//   below de-duplicates so requesting both keys never sends `phones` twice.
+//   docs/LUSHA-V3-CONTRACT.md §6 confirms Lusha bills flat per contact regardless of
+//   reveal-field count, so widening this map costs nothing extra per call; the reveal
+//   list stays PII-minimisation hygiene only (see the module header above).
 const LUSHA_REVEAL_BY_FIELD = Object.freeze({
   email: "emails",
   mobilephone: "phones",
+  phone: "phones",
 });
 
 // lushaReveal(missingFields) -> reveal value array, filtered through the frozen literal
-// map above. Threat T-20-02 mitigation: reads use `hasOwnProperty` so a prototype-chain
-// property name (e.g. "__proto__", "constructor") can never resolve to a value, and
-// anything not an exact literal key (e.g. the ungated landline "phone") silently drops
-// out rather than reaching the provider request. Sorted so output order never depends on
+// map above and DE-DUPLICATED (mobilephone and phone both map to "phones"; a duplicate
+// must never reach the provider — T-66-03). Threat T-20-02 mitigation: reads use
+// `hasOwnProperty` so a prototype-chain property name (e.g. "__proto__", "constructor")
+// can never resolve to a value, and anything not an exact literal key silently drops out
+// rather than reaching the provider request. Sorted so output order never depends on
 // input order (keeps the contract test deterministic). Tolerates non-array input.
 function lushaReveal(missingFields) {
   if (!Array.isArray(missingFields)) return [];
-  const out = [];
+  const out = new Set();
   for (const field of missingFields) {
     if (typeof field !== "string") continue;
     if (Object.prototype.hasOwnProperty.call(LUSHA_REVEAL_BY_FIELD, field)) {
-      out.push(LUSHA_REVEAL_BY_FIELD[field]);
+      out.add(LUSHA_REVEAL_BY_FIELD[field]);
     }
   }
-  return out.sort();
+  return [...out].sort();
 }
 
 function _blank(v) {

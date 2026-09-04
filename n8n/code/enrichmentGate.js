@@ -59,8 +59,15 @@ function decideAction(existingRecord, requiredFields, policy, nowIso, opts) {
   policy = policy || {};
 
   if (_isEmpty(existingRecord)) {
-    return { action: "create", staleFields: [], missingFields: [], invalidFields: [],
-             reason: "no existing record" };
+    // D-66-01 root-cause fix: nothing exists on a CREATE row, so everything required is
+    // missing — missingFields now carries a COPY of requiredFields rather than an empty
+    // array. Fixed in the shared function (not a per-caller workaround) because it has
+    // exactly two consumers outside this module: the ENRICH_BUILD_REQUESTS wrapper and
+    // the "Lusha Enrich" expression, both of which derive their reveal/request-building
+    // logic from missingFields and both benefit from this one edit. action/staleFields/
+    // invalidFields/reason are unchanged.
+    return { action: "create", staleFields: [], missingFields: requiredFields.slice(),
+             invalidFields: [], reason: "no existing record" };
   }
 
   const missingFields = [];

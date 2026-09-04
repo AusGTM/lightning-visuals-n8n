@@ -1289,7 +1289,13 @@ return $input.all().map((it) => {
 ENRICH_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
 
 // --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
-const REQUIRED = ["email", "jobtitle", "mobilephone"];
+// D-66-01/RICH-01: `phone` (the landline) is chased alongside mobilephone. POLICY below
+// stays byte-identical for it — no stale_after_days entry — because `stale_after_days`
+// is read only by decideAction's `stale_refreshable`-shaped TTL branch, and `phone` is
+// `fill_blank_only` (config/field_policy.yaml), whose branch never consults a TTL. A TTL
+// entry here would be inert, and the only way to activate one is a field-class change
+// D-66-08 forbids. See lushaRequest.js for the reveal-map half of this change.
+const REQUIRED = ["email", "jobtitle", "mobilephone", "phone"];
 const POLICY = { jobtitle: { stale_after_days: 180 }, mobilephone: { stale_after_days: 180 } };
 const NOW = new Date().toISOString();
 return $input.all().map((it) => {
@@ -5535,7 +5541,12 @@ def build_enrichment_cloud():
             "const id = $('Enrichment Gate').item.json.identity_keys || {}; "
             "const gate = $('Enrichment Gate').item.json.gate || {}; "
             "const missing = gate.missingFields || []; "
-            "const REVEAL_MAP = { email: 'emails', mobilephone: 'phones' }; "
+            # D-66-01/RICH-01: landline `phone` added, mapping to the SAME reveal value
+            # `mobilephone` maps to (mirrors n8n/code/lushaRequest.js's LUSHA_REVEAL_BY_FIELD —
+            # both copies move together in one commit, T-20-02/anti-drift parity). Lusha bills
+            # flat per contact regardless of reveal-field count (docs/LUSHA-V3-CONTRACT.md §6),
+            # so widening this map costs nothing extra per call.
+            "const REVEAL_MAP = { email: 'emails', mobilephone: 'phones', phone: 'phones' }; "
             # BUG (live, execution 11934, 2026-08-25): `Object.prototype` in an n8n EXPRESSION is
             # refused by the expression sandbox — "Cannot access \"prototype\" due to security
             # concerns" — and `onError: continueRegularOutput` turned that refusal into a
@@ -5544,7 +5555,9 @@ def build_enrichment_cloud():
             # are unaffected; this was the only expression in any deployed workflow touching it.
             # Plain lookup is sandbox-safe and equivalent here: REVEAL_MAP is an object literal
             # declared one line above, so no inherited key can shadow a miss.
-            "const revealed = missing.filter((f) => REVEAL_MAP[f] !== undefined).map((f) => REVEAL_MAP[f]).sort(); "
+            # T-66-03: mobilephone and phone now both map to 'phones' — de-duplicated with a
+            # Set (never a prototype lookup) so a duplicate can never reach the provider body.
+            "const revealed = [...new Set(missing.filter((f) => REVEAL_MAP[f] !== undefined).map((f) => REVEAL_MAP[f]))].sort(); "
             "const reveal = revealed.length ? revealed : ['emails']; "
             "const existingRecord = $('Enrichment Gate').item.json.existingRecord || {}; "
             "const storedId = existingRecord.lusha_contact_id; "
@@ -5561,6 +5574,17 @@ def build_enrichment_cloud():
             "})() }}"
         ))
     nodes.append(lusha)
+    # RICH-06 cost verification (D-66-01, structural — no live call needed): chasing the
+    # landline changes NO provider's per-call cost.
+    #   - Lusha: bills flat per contact regardless of reveal-field count
+    #     (docs/LUSHA-V3-CONTRACT.md §6, the selective-reveal cost lever is REFUTED there) —
+    #     the widened REVEAL_MAP above rides the existing flat bill.
+    #   - ZoomInfo: ZOOM_OUTPUT_FIELDS (this file, contacts branch) already lists BOTH
+    #     "phone" and "mobilePhone" — both phone fields ride a request already paid for;
+    #     no output-field list change needed or made.
+    #   - Apollo: the body below is identity plus one reveal flag (reveal_personal_emails)
+    #     with NO per-field ask at all, so its per-call cost is unchanged by construction,
+    #     not by generalising from the other two providers.
     # reveal_personal_emails=true forces Apollo to return the contactable email (a bare
     # people/match returns identity only). Phone is async: reveal_phone_number needs a
     # webhook_url and arrives via callback — wired separately, not in this synchronous node.

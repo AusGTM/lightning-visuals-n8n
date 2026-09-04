@@ -100,6 +100,17 @@ test("Lusha Enrich body: only jobtitle missing -> empty allow-list mapping, defa
   assert.deepEqual(body.reveal, ["emails"]);
 });
 
+// D-66-01/RICH-01: the landline reveal, and its de-duplication against mobilephone.
+test("Lusha Enrich body: landline phone missing -> phone reveal value", () => {
+  const body = buildBody({ email: "a@b.com" }, ["phone"]);
+  assert.deepEqual(body.reveal, ["phones"]);
+});
+
+test("Lusha Enrich body: landline AND mobile both missing -> ONE-element reveal, not two (T-66-03)", () => {
+  const body = buildBody({ email: "a@b.com" }, ["phone", "mobilephone"]);
+  assert.deepEqual(body.reveal, ["phones"]);
+});
+
 test("Lusha Enrich body: omits linkedinUrl key when identity_keys.linkedin_url is blank", () => {
   const body = buildBody({ email: "a@b.com", linkedin_url: "" }, []);
   assert.deepEqual(Object.keys(body.contacts[0]).sort(), ["email"]);
@@ -148,6 +159,9 @@ const PARITY_MATRIX = [
   { identity: { email: "a@b.com" }, missing: ["email", "mobilephone"] },
   { identity: { linkedin_url: "https://linkedin.com/in/a" }, missing: ["jobtitle"] },
   { identity: {}, missing: ["mobilephone"] },
+  // D-66-01/RICH-01: the landline, alone and alongside mobile (dedup parity, T-66-03).
+  { identity: { email: "a@b.com" }, missing: ["phone"] },
+  { identity: { email: "a@b.com" }, missing: ["phone", "mobilephone"] },
   // Phase 36-04 Task 3 (36-CONTEXT.md §4 decision 3): widened matrix. The cloud
   // expression now mirrors lushaContactBody()'s OWN emptiness check exactly
   // (Object.keys(contact).length === 0) rather than a hand-picked subset of OR clauses —

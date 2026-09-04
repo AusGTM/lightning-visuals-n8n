@@ -13,6 +13,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { LUSHA_REVEAL_BY_FIELD, lushaReveal, lushaContactBody, lushaContactEnrichByIdBody, lushaCompanyBody } =
   require(path.join(ROOT, "n8n/code/lushaRequest.js"));
+const { decideAction } = require(path.join(ROOT, "n8n/code/enrichmentGate.js"));
 
 // ---- lushaReveal() ----------------------------------------------------------
 
@@ -28,6 +29,14 @@ test("lushaReveal(['mobilephone']) -> exactly the phone reveal value", () => {
   assert.deepEqual(lushaReveal(["mobilephone"]), ["phones"]);
 });
 
+test("lushaReveal(['phone']) -> the landline maps to the SAME phone reveal value (D-66-01)", () => {
+  assert.deepEqual(lushaReveal(["phone"]), ["phones"]);
+});
+
+test("lushaReveal(['phone','mobilephone']) -> ONE-element array, not two — a duplicate must never reach the provider (T-66-03)", () => {
+  assert.deepEqual(lushaReveal(["phone", "mobilephone"]), ["phones"]);
+});
+
 test("lushaReveal(['email','mobilephone']) -> both reveal values, stable order", () => {
   assert.deepEqual(lushaReveal(["email", "mobilephone"]), ["emails", "phones"]);
 });
@@ -36,9 +45,9 @@ test("lushaReveal(['mobilephone','email']) -> same array regardless of input ord
   assert.deepEqual(lushaReveal(["mobilephone", "email"]), ["emails", "phones"]);
 });
 
-test("lushaReveal hostile input: unmapped + prototype-chain names all drop out", () => {
+test("lushaReveal hostile input: unmapped + prototype-chain names all drop out (T-20-02 stays pinned; only the landline's membership changed)", () => {
   assert.deepEqual(
-    lushaReveal(["lv_org_type", "__proto__", "constructor", "phone"]),
+    lushaReveal(["lv_org_type", "__proto__", "constructor", "seniority"]),
     []
   );
 });
@@ -50,11 +59,12 @@ test("lushaReveal(undefined) and lushaReveal(null) -> [] without throwing", () =
   assert.deepEqual(lushaReveal(null), []);
 });
 
-test("LUSHA_REVEAL_BY_FIELD is frozen and has exactly the two confirmed entries", () => {
+test("LUSHA_REVEAL_BY_FIELD is frozen and has exactly the three confirmed entries (D-66-01)", () => {
   assert.ok(Object.isFrozen(LUSHA_REVEAL_BY_FIELD));
-  assert.deepEqual(Object.keys(LUSHA_REVEAL_BY_FIELD).sort(), ["email", "mobilephone"]);
+  assert.deepEqual(Object.keys(LUSHA_REVEAL_BY_FIELD).sort(), ["email", "mobilephone", "phone"]);
   assert.equal(LUSHA_REVEAL_BY_FIELD.email, "emails");
   assert.equal(LUSHA_REVEAL_BY_FIELD.mobilephone, "phones");
+  assert.equal(LUSHA_REVEAL_BY_FIELD.phone, "phones");
 });
 
 // ---- lushaContactBody() ------------------------------------------------------
@@ -101,6 +111,17 @@ test("lushaContactBody: broader identity set (firstName/lastName/companyName/com
 test("lushaContactBody: only jobtitle missing -> empty reveal from lushaReveal, defaulted to ['emails']", () => {
   const body = lushaContactBody({ email: "a@b.com" }, ["jobtitle"]);
   assert.deepEqual(body.reveal, ["emails"]);
+});
+
+// D-66-01/RICH-01: the landline is chased end to end, through a CREATE row specifically —
+// the exact live scenario the brief cites (an all-blank CREATE row).
+test("D-66-01: a CREATE-row decideAction's missingFields feeds lushaContactBody a reveal containing the phone value", () => {
+  const REQUIRED = ["email", "jobtitle", "mobilephone", "phone"];
+  const gate = decideAction({}, REQUIRED, {}, "2026-09-05T00:00:00Z");
+  assert.equal(gate.action, "create");
+  assert.deepEqual(gate.missingFields, REQUIRED);
+  const body = lushaContactBody({ email: "a@b.com" }, gate.missingFields);
+  assert.ok(body.reveal.includes("phones"), "CREATE-row reveal must carry the phone reveal value");
 });
 
 // ---- lushaContactEnrichByIdBody() — Task 2b confirmed-free stored-id path -----

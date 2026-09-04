@@ -4,7 +4,10 @@
 // exercised indirectly, per 16-RESEARCH.md Wave-0 gap). Proves RT-5's already-built
 // freshness behavior: a fresh required field skips, a stale one re-enriches, and a
 // present value with NO _verified_at is conservatively treated as stale.
-// enrichmentGate.js is FROZEN — this file characterizes it, never modifies it.
+//
+// Phase 66 Plan 01 Task 1 (D-66-01): the CREATE branch changed — decideAction({}, ...)
+// now returns missingFields === requiredFields (a copy) rather than []. Everything else
+// in this file characterizes UNCHANGED behavior.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -77,4 +80,27 @@ test("RT-5 sanity: a missing required field enriches for 'missing', not 'stale'"
   const gate = decideAction(existingRecord, REQUIRED, POLICY, NOW);
   assert.equal(gate.action, "enrich");
   assert.deepEqual(gate.missingFields, ["lv_produces_content"]);
+});
+
+// D-66-01 (upstream_corrections item 3): a CREATE row (no existing record at all) used to
+// return an EMPTY missingFields, which meant the exact live scenario the phase-66 brief
+// cites — an all-blank CREATE row — chased nothing regardless of how wide REQUIRED was.
+// missingFields on a CREATE row must now equal requiredFields.
+test("D-66-01: decideAction({}, REQUIRED, POLICY, now) -> action create AND missingFields deep-equal REQUIRED", () => {
+  const gate = decideAction({}, REQUIRED, POLICY, NOW);
+  assert.equal(gate.action, "create");
+  assert.deepEqual(gate.missingFields, REQUIRED);
+  assert.deepEqual(gate.staleFields, []);
+  assert.deepEqual(gate.invalidFields, []);
+});
+
+test("D-66-01: a null existingRecord (not just {}) also treats every required field as missing", () => {
+  const gate = decideAction(null, REQUIRED, POLICY, NOW);
+  assert.equal(gate.action, "create");
+  assert.deepEqual(gate.missingFields, REQUIRED);
+});
+
+test("D-66-01: the returned missingFields is a COPY, not the same array reference as REQUIRED", () => {
+  const gate = decideAction({}, REQUIRED, POLICY, NOW);
+  assert.notEqual(gate.missingFields, REQUIRED, "mutating the result must never mutate the caller's REQUIRED list");
 });
