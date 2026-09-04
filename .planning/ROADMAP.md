@@ -143,6 +143,19 @@ makes a contact usable.
   count, and ZoomInfo's fields return in a request already paid for. The cost is mapping work.
 - Deliverable includes a producer/consumer matrix per field, and the same audit for companies.
 
+**Requirements:** RICH-01, RICH-02, RICH-03, RICH-05, RICH-06
+**Plans:** 3 plans
+
+Plans:
+- [ ] 66-01-PLAN.md — contacts lane: chase the landline end-to-end, give `lv_linkedin_url` a producer, widen `REQUIRED` to the full promotable set (wave 1)
+- [ ] 66-02-PLAN.md — the producer/consumer matrix for both lanes, then the companies gate derived from it (wave 2)
+- [ ] 66-03-PLAN.md — phone-and-email completeness visible in the operator's report, flagged never held (wave 3)
+
+**Planning note:** RICH-04 (`merge_enriched`'s keep/replace rule for a CREATE row) is mapped to
+this phase in REQUIREMENTS.md but is EXCLUDED by 66-CONTEXT.md's `<domain>`, which scopes Phase 66
+to the n8n lane and explicitly excludes `suggest_contacts.py`. It currently has no phase. See the
+66 planning return for the options.
+
 ### Phase 67: An autonomy flag with sensible defaults
 
 **Goal:** the operator can let functions run without per-step intervention, deliberately and
