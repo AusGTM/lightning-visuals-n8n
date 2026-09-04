@@ -1,21 +1,21 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Unattended Session Runs
-status: Awaiting next milestone
+milestone: v1.2
+milestone_name: Yield and Friction
+status: Planning
 stopped_at: context exhaustion at 100% (2026-09-03)
 last_updated: "2026-09-04T00:08:50.421Z"
 last_activity: 2026-09-04
 last_activity_desc: Milestone v1.1 completed and archived
 state_head: b527e22c67ef90de068788fd9c3ca10979075cce
 progress:
-  total_phases: 13
-  completed_phases: 10
-  total_plans: 62
-  completed_plans: 62
-  percent: 77
-current_phase: 61
-current_phase_name: Autonomous batch runs
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+current_phase: 64
+current_phase_name: The ladder stops at the best page, not the first
 ---
 
 # Project State
@@ -356,10 +356,13 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-09-04 — Milestone v1.1 completed and archived
+Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
+Phase: 64 - The ladder stops at the best page, not the first
+Plan: -
+Status: Planning
+Last activity: 2026-09-05 - milestone v1.2 activated (roadmap phase blocks promoted, requirements installed)
+
+*The v1.1 retained sections below are history, not current position.*
 
 ### Retained — 62-02 outcome (2026-09-02)
 
