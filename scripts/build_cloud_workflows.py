@@ -2293,7 +2293,42 @@ return rows.map((it, i) => {
 ENRICH_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
 
 // --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
-const REQUIRED = ["lv_org_type", "lv_produces_content"];
+// Phase 66 Plan 02 (D-66-01 companies half, RICH-02, RICH-05): REQUIRED is DERIVED from
+// 66-COVERAGE.md, not chosen by intuition — tests/n8n/fieldProducerMatrix.test.mjs's
+// chase-gate assertion enforces this derivation mechanically. The rule: a
+// config/field_policy.yaml `companies` key is included only when ALL THREE hold —
+// (1) promote_to_canonical: true, (2) class is neither score_output nor veto_output,
+// (3) the matrix records at least one producing branch (a provider `_push` OR, for the
+// six ICP fields no provider branch emits, the Claude web-research lane, recognised via
+// each field's own `allow_web_research: true` policy flag).
+//
+// Excluded, each for a load-bearing reason (66-COVERAGE.md's companies table):
+//   - `domain`: promote_to_canonical: false AND producer-less (open todo, not this plan's
+//     fix: .planning/todos/pending/2026-09-04-company-domain-has-no-candidate-source.md).
+//     Including a producer-less required field marks every company permanently incomplete.
+//   - `annualrevenue`: review_required / stage_only / promote_to_canonical: false. The
+//     pipeline can never fill it canonically, so a required-but-unfillable field would
+//     gate every company without a human-entered value to `enrich` forever, on every
+//     scheduled tick — the 2026-08-09 execution-runaway shape. The single most important
+//     exclusion here.
+//   - `lv_anti_icp_flag` / `lv_anti_icp_reason`: veto_output, recomputed by Decide Company
+//     Action from current inputs every run — never chased, same reasoning that keeps the
+//     derived ICP fit-score field out of the contacts REQUIRED list.
+//
+// `numberofemployees` IS included (matrix shows it promotable with producers): this
+// CHASES the field but changes nothing about what the merge will accept —
+// CLAUDE.md §29.1's ONE scoped exception (58-05 Task 2) stays exactly as scoped:
+// fill_blank_only, already-numeric provider values only, no band parsing. Chasing is not
+// widening the exception.
+const REQUIRED = [
+  "industry", "numberofemployees", "lv_revenue_band", "lv_employee_band",
+  "lv_country_region_normalized", "country", "city",
+  "lv_org_type", "lv_produces_content", "lv_content_type",
+  "lv_sponsorship_reliant", "lv_is_hardware_vendor", "lv_is_gambling_operator",
+];
+// POLICY unchanged (D-66-09 discipline applies to both lanes): only the two pre-existing
+// TTL entries. No new stale_after_days added — a TTL on a field decideAction never reads
+// through a stale_refreshable branch is inert (D-66-09's own reasoning for `phone`).
 const POLICY = {
   lv_org_type: { stale_after_days: 180 },
   lv_produces_content: { stale_after_days: 180 },
@@ -5116,12 +5151,20 @@ return rows.map((it, i) => {
 # a write. This is the property list build_enrichment_cloud() ACTUALLY feeds its
 # "HubSpot Company Search" and "HubSpot Company Fetch By Id" nodes (HS_CO_SEARCH_BODY_EXPR
 # above is a separate constant, used by build_enrichment_local_live() only).
+#
+# Phase 66 Plan 02 Task 2 (D-66-01 companies half): lv_revenue_band/lv_employee_band
+# appended — both newly REQUIRED by ENRICH_CO_GATE above (66-COVERAGE.md's derivation),
+# and same class of defect WR-01/VETO-01/58-05 already fixed here twice: a property
+# omitted from this CSV reads as absent on existingRecord, which both makes the gate
+# report it permanently missing AND turns mergeCompanies' non-clobber comparison into a
+# silent permit to overwrite a populated value.
 ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "name,domain,industry,annualrevenue,"
     "numberofemployees,hs_object_id,lv_org_type,"
     "lv_produces_content,lv_content_type,lv_sponsorship_reliant,"
     "lv_is_hardware_vendor,lv_is_gambling_operator,"
     "lv_country_region_normalized,country,city,"
+    "lv_revenue_band,lv_employee_band,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
     "lv_produces_content_verified_at,lusha_company_id,"
     "num_associated_contacts"

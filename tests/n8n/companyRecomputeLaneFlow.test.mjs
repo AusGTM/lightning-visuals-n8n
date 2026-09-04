@@ -100,6 +100,12 @@ function targetsOf(wf, nodeName, branchIndex) {
 // the freshness stamps must be computed relative to now or the test rots (TTL is 180 days).
 const FRESH = new Date(Date.now() - 86400000).toISOString();
 
+// Phase 66 Plan 02 (D-66-01 companies half): ENRICH_CO_GATE's REQUIRED widened from 2 to
+// 13 fields (66-COVERAGE.md's derivation). "Complete" must mean complete against the
+// WIDENED list, or this fixture no longer gates to `skip` at all (missing, not stale) and
+// every assertion below that depends on a genuine skip verdict is testing the wrong thing.
+// Only lv_org_type/lv_produces_content carry a stale_after_days TTL in POLICY, so only
+// those two need a _verified_at stamp — the other 11 just need to be non-blank.
 function completeRecord(region) {
   return {
     hs_object_id: "18047161864",
@@ -110,6 +116,16 @@ function completeRecord(region) {
     lv_org_type_verified_at: FRESH,
     lv_produces_content_verified_at: FRESH,
     lv_country_region_normalized: region,
+    industry: "sports",
+    numberofemployees: 42,
+    lv_revenue_band: "5-50M",
+    lv_employee_band: "10-50",
+    country: "Australia",
+    city: "Melbourne",
+    lv_content_type: "live_broadcast",
+    lv_sponsorship_reliant: "false",
+    lv_is_hardware_vendor: "false",
+    lv_is_gambling_operator: "false",
   };
 }
 

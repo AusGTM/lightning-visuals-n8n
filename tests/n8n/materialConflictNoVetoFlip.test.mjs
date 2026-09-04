@@ -177,3 +177,98 @@ test("an agreeing multi-source lv_country_region_normalized still promotes and i
   assert.notEqual(out.properties.lv_enrichment_needs_review, "true");
   assert.equal(out.properties.lv_anti_icp_flag, "false");
 });
+
+// --- Phase 66 Plan 02 Task 2 (T-66-09): the conflict-watch lists did not move ------------
+//
+// D-66-04/T-66-09: widening ENRICH_CO_GATE's REQUIRED (companies chase list) is a
+// different mechanism from CONFLICT_WATCH/MATERIAL_CONFLICT_GROUPS (what gets judge-
+// adjudicated before promotion, 58-06). They live in different nodes ("Company Gate" vs
+// "Merge Company"/"Judge Gate") and a byte-level snapshot here proves a stray edit to the
+// wrong wrapper constant would be caught rather than silently changing what the judge
+// adjudicates.
+
+function extractArrayLiteral(jsCode, constName) {
+  const re = new RegExp(`const ${constName}\\s*=\\s*(\\[[\\s\\S]*?\\])\\s*;`);
+  const m = re.exec(jsCode);
+  assert.ok(m, `const ${constName} not found in jsCode`);
+  // eslint-disable-next-line no-new-func
+  return new Function(`"use strict"; return (${m[1]});`)();
+}
+
+const SNAPSHOT_CONFLICT_WATCH = ["lv_revenue_band", "lv_employee_band"];
+const SNAPSHOT_MATERIAL_CONFLICT_GROUPS = [
+  { name: "country_region", fields: ["lv_country_region_normalized", "country"] },
+  { name: "org_type", fields: ["lv_org_type"] },
+  { name: "produces_content", fields: ["lv_produces_content"] },
+  { name: "hardware_vendor", fields: ["lv_is_hardware_vendor"] },
+  { name: "gambling_operator", fields: ["lv_is_gambling_operator"] },
+];
+
+test("T-66-09: Merge Company's CONFLICT_WATCH is byte-unchanged from the pre-plan snapshot", () => {
+  const watch = extractArrayLiteral(MERGE_COMPANY_BODY, "CONFLICT_WATCH");
+  assert.deepEqual(watch, SNAPSHOT_CONFLICT_WATCH,
+    "CONFLICT_WATCH moved — widening the companies gate's REQUIRED must never change what " +
+    "Merge Company treats as a size conflict");
+});
+
+test("T-66-09: Judge Gate's MATERIAL_CONFLICT_GROUPS is byte-unchanged from the pre-plan snapshot", () => {
+  const groups = extractArrayLiteral(loadNodeJsCode("Judge Gate"), "MATERIAL_CONFLICT_GROUPS");
+  assert.deepEqual(groups, SNAPSHOT_MATERIAL_CONFLICT_GROUPS,
+    "MATERIAL_CONFLICT_GROUPS moved — widening the companies gate's REQUIRED must never " +
+    "change which cross-provider conflicts the judge adjudicates");
+});
+
+test("T-66-09: Merge Company's MATERIAL_CONFLICT_GROUPS is also byte-unchanged", () => {
+  const groups = extractArrayLiteral(MERGE_COMPANY_BODY, "MATERIAL_CONFLICT_GROUPS");
+  assert.deepEqual(groups, SNAPSHOT_MATERIAL_CONFLICT_GROUPS);
+});
+
+// --- Phase 66 Plan 02 Task 2 (D-66-01 companies half): the widened gate still skips a --
+// genuinely complete record ---------------------------------------------------------------
+//
+// 66-COVERAGE.md's derivation widens Company Gate's REQUIRED from 2 to 13 fields. Only
+// lv_org_type/lv_produces_content carry a stale_after_days TTL in POLICY (D-66-09
+// discipline: no new TTL added), so a record holding all 13 values needs BOTH cache-key
+// timestamps to reach `skip` — present-but-unstamped for either of those two reads as
+// stale (RT-5), and this fixture would gate `enrich` and never reach `skip` without them,
+// per the plan's own acceptance criterion. Mirrors the existing RT-5 skip fixture shape
+// (tests/n8n/enrichmentGate.test.mjs) against the REGENERATED "Company Gate" node.
+
+const COMPANY_GATE_BODY = loadNodeJsCode("Company Gate");
+
+function fullyRequiredCompanyRecord() {
+  const FRESH = new Date(Date.now() - 10 * 86400000).toISOString(); // ~10 days ago, inside 180d TTL
+  return {
+    lv_org_type: "broadcaster",
+    lv_org_type_verified_at: FRESH,
+    lv_produces_content: true,
+    lv_produces_content_verified_at: FRESH,
+    industry: "sports",
+    numberofemployees: 42,
+    lv_revenue_band: "5-50M",
+    lv_employee_band: "10-50",
+    lv_country_region_normalized: "AU",
+    country: "Australia",
+    city: "Melbourne",
+    lv_content_type: "live_broadcast",
+    lv_sponsorship_reliant: false,
+    lv_is_hardware_vendor: false,
+    lv_is_gambling_operator: false,
+  };
+}
+
+test("D-66-01: a company holding every newly-required field AND both cache-key timestamps skips", () => {
+  const out = runCodeNode(COMPANY_GATE_BODY, { existingRecord: fullyRequiredCompanyRecord() });
+  assert.equal(out.action, "skip",
+    `expected skip, got "${out.action}" (missingFields: ${JSON.stringify(out.gate && out.gate.missingFields)}, staleFields: ${JSON.stringify(out.gate && out.gate.staleFields)})`);
+  assert.deepEqual(out.gate.missingFields, []);
+});
+
+test("D-66-01: blanking one newly-required field reports it in missingFields, gate enriches", () => {
+  const existingRecord = fullyRequiredCompanyRecord();
+  existingRecord.lv_content_type = "";
+  const out = runCodeNode(COMPANY_GATE_BODY, { existingRecord });
+  assert.equal(out.action, "enrich");
+  assert.ok(out.gate.missingFields.includes("lv_content_type"),
+    `expected lv_content_type in missingFields, got ${JSON.stringify(out.gate.missingFields)}`);
+});
