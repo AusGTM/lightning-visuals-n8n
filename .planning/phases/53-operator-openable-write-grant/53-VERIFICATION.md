@@ -1,6 +1,6 @@
 ---
 phase: 53-operator-openable-write-grant
-verified: 2026-09-02T00:00:00Z
+verified: 2026-09-05T00:00:00Z
 status: passed
 score: GRANT-01 achieved and demonstrated live (walk run 3, 2026-08-29)
 verification_basis: operator_walk
@@ -124,3 +124,37 @@ call site at `review_decision.py:330`, making all three lanes report into one ar
 carried a real batch to a real HubSpot write, asked once, with record scoping never widened and a
 verified disarm afterwards. The one walk that failed did so upstream of the grant, exercised none
 of this phase's properties, and its cause has since been fixed.
+
+
+---
+
+## Staleness reconciliation, 2026-09-05 (`/gsd-verify-work 53`)
+
+**The stale flag was a false positive. No re-verification was run, and none was warranted.**
+
+`gsd-tools` reports a verification stale when a phase SUMMARY is newer than the verification
+file. Here `53-04-SUMMARY.md` carried a 2026-09-03 mtime against this report's 2026-09-02 date,
+so the check fired correctly on its own terms — and the check was reading the wrong signal.
+
+**What actually happened, from git rather than from mtimes:**
+
+| When | What |
+| --- | --- |
+| 2026-08-25 | `53-04-SUMMARY.md` first committed (`c9e1e3e`) — the work itself, tasks 1–2 done, task 3 parked on an operator checkpoint |
+| 2026-08-29 | Walk run 3 discharged that checkpoint live (`53-WALK-RECORD-2.md` § WALK RUN 3) |
+| 2026-09-02 | This report written (`39b7a7d`), `status: passed`, on operator instruction |
+| 2026-09-03 | `919f7d3` edited `53-04-SUMMARY.md`'s FRONTMATTER ONLY: `status: blocked-on-checkpoint` → `complete`, and one coverage item `OUTSTANDING` → `DISCHARGED`, both citing this report |
+
+So the edit that made the summary "newer" than this report was an edit **recording that the
+phase had been verified**. Five insertions, three deletions, all metadata. No plan re-executed,
+no task re-opened, no claim changed.
+
+**Why no verifier agent was spawned.** This report says above, in terms, that Phase 53 was
+closed by a live operator walk, that no `gsd-verifier` pass was ever run for it, and that this
+report "does not manufacture one retroactively." Spawning one now to clear a timestamp would be
+precisely that manufacture — a machine score standing in for evidence a static code check
+cannot produce for a grant that carries a real batch to a real HubSpot write. The instrument
+that closed this phase is unchanged and is still the right one.
+
+**Status unchanged: passed.** `verified:` refreshed to 2026-09-05 so the ordering reflects the
+record rather than an artefact of a metadata correction. GRANT-01 stands on walk run 3.

@@ -12,9 +12,17 @@
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred INDEFINITELY** — 2026-08-25 in favour of v1.1, reaffirmed 2026-08-30 after its gates were satisfied)
 - 🚧 **v1.1 Unattended Session Runs** — Phases 53–63 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`).
   Complete: 53, 54, **57**, 58, 59, 61. Absorbed into 61: 55, 56 (D-61-08).
-  Open: **62** (executed 6/6 and verified 13/13, but NOT complete — verification is
-  `human_needed`, UAT `partial`, 3 items blocked on a live attended sitting), **60**, and
-  **63** (numbered 2026-09-02, not yet planned).
+  ~~Open: 62 (verification `human_needed`, UAT `partial`), 60, and 63 (numbered, not yet
+  planned).~~ **CORRECTED 2026-09-05 — all three are COMPLETE on disk and this line was
+  materially stale.** 60: 5/5 plans, `passed`. 62: 12/12 plans, `passed` (the human sittings
+  happened; reconciled in `fc4b108`). 63: 5/5 plans, `passed` at 28/28 must-haves — it was
+  never "not yet planned". **53** was flagged `stale` by the mtime check and reconciled
+  2026-09-05: a metadata-only edit recording the phase's own verification had made its SUMMARY
+  newer than its VERIFICATION. No re-verification was warranted; see the reconciliation note in
+  `53-VERIFICATION.md`.
+  **v1.1 now stands at 10/13, and the remaining three are not open work:** 52 is deferred
+  INDEFINITELY by operator decision (2026-08-25), and 55 and 56 are absorbed into 61 (D-61-08).
+  **The milestone is closable.**
   ~~Phases 53–60~~ — corrected 2026-08-30, Phase 61 was inserted ahead of everything.
   ~~Open: **57 (next)**~~ — corrected 2026-09-02, Phase 57 completed 2026-09-01.
   **The first live unattended, credit-spending batch has NOT run.** ~~It is gated on Phase 57.~~
