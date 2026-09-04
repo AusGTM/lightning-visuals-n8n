@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 65
-current_phase_name: Round-empty re-entry, keyed on the cause
-status: planning
-stopped_at: Phase 64 complete, ready to plan Phase 65
-last_updated: "2026-09-04T07:25:18.851Z"
+current_phase: 66
+current_phase_name: Rich enrichment, not minimum enrichment
+status: executing
+stopped_at: Completed 66-01-PLAN.md
+last_updated: "2026-09-04T07:43:22.730Z"
 last_activity: 2026-09-05
-last_activity_desc: Phase 64 complete, transitioned to Phase 65
-state_head: 26441e569ef5d9f7d8b91fbd0cd11aa90d3da5ef
+last_activity_desc: Phase 66 execution started
+state_head: d0296d9c8d8abe6738c9d9a86f06ea4508e13ef2
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 17
 ---
 
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 65 — Round-empty re-entry, keyed on the cause
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-04 — Phase 64 complete, transitioned to Phase 65
+Phase: 66 (Rich enrichment, not minimum enrichment) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-09-04 — Phase 66 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [░░░░░░░░░░] 0% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [██░░░░░░░░] 17% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-04T06:46:31.272Z
-**Stopped at:** Phase 64 complete, ready to plan Phase 65
+**Last session:** 2026-09-04T07:43:22.586Z
+**Stopped at:** Completed 66-01-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -629,6 +629,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P10 | N/A | 3 tasks | 8 files |
 | Phase 62 P12 | ~20min | 3 tasks | 8 files |
 | Phase 64 P01 | 15min | 3 tasks | 5 files |
+| Phase 66 P01 | 50min | 3 tasks | 13 files |
 
 ## Decisions
 
@@ -740,6 +741,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 64]: D-64-01/D-64-02: pages accumulate into one union deduped by normalised first+last name; a winner never replaces the rest
 - [Phase 64]: D-64-06: the walk bar is max(len(chosen_families), per_company_cap) -- the cap floor stops a one-family round from reproducing the stop-at-first-page defect
 - [Phase 64]: D-64-10: a refusal is checked before a page's people are touched, keyed only on a fetched page's own disposition
+- [Phase 66]: D-66-01: decideAction's CREATE branch now returns missingFields === requiredFields, the root-cause fix for a landline that was never chased on any brand-new contact
+- [Phase 66]: Apollo LinkedIn producer pushes the UNPREFIXED linkedin_url key, matching what ENRICH_MERGE already reads at scoreCandidates winners — corrects PATTERNS.md's reversed direction
 
 ### Roadmap Evolution
 

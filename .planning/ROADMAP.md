@@ -147,12 +147,12 @@ makes a contact usable.
 - Deliverable includes a producer/consumer matrix per field, and the same audit for companies.
 
 **Requirements:** RICH-01, RICH-02, RICH-03, RICH-05, RICH-06
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 66-01-PLAN.md — contacts lane: chase the landline end-to-end, give `lv_linkedin_url` a producer, widen `REQUIRED` to the full promotable set (wave 1)
+- [x] 66-01-PLAN.md — contacts lane: chase the landline end-to-end, give `lv_linkedin_url` a producer, widen `REQUIRED` to the full promotable set (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
