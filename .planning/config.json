@@ -4,7 +4,8 @@
     "use_worktrees": false,
     "plan_review_convergence": true,
     "nyquist_validation": true,
-    "security_enforcement": true
+    "security_enforcement": true,
+    "test_command": ".venv/bin/python -m pytest -q --tb=short && node --test tests/n8n/*.test.mjs"
   },
   "review": {
     "reviewer_instances": {
