@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 64
-current_phase_name: the-ladder-stops-at-the-best-page-not-the-first
-status: Ready to execute
-stopped_at: Phases 64 and 66 planned and verified; 64 is next to execute
-last_updated: "2026-09-04T05:09:15.393Z"
+current_phase_name: The ladder stops at the best page, not the first
+status: verifying
+stopped_at: Completed 64-01-PLAN.md
+last_updated: "2026-09-04T06:46:31.292Z"
 last_activity: 2026-09-05
-last_activity_desc: Milestone v1.1 completed and archived
-state_head: f7704ac9f247920737c529a242a25e00d8dcc50b
+last_activity_desc: Phase 64 execution started
+state_head: d593270f59670e6c4283704158da84cadd69ca3b
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 66 (rich-enrichment-not-minimum-enrichment) — READY TO EXECUTE
-Plan: -
-Status: Ready to execute
-Last activity: 2026-09-05 - milestone v1.2 activated (roadmap phase blocks promoted, requirements installed)
+Phase: 64 (The ladder stops at the best page, not the first) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-09-04 — Phase 64 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████░░░░] 62% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [░░░░░░░░░░] 0% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -500,12 +500,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-04T03:32:07.237Z
-**Stopped at:** Phases 64-69 context gathered (v1.2 fully discussed)
+**Last session:** 2026-09-04T06:46:31.272Z
+**Stopped at:** Completed 64-01-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** .planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-CONTEXT.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -628,6 +628,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P08 | 25min | 2 tasks | 4 files |
 | Phase 62 P10 | N/A | 3 tasks | 8 files |
 | Phase 62 P12 | ~20min | 3 tasks | 8 files |
+| Phase 64 P01 | 15min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -736,6 +737,9 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 61]: G-62-4 closed: suggest_contacts.mint_row_ids (wraps preingest.build_rows_spec, called once per batch) and rejoin_enriched (joins merge_enriched's fresh rows back by row_id) close the seam where suggest-contacts/SKILL.md's documented round could not dispatch stage 2 at all
 - [Phase 62]: 62-10: G-62-2 closed -- url_fallback._canonical_authority drops a single leading www. label only when the remainder still contains a dot; same_host compares canonical authorities in both directions. Lands in the one shared guard (D-62-01), so contact-upload's URL adapter gets the fix too. Suffix/subdomain/port/dotless boundaries each pinned by their own test; released as plugin 0.38.2 alongside G-62-3/G-62-4.
 - [Phase 61]: 62-12: partition_for_dispatch(rows, company_domains) -- company_domains required, no default, closing G-62-7 per operator ruling 2026-09-04
+- [Phase 64]: D-64-01/D-64-02: pages accumulate into one union deduped by normalised first+last name; a winner never replaces the rest
+- [Phase 64]: D-64-06: the walk bar is max(len(chosen_families), per_company_cap) -- the cap floor stops a one-family round from reproducing the stop-at-first-page defect
+- [Phase 64]: D-64-10: a refusal is checked before a page's people are touched, keyed only on a fetched page's own disposition
 
 ### Roadmap Evolution
 

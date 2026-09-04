@@ -91,11 +91,11 @@ walked to that list.
 
 **Requirements:** LADDER-01, LADDER-02 (inherits SAFE-02, SAFE-03)
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans executed
 
 Plans:
 
-- [ ] 64-01-PLAN.md — the walk stops at a cumulative role-hit bar, accumulates a deduped
+- [x] 64-01-PLAN.md — the walk stops at a cumulative role-hit bar, accumulates a deduped
   union across walked pages, and reports how it ended
 
 ### Phase 65: Round-empty re-entry, keyed on the cause

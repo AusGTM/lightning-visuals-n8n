@@ -23,9 +23,9 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   of the three enrichment drop paths (`doNotCall`/`dnc_status`, un-normalizable phone,
   unentitled provider field) is softened by any phase in this milestone. Richer means more
   fields ATTEMPTED, never more values FORCED through.
-- [ ] **SAFE-02**: A refusal stays terminal (D-5sd-04). No re-entry, retry or fallback reaches
+- [x] **SAFE-02**: A refusal stays terminal (D-5sd-04). No re-entry, retry or fallback reaches
   the search path from a ladder containing a `refused` attempt, by any route.
-- [ ] **SAFE-03**: `MAX_FOLLOWUP_FETCHES` and `MAX_FALLBACK_SEARCHES` bound a company's WHOLE
+- [x] **SAFE-03**: `MAX_FOLLOWUP_FETCHES` and `MAX_FALLBACK_SEARCHES` bound a company's WHOLE
   round. No phase resets them, and `cap_exhausted` never becomes a retry trigger.
 - [ ] **SAFE-04**: Ceilings remain refusals in code (`CapRefused`, the per-run ceiling), not
   prose. "Proceed unless interrupted" never becomes "proceed past a refusal".
@@ -34,11 +34,11 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 ## LADDER — the walk finds what the site actually publishes (Phases 64, 65)
 
-- [ ] **LADDER-01**: The walk continues past the first page that yields people when a better
+- [x] **LADDER-01**: The walk continues past the first page that yields people when a better
   candidate remains, under the SAME fetch budget. *Live: Brisbane Roar stopped at
   `/about/contact-us/`; the general case is a contact page naming a receptionist while
   `/board/` lists the committee.*
-- [ ] **LADDER-02**: "Better" is a testable predicate, not a prose instruction to the model.
+- [x] **LADDER-02**: "Better" is a testable predicate, not a prose instruction to the model.
 - [ ] **LADDER-03**: A round that ends with nothing usable re-enters, and the re-entry names
   the CAUSE of the zero rather than reading a single `round_empty` boolean. *Live: two rounds,
   two different causes, and a blanket retry would have helped neither.*
