@@ -981,3 +981,145 @@ def test_no_candidates_still_returns_give_up_messages_text_verbatim():
     assert result["outcome"] == "no_candidates_found"
     assert result["reason"] == url_fallback.give_up_message(
         "https://example-club.example/board", attempts)
+
+
+# =====================================================================================
+# Phase 64 Task 1 — walk_bar, walk_pages: the union across walked pages, deduped by
+# name, stopping on a cumulative bar rather than on the first page that yields anyone
+# (D-64-01 .. D-64-07). Task 1 covers only the WALK_GOOD_ENOUGH / None endings; the
+# three terminal endings (refused, cap_exhausted, ladder_exhausted) are Task 2.
+# =====================================================================================
+
+NINE_OFFICERS = [
+    {"firstname": f"Officer{i}", "lastname": f"Board{i}", "jobtitle": "Board Member"}
+    for i in range(9)
+]
+
+RECEPTIONIST_PAGE = {
+    "url": "https://example-club.example/contact",
+    "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Receptionist"}],
+}
+
+BOARD_PAGE = {
+    "url": "https://example-club.example/board",
+    "people": NINE_OFFICERS,
+}
+
+
+def test_walk_bar_is_the_chosen_family_count_floored_at_the_cap():
+    assert suggest_contacts.walk_bar(["board"], 3) == 3
+    assert suggest_contacts.walk_bar(["board", "executive", "media", "ops"], 3) == 4
+
+
+def test_walk_pages_unions_people_across_pages_in_walk_order():
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+    result = suggest_contacts.walk_pages(
+        [RECEPTIONIST_PAGE, BOARD_PAGE], candidates, bar=99,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert len(result["people"]) == 10
+    assert result["people"][0]["lastname"] == "Doe"
+    assert [p["lastname"] for p in result["people"][1:]] == [f"Board{i}" for i in range(9)]
+    assert result["ended"] is None
+
+
+def test_walk_pages_dedupes_a_case_and_whitespace_differing_duplicate_across_pages():
+    person_a = {"firstname": "Jane ", "lastname": "Smith", "jobtitle": "Board Member"}
+    person_a_dup = {"firstname": "JANE", "lastname": " smith ", "jobtitle": "Board Member"}
+    person_b = {"firstname": "Sam", "lastname": "Reilly", "jobtitle": "Board Member"}
+    page_a = {"url": "https://example-club.example/contact", "people": [person_a]}
+    page_b = {"url": "https://example-club.example/board", "people": [person_a_dup, person_b]}
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+
+    result = suggest_contacts.walk_pages(
+        [page_a, page_b], candidates, bar=99,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert len(result["people"]) == 2
+    assert len(result["selected"]) == 2
+    assert result["scores"] == [
+        {"url": page_a["url"], "score": 1, "cumulative": 1},
+        {"url": page_b["url"], "score": 1, "cumulative": 2},
+    ]
+
+
+def test_walk_pages_never_dedupes_a_person_missing_a_name_half():
+    incomplete_a = {"firstname": "Sam", "jobtitle": "Board Member"}
+    incomplete_b = {"firstname": "Sam", "jobtitle": "Board Member"}
+    page_a = {"url": "https://example-club.example/contact", "people": [incomplete_a]}
+    page_b = {"url": "https://example-club.example/board", "people": [incomplete_b]}
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+
+    result = suggest_contacts.walk_pages(
+        [page_a, page_b], candidates, bar=99,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert len(result["people"]) == 2
+
+
+def test_walk_pages_stops_at_good_enough_once_the_cumulative_union_clears_the_bar():
+    page_a = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Board Member"}]}
+    page_b = {"url": "https://example-club.example/board", "people": NINE_OFFICERS[:2]}
+    page_c = {"url": "https://example-club.example/staff", "people": NINE_OFFICERS[2:4]}
+
+    below_bar = suggest_contacts.walk_pages(
+        [page_a], {"accepted": [page_c["url"]], "budget_remaining": 1}, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert below_bar["ended"] is None
+
+    result = suggest_contacts.walk_pages(
+        [page_a, page_b, page_c], {"accepted": [], "budget_remaining": 0}, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert result["ended"] == suggest_contacts.WALK_GOOD_ENOUGH
+    assert len(result["selected"]) == 3
+    assert len(result["people"]) == 3
+    assert len(result["scores"]) == 2  # page_c never folded once page_b cleared the bar
+
+
+def test_walk_pages_requires_a_candidates_dict_carrying_accepted_and_budget_remaining():
+    with pytest.raises(ValueError):
+        suggest_contacts.walk_pages(
+            [RECEPTIONIST_PAGE], {"accepted": []}, bar=3,
+            family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+        )
+    with pytest.raises(ValueError):
+        suggest_contacts.walk_pages(
+            [RECEPTIONIST_PAGE], None, bar=3,
+            family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+        )
+
+
+def test_walk_ending_vocabulary_is_the_closed_four_value_tuple():
+    assert suggest_contacts.WALK_ENDINGS == (
+        suggest_contacts.WALK_GOOD_ENOUGH,
+        suggest_contacts.WALK_LADDER_EXHAUSTED,
+        suggest_contacts.WALK_CAP_EXHAUSTED,
+        suggest_contacts.WALK_REFUSED,
+    )
+
+
+def test_walk_pages_end_to_end_into_extraction_validate():
+    company_row = _company_row(website="https://example-club.example/contact")
+    candidates = {"accepted": [], "budget_remaining": 2}
+    bar = suggest_contacts.walk_bar(["board"], per_company_cap=3)
+
+    walk = suggest_contacts.walk_pages(
+        [RECEPTIONIST_PAGE, BOARD_PAGE], candidates, bar,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert walk["ended"] == suggest_contacts.WALK_GOOD_ENOUGH
+    assert len(walk["people"]) == 10
+
+    records = suggest_contacts.synthesise_rows(
+        company_row, walk["selected"], BOARD_PAGE["url"], per_company_cap=3
+    )
+    assert len(records) == 3
+
+    result = extraction.validate(suggest_contacts.round_artifact(records))
+    assert result.rejected == []
+    assert len(result.accepted) == 3
