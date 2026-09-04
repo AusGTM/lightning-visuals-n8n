@@ -147,7 +147,7 @@ makes a contact usable.
 - Deliverable includes a producer/consumer matrix per field, and the same audit for companies.
 
 **Requirements:** RICH-01, RICH-02, RICH-03, RICH-05, RICH-06
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -160,7 +160,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 66-03-PLAN.md — phone-and-email completeness visible in the operator's report, flagged never held (wave 3)
+- [x] 66-03-PLAN.md — phone-and-email completeness visible in the operator's report, flagged never held (wave 3)
 
 **Planning note:** RICH-04 (`merge_enriched`'s keep/replace rule for a CREATE row) is mapped to
 this phase in REQUIREMENTS.md but is EXCLUDED by 66-CONTEXT.md's `<domain>`, which scopes Phase 66
