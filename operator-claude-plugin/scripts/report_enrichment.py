@@ -233,6 +233,11 @@ _CONTACTABILITY_STATES = {"complete", "email_only", "none"}
 
 def _contactability_for_row(row):
     value = row.get("contactability")
+    # A dict/list value (malformed backend response) would raise on the `in`
+    # membership test below (set membership requires hashability) — guard the
+    # type first, matching `_match_info_for_row`'s isinstance-before-read style.
+    if not isinstance(value, str):
+        return None
     return value if value in _CONTACTABILITY_STATES else None
 
 

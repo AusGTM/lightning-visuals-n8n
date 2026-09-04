@@ -223,6 +223,35 @@ def test_contactability_carries_an_unrecognised_value_as_none_not_the_raw_string
     assert rendered["contactability"] is None
 
 
+def test_contactability_never_raises_on_an_unhashable_dict_value():
+    """CR-01 (66-REVIEW.md): a malformed/corrupted backend response could send a dict
+    for contactability, which raises TypeError on the old `value in <set>` membership
+    test (dicts are unhashable) — breaking build_sync_report/build_enrichment_report's
+    documented never-raises contract."""
+    row = {"_lane": "contacts", "action": "enrich", "contactability": {"nested": True}}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["contactability"] is None
+
+
+def test_contactability_never_raises_on_an_unhashable_list_value():
+    row = {"_lane": "contacts", "action": "enrich", "contactability": ["a", "b"]}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["contactability"] is None
+
+
+def test_build_sync_report_never_raises_on_an_unhashable_contactability_value():
+    body = [{"action": "enrich", "object_type": "contacts", "contactability": ["a", "b"]}]
+
+    rows, reason = report_enrichment.build_sync_report(body)
+
+    assert reason is None
+    assert rows[0]["contactability"] is None
+
+
 # =====================================================================================
 # build_sync_report — the SYNCHRONOUS webhook body, live-shaped from execution 11948.
 # =====================================================================================
