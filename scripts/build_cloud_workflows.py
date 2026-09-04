@@ -2055,10 +2055,14 @@ return $input.all().map((it) => {
 """
 
 # HubSpot read-only search body (existence check): by email if present, else first+last name.
-# Phase 66 Plan 01 Task 2: a KNOWN-NARROWER sibling of ENRICH_CONTACT_SEARCH_PROPERTIES_CSV
-# (used only by build_enrichment_local_live()) — deliberately left untouched by this plan.
-# It already omits the five location properties too; widening it is out of this plan's
-# scope. Recorded here so plan 66-02's coverage matrix can carry it as an open row.
+# Phase 66 REVIEW-FIX (WR-01): was a KNOWN-NARROWER sibling of
+# ENRICH_CONTACT_SEARCH_PROPERTIES_CSV (used only by build_enrichment_local_live()),
+# recorded as deliberately untouched by 66-01/66-02's scope. That gap meant this
+# workflow's "Enrichment Gate" read a `fill_blank_only`/`stale_refreshable` field's true
+# current value as `undefined` whenever it was one of the 7 fields this list omitted —
+# the non-clobber comparison in mergeContacts.js then reads "blank" and computes a wrong
+# promote decision. Widened here to every one of ENRICH_GATE's 12 REQUIRED fields, same
+# fields ENRICH_CONTACT_SEARCH_PROPERTIES_CSV already fetches for the CLOUD lane.
 HS_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '($json.identity_keys.email ? [ { propertyName: "email", operator: "EQ", value: $json.identity_keys.email } ] '
@@ -2066,7 +2070,9 @@ HS_SEARCH_BODY_EXPR = (
     '{ propertyName: "lastname", operator: "EQ", value: $json.identity_keys.lastName } ]) } ], '
     'properties: ["email","firstname","lastname","jobtitle","phone","mobilephone",'
     '"lv_jobtitle_verified_at","lv_mobilephone_verified_at","seniority",'
-    '"lv_contact_enrichment_provenance","lusha_contact_id"], limit: 5 }) }}'
+    '"lv_contact_enrichment_provenance","lusha_contact_id",'
+    '"city","state","country","hs_state_code","hs_country_region_code",'
+    '"lv_linkedin_url","lv_persona_group"], limit: 5 }) }}'
 )
 
 # ---- COMPANIES branch -------------------------------------------------------
@@ -2188,6 +2194,14 @@ return $input.all().map((it) => {
 # silently drops unknown names from `properties` and still returns 200, so asking for
 # not-yet-created props would read back as undefined and be indistinguishable from empty
 # (harmless pre-migration; becomes meaningful once scripts/sync_hubspot_properties.py runs).
+#
+# Phase 66 REVIEW-FIX (WR-01): widened with the 6 fields 66-02's Company Gate REQUIRED
+# widening (2->13) added but this LOCAL-LIVE sibling never picked up —
+# lv_revenue_band/lv_employee_band/lv_country_region_normalized/country/city/
+# lv_sponsorship_reliant — same fields ENRICH_COMPANY_SEARCH_PROPERTIES_CSV already
+# fetches for the CLOUD lane (see that constant's own Plan 02 Task 2 comment). Without
+# these, mergeCompanies.js reads a genuinely-populated field as blank on this lane's
+# preview and computes a wrong promote decision (reproduced live in 66-REVIEW.md WR-01).
 HS_CO_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
@@ -2199,7 +2213,9 @@ HS_CO_SEARCH_BODY_EXPR = (
     # Phase 62 Plan 04 (D-62-16): a native, read-only HubSpot rollup — confirmed
     # present in every committed portal-schema baseline. A read-field addition, not
     # a write; the suggestion round's zero-associated-contacts check reads this.
-    '"num_associated_contacts"], '
+    '"num_associated_contacts",'
+    '"lv_revenue_band","lv_employee_band","lv_country_region_normalized","country","city",'
+    '"lv_sponsorship_reliant"], '
     'limit: 5 }) }}'
 )
 
@@ -2349,12 +2365,14 @@ const NOW = new Date().toISOString();
 // has ever mis-fired. Hoisted out of the per-row map for the same reason.
 //
 // The try/catch is the SAME idiom ENRICH_NORMALIZE_SCORE_CO's nodeAll() uses, and it is
-// load-bearing, not decorative: this constant is shared by three workflows and only the
+// load-bearing, not decorative: this constant is shared by two workflows and only the
 // enrichment webhook one HAS a `Parse HubSpot Event` node. n8n throws on $() for a node
 // that does not exist in the current workflow, so `wf_enrichment_local_live`'s
-// "Company Gate" and `wf_scheduled_maintenance_cloud`'s "SJ-2 Company Gate" would throw on
-// every row without it. Failing to false is the fail-closed direction: those two workflows
-// keep exactly the behaviour they have today.
+// "Company Gate" would throw on every row without it. Failing to false is the fail-closed
+// direction: that workflow keeps exactly the behaviour it has today.
+// (Phase 66 REVIEW-FIX, WR-02: `wf_scheduled_maintenance_cloud`'s "SJ-2 Company Gate" no
+// longer reuses this constant — see SJ2_CO_GATE below, which keeps this same idiom for
+// the same reason even though SJ-2 never has a recompute intent to read.)
 let RECOMPUTE_REQUESTED = false;
 try {
   const _first = $('Parse HubSpot Event').first();
@@ -2375,6 +2393,71 @@ return $input.all().map((it) => {
   //                               through both write IFs to Build Response.
   // `enrich` is untouched. `gate` itself is left intact apart from the refusal reason —
   // the reason string is what makes the outcome readable in the response.
+  if (RECOMPUTE_REQUESTED) {
+    if (action === "skip") {
+      action = "enrich";
+    } else if (action === "create") {
+      action = "recompute_refused";
+      gate.reason =
+        "a recompute was requested for a company that did not resolve to an existing " +
+        "record — refused rather than created (" + gate.reason + ")";
+    }
+  }
+  return { json: { ...row, gate, action } };
+});
+"""
+
+# SJ-2's own companies gate — Phase 66 REVIEW-FIX (WR-02). SJ-2's job (CLAUDE.md §19.5,
+# "monthly stale ICP refresh") is narrowly "confirm the ICP org-type/produces-content
+# classification is fresh", not "confirm the whole companies record is complete" — that
+# broader completeness chase is ENRICH_CO_GATE's job (Enrichment webhook + LOCAL-LIVE
+# preview), fed by a fetch list widened to match its own 13-field REQUIRED.
+#
+# SJ-2 Company Gate used to reuse ENRICH_CO_GATE directly when ENRICH_CO_GATE's REQUIRED
+# was exactly these same two fields (pre-66-02) — the node's own comment even called it
+# "the reused, UNMODIFIED Company Gate". 66-02 widened ENRICH_CO_GATE's REQUIRED to 13
+# fields for the completeness-chase lanes without noticing SJ-2 shared the same constant:
+# `SJ-2 Search (stale refresh)` still only ever fetched the 2 fields this gate originally
+# needed (plus the 2 verified-at cache keys and hs_object_id/domain), so the other 11
+# newly-required fields always read as `undefined` on `existingRecord` and SJ-2 gated to
+# "enrich" for virtually every row regardless of actual staleness — a real over-triggering
+# regression, since SJ-2's dispatch (unlike ENRICH_CO_GATE's other two consumers) writes a
+# real HubSpot property (`lv_enrichment_requested=true`) once armed.
+#
+# Fix: give SJ-2 its own REQUIRED/POLICY, restoring the exact pre-66-02 shape (the two ICP
+# classification fields, both with the 180-day TTL SJ-2's own epoch-cutoff filter already
+# confirms upstream) rather than widening `SJ-2 Search`'s fetch to the full 13-field list —
+# widening the fetch would only relocate the bug: SJ-2 would then gate on completeness of
+# 11 fields unrelated to its documented staleness job, and a record missing one of those
+# (e.g. a producer-less companies signal) would re-trigger every month forever, the same
+# shape of over-triggering this fix removes. `SJ-2 Search`'s existing 6-field fetch already
+# covers this narrower REQUIRED in full — no fetch-list change needed here.
+SJ2_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
+
+// --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
+// SJ-2-specific REQUIRED/POLICY — deliberately NOT ENRICH_CO_GATE's 13-field completeness
+// list (see this constant's own comment above). Two ICP classification fields only, both
+// with the 180-day staleness TTL SJ-2's search already filters on upstream.
+const REQUIRED = ["lv_org_type", "lv_produces_content"];
+const POLICY = {
+  lv_org_type: { stale_after_days: 180 },
+  lv_produces_content: { stale_after_days: 180 },
+};
+const NOW = new Date().toISOString();
+// SJ-2 is a scheduled job, never a webhook — no `Parse HubSpot Event` node exists in this
+// workflow, so recompute intent can never be requested here. Same fail-to-false idiom
+// ENRICH_CO_GATE uses, kept for consistency even though it is always a no-op on this lane.
+let RECOMPUTE_REQUESTED = false;
+try {
+  const _first = $('Parse HubSpot Event').first();
+  RECOMPUTE_REQUESTED = !!(_first && _first.json && _first.json.recompute === true);
+} catch (e) { RECOMPUTE_REQUESTED = false; }
+return $input.all().map((it) => {
+  const row = it.json;
+  const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
+  let action = gate.action;
+  // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
+  if (row.lookup_failed === true && action === "create") action = "skip";
   if (RECOMPUTE_REQUESTED) {
     if (action === "skip") {
       action = "enrich";
@@ -7553,10 +7636,17 @@ def build_scheduled_maintenance_cloud():
 
     # --- SJ-2: monthly stale refresh + RT-5 confirmation (Task 2) ----------------------
     # Two OR'd groups, LT on the two verified-at cache keys against a Code-node-computed
-    # epoch-ms cutoff. An Adapt step (ENRICH_ADAPT_CO_SEARCH shape) feeds the reused,
-    # UNMODIFIED Company Gate so decideAction actually confirms staleness (RT-5) before
-    # the terminal dispatch — a skip (still fresh, or re-verified since the scan started)
-    # never re-queues.
+    # epoch-ms cutoff. An Adapt step (ENRICH_ADAPT_CO_SEARCH shape) feeds SJ2_CO_GATE so
+    # decideAction actually confirms staleness (RT-5) before the terminal dispatch — a
+    # skip (still fresh, or re-verified since the scan started) never re-queues.
+    # Phase 66 REVIEW-FIX (WR-02): this used to say "the reused, UNMODIFIED Company Gate"
+    # and reuse ENRICH_CO_GATE directly — true while ENRICH_CO_GATE's REQUIRED was these
+    # same 2 fields. 66-02 widened ENRICH_CO_GATE's REQUIRED to 13 fields for the
+    # completeness-chase lanes without widening this search's fetch to match, so the other
+    # 11 fields always read `undefined` here and this gate over-triggered on every row.
+    # SJ2_CO_GATE (defined above ENRICH_BUILD_CO_REQUESTS) restores the original 2-field
+    # REQUIRED/POLICY this search's fetch already fully covers — see SJ2_CO_GATE's own
+    # comment for why narrowing the gate, not widening the fetch, is the correct fix here.
     x, y2 = 220, 940
     sj2_trigger = _schedule_trigger("SJ-2 Trigger", x, y2, "months", 1)
     nodes.append(sj2_trigger)
@@ -7578,7 +7668,7 @@ def build_scheduled_maintenance_cloud():
     x2 += 220
     nodes.append(code_node("SJ-2 Adapt Search", ENRICH_ADAPT_SJ2_SEARCH, x2, y2))
     x2 += 220
-    nodes.append(code_node("SJ-2 Company Gate", ENRICH_CO_GATE, x2, y2))
+    nodes.append(code_node("SJ-2 Company Gate", SJ2_CO_GATE, x2, y2))
     x2 += 220
     sj2_if_not_skip = _if_node("SJ-2 IF Skip", "skip", x2, y2)
     nodes.append(sj2_if_not_skip)

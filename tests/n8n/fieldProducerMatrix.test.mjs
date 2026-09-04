@@ -289,13 +289,109 @@ test("D-66-07 producer gate: every promotable, non-recomputed policy key has a p
 // be requested by that lane's search node, or the fill_blank_only/stale_refreshable
 // non-clobber comparison silently reads `undefined` and turns non-clobber into clobber.
 
-test("fetch gate: every REQUIRED member is requested by the lane's search node", () => {
+test("fetch gate: every REQUIRED member is requested by the lane's search node (wf_enrichment_cloud.json)", () => {
   for (const lane of ["contacts", "companies"]) {
     const required = laneRequired(lane);
     const searchText = laneSearchPropertiesText(lane);
     const missing = required.filter((f) => !searchText.includes(f));
     assert.deepEqual(missing, [], `${lane}: REQUIRED but not fetched: ${missing.join(", ")}`);
   }
+});
+
+// --- Assertion 2b (WR-03 fix, 66-REVIEW.md) ---------------------------------------------------
+// The assertion above only ever proved the fetch-gate guarantee for
+// wf_enrichment_cloud.json. The shared ENRICH_GATE/ENRICH_CO_GATE(/SJ2_CO_GATE) code is
+// inlined into every workflow that builds a gate node, and each has its OWN, independently
+// hand-written search node(s) — WR-01/WR-02 were exactly this: a widened REQUIRED reused by
+// a search node whose fetch list was never widened to match. This assertion generalises the
+// check to EVERY generated n8n/wf_*.json file and EVERY gate node it contains — nothing below
+// is hardcoded to a filename or node name; both are discovered from the generated JSON at
+// test runtime, so the next workflow to reuse a gate cannot silently escape this check.
+
+const WF_DIR = path.join(ROOT, "n8n");
+const WF_FILES = fs.readdirSync(WF_DIR).filter((f) => /^wf_.*\.json$/.test(f));
+
+const COMPANIES_POLICY_KEYS = new Set(Object.keys(loadPolicy("companies")));
+const CONTACTS_POLICY_KEYS = new Set(Object.keys(loadPolicy("contacts")));
+
+// A gate's REQUIRED array is always drawn wholesale from one lane's policy keys (never a
+// mix) — used to classify a gate node without hardcoding which constant produced it.
+function laneOfRequired(required) {
+  if (required.length && required.every((f) => COMPANIES_POLICY_KEYS.has(f))) return "companies";
+  if (required.length && required.every((f) => CONTACTS_POLICY_KEYS.has(f))) return "contacts";
+  return null;
+}
+
+function findGateNodes(wf) {
+  return wf.nodes.filter((n) =>
+    n.parameters && typeof n.parameters.jsCode === "string" &&
+    n.parameters.jsCode.includes("const REQUIRED"));
+}
+
+function predecessorsOf(wf, name) {
+  const preds = [];
+  for (const [src, outputs] of Object.entries(wf.connections || {})) {
+    for (const outArr of outputs.main || []) {
+      for (const conn of outArr || []) {
+        if (conn && conn.node === name) preds.push(src);
+      }
+    }
+  }
+  return preds;
+}
+
+// Walk backward from `name`, collecting every httpRequest-type node reached — the walk
+// stops on each path as soon as an httpRequest node is found (the actual HubSpot search/
+// fetch call), never recursing past it. Returns [] when no httpRequest predecessor exists
+// at all — the generic, non-hardcoded signal for "this gate is fed by a mock/canned lane,
+// not a live HubSpot search" (e.g. wf_enrichment_local.json's Code-node mock).
+function upstreamHttpRequestNodes(wf, byName, name, seen) {
+  seen = seen || new Set();
+  if (seen.has(name)) return [];
+  seen.add(name);
+  const results = [];
+  for (const p of predecessorsOf(wf, name)) {
+    const node = byName[p];
+    if (node && typeof node.type === "string" && node.type.toLowerCase().includes("httprequest")) {
+      results.push(node);
+    } else {
+      results.push(...upstreamHttpRequestNodes(wf, byName, p, seen));
+    }
+  }
+  return results;
+}
+
+test("fetch gate (WR-03): every REQUIRED member is requested, in EVERY generated workflow file that embeds a gate node", () => {
+  const failures = [];
+  const noFetchNode = [];
+  for (const file of WF_FILES) {
+    const wf = JSON.parse(fs.readFileSync(path.join(WF_DIR, file), "utf8"));
+    const byName = {};
+    for (const n of wf.nodes) byName[n.name] = n;
+    for (const gate of findGateNodes(wf)) {
+      const required = requiredListFromGate(gate.parameters.jsCode);
+      const lane = laneOfRequired(required);
+      assert.ok(lane,
+        `${file}:${gate.name} — REQUIRED is neither a companies nor a contacts policy-key subset: ${required.join(", ")}`);
+      const httpNodes = upstreamHttpRequestNodes(wf, byName, gate.name);
+      if (httpNodes.length === 0) {
+        noFetchNode.push(`${file}:${gate.name}`);
+        continue;
+      }
+      const searchText = httpNodes.map((n) => JSON.stringify(n.parameters)).join(" ");
+      const missing = required.filter((f) => !searchText.includes(f));
+      if (missing.length) {
+        failures.push(`${file}:${gate.name} (${lane}): REQUIRED but not fetched: ${missing.join(", ")}`);
+      }
+    }
+  }
+  assert.deepEqual(failures, [], `fetch-gate violations across all workflows:\n${failures.join("\n")}`);
+  // Known, mock-fed exception: wf_enrichment_local.json's "Enrichment Gate" is fed by a
+  // hardcoded "HubSpot Search (MOCK)" Code node, never a real HubSpot search — nothing to
+  // fetch-check there. Any OTHER entry here is new and needs eyes, not a silent pass — a
+  // mock lane growing a real search node, or a genuinely orphaned gate, should fail loudly.
+  assert.deepEqual(noFetchNode, ["wf_enrichment_local.json:Enrichment Gate"],
+    `mock-fed (no live search predecessor) gate nodes changed — investigate: ${noFetchNode.join(", ")}`);
 });
 
 // --- Assertion 3 (D-66-01/RICH-02 chase gate) -------------------------------------------------
