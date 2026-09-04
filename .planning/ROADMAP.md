@@ -94,6 +94,7 @@ walked to that list.
 **Plans:** 1 plan
 
 Plans:
+
 - [ ] 64-01-PLAN.md — the walk stops at a cumulative role-hit bar, accumulates a deduped
   union across walked pages, and reports how it ended
 
@@ -121,6 +122,8 @@ reported success.
 **Depends on:** 64, and on the two quick tasks — until false zeros stop, this phase would be
 designed against noise.
 
+**Requirements:** RICH-04 (re-routed from Phase 66 by operator ruling 2026-09-04 — `merge_enriched` lives in `suggest_contacts.py`, which 66's domain excludes)
+
 ### Phase 66: Rich enrichment, not minimum enrichment
 
 **Goal:** the waterfall fills every field it can confidently reach, instead of the minimum that
@@ -147,8 +150,16 @@ makes a contact usable.
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 66-01-PLAN.md — contacts lane: chase the landline end-to-end, give `lv_linkedin_url` a producer, widen `REQUIRED` to the full promotable set (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 66-02-PLAN.md — the producer/consumer matrix for both lanes, then the companies gate derived from it (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 66-03-PLAN.md — phone-and-email completeness visible in the operator's report, flagged never held (wave 3)
 
 **Planning note:** RICH-04 (`merge_enriched`'s keep/replace rule for a CREATE row) is mapped to

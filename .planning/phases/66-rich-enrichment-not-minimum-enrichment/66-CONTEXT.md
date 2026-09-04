@@ -106,7 +106,7 @@ one v1.2 phase that can run as a parallel stream.
   (annual AGM committee turnover) the field that actually goes stale is `jobtitle`, which is
   already `stale_refreshable` at 180 days.
 
-- **D-66-10: Never hand-edit `n8n/wf_*.json`.** `ENRICH_GATE`'s `REQUIRED` lives in the
+- **D-66-10: Never hand-edit the generated n8n workflow JSON.** That means `n8n/wf_*.json`. `ENRICH_GATE`'s `REQUIRED` lives in the
   WRAPPER built by `scripts/build_cloud_workflows.py`, not in the frozen `enrichmentGate.js`
   module. Regenerate via the builder. Check whether `src/` carries an equivalent required-field
   list that must move in the SAME commit (Phase 46 parity rule).

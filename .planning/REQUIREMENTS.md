@@ -46,8 +46,15 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   (`test_report_sufficiency.py::_has_while_loop` scans every plugin script).
 - [ ] **LADDER-05**: The search fallback becomes reachable in a real round — i.e.
   `260904-QUICK-UAT.md` test 8 can finally be exercised rather than skipped a third time.
+- [ ] **RICH-04**: `merge_enriched`'s keep/replace rule for a CREATE row is audited as its own
+  seam. *Live: on an all-blank CREATE row the round discovered `Head of Marketing and Content`
+  and `seniority: Director` and kept neither.* **Routed to Phase 65 by operator ruling
+  2026-09-04** — `merge_enriched` lives in `suggest_contacts.py`, which 66-CONTEXT.md's
+  `<domain>` explicitly excludes; 65 already has that file in scope and was not yet planned.
 
 ## RICH — the waterfall fills what it can reach (Phase 66)
+
+*RICH-04 is listed under LADDER above: it was re-routed to Phase 65 on 2026-09-04.*
 
 - [ ] **RICH-01**: `phone` is chased, not merely accepted. *Operator target 2026-09-04: phone
   AND email, email-only as fallback.*
@@ -58,9 +65,6 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   NO provider branch emitting it, while Apollo and ZoomInfo both return one — verified by grep
   2026-09-04. It is also one of the three identity groups, so filling it makes those contacts
   matchable on a privileged key.*
-- [ ] **RICH-04**: `merge_enriched`'s keep/replace rule for a CREATE row is audited as its own
-  seam. *Live: on an all-blank CREATE row the round discovered `Head of Marketing and Content`
-  and `seniority: Director` and kept neither.*
 - [ ] **RICH-05**: The same audit is run for companies; this measurement covered contacts only.
 - [ ] **RICH-06**: Provider cost is confirmed, not assumed — Lusha's flat-per-contact billing
   is documented, ZoomInfo's fields ride an already-paid request, and Apollo is VERIFIED rather

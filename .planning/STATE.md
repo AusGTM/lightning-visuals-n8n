@@ -4,16 +4,16 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 64
 current_phase_name: the-ladder-stops-at-the-best-page-not-the-first
-status: executing
-stopped_at: Phases 64-69 context gathered (v1.2 fully discussed)
-last_updated: "2026-09-04T04:52:30.703Z"
+status: Ready to execute
+stopped_at: Phases 64 and 66 planned and verified; 64 is next to execute
+last_updated: "2026-09-04T05:09:15.393Z"
 last_activity: 2026-09-05
 last_activity_desc: Milestone v1.1 completed and archived
-state_head: a903144628f9bf23bc3633bae4fae7618f3da474
+state_head: f7704ac9f247920737c529a242a25e00d8dcc50b
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 2
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -357,7 +357,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 64 (the-ladder-stops-at-the-best-page-not-the-first) — READY TO EXECUTE
+Phase: 66 (rich-enrichment-not-minimum-enrichment) — READY TO EXECUTE
 Plan: -
 Status: Ready to execute
 Last activity: 2026-09-05 - milestone v1.2 activated (roadmap phase blocks promoted, requirements installed)
