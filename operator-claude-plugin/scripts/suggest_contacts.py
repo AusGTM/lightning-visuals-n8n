@@ -207,11 +207,10 @@ def select_people(people, family_list, chosen_families, known_contacts):
 
 # The closed vocabulary for how a company's page walk ended (D-64-08). Mirrors
 # `search_fallback.py`'s `DISPOSITION_*` / `ELIGIBLE_DISPOSITIONS` shape: a small,
-# named set of strings rather than free text, pinned by test rather than by import
-# (see `walk_pages` below and Task 2's equality tests against
-# `search_fallback.DISPOSITION_REFUSED` / `DISPOSITION_CAP_EXHAUSTED`). Task 1 makes
-# only `WALK_GOOD_ENOUGH` and `None` reachable; the other three become reachable in
-# Task 2, but the vocabulary and the function signature are final now.
+# named set of strings rather than free text, pinned by test rather than by import --
+# `WALK_REFUSED == search_fallback.DISPOSITION_REFUSED` and `WALK_CAP_EXHAUSTED ==
+# search_fallback.DISPOSITION_CAP_EXHAUSTED` are asserted by test, and this module
+# gains no `search_fallback` import to compute them.
 WALK_GOOD_ENOUGH = "good_enough"
 WALK_LADDER_EXHAUSTED = "ladder_exhausted"
 WALK_CAP_EXHAUSTED = "cap_exhausted"
@@ -268,18 +267,47 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
     stops, where a per-page bar would have walked the whole cap. The bar is a stop
     condition and never a budget: not clearing it simply means `ended` stays `None`.
 
-    This function enlarges no budget (D-64-09): it keeps no fetch counter of its own,
-    and `MAX_FOLLOWUP_FETCHES` is never referenced here -- that axis belongs to
-    `company_budget` and `filter_candidates` alone. It also acts on none of the
-    `ended` values it returns (D-64-08's boundary) -- a future caller decides what
-    happens next; this function only reports why it stopped.
+    D-64-10 (SAFE-02): a refusal stays terminal. Checked FIRST, before a page's people
+    are touched at all -- `page.get("disposition") == WALK_REFUSED` ends the walk
+    right there, folding nothing from that page (no people added, no `scores` entry).
+    This is keyed on a FETCHED page's own disposition and on nothing else: the walk
+    only ever fetches what `candidates["accepted"]` already cleared (D-64-13), so a
+    pre-fetch refusal from `url_fallback.filter_candidates` (an off-host or bad-scheme
+    sitemap entry) is never fetched in the first place and can never produce this
+    ending -- `same_host`/`_canonical_authority` remain the one host check, unmodified.
+    Getting this backwards would be a live regression, not a style point: an
+    `ended: refused` manufactured from a never-fetched off-host entry would, once a
+    future caller consumes this field, close a search path that stays open today.
 
-    Returns `{"people", "selected", "dropped", "scores", "ended", "bar"}`. `people` is
+    Ending resolution runs in this order, checked after each page folds: refused ->
+    good_enough -> keep walking -> cap_exhausted -> ladder_exhausted. When every page
+    is folded without clearing the bar or hitting a refusal, the two remaining
+    terminal endings are read straight off `candidates` -- never from a fetch counter
+    this function keeps itself (D-64-09, PATTERNS analog 3; that axis belongs to
+    `company_budget` and `filter_candidates` alone). The unfetched remainder is every
+    URL in `candidates["accepted"]` not already present in `pages`; a non-empty
+    remainder means `ended` stays `None` (keep walking), an empty one resolves to
+    `WALK_CAP_EXHAUSTED` when `candidates["budget_remaining"] == 0` and
+    `WALK_LADDER_EXHAUSTED` otherwise. `WALK_CAP_EXHAUSTED` is a terminal, ELIGIBLE
+    ending and never a trigger to fetch again (D-64-11, SAFE-03) -- continuing the walk
+    further only ever spends the SAME `MAX_FOLLOWUP_FETCHES` better, never a larger
+    one.
+
+    Any `disposition` value other than `WALK_REFUSED`, including none at all, means
+    "this page was fetched, fold its people" -- this function does NOT fail closed on
+    an unknown or absent disposition. Fail-closed reading of that same field is
+    `search_fallback.eligible_after_ladder`'s job and stays there, unmodified and
+    uncalled: this function emits its reason and acts on none of it (D-64-08's
+    boundary) -- a future caller decides what happens next.
+
+    Returns `{"people", "selected", "dropped", "scores", "ended", "bar"}` and nothing
+    else -- no key, flag, or list here invites another fetch (D-64-11). `people` is
     the deduped union in walk order; `selected`/`dropped` are the accumulated
     `select_people` outputs across every folded page; `scores` is
-    `[{"url", "score", "cumulative"}, ...]`, one entry per folded page -- `score` is
-    that page's own marginal (post-dedupe) hit count, `cumulative` the running total;
-    `ended` is one of `WALK_ENDINGS` or `None` (keep walking).
+    `[{"url", "score", "cumulative"}, ...]`, one entry per folded page (a refused page
+    contributes none) -- `score` is that page's own marginal (post-dedupe) hit count,
+    `cumulative` the running total; `ended` is one of `WALK_ENDINGS` or `None` (keep
+    walking).
 
     Raises `ValueError` when `candidates` is not a dict carrying both `accepted` and
     `budget_remaining` -- the same register `rejoin_enriched` already uses for a
@@ -306,6 +334,10 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
     ended = None
 
     for page in pages:
+        if page.get("disposition") == WALK_REFUSED:
+            ended = WALK_REFUSED
+            break
+
         new_people = []
         for person in page.get("people") or []:
             key = _name_key(person)
@@ -330,6 +362,18 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
         if len(selected) >= bar:
             ended = WALK_GOOD_ENOUGH
             break
+
+    if ended is None:
+        walked_urls = {page.get("url") for page in pages}
+        unfetched = [
+            url for url in candidates["accepted"] if url not in walked_urls
+        ]
+        if not unfetched:
+            ended = (
+                WALK_CAP_EXHAUSTED
+                if candidates["budget_remaining"] == 0
+                else WALK_LADDER_EXHAUSTED
+            )
 
     return {
         "people": people,
