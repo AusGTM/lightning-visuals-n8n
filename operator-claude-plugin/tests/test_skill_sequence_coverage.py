@@ -349,6 +349,20 @@ COVERED = {
     # the same three companies, asserting the walk's own terminal ending
     # (`cap_exhausted`/`ladder_exhausted`) independently of `eligible_after_ladder`'s
     # separate, attempts-keyed eligibility question.
+    #
+    # Phase 64 code review CR-01/CR-02 fix: the tuple gained a SECOND `walk_pages`
+    # call. CR-01 -- the documented loop re-derived `candidates` from the FULL,
+    # unfiltered `sitemap_urls` after every fetch, which made `filter_candidates`
+    # (always a PREFIX of the URLs it is handed) return a shrinking prefix of the
+    # SAME front URLs rather than what remained unfetched, so the walk read the
+    # ladder as exhausted 2-3 fetches early. The re-derivation now happens BEFORE
+    # each `walk_pages` call (not after), narrowed to `sitemap_urls` minus what
+    # `pages` has already walked. CR-02 -- the pasted URL's own fetch was never
+    # folded into `pages` at all, silently dropping it from the union `walk_pages`
+    # is documented to produce ("EVERY page fetched... INCLUDING the pasted URL");
+    # it is now fetched first and walked before any ladder candidate, which is the
+    # second `walk_pages` call. The sink is still `suggest_contacts.round_artifact`,
+    # so the covering nodeid is unchanged.
     (
         "suggest-contacts",
         (
@@ -356,6 +370,7 @@ COVERED = {
             "suggest_contacts.agreed_cap", "suggest_contacts.walk_bar",
             "suggest_contacts.discovery_plan", "suggest_contacts.next_candidates",
             "suggest_contacts.walk_pages", "suggest_contacts.next_candidates",
+            "suggest_contacts.walk_pages",
             "search_fallback.eligible_after_ladder", "search_fallback.rank_results",
             "suggest_contacts.select_people", "suggest_contacts.synthesise_rows",
             "suggest_contacts.mint_row_ids", "chunking.plan_chunks",

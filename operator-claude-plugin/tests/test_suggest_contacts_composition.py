@@ -264,6 +264,134 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     assert "Robin" not in validated_firstnames
 
 
+# =====================================================================================
+# Phase 64 code review CR-01/CR-02: the REAL documented per-company loop, driven with a
+# growing `attempts` list and a real `next_candidates` re-invocation per fetch -- not a
+# single static `candidates` dict built by hand. No test before this fix drove the loop
+# with more than 2 accepted URLs, which is exactly why both defects (the premature
+# `ladder_exhausted` and the dropped pasted-URL fetch) shipped with a green suite.
+# =====================================================================================
+
+_WALK_FAMILY_LIST = [{"label": "board", "members": ["Director"]}]
+_WALK_CHOSEN_FAMILIES = ["board"]
+
+
+def _walk_company_like_skill_md(company_row, sitemap_urls, bar, page_people_for):
+    """Drives `skills/suggest-contacts/SKILL.md` step 7's per-company loop verbatim
+    (post CR-01/CR-02 fix): the pasted URL is fetched first and folded into `pages`,
+    then each ladder candidate is fetched in turn, with `candidates` re-derived from
+    `sitemap_urls` MINUS what `pages` has already walked -- BEFORE each `walk_pages`
+    call, never after.
+
+    `page_people_for(url)` stands in for `web_fetch`. Returns `(pages,
+    ladder_fetch_count, walk)`; `ladder_fetch_count` counts ladder fetches only,
+    matching how CR-01's traced expected behaviour states them (the pasted URL is
+    always fetched once, separately, before any ladder candidate).
+    """
+    plan = suggest_contacts.discovery_plan(company_row)
+    pages, attempts = [], []
+    candidates = suggest_contacts.next_candidates(company_row, attempts, sitemap_urls)
+    accepted = list(candidates["accepted"])
+    walk = {"people": [], "selected": [], "ended": None}
+
+    pasted_url = plan.get("pasted_url")
+    if pasted_url:
+        pages.append({"url": pasted_url, "people": page_people_for(pasted_url)})
+        walk = suggest_contacts.walk_pages(
+            pages, candidates, bar, _WALK_FAMILY_LIST, _WALK_CHOSEN_FAMILIES,
+            known_contacts=[])
+
+    ladder_fetch_count = 0
+    for candidate_url in accepted:
+        if walk["ended"] is not None:
+            break
+        pages.append({"url": candidate_url, "people": page_people_for(candidate_url)})
+        attempts.append({"url": candidate_url, "outcome": "ok", "disposition": "empty"})
+        ladder_fetch_count += 1
+        candidates = suggest_contacts.next_candidates(
+            company_row, attempts,
+            [u for u in sitemap_urls if u not in {p["url"] for p in pages}])
+        walk = suggest_contacts.walk_pages(
+            pages, candidates, bar, _WALK_FAMILY_LIST, _WALK_CHOSEN_FAMILIES,
+            known_contacts=[])
+
+    return pages, ladder_fetch_count, walk
+
+
+def _nobody(url):
+    """A page whose one person never clears the role filter -- classify_title finds no
+    match for "Nobody" against `_WALK_FAMILY_LIST`, so every page scores 0 and the walk
+    can only end via ladder/cap exhaustion, never `good_enough`. This isolates CR-01's
+    budget-bookkeeping defect from the (already-tested) bar-clearing behaviour."""
+    return [{"firstname": f"P-{url}", "lastname": "X", "jobtitle": "Nobody"}]
+
+
+@pytest.mark.parametrize("candidate_count,expected_ended", [
+    (3, "ladder_exhausted"),
+    (5, "cap_exhausted"),
+    (10, "cap_exhausted"),
+])
+def test_the_documented_loop_walks_every_candidate_the_budget_allows(
+        candidate_count, expected_ended):
+    """CR-01: re-deriving `candidates` from the FULL, unfiltered `sitemap_urls` after
+    every fetch made `filter_candidates` (always a PREFIX of the URLs it is handed)
+    return a shrinking prefix of the SAME front URLs -- never further down the list --
+    so the walk read the ladder as exhausted after 3 fetches regardless of whether 3,
+    5, or 10 candidates were actually offered. The fix narrows the input to what
+    `pages` has not already walked, so all 5 of `MAX_FOLLOWUP_FETCHES` are spent
+    before the walk reports itself exhausted."""
+    company_row = _company_row_with_website(
+        "walk-1", "https://walk-ladder.example/contact")
+    sitemap_urls = [
+        f"https://walk-ladder.example/u{i}" for i in range(1, candidate_count + 1)
+    ]
+    bar = suggest_contacts.walk_bar(_WALK_CHOSEN_FAMILIES, per_company_cap=3)
+
+    pages, ladder_fetch_count, walk = _walk_company_like_skill_md(
+        company_row, sitemap_urls, bar, _nobody)
+
+    expected_fetches = min(candidate_count, url_fallback.MAX_FOLLOWUP_FETCHES)
+    assert ladder_fetch_count == expected_fetches, (
+        f"{candidate_count} same-host candidates must spend "
+        f"{expected_fetches} ladder fetches (bounded only by "
+        f"MAX_FOLLOWUP_FETCHES={url_fallback.MAX_FOLLOWUP_FETCHES}), not stop early"
+    )
+    assert walk["ended"] == expected_ended
+    # every ladder fetch actually folded into `pages`, alongside the pasted URL
+    assert len(pages) == expected_fetches + 1
+
+
+def test_the_documented_loop_folds_the_pasted_page_and_a_later_ladder_page_into_one_union():
+    """CR-02: the pasted URL's own fetch was never folded into `pages` at all --
+    `walk_pages`'s own docstring says `pages` is "EVERY page fetched for this company,
+    INCLUDING the pasted URL" and warns that dropping it "would silently drop the
+    receptionist page -- the very page the live case starts from". This is the
+    phase's headline case: a person named on the pasted `/contact` page and a person
+    named on a later `/board/` ladder page both end up in the SAME `walk["people"]`
+    union."""
+    company_row = _company_row_with_website(
+        "walk-2", "https://walk-ladder.example/contact")
+    sitemap_urls = ["https://walk-ladder.example/board"]
+    bar = suggest_contacts.walk_bar(_WALK_CHOSEN_FAMILIES, per_company_cap=99)
+
+    def page_people(url):
+        if url == "https://walk-ladder.example/contact":
+            return [{"firstname": "Jane", "lastname": "Receptionist", "jobtitle": "Director"}]
+        return [{"firstname": "Sam", "lastname": "Officer", "jobtitle": "Director"}]
+
+    pages, ladder_fetch_count, walk = _walk_company_like_skill_md(
+        company_row, sitemap_urls, bar, page_people)
+
+    assert ladder_fetch_count == 1
+    lastnames = {p["lastname"] for p in walk["people"]}
+    assert lastnames == {"Receptionist", "Officer"}, (
+        "the pasted page's person and the ladder page's person must both survive "
+        "into the walk's own union"
+    )
+    selected_lastnames = {p["lastname"] for p in walk["selected"]}
+    assert selected_lastnames == {"Receptionist", "Officer"}
+
+
 def _company_row_with_website(row_id, website):
     return {
         "row_id": row_id,

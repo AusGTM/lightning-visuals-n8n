@@ -359,20 +359,57 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # below -- never conflated with `pages` (D-64-13's boundary).
        pages, attempts = [], []
        candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
+       # `accepted` is bound ONCE, here -- Python's `for` binds its iterable at loop
+       # start, so re-deriving `candidates` inside the loop below (needed to keep the
+       # walk's cap/ladder reading accurate as `attempts` grows, CR-01) can never
+       # change WHICH URLs this loop walks, only how accurately the walk reads the
+       # remaining budget after each fetch.
+       accepted = list(candidates["accepted"])
        walk = {"people": [], "selected": [], "ended": None}
-       for candidate_url in candidates["accepted"]:
+
+       # The pasted URL is fetched FIRST, before any ladder candidate, and folds
+       # into `pages` exactly like a ladder page -- `walk_pages`'s own docstring
+       # warns that skipping it "would silently drop the receptionist page -- the
+       # very page the live case starts from". It goes into `pages` ONLY, never
+       # `attempts`: that list is what `no_candidates`/`eligible_after_ladder` read
+       # as "what was tried AFTER the pasted URL came back empty" (this step's own
+       # "`pages` is not `attempts`" paragraph), and folding the pasted URL's own
+       # attempt in there would misrepresent both (CR-02).
+       pasted_url = plan.get("pasted_url")
+       if pasted_url:
+           # web_fetch `pasted_url`; append its outcome to `pages`, carrying a
+           # `disposition` per step 5's table.
+           pages.append({"url": pasted_url, "people": fetched_people,
+                         "disposition": fetched_disposition})
+           walk = suggest_contacts.walk_pages(
+               pages, candidates, bar, vocabulary["families"], chosen_families,
+               known_contacts)
+
+       for candidate_url in accepted:
+           if walk["ended"] is not None:
+               break          # already ended -- even on the pasted page alone --
+                               # so no ladder fetch is spent at all
            # web_fetch `candidate_url`; append its outcome to `pages` and to
            # `attempts`, each carrying a `disposition` per step 5's table.
            pages.append({"url": candidate_url, "people": fetched_people,
                          "disposition": fetched_disposition})
            attempts.append({"url": candidate_url, "outcome": fetched_outcome,
                             "disposition": fetched_disposition})
+           # Re-derive `candidates` BEFORE the walk, narrowed to what THIS
+           # company's sitemap still has left unfetched. `filter_candidates`
+           # always returns a PREFIX of the URL list it is given, so re-filtering
+           # the FULL `sitemap_urls` on every call (the original defect, CR-01)
+           # returns a shrinking prefix of the SAME front URLs rather than what
+           # remains, which makes the walk read the ladder as exhausted 2-3
+           # fetches early. Narrowing the input to what `pages` has not already
+           # walked keeps `accepted`/`budget_remaining` accurate as `attempts`
+           # grows.
+           candidates = suggest_contacts.next_candidates(
+               eligible_company, attempts,
+               [u for u in sitemap_urls if u not in {p["url"] for p in pages}])
            walk = suggest_contacts.walk_pages(
                pages, candidates, bar, vocabulary["families"], chosen_families,
                known_contacts)
-           if walk["ended"] is not None:
-               break          # fetch the next accepted candidate only while ended is None
-           candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
        people = walk["people"]           # the walk's own deduped union, not one page's
        fetched_url = pages[-1]["url"] if pages else plan.get("pasted_url")
        source_rank = None          # a ladder-found person's provenance is unchanged
