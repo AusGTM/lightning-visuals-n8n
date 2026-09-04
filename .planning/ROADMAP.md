@@ -89,6 +89,14 @@ walked to that list.
 - `MAX_FOLLOWUP_FETCHES` is unchanged and still bounds the whole walk. Continuing further is
   spending the SAME budget better, never a larger one.
 
+**Requirements:** LADDER-01, LADDER-02 (inherits SAFE-02, SAFE-03)
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 64-01-PLAN.md — the walk stops at a cumulative role-hit bar, accumulates a deduped
+  union across walked pages, and reports how it ended
+
 ### Phase 65: Round-empty re-entry, keyed on the cause
 
 **Goal:** a round that ends with nothing usable does not stop because an intermediate stage
