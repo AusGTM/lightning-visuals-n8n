@@ -1295,7 +1295,32 @@ ENRICH_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.j
 // `fill_blank_only` (config/field_policy.yaml), whose branch never consults a TTL. A TTL
 // entry here would be inert, and the only way to activate one is a field-class change
 // D-66-08 forbids. See lushaRequest.js for the reveal-map half of this change.
-const REQUIRED = ["email", "jobtitle", "mobilephone", "phone"];
+//
+// Phase 66 Plan 01 Task 3: REQUIRED widened to all twelve config/field_policy.yaml
+// `contacts` keys — every field the merge policy can promote is now both fetched (Task 2)
+// and produced (this task's LinkedIn producer; every other key already had one). Key
+// spelling here is the HUBSPOT PROPERTY name (prefixed for the LinkedIn/persona fields),
+// the opposite of the normalizer's UNPREFIXED push key described in prose above the
+// Apollo push site — the two are correct in their own lanes: decideAction indexes
+// existingRecord, a HubSpot property bag.
+//
+// What widening costs (not free at the batch level): almost no contact will ever hold
+// all twelve fields, so rows that used to gate to "skip" now gate to "enrich" and reach
+// the provider calls — per-call cost is unchanged (see the RICH-06 comment at the "Lusha
+// Enrich" node), but calls per batch rise. The sharp edge is specifically the two
+// single-producer fields: lv_persona_group and lv_linkedin_url each have exactly ONE
+// producing branch (Apollo) — ZoomInfo returns no persona/departments field and its
+// LinkedIn output field is unprobed (pending-probe, see normalizeProviders.js), and
+// neither field has a Lusha producer either. For any contact Apollo does not match, both
+// stay permanently blank, permanently missing, and permanently "enrich", including on
+// every scheduled tick once armed. Accepted (T-66-04) rather than mitigated because
+// D-66-01 is a locked decision and mitigating would mean narrowing the chase, which is
+// the phase goal; the existing bound holds — nothing is armed, no unattended
+// credit-spending batch has ever run, and the search limit is 100.
+const REQUIRED = [
+  "city", "country", "email", "hs_country_region_code", "hs_state_code", "jobtitle",
+  "lv_linkedin_url", "lv_persona_group", "mobilephone", "phone", "seniority", "state",
+];
 const POLICY = { jobtitle: { stale_after_days: 180 }, mobilephone: { stale_after_days: 180 } };
 const NOW = new Date().toISOString();
 return $input.all().map((it) => {

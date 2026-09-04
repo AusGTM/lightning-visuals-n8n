@@ -45,6 +45,27 @@ function _codeShaped(value, minLen, maxLen) {
   return new RegExp(`^[A-Za-z]{${minLen},${maxLen}}$`).test(s) ? s.toUpperCase() : null;
 }
 
+// Phase 66 Plan 01 Task 3 (D-66-02, D-66-03, RICH-03, T-66-01): the LinkedIn producer's
+// host guard. Follows _codeShaped's/_personaGroup's model exactly — return null rather
+// than fabricate, never coerce. A provider-supplied URL is attacker-influencable text
+// landing in a CRM field, so this is STRICTLY MORE validation than the other eleven
+// contact fields get (which pass through `_norm` alone): admits only `linkedin.com` and
+// its subdomains, matched by comparing the PARSED host (scheme stripped, everything up to
+// the first "/") for exact equality with `linkedin.com` or a `.linkedin.com` suffix —
+// never a bare `endsWith` on the whole string, which would accept a lookalike-suffix host
+// (e.g. "evil-linkedin.com" or "linkedin.com.evil.example"). Returns the value UNCHANGED
+// when accepted (never reshapes/canonicalizes — that stays at the merge boundary, see the
+// Apollo push site below), or null otherwise.
+function _linkedinHostOnly(value) {
+  if (value === null || value === undefined) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const withoutScheme = s.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "");
+  const host = withoutScheme.split("/")[0].toLowerCase();
+  if (host === "linkedin.com" || host.endsWith(".linkedin.com")) return s;
+  return null; // T-66-01: refused host — never fabricate a candidate from a lookalike domain.
+}
+
 // ---- local value normalizers (mirror src/normalizer.py band logic) ----------
 // Parse a revenue value (number OR range string like "10M-25M") to lower-bound
 // dollars, then map to the CLAUDE.md revenue bands. Range strings use the LOWER
@@ -404,6 +425,25 @@ function apolloCandidates(raw, objectType) {
     }
     _push(out, "jobtitle", src, person.title, _norm(person.title), 0.6, updated);
     _push(out, "seniority", src, person.seniority, _norm(person.seniority), 0.6, updated);
+    // Phase 66 Plan 01 Task 3 (D-66-02, D-66-03, RICH-03): LinkedIn producer, the FULL
+    // seam stated here because D-66-03 requires the plan to prove the merge consumes it.
+    // The push key below is UNPREFIXED (`linkedin_url`, prose/attribute access only per
+    // the PN-1 architecture guard — never a quoted literal in scripts/build_cloud_workflows.py):
+    //   normalizeProviders.js push (unprefixed) -> scoreEnrichment.js groups candidates by
+    //   c.field, so the winner also lands under the unprefixed key -> ENRICH_MERGE in
+    //   scripts/build_cloud_workflows.py already reads that unprefixed winner attribute,
+    //   runs canonicalizeLinkedin() on it, and assigns the lv_-prefixed merge candidate ->
+    //   mergeContacts.js keys its policy on the prefixed name at fill_blank_only / 85,
+    //   which this waterfall's flat confidence of 85 clears (mirrors the persona_group
+    //   PN-1 rename eight lines below). resolveIdentity.js's canonicalizeLinkedin is
+    //   deliberately NOT called here — it mirrors a Python identity function and is not in
+    //   ENRICH_NORMALIZE_SCORE's inline list, so canonicalising stays at the merge boundary
+    //   where it already lives, not duplicated here.
+    // The value argument is passed as BOTH `value` and `normalizedValue`: a refused host
+    // is null in the `value` position, so _push's existing null short-circuit drops it
+    // with no extra guard needed at this call site.
+    const linkedinUrl = _linkedinHostOnly(person.linkedin_url);
+    _push(out, "linkedin_url", src, linkedinUrl, linkedinUrl, 0.6, updated);
     // COPY-02: same persona_group producer, reading Apollo's own department field.
     const persona = _personaGroup(person.departments);
     _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
@@ -523,6 +563,15 @@ function zoominfoCandidates(rawResponse, objectType) {
     if (ziStateCode) {
       _push(out, "hs_state_code", src, raw.state, ziStateCode, 0.6, recency);
     }
+    // Phase 66 Plan 01 Task 3: ZoomInfo gets NO linkedin_url push in this plan.
+    // ZOOM_OUTPUT_FIELDS (build_cloud_workflows.py) is account-verified — every member
+    // must be a valid GTM contacts/enrich outputField or the WHOLE batch request 400s
+    // (memory record zoominfo-gtm-enrich-400-blocker names the verified set; it carries
+    // no LinkedIn field, and three other candidate names are recorded as 400). Adding an
+    // unprobed output field here would risk the entire ZoomInfo call for every contact in
+    // a batch. scripts/probe_zoominfo_location_fields.mjs is the precedent for probing a
+    // new output field live before trusting it — the same probe that verified city/state/
+    // country above. Left as a PENDING-PROBE row for plan 66-02's coverage matrix.
   } else {
     // UNITS: GTM `revenue` is in THOUSANDS, not dollars — confirmed live against three
     // records (Racing NSW 268163 + revenueRange "$250 mil. - $500 mil."; ZoomInfo 1254000
