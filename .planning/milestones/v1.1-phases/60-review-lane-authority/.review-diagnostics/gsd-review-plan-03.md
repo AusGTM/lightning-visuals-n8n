@@ -1,0 +1,263 @@
+---
+phase: 60-review-lane-authority
+plan: 04
+type: execute
+wave: 3
+depends_on: ["60-01", "60-02", "60-03"]
+files_modified:
+  - n8n/code/reviewDecision.js
+  - n8n/wf_review_decision_cloud.json
+  - operator-claude-plugin/skills/review-triage/SKILL.md
+  - operator-claude-plugin/skills/enrich-records/SKILL.md
+  - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
+  - operator-claude-plugin/README.md
+  - operator-claude-plugin/USAGE.md
+  - operator-claude-plugin/CHANGELOG.md
+  - operator-claude-plugin/.claude-plugin/plugin.json
+autonomous: true
+requirements: [D-60-01, D-60-02, D-60-04, D-60-05, D-60-06, D-60-08]
+user_setup: []
+
+estimate:
+  tokens: 66000
+  raw_tokens: 66000
+  tasks: 3
+  confidence: low
+
+must_haves:
+  truths:
+    - "D-60-04: no operator-facing surface tells anyone to set a shell environment variable to approve a record — the retired gate is gone from the skill, the README gate table and the USAGE admin table, replaced by the grant the operator can open in conversation."
+    - "D-60-02: the two dispatch skills open their grant naming all three lanes, so a grant opened for an enrichment or ingest batch also authorizes review on those same records with no second deliberate yes."
+    - "D-60-06: the review-triage skill opens ONE arm window for the sitting and closes it once, rather than arming per record; D-60-01's grant is what authorizes it and D-60-05's dynamic arm is what removes the admin deploy."
+    - "D-60-08: the skill mints one `run_id` per triage batch and reports, at the end, the records that run actually wrote — read from that run's own artifact, never the path-less aggregate."
+    - "The deployed backend no longer tells an operator that only an administrator can add records to the allowlist at deploy time — a grant now sets it dynamically. The text is corrected at its source and the workflow JSON is REGENERATED, never hand-edited."
+  artifacts:
+    - operator-claude-plugin/skills/review-triage/SKILL.md
+    - n8n/wf_review_decision_cloud.json
+    - operator-claude-plugin/CHANGELOG.md
+    - operator-claude-plugin/.claude-plugin/plugin.json
+  key_links:
+    - "`n8n/code/reviewDecision.js` -> `scripts/build_cloud_workflows.py::build_review_decision_cloud` -> `n8n/wf_review_decision_cloud.json` — the ONLY route by which that JSON may change."
+    - "`review-triage/SKILL.md` step 6 -> `write_grant.authorize_review_batch` -> `n8n_arming.armed_review_window` -> per-record `write_grant.authorize_send(lane=\"review\")` -> `review_decision.submit_decision(grant=..., run_id=...)`."
+    - "`.claude-plugin/plugin.json` version -> the marketplace Update button — an unbumped string means the operator never sees any of this."
+---
+
+<objective>
+Make the operator-facing surfaces tell the truth this phase created, and release it.
+
+Purpose: plans 01-03 changed what the system CAN do. Until the skill, the two dispatch
+skills, the README gate table, the USAGE admin table and the backend's own refusal message
+say so — and until the version string moves — an installed operator still reads that only an
+admin can approve a flagged record, and still runs the old code.
+
+Output: the corrected backend message (regenerated, never hand-edited), a review-triage skill
+that opens one grant-authorized window per sitting, three-lane grants in the dispatch skills,
+truthful gate tables, a CHANGELOG section and version `0.35.0`.
+</objective>
+
+<execution_context>
+@~/.claude/gsd-core/workflows/execute-plan.md
+@~/.claude/gsd-core/templates/summary.md
+</execution_context>
+
+<context>
+@.planning/PROJECT.md
+@.planning/ROADMAP.md
+@.planning/STATE.md
+@.planning/phases/60-review-lane-authority/60-CONTEXT.md
+@.planning/phases/60-review-lane-authority/60-RESEARCH.md
+@.planning/phases/60-review-lane-authority/60-PATTERNS.md
+@.planning/phases/60-review-lane-authority/60-01-SUMMARY.md
+@.planning/phases/60-review-lane-authority/60-02-SUMMARY.md
+@.planning/phases/60-review-lane-authority/60-03-SUMMARY.md
+</context>
+
+<tasks>
+
+<task type="auto">
+  <name>Task 1: Correct the backend's now-false refusal message, at its source</name>
+
+  <read_first>
+    - n8n/code/reviewDecision.js around lines 218-235 (the `writeAllowed === false` branch and its message, plus the comment above it explaining why `not_allowlisted` is a distinct outcome from `refused`)
+    - scripts/build_cloud_workflows.py lines 7700-7740 (the inline list that pulls `reviewDecision.js` into the built node) and 8160-8175 (`splice_write_gates` for the two review write nodes)
+    - scripts/build_cloud_workflows.py's `main()` (the tail of the file — it regenerates EVERY workflow JSON, which is why the acceptance criterion below checks that only one changed)
+    - operator-claude-plugin/tests/test_review_outcome_parity.py (it pins the outcome literals against this file and the committed JSON as text — it must stay green through a message-text edit)
+    - CLAUDE.md § 10.3.1 and § 13.0 (the standing rule: never hand-edit `n8n/wf_*.json`)
+  </read_first>
+
+  <files>n8n/code/reviewDecision.js, n8n/wf_review_decision_cloud.json</files>
+
+  <precondition>The repo venv can import the builder — `.venv/bin/python -c "import sys; sys.path.insert(0, 'scripts'); import build_cloud_workflows"` exits 0. The builder has import-time side effects and a sibling-module import (`gen_taxonomy_js`) that system python does not satisfy; halt and report rather than regenerating with the wrong interpreter.</precondition>
+
+  <action>
+In `n8n/code/reviewDecision.js`'s `writeAllowed === false` branch, replace the trailing clause of the `not_allowlisted` message — the one asserting that only an administrator can put records on the allowlist, and only while deploying — with wording that is true after this phase: the allowlist is set either by a deploy or, now, dynamically for the duration of one authorized window, and the operator's route is to open a write grant covering this record rather than to find an admin. Keep the first half of the message byte-identical (that this record is not on the backend's allowlist, that nothing was sent to HubSpot, and that the record is unchanged) — it is still exactly true and is what the outcome means. Keep the outcome literal `not_allowlisted` untouched; `test_review_outcome_parity.py` pins it against this file and the committed JSON as text. Add a short dated comment above the message naming Phase 60 and D-60-05, recording that this string was accurate before a grant could arm the allowlist and is being corrected rather than rewritten, so a reader does not have to date it from `git blame`.
+
+Then regenerate the workflow JSON by running the builder — never by editing `n8n/wf_review_decision_cloud.json`. The builder rewrites every workflow file, so inspect the resulting `git status` before staging: only the review workflow may differ. Any other workflow showing a diff is pre-existing generator drift, not this phase's work — STOP and report it in the summary rather than committing it alongside a message-text change.
+  </action>
+
+  <verify>
+    <automated>.venv/bin/python scripts/build_cloud_workflows.py</automated>
+    <fails_when>non-zero exit, or the run prints a traceback instead of one `wrote n8n/...` line per workflow</fails_when>
+    <automated>git status --porcelain n8n/ | awk '{print $2}'</automated>
+    <fails_when>the output is anything other than exactly the two lines `n8n/code/reviewDecision.js` and `n8n/wf_review_decision_cloud.json`</fails_when>
+    <automated>.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_outcome_parity.py -x</automated>
+    <fails_when>non-zero exit, or the summary line reports any failed or errored test</fails_when>
+    <automated>node --test tests/n8n/*.test.mjs</automated>
+    <fails_when>non-zero exit, or the summary reports `fail 1` or higher</fails_when>
+  </verify>
+
+  <acceptance_criteria>
+    - Source assertion: `grep -c 'that allowlist at deploy time' n8n/code/reviewDecision.js` prints `0`, and the same grep over `n8n/wf_review_decision_cloud.json` prints `0` — the regeneration actually carried the edit through.
+    - Source assertion: `grep -c '"not_allowlisted"' n8n/code/reviewDecision.js` is unchanged from before the edit.
+    - CLI output: `git status --porcelain n8n/` lists exactly the two files named above.
+    - Source assertion: `git diff --stat -- tests/n8n/reviewWriteFlagSeparation.test.mjs | wc -l` prints `0`.
+    - Test command: the parity test and the full n8n glob suite both exit 0.
+  </acceptance_criteria>
+
+  <reversibility rating="reversible">A message-text edit plus a regeneration; reverting is the same two steps.</reversibility>
+
+  <done>The deployed review workflow no longer tells an operator that only an admin can open the allowlist, the correction went through the generator, and exactly one workflow JSON changed.</done>
+</task>
+
+<task type="auto">
+  <name>Task 2: Rewrite the review-triage skill onto the grant, and open three-lane grants</name>
+
+  <read_first>
+    - operator-claude-plugin/skills/review-triage/SKILL.md (whole file — 188 lines; step 1's arming statement, step 6's env-var paragraph and its `submit_decision` call, step 7's verdict reporting, and the closing "What this skill never asks the operator to do")
+    - operator-claude-plugin/skills/enrich-records/SKILL.md lines 320-425 (step 8's authorize -> arm -> act -> disarm block — the canonical shape to mirror; note it is EXECUTABLE Python that `test_write_grant.py` `compile()`s, so any edit must stay compilable) and its step 10 end-of-run report call
+    - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md lines 55-95 (the two-lane grant paragraph and the `lanes=[...]` sentence)
+    - operator-claude-plugin/tests/test_skill_sequence_coverage.py lines 300-310 (the two symbols review-triage's SKILL.md must keep mentioning)
+    - operator-claude-plugin/scripts/write_grant.py and review_decision.py as plans 01-03 left them (the real signatures the skill must call)
+  </read_first>
+
+  <files>operator-claude-plugin/skills/review-triage/SKILL.md, operator-claude-plugin/skills/enrich-records/SKILL.md, operator-claude-plugin/skills/enrich-before-ingest/SKILL.md</files>
+
+  <action>
+Rewrite `review-triage/SKILL.md` around the grant. Step 1's opening statement changes from "review writeback is disarmed" to the accurate two-part position: nothing reaches HubSpot until the operator says yes to a specific record's exact write, AND a write grant covering that record must be open — which the operator can open in this conversation once an n8n admin has set `allow_write_grants`, with no shell and no deploy. Add a new step between the current 3 and 4, or fold into step 3, that opens the sitting: mint `run_id = run_state.new_run_id()` before any HTTP call; if a grant is already open from an enrichment or ingest batch and covers the records to be triaged, reuse it; otherwise plan and open one over the ids the operator is about to work, naming `lanes=["review"]` and passing `providers=[]` — a review batch spends no provider credit, and passing the configured selection would price the envelope against credits this sitting will not touch. Then open ONE `n8n_arming.armed_review_window` over `write_grant.authorize_review_batch(grant)`'s returned record lists and hold it for the whole sitting (D-60-06), closing it once at the end and on any exception, through the context manager's own guarantee. Say plainly, in the skill's own voice, that the window is grant-wide but every decision inside it is still checked per record, so a record the grant does not name is refused even mid-sitting.
+
+Rewrite step 6. The per-record ritual is UNCHANGED and must be said to be unchanged: read the exact write back, get an explicit yes for this record, and that yes is `review_armed=True` for that one submit and nothing else — VOCAB-05 still holds, an operator saying yes must never have to produce the system's wording. What changes is only the authority underneath it: `submit_decision` now takes `grant=` and `run_id=`, and refuses with reason `grant_not_authorized` when no open grant covers this record. Delete the paragraph telling the operator that an administrator must set an environment variable and that this skill cannot set it — that refusal no longer exists; put in its place the grant refusal's handling, which is genuinely actionable: relay the message, and offer to open a grant covering this record rather than sending them to an admin. Keep the sentence that a yes here does not arm the contact-upload or enrichment lanes and vice versa — the per-record consent is still lane-specific even though one grant now spans three lanes; the grant is the authority, the yes is still the act.
+
+Step 7 gains the end-of-run account: after the sitting, read this run's own artifact through `written_records.load(path=written_records.written_records_path(run_id))` — never the path-less aggregate, which would fold in previous runs — and tell the operator which records this sitting wrote. Say that a decision whose bookkeeping failed still landed and is reported as such from the `written_records` key on the submit envelope, because the write always wins over the log (D-59-10). Rewrite the closing "What this skill never asks the operator to do" section: the environment variable is gone from the list; what remains is a missing config key and the admin's `allow_write_grants` settings key. Keep every mention of `review_queue.policy_class` and `review_queue.record_link` — a skill-coverage test asserts both by name.
+
+In `enrich-records/SKILL.md` and `enrich-before-ingest/SKILL.md`, add `"review"` to the lanes each opens its grant with, citing D-60-02 in one sentence each: one grant covers all three lanes together, so a record enriched or ingested under this grant can also be triaged in the same sitting without a second deliberate yes — bounded, as always, to the grant's own records. In `enrich-records/SKILL.md` the edit lands inside the executable Python block, which an AST test compiles: keep it compilable and keep every existing name binding. In `enrich-before-ingest/SKILL.md`, update the surrounding prose that says the grant spans "both of this flow's lanes" so the count is right.
+  </action>
+
+  <verify>
+    <automated>.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py operator-claude-plugin/tests/test_enrich_skill_contract.py operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py -x</automated>
+    <fails_when>non-zero exit, or the summary line reports any failed or errored test</fails_when>
+    <automated>.venv/bin/python -m pytest operator-claude-plugin/tests -q</automated>
+    <fails_when>non-zero exit, or the summary line reports any failed or errored test</fails_when>
+    <automated>grep -c 'ALLOW_REVIEW_SUBMIT' operator-claude-plugin/skills/review-triage/SKILL.md</automated>
+    <fails_when>prints anything other than `0`</fails_when>
+  </verify>
+
+  <acceptance_criteria>
+    - Source assertion: `grep -c 'authorize_review_batch' operator-claude-plugin/skills/review-triage/SKILL.md` is at least 1, and `grep -c 'new_run_id' operator-claude-plugin/skills/review-triage/SKILL.md` is at least 1.
+    - Source assertion: `grep -c 'review_queue.policy_class' operator-claude-plugin/skills/review-triage/SKILL.md` and `grep -c 'review_queue.record_link'` are both at least 1 — the skill-coverage test's two pinned symbols survive.
+    - Source assertion: `grep -c '"review"' operator-claude-plugin/skills/enrich-records/SKILL.md` is at least 1 and `grep -c 'D-60-02' operator-claude-plugin/skills/enrich-records/SKILL.md` is at least 1; the same two hold for `enrich-before-ingest/SKILL.md`.
+    - Behavior assertion: the Python block in `enrich-records/SKILL.md` still compiles — the existing AST test in `test_write_grant.py` passes unmodified.
+    - Behavior assertion: the review skill still states that a yes covers this record's write and nothing else, and still states that the exact-write preview works without any authority.
+    - Test command: the plugin suite exits 0.
+  </acceptance_criteria>
+
+  <reversibility rating="costly">D-60-02: reversing the combined-lane grant means re-adding a lane-selection step to the grant-opening flow these edits remove. D-60-06's one-window-per-sitting is likewise costly to unpick. The review-triage rewrite itself is reversible.</reversibility>
+
+  <done>The review-triage skill opens one grant-authorized window per sitting, mints one run id, reports what that run wrote, and asks nobody to set an environment variable; the two dispatch skills open three-lane grants citing D-60-02.</done>
+</task>
+
+<task type="auto">
+  <name>Task 3: Truthful gate tables, CHANGELOG, and the version bump that ships it</name>
+
+  <read_first>
+    - operator-claude-plugin/README.md lines 585-615 (the three-gate table for a review decision and the two paragraphs below it)
+    - operator-claude-plugin/USAGE.md lines 198-212 (the "why it's the admin" table, including the review-approval row)
+    - operator-claude-plugin/CHANGELOG.md lines 1-20 (the Unreleased heading and the release rule stated at the top) and its final section (the four-step release checklist)
+    - operator-claude-plugin/.claude-plugin/plugin.json (current version `0.34.0`)
+    - .planning/phases/60-review-lane-authority/60-01-SUMMARY.md, 60-02-SUMMARY.md, 60-03-SUMMARY.md (what actually shipped, for the CHANGELOG entry — write the entry from these, never from this plan's intentions)
+  </read_first>
+
+  <files>operator-claude-plugin/README.md, operator-claude-plugin/USAGE.md, operator-claude-plugin/CHANGELOG.md, operator-claude-plugin/.claude-plugin/plugin.json</files>
+
+  <action>
+In `README.md`, rewrite the review-decision gate table. It is still three gates and they are still all required, so keep the table's shape and its "any one closed and nothing is written" framing. Row one becomes the write grant covering this record — where it lives is the conversation, who opens it is the operator, once an n8n admin has set `allow_write_grants` in `operator.local.json`. Row two, the per-record arm, is unchanged. Row three, the backend constant and its record allowlist, keeps its process/machine distinction but its "who opens it" becomes the grant's own arm window as well as a deploy. Rewrite the paragraph beneath it: the trap it warned about — two similarly-named variables in different processes — is retired along with the variable, so replace it with the distinction that actually matters now, which is that the client-side authority and the backend constant are still two separate things and the grant is what closes both in one step. Keep the closing statement that the skill will never ask the operator to set any of these and will name which gate is closed and who can open it — it is still true and it is the load-bearing promise. Keep the sentence that the review arm and the contact-dispatch arm are separate in both directions; that separation survives this phase at the flag level and is worth a reader knowing.
+
+In `USAGE.md`, rewrite the review-approval row of the admin table. It is no longer an admin's job at all in the common case: the operator opens a grant in conversation. What remains the admin's is the one-time `allow_write_grants` settings key — fold the row into that, or point it at the existing arming row, whichever leaves one true statement rather than two overlapping ones.
+
+Then release. Cut a `## [0.35.0] - <today's date>` section in `CHANGELOG.md` beneath an emptied Unreleased heading, describing what actually shipped from the three summaries: the review lane became grantable; the shell environment variable that gated review submission is retired and grant authorization took its place; a rejection still works with no grant open; arming review is dynamic and never touches the dispatch write flags; one window covers a whole triage sitting; the dirty-backend guardrail can now see a stuck-open review authorization; review writes appear in the per-run written-records artifact. Note the reversal explicitly — 30-01's D-02/D-08e separation between dispatch grants and review writeback is deliberately undone, with the record kept in `write_grant.py`'s own dated addendum — because a CHANGELOG that presents a reversal as a feature is how a later reader loses the reason the old design existed. In the same commit, set `.claude-plugin/plugin.json`'s version to `0.35.0`: the release checklist at the bottom of the CHANGELOG says the bump and the section cut are one commit, and an unbumped string leaves the Update button greyed out however much shipped. Do not push and do not touch the marketplace clone — steps 3 and 4 of that checklist are the operator's, not this plan's.
+  </action>
+
+  <verify>
+    <automated>.venv/bin/python -c "import json; v=json.load(open('operator-claude-plugin/.claude-plugin/plugin.json'))['version']; assert v=='0.35.0', v; print('version', v)"</automated>
+    <fails_when>non-zero exit, or the printed version is anything other than `0.35.0`</fails_when>
+    <automated>grep -c '^## \[0.35.0\]' operator-claude-plugin/CHANGELOG.md</automated>
+    <fails_when>prints anything other than `1`</fails_when>
+    <automated>grep -c 'ALLOW_REVIEW_SUBMIT' operator-claude-plugin/README.md operator-claude-plugin/USAGE.md</automated>
+    <fails_when>either file's count is anything other than `0`</fails_when>
+    <automated>.venv/bin/python -m pytest -q && .venv/bin/python -m pytest operator-claude-plugin/tests -q && node --test tests/n8n/*.test.mjs</automated>
+    <fails_when>non-zero exit from any of the three, or any summary line reports a failed, errored or `fail 1`-or-higher result</fails_when>
+  </verify>
+
+  <acceptance_criteria>
+    - Source assertion: the version is exactly `0.35.0` and the CHANGELOG's `## [0.35.0]` section and that bump are in ONE commit (`git show --stat HEAD` lists both files).
+    - Source assertion: the Unreleased heading is still present and its body is empty.
+    - Source assertion: the retired variable name appears nowhere in `README.md` or `USAGE.md`; the only surviving mentions repo-wide are the historical CHANGELOG entry at line ~1605 and the dated recorded-edit notes in `write_grant.py`, `review_decision.py` and `test_review_decision.py`.
+    - Behavior assertion: the README gate table still lists three gates and still says any one closed means nothing is written.
+    - Test command: all three suites exit 0.
+  </acceptance_criteria>
+
+  <reversibility rating="reversible">Documentation and a version string; a revert is a symmetric edit.</reversibility>
+
+  <done>Every operator-facing surface describes the authority that now exists, the CHANGELOG records the reversal as a reversal, and the version string moved so an installed operator can actually receive it.</done>
+</task>
+
+</tasks>
+
+<threat_model>
+## Trust Boundaries
+
+| Boundary | Description |
+|----------|-------------|
+| documentation → operator behaviour | A gate table that overstates what is required trains an operator to look for an admin who is no longer needed; one that understates it trains them to expect a write that will not happen. |
+| generator → deployed workflow JSON | The JSON is a build artifact; a hand-edit silently diverges from its source and survives until the next regeneration erases it. |
+| repo → installed plugin copy | An unbumped version string means none of this phase reaches the operator at all. |
+
+## STRIDE Threat Register
+
+| Threat ID | Category | Component | Severity | Disposition | Mitigation Plan |
+|-----------|----------|-----------|----------|-------------|-----------------|
+| T-60-14 | Repudiation | a hand-edited `wf_review_decision_cloud.json` | high | mitigate | The message is changed in `n8n/code/reviewDecision.js` and the JSON is REGENERATED via `scripts/build_cloud_workflows.py`; the acceptance criterion greps the built JSON to prove the edit travelled, and `git status --porcelain n8n/` proves exactly two files changed. |
+| T-60-15 | Spoofing | a gate table implying an authority that no longer exists | medium | mitigate | The README and USAGE rows are rewritten to name the grant and the admin's one remaining settings key; a negative grep proves the retired variable name is gone from both. |
+| T-60-16 | Elevation of Privilege | three-lane grants in the dispatch skills | high | mitigate | D-60-02 is the operator's own decision and D-60-03 bounds it: the grant's record set is unchanged, so the collapse widens WHEN the approval is given and never WHAT it covers. `_consequence()` (plan 01) names every lane individually at the yes, so the operator reads all three before consenting. |
+| T-60-17 | Repudiation | shipping code an operator never receives | medium | mitigate | The version bump and CHANGELOG cut are asserted to be one commit, per the release checklist this repo already keeps. Steps 3 and 4 (push, refresh the marketplace clone) stay the operator's, and are named as such rather than silently assumed. |
+| T-60-SC | Tampering | npm/pip/cargo installs | low | accept | No package is installed by this plan; `60-RESEARCH.md` records the same. |
+</threat_model>
+
+<artifacts_this_plan_produces>
+- `n8n/code/reviewDecision.js` — corrected `not_allowlisted` message text with a dated note
+- `n8n/wf_review_decision_cloud.json` — regenerated (message text only; no node, no gate, no topology change)
+- `operator-claude-plugin/skills/review-triage/SKILL.md` — grant-opened sitting, one batch window, one `run_id`, end-of-run written-records account, no environment variable
+- `operator-claude-plugin/skills/enrich-records/SKILL.md`, `skills/enrich-before-ingest/SKILL.md` — three-lane grants citing D-60-02
+- `operator-claude-plugin/README.md`, `USAGE.md` — truthful gate tables
+- `operator-claude-plugin/CHANGELOG.md` — a `## [0.35.0]` section recording the reversal as a reversal
+- `operator-claude-plugin/.claude-plugin/plugin.json` — version `0.35.0`
+
+The full phase-level artifact list is in `60-01-PLAN.md` § Artifacts this phase produces.
+</artifacts_this_plan_produces>
+
+<verification>
+- All three suites green: `.venv/bin/python -m pytest -q`, `.venv/bin/python -m pytest operator-claude-plugin/tests -q`, `node --test tests/n8n/*.test.mjs`.
+- `git status --porcelain n8n/` names exactly `n8n/code/reviewDecision.js` and `n8n/wf_review_decision_cloud.json`.
+- `tests/n8n/reviewWriteFlagSeparation.test.mjs` passes unmodified.
+- Version is `0.35.0` and the CHANGELOG section is cut in the same commit.
+- Nothing is armed, nothing is deployed to n8n, no HubSpot request and no provider call is made. This phase's own live proof belongs to the supervised operator walk in `60-VALIDATION.md` § Manual-Only Verifications, not to an executor task.
+</verification>
+
+<success_criteria>
+An operator reading any surface of this plugin learns that approving a flagged record needs a
+grant they can open in conversation and a yes to that record's exact write — and nothing they
+have to ask an administrator for — and an installed copy can actually receive that change.
+</success_criteria>
+
+<output>
+Create `.planning/phases/60-review-lane-authority/60-04-SUMMARY.md` when done
+</output>

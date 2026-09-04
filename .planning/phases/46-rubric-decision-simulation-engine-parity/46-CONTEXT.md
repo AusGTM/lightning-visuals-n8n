@@ -1,9 +1,17 @@
+---
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
+  questions_digest: 2867d2ab105a8c967709e6427577ed3a868ee31dadec980cac50b85c1a2165dd
+---
+
 # Phase 46: Rubric Decision, Simulation & Engine Parity - Context
 
 **Gathered:** 2026-08-11
 **Status:** Ready for planning
 
 <domain>
+
 ## Phase Boundary
 
 Decide the `individual_club_team` weight (and, folded in during discussion, the `regulator`
@@ -25,6 +33,7 @@ amended on 2026-08-11 to match the widened scope.
 </domain>
 
 <decisions>
+
 ## Implementation Decisions
 
 ### Rubric weights (the decision itself)
@@ -185,22 +194,26 @@ amended on 2026-08-11 to match the widened scope.
   org-type deduction map — whichever ports most cleanly across all three engines.
 
 ### Reviewed Todos (not folded)
+
 None folded. See Deferred.
 
 </decisions>
 
 <canonical_refs>
+
 ## Canonical References
 
 **Downstream agents MUST read these before planning or implementing.**
 
 ### The evidence behind the decision
+
 - `docs/business/icp-scoring.md` — the 92-closed-deal ICP validation. §3 assumption scorecard,
   §4 best-fit/anti-ICP (club 19% n=36, gambling as graduated deduction, "QRIC is a regulator"),
   §5 proposed scoring model and tier definitions. **This is the document RUBRIC-01 requires the
   decision to be traceable to** — including where the decision overrides it.
 
 ### The three scoring engines (D-11)
+
 - `config/icp_scoring.yaml` — Python oracle weight table; `base_score.org_type` line 10 is
   `individual_club_team: 5`, line 11 `regulator: 5`; `graduated_deductions` holds only
   `gambling_operator`.
@@ -215,12 +228,14 @@ None folded. See Deferred.
   the component scores.
 
 ### Parity harness
+
 - `tests/test_scoring_parity.py` — two-tier parity suite (offline + live).
 - `tests/scoring_fixtures.py` — shared fixtures.
 - `scripts/run_scoring_parity.py` — the live parity runner producing the verdict artifact.
 - `tests/test_flow_rubric_conformance.py` — guards the HubSpot flow surface against the rubric.
 
 ### Milestone framing and constraints
+
 - `.planning/REQUIREMENTS.md` — RUBRIC-01/02/03; **Out of Scope** section carries the
   no-new-properties constraint that D-04 upholds and the `lv_icp_scoring_version` exclusion that
   forces whole-population re-scores.
@@ -230,6 +245,7 @@ None folded. See Deferred.
   being false vetoes) and the v0.9 goal statement.
 
 ### Docs that must be updated in this phase (D-13)
+
 - `docs/business/icp-scoring.md` §4, §5 — business sign-off doc; scoring model table, graduated
   deductions table, property-map table, tier illustration. Preserve the evidence, record the
   override (D-14).
@@ -239,6 +255,7 @@ None folded. See Deferred.
 - `docs/WEB-RESEARCH-SPEC.md` — gambling-deduction semantics and the ATC worked example.
 
 ### Operational gotchas that constrain how the change ships
+
 - `.planning/milestones/v0.7-phases/` — `PORTAL-FACTS.md` (HubSpot Automation v4 PUT limits
   discovered live in Phase 40) and the `39-DECISION.md` precedent D-05 follows.
 - `config/june_candidates.json` — the June 66-company snapshot. **Reference only, not the
@@ -247,9 +264,11 @@ None folded. See Deferred.
 </canonical_refs>
 
 <code_context>
+
 ## Existing Code Insights
 
 ### Reusable Assets
+
 - **`scripts/run_scoring_parity.py`** — already reads live records and compares against the
   oracle. The simulation is close to a read-only variant of this; extend or mirror rather than
   build fresh.
@@ -262,6 +281,7 @@ None folded. See Deferred.
   cross-checking the live pull and for naming companies in the report.
 
 ### Established Patterns
+
 - **Config → build → deploy → bounce → read-back running content.** A bare PUT never reloads a
   running n8n workflow (D-12). Phase 44's live evidence and the memory note on stored-vs-running
   content both apply.
@@ -272,6 +292,7 @@ None folded. See Deferred.
   behaviour changed. Budget for fixture/assertion updates in all three engines' test surfaces.
 
 ### Integration Points
+
 - `base_score.org_type` in `config/icp_scoring.yaml` → the JS port's org-type map in
   `wf_enrichment_cloud.json` → HubSpot flow `4626124224`. All three must move together or the
   portal's native score diverges from the pipeline's.
@@ -280,6 +301,7 @@ None folded. See Deferred.
   removal and D-02's addition both touch this chain.
 
 ### Blast radius (measured, June snapshot n=66)
+
 ```
 individual_club_team   37   (56% of the scored population)  → D-01 moves these
 broadcaster            12
@@ -289,12 +311,14 @@ hardware_vendor         2
 other                   2
 regulator               1   → D-02 moves this one
 ```
+
 D-01 alone re-tiers more than half the scored list. That is the real blast radius — surgical
 across org types, sweeping across records — and it is why the simulation must run before sign-off.
 
 </code_context>
 
 <specifics>
+
 ## Specific Ideas
 
 - Operator's framing, verbatim in substance: *"sales teams consider individual racing/turf clubs
@@ -314,6 +338,7 @@ across org types, sweeping across records — and it is why the simulation must 
 </specifics>
 
 <deferred>
+
 ## Deferred Ideas
 
 - **`lv_is_regulator` boolean property** — investigated and rejected this phase (D-04). If the
@@ -332,8 +357,10 @@ across org types, sweeping across records — and it is why the simulation must 
   the bucket is "slightly mixed" and shouldn't be treated as monolithic. Out of scope.
 
 ### Reviewed Todos (not folded)
+
 Three pending todos keyword-matched Phase 46 via `todo.match-phase`; the operator did not select
 them for discussion, and none is in scope for a phase that writes nothing to a record:
+
 - **Enrichment throughput — 82% of every full run is two sequential Anthropic calls** (score 0.90,
   area `n8n`) — a runtime-cost concern for enrichment runs. Phase 48 territory at the earliest.
 - **Sweep crontab pins a versioned plugin path** (score 0.60, `operator-claude-plugin`) — v0.8-era
@@ -344,6 +371,7 @@ them for discussion, and none is in scope for a phase that writes nothing to a r
 </deferred>
 
 <open_questions>
+
 ## Open Questions for the Researcher
 
 1. **Enumerate "the 66" live.** `PROJECT.md` says 66 scored with distribution A:7 B:18 C:17 D:24,

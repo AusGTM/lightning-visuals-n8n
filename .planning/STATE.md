@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 61
-current_phase_name: Autonomous batch runs
-status: executing
+status: Awaiting next milestone
 stopped_at: context exhaustion at 100% (2026-09-03)
-last_updated: "2026-09-03T18:06:33.248Z"
+last_updated: "2026-09-04T00:08:50.421Z"
 last_activity: 2026-09-04
-last_activity_desc: 62-12 closed G-62-7 -- suggested rows now held when the enriched email's domain is unrelated to the company
-state_head: fc4b1085f093c50c2be56554ee1c41495343c675
+last_activity_desc: Milestone v1.1 completed and archived
+state_head: b527e22c67ef90de068788fd9c3ca10979075cce
 progress:
   total_phases: 13
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 62
   completed_plans: 62
-  percent: 69
+  percent: 77
+current_phase: 61
+current_phase_name: Autonomous batch runs
 ---
 
 # Project State
@@ -356,124 +356,10 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 61 — Autonomous batch runs
-  PHASE-VERIFIED (2026-09-02)
-
-**63-05 outcome (2026-09-02, wave 3, deploy).** Deployed the committed `n8n/wf_*_cloud.json` set
-  disarmed (`DRY_RUN=false ALLOW_N8N_DEPLOY=true`, empty `ENABLE_BAKED_FLAGS` overlay — the
-  deployed JSON is byte-for-byte what the test suites ran against), then bounced
-  (deactivate/activate) all five affected workflows, each independently re-read active with a node
-  count matching the locally built JSON exactly (enrichment stays 123 — this deploy edited
-  `jsCode`/`jsonBody` strings only, added no node). Proved the RUNNING instance (not merely the
-  stored copy) with one disarmed recompute POST for Melbourne Racing Club `9604614548`: response
-  `write_blocked`; execution `12070` read back with `includeData=true` shows status `success`,
-  terminal node `Build Response`, and none of the 22 nodes that ran match any provider/write/
-  Anthropic marker — zero credits, zero Anthropic calls, zero HubSpot writes. Because 63-04 took
-  the DROP branch, this deploy carries **Phase 62's already-committed-but-undeployed change
-  alone** (`num_associated_contacts` on the enrichment workflow's companies-search node,
-  `sourceByField` on Contact Ingest's `Merge Contacts`), both confirmed present in the post-bounce
-  stored read-back — not two phases' worth, and the deploy record says so explicitly rather than
-  using SHIP-branch wording. Opportunistically recorded the lever-3 fact for a later phase:
-  `WEB_RESEARCH_MAX_SEARCHES = 5` is baked into both research-request nodes, so the effective
-  `max_uses` is 5 — unchanged, not a deliverable here. Nothing armed; write allowlist stayed
-  empty throughout. `node --test tests/n8n/*.test.mjs`: 862 pass / 0 fail. Full record:
-  `63-DEPLOY-RECORD.md`; full plan record: `63-05-SUMMARY.md`.
-  All five plans in Phase 63 (63-01 through 63-05) are complete, and the phase itself closed
-  2026-09-03 at 28/28 `passed` — see the milestone section above.
-
-**63-02 outcome (2026-09-02, wave 2, 63-A half).** `scripts/verify_sweep_shim_scheduler.sh` —
-  a self-contained, re-runnable harness — proved 63-01's shim under a REAL launchd fire, not an
-  interactive `sh` invocation (memory `sweep-trigger-llm-free`'s standard). It builds an isolated
-  `mktemp -d` plugin world, installs the shim via its real CLI pointed only at that temp world,
-  registers a uniquely-labelled temporary launchd agent (`StartInterval` 60s, no `RunAtLoad`),
-  and observes two genuine scheduled fires across a simulated `1.0.0`/`1.1.0` → `1.2.0` update
-  with no plist or shim edit in between. **Run three times live, all three `rc=0`**, both fires
-  landing at exactly 60s each time, teardown independently confirmed absent via a SEPARATE
-  `launchctl list` read after every run. Never touches the user crontab (D-63-03) — the whole
-  harness contains zero `crontab` invocations. `63-SWEEP-SHIM-SCHEDULER-PROOF.md` records the
-  verbatim observed log lines, exit code, and an explicit "what this does NOT prove" section:
-  nothing about this machine's twelve already-installed directories (D-63-03 forbids touching
-  them; the one-time admin re-point from 63-01 Task 3 is the only path there), and the
-  self-check's version-bound reach (a schedule pinned to `0.33.0` or earlier still runs a
-  wrapper carrying no self-check at all). The sweep-crontab todo now carries a dated Closure
-  section naming all three landed mitigations with file paths — still `pending/`, unmoved
-  (phase-seal's job). Zero network calls, zero provider credits, zero n8n executions, zero
-  HubSpot writes. Full record: `63-02-SUMMARY.md`.
-  Both wave-1 plans (63-01, 63-03) and wave-2's 63-02 are now complete; 63-04/63-05 remain.
-
-**63-03 outcome (2026-09-02, wave 1, 63-B half).** The offline replay (D-63-06) comparing
-  `claude-sonnet-5` against `claude-haiku-4-5` over real stored n8n judge inputs (executions
-  `11973`-`12069`) returned **DROP**: the confidence_band-only corpus was 3 (below the fixed
-  minimum of 10) and one of the three compared inputs disagreed materially on `decision`
-  (`accept_research` vs `accept`, same `chosen_value`). Per D-63-06 this is accepted as-is — no
-  re-run with a relaxed threshold. **The cheaper-model routing lever (D-63-05) does not ship.**
-  63-04 reads `63-JUDGE-REPLAY-VERDICT.json` and lands 63-A alone; `build_cloud_workflows.py`
-  and every `n8n/wf_*.json` stay untouched by this plan. Zero provider credits, zero HubSpot
-  writes, zero new n8n executions; 6 Anthropic Messages calls made. One deviation: added a
-  module-level `load_dotenv()` call to `scripts/replay_judge_models.py` (Rule 3) so its own
-  PLAN.md verify commands are directly runnable. Full record: `63-03-SUMMARY.md`.
-  Both wave-1 plans (63-01, 63-03) are now complete; wave 2/3 (63-02, 63-04, 63-05) remain.
-
-**Where Phase 62 actually stands.** Six plans executed (62-01..62-06), all with SUMMARY files.
-  Goal verification scored **13/13 must-haves** and returned **`human_needed`**, not `passed`.
-  UAT is **`partial`**: all three checkpoints are `blocked`, deferred by the operator because a
-  live test could not be run at the time. They are prerequisite gates, not failures — no gap
-  entries, no fix plans. The code is done and independently verified; what is outstanding is
-  only the live proof. Resume with `/gsd-verify-work 62`.
-
-The three outstanding live items: (1) a real company's sitemap yielding a usable people page;
-  (2) the stage-1 → stage-2 handoff on a real discovered person (real page fetch, then a real
-  Lusha credit spend); (3) the priced ceiling holding in a real sitting — which is also the
-  acceptance test for 62-06's cap fix. None can run in the stub-transport suite.
-
-**62-06 outcome (2026-09-02, gap closure — the last plan).** First-pass verification found ONE
-  gap: `synthesise_rows()` applied the per-company cap as a bare `people[:per_company_cap]`
-  slice with no validation, so `per_company_cap=None` silently UNCAPPED the round (5/5 against
-  a 5-person fixture) and `-1` truncated from the wrong end. The "a cap above the grant's
-  priced cap is refused" rule existed only as SKILL.md prose — and the production caller is an
-  LLM orchestrator following that prose at runtime, so a bad cap was a realistic mechanism
-  failure, not a contrived edge. Closed in code: `CapRefused` and
-  `agreed_cap(chosen_cap, grant_figures)` reading `figures['suggestion_allowance']['priced_cap']`,
-  plus a guard at the sole cap-applying site. Refusals **raise** rather than fall back to
-  `PRICED_CAP` — falling back at grant-open (what `envelope()` does) is right; at spend time it
-  would spend against a number the operator never saw. Deliberate asymmetry. `suggest_contacts.py`
-  still carries no `write_grant` import (module purity, enforced by a grep in the plan's own
-  acceptance criteria). Re-review and re-verification each reproduced the fix live and
-  independently: `None`, `-1`, `"2"`, `True`, `1.5`, `inf` all raise; `0` stays legal (spending
-  less is allowed). Released as plugin **0.37.0**. Full record: `62-06-SUMMARY.md`.
-
-**Also produced this session:** `62-COVERAGE.md` — the repo's **first** external-API coverage
-  matrix (14 capabilities, 5 INTEGRATE, 9 OPT-OUT), written to satisfy the blocking
-  `api-coverage.verify-pre` gate. No prior phase had ever produced one.
-
-**62-05 outcome (2026-09-02):** the operator-attended sitting —
-  `skills/suggest-contacts/SKILL.md` composes plans 62-01..04 into one 9-step round,
-  auto-offered by the assistant right after a company batch (D-62-15) and also directly
-  slash-invocable. No per-person and no per-company confirmation anywhere in it (D-62-10);
-  a cap above the grant's own `priced_cap` (3) is refused by name. Only ONE
-  `` ```python `` fence in the whole file — every other function reference (stage-2's
-  reuse of `enrich-before-ingest`'s own dispatch machinery, the held-row path) is prose,
-  deliberately, so `test_skill_sequence_coverage`'s ratchet gains exactly one new
-  registered identity rather than several. `enrich-records/SKILL.md` had NO literal
-  `write_grant.plan_grant()` code fence anywhere for the enrichment/contacts lanes
-  (confirmed by grep across every skill before editing — only `review-triage`'s
-  review-lane grant is a real call); `suggestion_companies`/`suggestion_cap` threading is
-  therefore documented as inline-code prose amending that already-documented call, adding
-  no new AST sequence. Released as plugin `0.36.0` (later 0.37.0 by 62-06).
-  SUGGEST-01/-02/-04/-05 checked off in `v1.1-REQUIREMENTS.md`; SUGGEST-03 stays unchecked
-  (AMENDED by D-62-07, not closed — 62-02's own call). Full record:
-  `.planning/phases/62-suggest-the-contacts-nobody-named/62-05-SUMMARY.md`.
-Next: **finish Phase 62's live UAT** (`/gsd-verify-work 62`), then **Phase 63** (the unattended
-  lane actually runs unattended, numbered 2026-09-02, not yet planned). Phase 60 also remains
-  open. ~~Next: Phase 57~~ — 57 completed 2026-09-01.
-Armed state: nothing armed. The first live UNATTENDED, credit-spending batch has NOT run.
-  Phase 62 touched only local Markdown/Python/JS/JSON source and test files — no network, no
-  HubSpot credentials, no live credit. It DID regenerate the n8n workflow JSONs via
-  `scripts/build_cloud_workflows.py`, but did **not** deploy them: the committed JSON is ahead
-  of the live n8n Cloud instance (missing `num_associated_contacts` and `sourceByField` there).
-Suites at 62-06 close: operator-claude-plugin 2259 passed / 5 skipped; root
-  `.venv/bin/python -m pytest -q` **3929 passed / 154 skipped** (up from 3912 — 17 new tests
-  for the cap guard); `node --test tests/n8n/*.test.mjs` 862 pass / 0 fail.
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-09-04 — Milestone v1.1 completed and archived
 
 ### Retained — 62-02 outcome (2026-09-02)
 
@@ -586,7 +472,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-05 — v1.2 'Yield and Friction' defined (phases 64-69; milestone switch deliberately NOT run while v1.1 has 3 open phases) and the operator's items 1-2 both landed as quick tasks: one-word club titles now classify (260905-rf1, plugin 0.39.2) and a company may carry more than one domain (260905-ad2, plugin 0.40.0). Both live zeros from the first suggest-contacts rounds are now addressable
+Last activity: 2026-09-04
   items blocked. Next: `/gsd-verify-work 62`, then Phase 63. ~~Next: Phase 57.~~ (57 complete
   2026-09-01.)
 
@@ -1015,6 +901,28 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 
 ## Deferred Items
 
+### Acknowledged at the v1.1 close (2026-09-04)
+
+Acknowledged, not resolved. Acknowledgement is verdict-preserving and self-invalidating —
+it never rewrites an artifact's own `status:`, and the suppression lapses automatically the
+moment the artifact's observed state changes again, at which point the item resurfaces and
+must be acknowledged afresh. Five of the eight todos are already scheduled as v1.2 phases;
+the Phase 20 and Phase 46 items belong to earlier milestones and were never v1.1's work.
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| todos | 2026-08-04-enrichment-throughput-ceiling.md | (presence-only) | 2026-09-04 | v1.1 |
+| todos | 2026-09-04-autonomy-flag-with-sensible-defaults.md | (presence-only) — scheduled as v1.2 Phase 67 | 2026-09-04 | v1.1 |
+| todos | 2026-09-04-company-domain-has-no-candidate-source.md | (presence-only) — unscheduled | 2026-09-04 | v1.1 |
+| todos | 2026-09-04-phone-is-never-chased-only-accepted.md | (presence-only) — scheduled as v1.2 Phase 66 | 2026-09-04 | v1.1 |
+| todos | 2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md | (presence-only) — scheduled as v1.2 Phase 69 | 2026-09-04 | v1.1 |
+| todos | 2026-09-04-state-the-price-and-keep-moving.md | (presence-only) — scheduled as v1.2 Phase 68 | 2026-09-04 | v1.1 |
+| todos | 2026-09-04-website-less-company-search-fallback.md | (presence-only) — unscheduled | 2026-09-04 | v1.1 |
+| todos | 2026-09-05-fallback-is-keyed-on-ladder-empty-not-round-empty.md | (presence-only) — scheduled as v1.2 Phases 64+65 | 2026-09-04 | v1.1 |
+| quick_tasks | 260825-contact-company-association | missing (no SUMMARY) | 2026-09-04 | v1.1 |
+| verification_gaps | 20/20-VERIFICATION.md | human_needed — archived ws-milestone-2026-09-03, NOT a v1.1 phase | 2026-09-04 | v1.1 |
+| context_questions | 46/46-CONTEXT.md | 11 questions — v0.9-era phase, NOT a v1.1 phase | 2026-09-04 | v1.1 |
+
 Items acknowledged and deferred at the v0.8 milestone close on 2026-08-11. All three predate
 this milestone (planted 2026-08-04, v0.6 era) and are not v0.8 gaps.
 
@@ -1030,13 +938,7 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 ## Operator Next Steps
 
-- Run `/gsd-plan-phase 57` — Ceilings, refusal-before-start and post-run proof. It is the last
-  gate on the first live unattended, credit-spending batch (D-61-08) and is the missing producer
-  for GRANT-04's `ceiling_breach` and requirements RUN-05 / AFTER-01 / AFTER-03.
-
-- ~~Run /gsd-plan-phase 50 to plan Derived Tier Property (context gathered 2026-08-13,
-  `.planning/phases/50-derived-tier-property/50-CONTEXT.md`)~~ — superseded; Phase 50 completed
-  2026-08-14.
+- Start the next milestone with /gsd-new-milestone
 
 ## Deferred Items
 

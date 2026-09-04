@@ -6,6 +6,7 @@ score: 5/5 must-haves verified (roadmap success criteria); 1 present-but-behavio
 behavior_unverified: 1
 overrides_applied: 0
 human_verification:
+
   - test: "Run the pending Task 3 operator action documented in 20-04-SUMMARY.md: arm `DRY_RUN=false ALLOW_HUBSPOT_PROPERTY_WRITES=true` against `scripts/sync_hubspot_properties.py` to create `lusha_contact_id` (contacts) / `lusha_company_id` (companies), then read the schema back with `scripts/snapshot_hubspot_schema.py`."
     expected: "Sync script reports exactly 2 created, 0 updates, 0 deletes, writes an undo manifest under config/hubspot_migration/, and the independent schema read-back shows both properties in the expected groups (lv_enrichment_contacts / lv_enrichment), single-line text."
     why_human: "Classifier-blocked for agents in this environment (confirmed by the phase's own orchestrator attempt) — armed HubSpot schema writes are operator-only here. Re-confirmed live during this verification: dry-run still reports exactly the same 2 pending creates."
@@ -16,10 +17,15 @@ re_verification: null
 gaps: []
 deferred: []
 behavior_unverified_items:
+
   - truth: "SC4 (ROADMAP.md #292): a matched record persists lusha_contact_id/lusha_company_id staging properties, and a re-enrichment run passes the stored ID so already-revealed data comes back at canReveal.credits: 0 (no new spend)."
     test: "Live re-enrichment of a record carrying a freshly-staged lusha_contact_id, observing the live response's credit-charge field."
     expected: "0 new credits charged on the stored-id reuse call."
     why_human: "The write path, property declarations, and reuse-request builder are all present, wired, and unit-tested; the underlying zero-cost mechanism was independently confirmed live in Plan 01 (4/4 calls). What remains unexecuted is the loop through THIS phase's own staging properties, because those properties do not exist live yet (Task 3 is a documented pending-operator action, classifier-blocked for agents in this environment)."
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
+  status: human_needed
 ---
 
 # Phase 20: Lusha v3 Migration Verification Report

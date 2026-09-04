@@ -1,0 +1,478 @@
+# Requirements — Milestone v1.1: Unattended Session Runs
+
+**Defined:** 2026-08-25. **Status:** ~~DEFINED, NOT STARTED (phases unplanned)~~ **IN FLIGHT**
+(updated 2026-08-30). Phases 53–61: 53, 54, 58, 59 and **61** complete; 55 and 56 absorbed into 61
+(D-61-08); **57 is next** and 60 is open.
+**Prior milestone:** v1.0 Direct Backfill & Scoring Coverage — Phase 51 complete, **Phase 52
+deferred by the operator 2026-08-25** in favour of this milestone. Its requirements are the root
+`.planning/REQUIREMENTS.md`; nothing in this milestone is tracked there.
+
+**The first live unattended, credit-spending batch has NOT run.** Phase 61's backend is deployed
+and disarmed-proven; the live run is gated on Phase 57 (D-61-08). RUN-05 and AFTER-03 are now
+ticked; **AFTER-01 remains PARTIAL** (57-05), which is the run requirement still standing between
+here and that gate.
+
+Source evidence: a UAT walkthrough with the end client, 2026-08-25. The operator's verdict was
+that the flow is *"incredibly halting"* — every send needs its own preview, its own arming
+phrase and its own confirmation, and **that becomes unfeasible at scale**. The request is a
+grant given **once, at the start of a session**, after which the system runs a batch through
+ingest → enrichment → HubSpot write without asking again.
+
+## Live evidence (client UAT, 2026-08-25)
+
+A verification session walked the documented operator path for ONE contact
+(`347569451461`) and recorded four gaps. Details:
+`.planning/quick/260825-contact-company-association/UAT.md`.
+
+- **G-1 (major)** — three separate arming surfaces to reach one write: the client-side
+  phrase, the backend `arm_dispatch` confirmation, and the `ALLOW_N8N_ARM` environment
+  variable. Each defensible alone; nobody had walked all three from the operator's chair.
+- **G-2 (blocker)** — `n8n_arming._arm_gate()` requires `ALLOW_N8N_ARM=true` **in the
+  session's environment**, which an operator in Claude Desktop cannot set. The documented
+  operator path therefore ends in a refusal only an admin with terminal access can clear.
+  Every write this client has seen land was landed by an admin from a terminal. This is
+  the mechanism v1.1's "one grant at session start" would have to be built on, so the
+  milestone must decide who may grant and how before anything else.
+- **G-3 (major)** — arming re-runs the waterfall. The first dispatch derives everything and
+  returns `write_blocked`; the arm cycle re-sends the same providers so the values can
+  land. **Two full provider passes per record, one thrown away by design** — at scale that
+  doubles both the provider bill and the execution count. A grant opened *before* the run
+  removes the second pass entirely.
+
+  **Amendment, 2026-08-27 (Phase 54):** the mechanism above is closed. Both
+  `n8n_arming.arm_for_dispatch` and `write_grant.authorize_ungranted_send` (plugin
+  0.18.0, 2026-08-25) now open the armed window before the dispatch, for granted and
+  ungranted sends alike — there is no live `write_blocked`-then-manually-rearm ceremony
+  left to re-run. Live-verified by the operator walk on 2026-08-26. The measured saving
+  is in `.planning/phases/54-single-pass-armed-dispatch/54-MEASUREMENT.md`: one real
+  n8n execution for a single-record, single-ask, post-fix send (execution `11960`),
+  against three for the pre-fix triple-refused pass on the same record. Two shapes
+  still cost two full passes by design, and neither is this defect: a look-only
+  rehearsal (propose mode, never writes) and an identity hold awaiting the operator's
+  confirmation (a same-surname, same-company match, held rather than written over).
+  The scheduled poller's own double pass is a separate, recorded residual
+  (OP-54-02, `.planning/WINDOWS.md` entry 27) — architecturally the same shape,
+  deliberately left unfixed because headless/cron paths are out of this milestone's
+  scope (D-1.1-01).
+- **G-4 (minor)** — two of three provider balances read `unknown` in the same preview
+  (Apollo `http_403`, expected; ZoomInfo `provider_error`, new and probably transient). Thin
+  cover for an unattended run that spends against them.
+  *ZoomInfo half CLOSED 2026-08-31 (57-04): a disarmed live probe against the deployed instance
+  observed the balance as `readable` (9381 raw credits, zero measured Lusha delta) — the
+  2026-08-25 `provider_error` is gone and needed no code fix; the `Accept:
+  application/vnd.api+json` header was already correct in current code. Apollo's `http_403`
+  stays disclosed as a permanent, structural blind spot — a non-master API key, unfixable in
+  this repo. Lusha: project memory records it live-validated in an earlier phase (the Lusha v3
+  migration), but that predates this phase's G-4 work and was not re-verified here — 57-05
+  reports it as unconfirmed-by-this-phase, not asserted readable. Both halves' disclosure text,
+  and which part of spend is therefore bounded, ships in 57-05's end-of-run report.*
+
+## What the operator is actually asking for
+
+Two different things arrive in one sentence, and the milestone fails if it only builds one:
+
+1. **Fewer decisions.** One grant per session, not one per send.
+2. **Higher throughput.** A batch of hundreds must complete without a human sitting in the
+   loop between chunks.
+
+The second is not a consent problem and no amount of auto-approval solves it. Today's
+per-request ceiling is **2 records** — a measured bound, not a preference: the full-waterfall
+probe (B4, 2026-08-03) ran one record in 37.44 s against n8n Cloud's ~100 s response window,
+and `SJ-3` fans out one sub-execution per record against a **2,500 execution/month plan**. A
+500-contact batch is ~250 requests and, at one execution per record plus overhead, a
+meaningful fraction of the monthly allowance. Auto-approving 250 prompts still leaves an
+operator watching a progress bar for hours and a plan that may not have the executions to
+finish.
+
+## What must NOT be lost
+
+The confirmation surface is not ceremony; each gate exists because something went wrong
+without it. A standing grant must keep every one of these properties, or it is a regression
+wearing a feature's clothes:
+
+- **Record-scoped writes.** `_writeSafetyAllows` denies unless the record's id or domain is in
+  the allowlist, and an empty allowlist denies everything. Arming a session must widen the
+  allowlist to *the batch*, never to *everything* — the deployed backend must remain incapable
+  of writing a record that was not in the run.
+- **Guaranteed disarm.** `armed_window` disarms on the way out even when the dispatch raises,
+  and a `disarm_failed` is its own loudly-reported state. A session-long window must disarm on
+  session end, on error, and on operator interrupt.
+- **Cost ceilings that bind before spend, not after.** Provider credits, Anthropic dollars and
+  n8n executions each need a per-run ceiling the run refuses to cross, in the shape
+  `n8n_cadence.check_budget_floor` already uses (arithmetic shown at proposal time, not after
+  a yes).
+- **Per-record auditability.** Every write still stamps source, confidence, evidence URL and
+  timestamp. A run nobody watched needs a stronger audit trail than one somebody did.
+- **The held-row contract.** A contact whose company cannot be resolved is held, not landed
+  (2026-08-25). Unattended running must collect held rows for review, never resolve them by
+  guessing to keep a batch moving.
+
+## Requirements
+
+### GRANT — one decision, explicitly bounded
+
+- [x] **GRANT-01**: An operator can open a **session grant** in one exchange, stating what it
+  covers: object types, the record set, whether creates are included, and its ceilings.
+  *TICKED 2026-08-29 on walk run 3 (`53-WALK-RECORD-2.md` § "WALK RUN 3"), under the operator's
+  explicit authorisation. The same record walked end to end under **one grant, one yes**:
+  extraction → unarmed match → grant → arm → enrich → merge → strip → CSV → arm → HubSpot create.
+  Contact `348695309760` created and auto-associated to Series Futsal Victoria `283816805830` by
+  domain, independently confirmed by re-probe; backend `VERDICT: disarmed PASS` after; grant
+  closed `batch_complete`. **Two limitations recorded, not waived:** it ran from Claude Code
+  **with a terminal**, so the composition is proven and the operator's own constraint set is not;
+  and it ran against the **repo** at plugin 0.28.1 rather than the installed plugin. A
+  Claude-Desktop walk on the installed plugin is the only thing that proves G-2 is truly gone —
+  walk run 4 attempted exactly that on 2026-08-30 and halted before the grant was opened
+  (`53-WALK-RECORD-3.md` FINDING D), which is what caused Phase 61. The partial notes below are
+  the build history and are retained.*
+  *Partial (53-01): the grant's SHAPE ships — `write_grant.plan_grant`/`open_grant` state
+  object type, record set, lanes and creates, behind a proposal plus an explicit yes. The
+  ceilings are 53-02 T1 and the one-exchange operator surface is 53-03 T2.*
+  *Partial updated (53-02): the ceilings now ship — `envelope()` states them and the grant
+  carries them unchanged. Only the one-exchange operator surface (53-03 T2) is outstanding.*
+  *Partial updated (53-03): the surface an operator reaches now exists — an admin sets
+  `allow_write_grants` in `operator.local.json` and `init_check` reports back that they have
+  (its own `settings` section, deliberately not a capability row), `control_actions`'
+  out-of-allowlist wording names the grant path so an operator asking to turn writes on for a
+  batch is pointed at it rather than refused, and `write_grant.authorize_send` bridges an open
+  grant to a dispatch's `armed` argument. NOT closed: no lane SKILL invokes any of this yet, so
+  the exchange is reachable in Python and not yet from the operator's chair — that is 53-04,
+  along with the blocking operator walk of the whole path from Claude Desktop.*
+  *Partial updated (53-04): the exchange is now reachable from the operator's chair — every
+  lane skill carries the grant branch inside its own arming step, `backend-control` lists
+  opening/revoking/closing a grant, and the README tells an admin which key to set and an
+  operator what a grant is, what it is bounded to and how it ends. Released as 0.15.0. NOT
+  ticked: this requirement's evidence is the operator walk (53-04 task 3, a blocking
+  checkpoint), which is outstanding. Ticking it on tests alone would be exactly the claim G-2
+  disproved — every component correct, the composition broken.*
+- [ ] **GRANT-02**: The grant's envelope is shown as arithmetic before it is accepted — record
+  count, worst-case provider credits, worst-case Anthropic dollars, projected n8n executions
+  against the remaining monthly allowance.
+  *Partial (53-02): `write_grant.envelope()` computes all four figures at plan time and
+  attaches them to the grant unchanged, an unreadable balance reads `unconfirmed` rather than
+  as headroom, and the rendered block carries the rate table's date and age. TWO halves are
+  NOT closed and are deliberately visible in the block itself: the projection is against the
+  plan's CONFIGURED monthly allowance, not what is left of it this month (n8n exposes no usage
+  endpoint to an API key — Phase 57 samples the remainder), and D-53-02 records that this
+  ceiling DISCLOSES rather than constrains. The operator surface that shows it is 53-03 T2.*
+- [x] **GRANT-03**: A grant is **scoped to a named batch**, not to a duration alone. "Everything
+  for the next hour" is not expressible; "these 340 contacts, creates included" is.
+  *Complete (53-01): a grant cannot be planned over an empty record set, and
+  `n8n_arming.arm_for_dispatch`'s own grant branch refuses — before any transport is
+  constructed — any record id, domain or workflow id outside the grant's lists
+  (`test_write_grant.py::test_a_record_outside_the_grant_is_refused_before_any_transport_call`
+  and siblings).*
+- [ ] **GRANT-04**: A grant expires on: batch completion, ceiling breach, operator revocation,
+  session end, or an unhandled error. Each expiry disarms the backend and is reported.
+  *Partial (53-02): the five reasons are named constants (`write_grant.GRANT_04_REASONS`) and
+  `close_grant` RAISES on a free-text reason, so every close is reportable. The disarm clause
+  is VACUOUS on completion, revocation and session end — per-send `armed_window`s leave no
+  window open at close time — and REAL on guardrail B's two paths, which attempt a disarm,
+  carry its verdict and close either way. Not closed: `ceiling_breach` has no producer until
+  Phase 57, and the surface that REPORTS an expiry to the operator is 53-03.*
+  *Partial updated (53-04): the surface that reports an expiry now exists — `backend-control`
+  names what closes a grant on its own (completion, session end, error, ceiling breach, two
+  consecutive disarm failures) and that a free-text close reason raises rather than being
+  accepted; the README lists the same set for the operator. Still not closed: `ceiling_breach`
+  has no producer until Phase 57.*
+- [x] **GRANT-05**: Revocation mid-run is possible and takes effect at the **next send**
+  (re-scoped by the operator 2026-08-25, from "within one chunk boundary"). `chunking.dispatch_plan`
+  loops its chunks internally with no grant-aware hook, so a dispatch already running completes its
+  remaining chunks under the arm it opened with — at a 2-record chunk ceiling that can be many chunks.
+  Chunk-granular revocation would mean making the shared dispatch loop grant-aware and is not in v1.1.
+  *Complete (53-02): `write_grant.revoke()` closes the grant and `check_before_send` refuses
+  the next send by name. The limitation is pinned by driving a REAL 3-chunk `dispatch_plan`
+  with a mid-run revocation — every remaining chunk still goes
+  (`test_write_grant.py::test_a_revocation_midway_does_not_stop_a_running_dispatch`), plus a
+  signature test that notices if `dispatch_plan` ever gains a `grant` parameter.*
+  *Reachability added (53-03): `write_grant.revoke_grant()` is the operator-facing name a
+  request maps onto, and it is IDEMPOTENT — an already-closed grant comes back unchanged
+  rather than re-closed, which is what stops a plain re-close from overwriting a
+  guardrail-B `two_consecutive_disarm_failures` reason with `operator_revocation`. `revoke`
+  is kept as an alias over the same implementation. The next-send-not-mid-dispatch scope is
+  in the docstring an operator reads, pinned by
+  `test_write_grant_surface.py::test_revoke_grants_docstring_states_what_a_revocation_does_not_stop`
+  and by a signature test that reddens if `dispatch_plan` ever becomes grant-aware.*
+- [ ] **GRANT-06**: No grant can be inferred, defaulted, remembered across sessions, or written
+  to disk. Nothing about today's "never persisted" property changes.
+  *Partial (53-01): holds for everything 53-01 built — no file, no environment variable, no
+  default for an absent grant, pinned by
+  `test_write_grant.py::test_nothing_about_a_grant_is_written_to_disk_or_to_the_environment`.
+  Stays open until 53-02..04 have shipped their own surfaces under the same prohibition.*
+  *Partial updated (53-02): holds for the envelope, the lifetime constants and both
+  guardrails — re-pinned by
+  `test_write_grant_guardrails.py::test_nothing_a_guardrail_writes_reaches_disk`, and neither
+  guardrail is reachable by an env var, a config key or a phrase (T-53-12). 53-03/53-04 still
+  owe their own.*
+  *Partial updated (53-03): holds over the operator surface too. `init_check` READS the
+  settings file and never writes it, never creates it as a side effect of reporting, and never
+  migrates a file into having the key — pinned by
+  `test_write_grant_surface.py::test_init_check_neither_writes_nor_migrates_a_grant_into_the_settings_file`.
+  No default is supplied for the key anywhere (the shipped example carries the JSON boolean
+  `false`, asserted by its own test, because `--create` copies the example verbatim), and
+  `authorize_send` and `revoke_grant` add no persistence — re-pinned by
+  `test_no_grant_and_no_bridge_state_reaches_disk_or_the_environment`. 53-04 still owes its
+  own, over the skills and the release.*
+  *Partial updated (53-04): holds over this plan's surfaces, which are prose and a version string — nothing written, nothing defaulted, nothing remembered across sessions. The skills state the grant is never written to disk and ends with the conversation, and `test_enrich_before_ingest_skill_contract.py`'s never-written-to-disk pin is untouched.*
+
+### RUN — the batch actually completes
+
+- [x] **RUN-01**: A batch runs ingest → enrichment → HubSpot write end to end with no operator
+  input between chunks.
+  *61-05: async run shape ships (submit returns a handle without holding a request open,
+  progress readable mid-run, resume-or-fail-loudly). Live-observed on one bounded, disarmed
+  chunk (execution `12040`) — the first unattended multi-chunk batch is 61-06's, still gated
+  on Phase 57's ceilings per D-61-08.*
+- [x] **RUN-02**: Chunk failures do not abandon the batch; failed records are collected and
+  re-sendable as one well-formed request (today's `failed_batch`, carried through).
+  *61-04 + 61-06 (`61-VERIFICATION.md` truth 7): `held_queue.py`/`run_manifest.py` collect held
+  and failed rows and `chunking.failed_batch`'s existing re-sendable specification is reused
+  unchanged. The association-or-hold contract is enforced with exactly ONE implementation — the
+  ingest lane — because the enrichment lane's own contacts-create path downgrades an armed create
+  to `review` rather than duplicating the resolve+associate subgraph.
+  `tests/n8n/pairPipelineAssociationFlow.test.mjs` asserts the held case is NOT landed.*
+- [x] **RUN-03**: Throughput is designed against the measured bounds, not assumed away — the
+  2-record request ceiling, the ~100 s response window, and the execution budget. If the
+  answer is an async submit-and-poll shape rather than synchronous chunking, that is a
+  milestone decision to take deliberately.
+  *61-05: async submit-and-poll (substrate 1) selected deliberately over substrate 3 at this
+  scale, per 61-01's spike verdict and the operator's checkpoint decision.*
+- [x] **RUN-04**: A run reports progress the operator can read while it runs — records done,
+  held, failed, spend so far against ceiling.
+  *61-05: `run_state.py` reports done/held/failed/spend with the `total = pending+running+
+  done+held+failed` invariant asserted.*
+- [x] **RUN-05**: A run that would exhaust the monthly execution allowance refuses **before
+  starting**, with the arithmetic, and offers a smaller batch.
+  *57-01: `write_grant.allowance_headroom`/`ceiling_verdict` sample the monthly remainder and
+  `plan_grant` refuses a `CEILING_OVER` batch before anything is armed, with the arithmetic
+  named. 57-03: `write_grant.split_for_allowance` makes the refusal concrete — the grant scope
+  is projected FROM the split work (never cut in parallel with it, REVIEW-57-H1), and the
+  refusal now carries the smaller affordable batch and a named remainder queued for a future,
+  separately-authorised run (D-57-04/D-57-05, GRANT-06 preserved).*
+
+### AFTER — what the operator reads instead of watching
+
+- [ ] **AFTER-01**: One end-of-run report: per-record outcome, association outcome, held rows
+  named individually with reasons, spend actuals vs ceiling, and the disarm verdict.
+  *Partial (57-05): `run_report.build_run_report` joins all five durable stores
+  (`written_records`, `run_state`, `run_manifest`, `held_queue`, `remainder_queue`) plus the
+  run-audit record, keyed by `(row_id, lane)` so a row with events on two lanes keeps both, and
+  renders AFTER-01's five contents in one block — including held/gated rows named individually,
+  every cross-store contradiction named rather than resolved, and a `REPORT INCOMPLETE` banner
+  when any store degrades. Both lane runbooks call it at end of run, pinned by a test that
+  compiles their real code. NOT closed: the pair pipeline's final ingest leg strips `row_id`
+  (`extraction.strip_row_id`), so those rows join by `hs_object_id` where one exists and are
+  otherwise kept and rendered UNJOINABLE rather than dropped — a known, named gap in the join,
+  disclosed in the report's own `gaps`, not a silent one. The report is authorised for its first
+  exercise against a real run in Task 4's small operator-supervised batch, run outside this
+  phase.*
+- [x] **AFTER-02**: Held and failed rows land in a queue that survives the session.
+  *61-04 + 61-06 (`61-VERIFICATION.md` truth 10): `held_queue.py` persists through
+  `durable_paths._atomic_write_0600` (0600, forbidden-name-refusing), carries the hold reason and
+  a per-hold-code resume fingerprint, and is ONE global file rather than per-run — D-61-07's "one
+  review queue, cleared in a single pass" is a durable backlog across runs. The end-of-run review
+  reuses the existing `approve`/`deny`/`pick`/`email:` decision vocabulary; no second vocabulary
+  was invented.*
+- [x] **AFTER-03**: The report distinguishes "written" from "would have been written" — a
+  gated record must never read as a completed one.
+  *57-02: `written_records`/`report_enrichment` widened to an eight-word vocabulary
+  (`written`/`write_attempted`/`created_id_unknown`/`written_id_unknown`/`gated`/`held`/
+  `failed`/`no_action`), both resolved through one pure `outcome_for_action` function.
+  `gated` (`write_blocked`) is distinct from `written`/`write_attempted` on both client
+  surfaces, pinned by a cross-module agreement test over all ten backend actions.*
+  *57-05: the operator-facing half closes here. `run_report`'s rendered block imports and reuses
+  those same outcome words rather than restating a third copy, and a test asserts the `gated`
+  and `written` renderings are distinct strings. Both lane runbooks now state AFTER-03's rule
+  where the operator actually reads it: a gated row would have been written and is recoverable
+  by opening a grant and re-sending — never reported as a failure, and never as a completed
+  write.*
+
+## Added after the Phase 53 walk (operator, 2026-08-25)
+
+Both came from the operator saying ordinary sentences and hitting a wall. They are recorded
+as their own phases (58, 59) because each is larger than the fix that surfaced it.
+
+> **Correction, 2026-08-30.** Only the INPUT half kept its number: Phase 58 shipped it
+> (complete 2026-08-26). **Phase 59 was reassigned** to "Frictionless write path" (complete
+> 2026-08-29), so the SUGGEST block below has NO phase number and is not scheduled — see
+> `v1.1-ROADMAP.md` § Phase 59 for the same note. INPUT-05 was added later (2026-08-30) and
+> closed by Phase 61.
+
+### INPUT — take what the operator actually has
+
+- [x] **INPUT-01**: A company can be named by **anything the operator holds**: a screenshot of
+  a website or a search-results page, a pasted block of text, a URL of any kind, a name with
+  no domain at all. The contact lane has had this since Phase 35 (`extraction.md`'s adapters
+  for pasted text, foreign JSON, a public URL, operator screenshots). The company lane has
+  never had it.
+  Closed 2026-08-26 by plans 58-01, 58-05, 58-06 (all complete). 58-06's own contribution: a
+  disagreement between providers about a fact that can disqualify a company (starting with the
+  exact region-conflict shape that caused a false Non-ANZ veto in execution 11983) can no
+  longer resolve to a confident wrong answer — it is withheld, flagged, and routed to the
+  existing judge, so the operator's disagreement surfaces as a disagreement rather than a
+  silent misclassification. Operator-accepted 2026-08-26 (Task 4).
+- [ ] **INPUT-02**: When the input carries no usable domain, the system **finds one** rather
+  than asking the operator to. The backend already has the tool — `Claude Web Research` in
+  the companies branch — and it is already used for org-type and content signals. Researching
+  a company's own website from its name, or from a LinkedIn page, is the same call.
+  **Left open — residual recorded 2026-08-26** (`58-SPIKE-VERDICT.md`, operator decision
+  `defer-residual`): the backend research node was not extended to seek a domain this phase.
+  Claude-in-conversation already proposes a domain from what it sees in most cases (free,
+  instant), and the operator confirms/corrects/denies it — the gap is rows where Claude cannot
+  confidently propose a domain AND the operator cannot supply one; those fall to the
+  accept-by-name path (0.16.0) rather than a backend-researched domain. Carried forward to a
+  later phase.
+- [x] **INPUT-03**: A researched domain is **confirmed before it is written**, not accepted
+  silently. Getting this wrong creates a company under the wrong domain, which is the dedupe
+  anchor for everything after it.
+  Closed 2026-08-26 by plans 58-02, 58-03 (both complete).
+- [x] **INPUT-05**: A **contact** identified by a strong identity key alone — a LinkedIn URL, an
+  email — resolves through **match, then enrich**, without the operator being asked for fields
+  the backend does not need. Added 2026-08-30 after walk run 4 failed on exactly this
+  (`53-WALK-RECORD-3.md` FINDING D): the plugin demanded a company before it would act, while
+  `n8n/code/resolveIdentity.js:76-78` treats `linkedin_url` as a **strong** HubSpot match key
+  (same tier as email) and `n8n/code/lushaRequest.js:79-91` accepts a Lusha v3 enrich body
+  carrying `linkedinUrl` alone. Both operations the plugin refused were keyed on what the
+  operator had already supplied.
+  **This does not loosen the no-invention rule** — the operator supplies the key, a licensed
+  provider returns sourced fields, the operator confirms. A searched-and-sourced value is not an
+  invented one; the fix is separating those two, not weakening either. `extraction.md`'s verbatim
+  no-invention sentence stays as-is.
+  **Operator priority, stated 2026-08-30:** *"we are prioritising speed and efficiency, and
+  relying on the plugin to propose best effort completion using the services n8n gives it in the
+  backend"* — an exception per ingestion is the failure mode, not the safety net.
+  Owned by **Phase 61**. Closed 2026-08-30 by plans 61-02 (backend linkedin match lane) and
+  61-03 (front-end identity acceptance: `required_identity.any_of` gained `linkedin_url` as a
+  third group in both YAML copies and `columnMap.js`, the rejection message is now derived from
+  config, and a waterfall-found value is proposed through the existing D-59-08
+  resolutions/provider_result loop) — both plans complete.
+- [x] **INPUT-04**: A refusal is a last resort and must always name what would make it work.
+  *"A blanket refusal is not useful because the operator does not want to research that"*
+  (operator, 2026-08-25). The guard that survives is **never silently invent a domain** — a
+  profile URL is dropped, never passed through as one — not "go and find one yourself".
+  Partially shipped 0.16.0: a company with a name and an unusable URL is now accepted and
+  looked up by name.
+  Closed 2026-08-26 by plans 58-01, 58-03, 58-04 (all complete).
+
+### VOCAB — the operator never has to speak the system's language
+
+Found repeatedly across the 2026-08-25 walk, each time by the operator rejecting a script
+written in the implementer's register.
+
+- [ ] **VOCAB-01**: An operator never has to know the word "grant", or ask for one by name.
+  They say what they want done — *"update John Tsatsimas from Football NSW"* — and the SYSTEM
+  offers the permission it needs, at the moment it needs it: *"to update him I need permission
+  to write to HubSpot — just his record. OK?"*. One yes. Today the operator must open a grant
+  explicitly, which is the system making its own internals the user's vocabulary.
+- [ ] **VOCAB-02**: No step of any documented walk, runbook or skill instruction may require
+  words a non-technical operator would not say unprompted. "Enrichment lane", "no creates",
+  "record id", "dispatch", "arm" are the system's words, not theirs.
+- [ ] **VOCAB-03**: Where the system must name a constraint, it names the CONSEQUENCE in the
+  operator's terms, not the mechanism: not *"creates are excluded"* but *"I won't add anyone
+  new, only fill in people already there"*.
+- [x] **VOCAB-05**: **The arming phrase dies.** *(implemented 2026-08-25, plugin 0.17.0 — walk still to confirm the wording works, per VOCAB-04.)* An operator answers the question they were
+  asked, in their own words — "yes", "go ahead", "do it", "please" — and that arms the send it
+  answers. Requiring the literal string "arm the enrichment" makes the operator speak the
+  system's language at the exact moment they are trying to say yes, and it rejected a plain
+  "yes" that answered the system's own "Proceed?" (observed live, 2026-08-25 walk).
+
+  **The safety property that must survive is NOT the wording — it is that consent is
+  unambiguous and attached.** What made the phrase safe was never its spelling: it was that a
+  casual "ok" could not become a write. That is preserved by binding the affirmative to
+  *this send's shown consequence in the same turn*:
+    - an affirmative that answers the send proposal just shown → arms that send, nothing else;
+    - an affirmative floating free, answering nothing, or answering a different question → does
+      NOT arm; ask once more, naming what will happen;
+    - ambiguity resolves to not-armed, always. `armed` still has no default in code
+      (`dispatch()` raises without it) — that is the structural guarantee and it does not move.
+
+  Scope: `enrich-records`, `contact-upload`, `enrich-before-ingest`, `review-triage`, and the
+  phrase pins in `test_enrich_skill_contract.py`,
+  `test_enrich_before_ingest_skill_contract.py`, `test_preingest_preview.py`. Those pins are
+  rewritten in place with the reason recorded, never deleted — the same discipline as the
+  arm/probe parity pin and the D-53-05 ordering pin.
+
+- [ ] **VOCAB-04**: The test for all three is a walk transcript, not a review: if the operator
+  has to be told what to type, the wording failed.
+
+### SUGGEST — the contacts the operator did not name
+
+> **SUGGEST-01..05 are PHASE 62** (numbered 2026-08-30 by the operator, scheduled after
+> Phase 57). They spent a period unnumbered after "Phase 59" was reassigned to the as-built
+> Frictionless write path — scope that was real but that no index pointed at. Still open.
+
+- [ ] **SUGGEST-01**: After companies are ingested or enriched with no contacts named, the
+  system **suggests contacts worth enriching** rather than stopping. An enriched company with
+  nobody at it is not a lead.
+- [ ] **SUGGEST-02**: For a bulk company list the suggestion is **categorical, not per-record**
+  — the operator picks roles ("CEO", "CMO", "Head of Broadcast") once and the system applies
+  them across the batch. Asking per company does not scale, which is the same complaint that
+  started this milestone.
+- [ ] **SUGGEST-03**: The role vocabulary is **derived from this portal's own contact records**,
+  not invented and not a generic B2B list. Sample the `jobtitle` values already in HubSpot,
+  cluster them, and offer the ones that actually recur — the buying committee Lightning Visuals
+  actually sells to, evidenced rather than assumed. `scripts/inventory_org_type_values.py` is
+  the existing pattern for inventorying a property's live values.
+- [ ] **SUGGEST-04**: Suggested contacts are **proposed, never auto-created**. They are people
+  who are not in HubSpot yet, so they land through the existing pre-ingest path with its match
+  lane, its held rows and its association contract — a suggestion must not become a silent
+  write.
+- [ ] **SUGGEST-05**: The cost of a suggestion round is shown before it is spent. Provider
+  people-search by company + title (Apollo and ZoomInfo both support it) is a per-company
+  call, so a 300-company list is 300 calls and must be priced as one decision, not discovered
+  mid-run.
+
+## Decisions taken (operator, 2026-08-25)
+
+- **D-1.1-01** — the grant is **operator-openable in Claude**: an admin enables the capability
+  once in the settings file, the operator opens a session grant in conversation. The
+  `ALLOW_N8N_ARM` env var stops being the authority for interactive runs (it remains the
+  authority for headless/cron paths, which have no operator to confirm anything). This is what
+  makes G-2 tractable.
+- **D-1.1-02** — **grant first, then a single async pass**: the grant opens before the run, so
+  each record is enriched once and written in the same pass (G-3's double spend disappears),
+  and the run submits-and-polls rather than blocking on the ~100 s response window.
+- **D-1.1-03** — the first slice is the **full pair pipeline**, creates included. Largest blast
+  radius, so the ceiling and post-run-proof work ships inside the milestone.
+
+Roadmap: `.planning/milestones/v1.1-ROADMAP.md` (~~phases 53–57~~ **phases 53–61**, corrected
+2026-08-30 — 58, 59 and 61 were added after these decisions were taken, and 55/56 were folded
+into 61 by D-61-08).
+
+## Decisions still open
+
+> **Status, 2026-08-30.** #1 was settled by Phase 53: the grant is **client-side**, a plain
+> JSON-shaped dict held in the conversation — no file, no env var, no default (GRANT-06 /
+> D-53-03). #5 is Phase 57's work by design (it owns the sampled allowance). #2, #3 and #4 are
+> **not** recorded as decided anywhere this pass could find; treat them as still open going into
+> Phase 57, which is where #3's "what proves after the fact that nothing outside the batch was
+> touched" already sits as AFTER-01/AFTER-03.
+
+1. **Where the grant lives.** Client-side (the plugin holds it for the conversation) or
+   backend-side (a longer armed window with a batch allowlist)? The existing
+   `scripts/scheduled_arm.py` is prior art for the second: it already runs an unattended armed
+   window with a 2-record chunk cap for the SJ-3 poller.
+2. **Creates under a standing grant.** `ALLOW_HUBSPOT_CREATE` is a separate key today. Does a
+   session grant include creation by default, or does creation stay a per-batch decision?
+3. **Blast radius if the allowlist is wrong.** A 340-record allowlist is 340 records the
+   backend may write unattended. What re-reads it, and what proves after the fact that nothing
+   outside the batch was touched?
+4. **Interaction with the schedulers.** SJ-1/SJ-2/SJ-3 and the dedupe/review jobs share the
+   same execution budget. A session grant must not starve them, or must explicitly pause them.
+5. **Where the ceiling numbers come from.** `config/cost_rates.json` is dated (measured
+   2026-07-30) and n8n exposes no usage endpoint to an API key — the execution budget has to be
+   sampled, as `n8n_cadence` already does.
+
+## Open questions for the operator
+
+- What batch size does "at scale" mean in practice — hundreds per session, or thousands?
+- Who may open a session grant: any operator, or a named role?
+- On a partial run (ceiling hit at record 200 of 340), continue next session automatically or
+  wait for a fresh grant?
+- Is a nightly unattended run acceptable, or must a human always be present at the start?
+
+## Non-goals
+
+- Removing the record-scoped allowlist, in any form.
+- A persisted or cross-session grant.
+- Auto-resolving held rows to keep a batch moving.
