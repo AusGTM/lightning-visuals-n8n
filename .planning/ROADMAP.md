@@ -56,7 +56,7 @@ safety gate.** Seven of the eight source items came from the first two live
 `suggest-contacts` rounds (Brisbane Roar FC, The Roma Turf Club), each with a filed todo
 carrying its live evidence.
 
-- [ ] Phase 64: The ladder stops at the best page, not the first
+- [x] Phase 64: The ladder stops at the best page, not the first (completed 2026-09-04)
 - [ ] Phase 65: Round-empty re-entry, keyed on the cause
 - [ ] Phase 66: Rich enrichment, not minimum enrichment
 - [ ] Phase 67: An autonomy flag with sensible defaults
@@ -91,7 +91,7 @@ walked to that list.
 
 **Requirements:** LADDER-01, LADDER-02 (inherits SAFE-02, SAFE-03)
 
-**Plans:** 1/1 plans executed
+**Plans:** 1/1 plans complete
 
 Plans:
 

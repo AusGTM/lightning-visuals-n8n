@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 64
-current_phase_name: The ladder stops at the best page, not the first
-status: verifying
-stopped_at: Completed 64-01-PLAN.md
-last_updated: "2026-09-04T06:46:31.292Z"
+current_phase: 65
+current_phase_name: Round-empty re-entry, keyed on the cause
+status: planning
+stopped_at: Phase 64 complete, ready to plan Phase 65
+last_updated: "2026-09-04T07:25:18.851Z"
 last_activity: 2026-09-05
-last_activity_desc: Phase 64 execution started
-state_head: d593270f59670e6c4283704158da84cadd69ca3b
+last_activity_desc: Phase 64 complete, transitioned to Phase 65
+state_head: 26441e569ef5d9f7d8b91fbd0cd11aa90d3da5ef
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 17
 ---
 
 # Project State
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 64 (The ladder stops at the best page, not the first) — EXECUTING
-Plan: 1 of 1
-Status: Phase complete — ready for verification
-Last activity: 2026-09-04 — Phase 64 execution started
+Phase: 65 — Round-empty re-entry, keyed on the cause
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-04 — Phase 64 complete, transitioned to Phase 65
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -501,7 +501,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-04T06:46:31.272Z
-**Stopped at:** Completed 64-01-PLAN.md
+**Stopped at:** Phase 64 complete, ready to plan Phase 65
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
