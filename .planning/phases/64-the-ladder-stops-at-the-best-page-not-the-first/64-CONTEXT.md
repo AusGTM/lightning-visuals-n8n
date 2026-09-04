@@ -96,8 +96,7 @@ stage-2 provider enrichment (Phase 66).
   `tests/test_report_sufficiency.py::_has_while_loop`. The walk is expressed as bounded
   iteration over a fixed-length candidate list, which is a design constraint, not an
   afterthought.
-- **D-64-13: `url_fallback.py` stays the ladder builder, called as a library and never
-  re-implemented** (D-62-01). The canonical-authority `same_host` guard (62-10, G-62-2)
+- **D-64-13: `url_fallback.py` stays the ladder builder, called as a library and never re-implemented** (D-62-01). The canonical-authority `same_host` guard (62-10, G-62-2)
   applies to every candidate the extended walk reaches, unchanged.
 
 ### Claude's Discretion
