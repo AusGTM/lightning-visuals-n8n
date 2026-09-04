@@ -9,11 +9,17 @@ files_reviewed_list:
   - operator-claude-plugin/tests/test_suggest_contacts.py
   - operator-claude-plugin/tests/test_suggest_contacts_composition.py
 findings:
-  critical: 1
+  critical: 2
   warning: 1
   info: 1
-  total: 3
+  total: 4
 status: issues_found
+amended: 2026-09-04
+amendment_note: >
+  CR-01's original Fix section was wrong (dropping the re-derivation would have made
+  WALK_CAP_EXHAUSTED unreachable) and has been replaced with the corrected fix actually
+  applied. CR-02 was added: the pasted URL's own fetch was never folded into `pages`,
+  found while fixing CR-01. Both are fixed as of commit 9dbc1a6.
 ---
 
 # Phase 64: Code Review Report
@@ -152,35 +158,77 @@ when a better candidate remains, under the same fetch budget") for the common ca
 makes step 9's `ladder_exhausted` -> "read every candidate the ladder offered" a false
 statement to the operator in that same common case.
 
-**Fix:**
+**Fix (corrected 2026-09-04 — the original Fix below this line was WRONG and was
+never applied; see amendment_note in the frontmatter):**
 
-Do not re-derive `candidates` inside the per-company loop. Compute it once, before the
-loop starts (as it already is, on line 361), and reuse that same dict for every
-`walk_pages` call for this company — exactly what `test_walk_pages_does_not_count_an_already_walked_url_as_remaining`
-already assumes and what `walk_pages`'s own "unfetched" logic is designed for:
+The original suggestion — stop re-deriving `candidates` inside the loop and reuse the
+one dict computed before the loop starts — was traced by the orchestrator and found to
+freeze `candidates["budget_remaining"]` at its pre-loop value (5) for the whole walk.
+That makes `WALK_CAP_EXHAUSTED` unreachable: a 10-URL ladder that spends all 5 fetches
+would report `ladder_exhausted` instead of `cap_exhausted` — a different false statement
+to the operator than the one CR-01 names, not a fix for it.
+
+The fix actually applied: keep re-deriving `candidates` on every iteration (its
+`budget_remaining` genuinely needs to shrink as `attempts` grows), but (a) move the
+re-derivation to BEFORE the `walk_pages` call, not after, and (b) narrow the URL list
+handed to `next_candidates` to `sitemap_urls` minus the URLs already present in `pages`,
+so `filter_candidates`'s always-a-prefix-of-the-input behaviour returns the NEXT
+unfetched URLs rather than a shrinking prefix of the same front ones:
 
 ```python
 pages, attempts = [], []
 candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
+accepted = list(candidates["accepted"])   # bound once; the loop below walks THIS list
 walk = {"people": [], "selected": [], "ended": None}
-for candidate_url in candidates["accepted"]:
-    pages.append({...}); attempts.append({...})
-    walk = suggest_contacts.walk_pages(
-        pages, candidates, bar, vocabulary["families"], chosen_families, known_contacts)
+for candidate_url in accepted:
     if walk["ended"] is not None:
         break
-    # candidates is NOT re-derived here -- the walk's own `people`/`pages` accounting
-    # against the ORIGINAL accepted list is what makes "unfetched" correct.
+    pages.append({...}); attempts.append({...})
+    candidates = suggest_contacts.next_candidates(
+        eligible_company, attempts,
+        [u for u in sitemap_urls if u not in {p["url"] for p in pages}])
+    walk = suggest_contacts.walk_pages(
+        pages, candidates, bar, vocabulary["families"], chosen_families, known_contacts)
 ```
 
-If the intent behind the re-derivation was to let `sitemap_urls` grow mid-walk (e.g. new
-URLs discovered from a fetched sitemap page), that needs a different mechanism — appending
-newly discovered URLs to the same list does not fix the prefix-truncation problem, since
-`filter_candidates` still returns `urls[:budget_remaining]` from the front on every call.
-At minimum, add an integration-style test that drives the real loop (real
-`next_candidates` re-invocation or its removal) over a fixture with >= 4 same-host
-candidate URLs and asserts the walk actually reaches candidate 4/5 before terminating —
-none of the current tests would have caught this.
+Traced and test-verified: 3 same-host candidates -> 3 fetches, `ended ==
+"ladder_exhausted"`; 5 candidates -> 5 fetches, `ended == "cap_exhausted"`; 10 candidates
+-> 5 fetches, `ended == "cap_exhausted"`. `walk_pages` itself required no change — this
+was an orchestration-order defect in the documented SKILL.md loop, not a predicate
+defect. Fixed in commit 9dbc1a6, with integration tests in
+`test_suggest_contacts_composition.py` driving this exact loop over 3/5/10-candidate
+fixtures (`test_the_documented_loop_walks_every_candidate_the_budget_allows`).
+
+### CR-02: The pasted URL's own fetch was never folded into the walk's `pages`, silently dropping it from the union `walk_pages` is documented to produce
+
+**File:** `operator-claude-plugin/skills/suggest-contacts/SKILL.md:360` (the step-7 code
+block, as it stood before this amendment), interacting with
+`operator-claude-plugin/scripts/suggest_contacts.py`'s `walk_pages` docstring.
+
+**Issue:**
+
+Found while fixing CR-01, not by the original review pass. The documented loop
+initialised `pages, attempts = [], []` and only ever appended LADDER candidates to
+`pages` — the pasted/starting URL's own fetch was never appended anywhere. But
+`walk_pages`'s own docstring states `pages` is "EVERY page fetched for this company,
+INCLUDING the pasted URL", and explicitly warns that folding the wrong list "would
+silently drop the receptionist page — the very page the live case starts from". That is
+the phase's headline must-have truth: "a company whose `/contact` page names one
+receptionist and whose `/board/` page names nine officers ends the round with people
+from BOTH pages in one set." As documented, the pasted `/contact` page's people were
+never in the union at all — only ladder-candidate pages were.
+
+**Fix:**
+
+Fetch the pasted URL (`plan["pasted_url"]` from `discovery_plan`) FIRST, append it to
+`pages` (not to `attempts` — that list's contract is "what was tried AFTER the pasted URL
+came back empty", and folding the pasted URL's own attempt there would misrepresent
+`no_candidates`/`eligible_after_ladder`'s reading of it), and run `walk_pages` on it
+before any ladder candidate is fetched — so a walk that clears the bar on the pasted page
+alone ends before spending any ladder fetch at all. Fixed in commit 9dbc1a6, alongside
+CR-01, with a test asserting a pasted-page person and a later-ladder-page person both
+land in the walk's union
+(`test_the_documented_loop_folds_the_pasted_page_and_a_later_ladder_page_into_one_union`).
 
 ## Warnings
 
