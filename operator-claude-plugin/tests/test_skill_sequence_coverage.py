@@ -339,11 +339,23 @@ COVERED = {
     # merge fills a related-domain email, and a tier-3 person held despite the same
     # successful merge -- so the new joins are proven at the composition level, not
     # merely renamed here.
+    #
+    # Phase 64 Task 3: the tuple gained `walk_bar` (the round-level bar, resolved
+    # once alongside `agreed_cap`) and two `next_candidates` calls bracketing one
+    # `walk_pages` call -- the per-company page walk that replaced "stop at the
+    # first page that yields anyone" (D-64-01 .. D-64-07). The sink is still
+    # `suggest_contacts.round_artifact`, so the covering nodeid is unchanged; that
+    # test now also drives `walk_bar`/`next_candidates`/`walk_pages` for real, over
+    # the same three companies, asserting the walk's own terminal ending
+    # (`cap_exhausted`/`ladder_exhausted`) independently of `eligible_after_ladder`'s
+    # separate, attempts-keyed eligibility question.
     (
         "suggest-contacts",
         (
             "suggest_contacts.eligibility", "role_classify.load_families",
-            "suggest_contacts.agreed_cap", "suggest_contacts.discovery_plan",
+            "suggest_contacts.agreed_cap", "suggest_contacts.walk_bar",
+            "suggest_contacts.discovery_plan", "suggest_contacts.next_candidates",
+            "suggest_contacts.walk_pages", "suggest_contacts.next_candidates",
             "search_fallback.eligible_after_ladder", "search_fallback.rank_results",
             "suggest_contacts.select_people", "suggest_contacts.synthesise_rows",
             "suggest_contacts.mint_row_ids", "chunking.plan_chunks",

@@ -1240,3 +1240,41 @@ def test_walk_pages_never_imports_search_fallback():
     source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
     assert "import search_fallback" not in source
     assert not hasattr(suggest_contacts, "search_fallback")
+
+
+# =====================================================================================
+# Phase 64 Task 3 — invariants that must not move: the budget axis stays with
+# company_budget/filter_candidates, and the walk loops with a bounded `for`, never a
+# `while` (D-64-09, D-64-12).
+# =====================================================================================
+
+def test_max_followup_fetches_is_still_five():
+    assert url_fallback.MAX_FOLLOWUP_FETCHES == 5
+
+
+def test_walk_pages_source_never_references_max_followup_fetches():
+    """The BODY, not the docstring -- the docstring explains the D-64-09 invariant in
+    prose (naming the constant is how a reader learns it isn't here), while this test
+    pins that the executable code never actually touches it; that axis belongs to
+    `company_budget` and `filter_candidates` alone."""
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(suggest_contacts.walk_pages))
+    body = tree.body[0].body
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]  # drop the docstring statement
+    names = {
+        node.id
+        for stmt in body
+        for node in ast.walk(stmt)
+        if isinstance(node, ast.Name)
+    }
+    assert "MAX_FOLLOWUP_FETCHES" not in names
+
+
+def test_walk_pages_source_contains_no_while_loop():
+    import ast
+    import inspect
+    source = inspect.getsource(suggest_contacts.walk_pages)
+    tree = ast.parse(source)
+    assert not any(isinstance(node, ast.While) for node in ast.walk(tree))

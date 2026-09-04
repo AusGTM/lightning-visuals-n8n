@@ -119,6 +119,9 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     chosen_families = [FAMILY_LABEL]
     figures = {"suggestion_allowance": {"priced_cap": 5}}
     per_company_cap = suggest_contacts.agreed_cap(5, figures)
+    # Phase 64 Task 3: round-level, alongside per_company_cap -- the SKILL.md block
+    # now resolves the walk's bar here too, never per company.
+    bar = suggest_contacts.walk_bar(chosen_families, per_company_cap)
 
     # A refusal anywhere in a ladder; a clean empty ladder for the other two. The URLs
     # differ per company only so a failure names which one.
@@ -153,6 +156,24 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
             url_fallback.plan_ladder(company_row["website"])["candidates"])
 
         attempts = attempts_by_row_id[company_row["row_id"]]
+        # Phase 64 Task 3: the walk itself, driven for real. This fixture's ladder
+        # never offers a same-host sitemap candidate to fetch (join 4/5/6 below are
+        # about the SEARCH fallback, not the ladder walk), so `next_candidates`
+        # correctly reports nothing accepted and `walk_pages` over zero folded pages
+        # reports why the ladder itself is done -- `cap_exhausted` once its own
+        # `attempts` have spent the whole budget, `ladder_exhausted` otherwise. This
+        # is the walk's real terminal-ending join (D-64-08/D-64-11), independent of
+        # `eligible_after_ladder`'s separate, attempts-keyed eligibility question
+        # below.
+        candidates = suggest_contacts.next_candidates(company_row, attempts, sitemap_urls=[])
+        walk = suggest_contacts.walk_pages(
+            [], candidates, bar, family_list, chosen_families, known_contacts=[])
+        candidates = suggest_contacts.next_candidates(company_row, attempts, sitemap_urls=[])
+        assert walk["people"] == []
+        assert walk["ended"] in (
+            suggest_contacts.WALK_CAP_EXHAUSTED, suggest_contacts.WALK_LADDER_EXHAUSTED,
+        )
+
         verdict = search_fallback.eligible_after_ladder(attempts)
         if not verdict["eligible"]:
             # join 4: a refused ladder terminates here. `no_candidates` reports

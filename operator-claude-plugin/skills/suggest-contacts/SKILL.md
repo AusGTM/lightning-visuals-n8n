@@ -340,18 +340,41 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
    verdicts = suggest_contacts.eligibility(company_rows)
    # Round-level (D-62-12, SUGGEST-02): the vocabulary and the cap are resolved ONCE,
-   # before the per-company loop -- never re-asked per company.
+   # before the per-company loop -- never re-asked per company. `bar` is round-level
+   # too -- it is a function of the round's chosen families and the round's agreed
+   # cap, so it is resolved here alongside them, never re-asked per company either.
    vocabulary = role_classify.load_families()
    per_company_cap = suggest_contacts.agreed_cap(chosen_cap, figures)
+   bar = suggest_contacts.walk_bar(chosen_families, per_company_cap)
 
    records = []
    for eligible_company in eligible_companies:
        plan = suggest_contacts.discovery_plan(eligible_company)
-       # The operator approves candidates from `plan`, in the order shown, stopping at
-       # the first that yields people (the INGEST-05 contract, inherited unchanged).
-       # `people` below is whatever that approved fetch actually returned, and
-       # `attempts` is this company's own record, each entry carrying a `disposition`
-       # per step 5's table.
+       # Fetch in ladder order. After each fetch, append `{"url", "people",
+       # "disposition"}` to THIS COMPANY'S `pages` list (per step 5's disposition
+       # table) and re-walk with `suggest_contacts.walk_pages` -- pages accumulate
+       # into one deduped union and the walk decides whether to keep going, never
+       # "stop at the first page that yields anyone" (D-64-01 .. D-64-07). `attempts`
+       # is the SEPARATE record `no_candidates` and `eligible_after_ladder` read
+       # below -- never conflated with `pages` (D-64-13's boundary).
+       pages, attempts = [], []
+       candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
+       walk = {"people": [], "selected": [], "ended": None}
+       for candidate_url in candidates["accepted"]:
+           # web_fetch `candidate_url`; append its outcome to `pages` and to
+           # `attempts`, each carrying a `disposition` per step 5's table.
+           pages.append({"url": candidate_url, "people": fetched_people,
+                         "disposition": fetched_disposition})
+           attempts.append({"url": candidate_url, "outcome": fetched_outcome,
+                            "disposition": fetched_disposition})
+           walk = suggest_contacts.walk_pages(
+               pages, candidates, bar, vocabulary["families"], chosen_families,
+               known_contacts)
+           if walk["ended"] is not None:
+               break          # fetch the next accepted candidate only while ended is None
+           candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
+       people = walk["people"]           # the walk's own deduped union, not one page's
+       fetched_url = pages[-1]["url"] if pages else plan.get("pasted_url")
        source_rank = None          # a ladder-found person's provenance is unchanged
        if not people:
            # Only a ladder that found NOBODY asks this question at all.
@@ -365,13 +388,16 @@ and what `enrich-before-ingest/SKILL.md` already calls.
            # `fetched_url` and `source_rank` from the page ACTUALLY fetched and the
            # accepted entry it came from -- a rank-3 accept still yields people, and
            # step 8's gate is what holds them.
-       selection = suggest_contacts.select_people(
-           people, vocabulary["families"], chosen_families, known_contacts)
+           selected = suggest_contacts.select_people(
+               people, vocabulary["families"], chosen_families, known_contacts)["selected"]
+       else:
+           # `select_people` already ran INSIDE the walk, once per page (D-64-04) --
+           # never re-run it here over the same union.
+           selected = walk["selected"]
        # The accepted entry's own rank is the FIFTH argument; a ladder-found person
        # passes None there, which keeps that record's provenance byte-identical.
        records.extend(suggest_contacts.synthesise_rows(
-           eligible_company, selection["selected"], fetched_url, per_company_cap,
-           source_rank))
+           eligible_company, selected, fetched_url, per_company_cap, source_rank))
 
    # The mint -- ONCE, over the whole accumulated batch, never per company.
    minted = suggest_contacts.mint_row_ids(records)
@@ -404,8 +430,13 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
 9. **Report.** Per company: eligible / skipped / unknown, people named, people already
    known and dropped before the cap, fetches spent against the per-company bound, people
-   proposed, and people held with why. Quote the ceiling shown at step 4 alongside the
-   actuals, so the operator can see the actuals landed at or under it.
+   proposed, people held with why, and how the page walk ended for that company —
+   `walk["ended"]` in the operator's own words ("found enough on the pages read",
+   "read every candidate the ladder offered", "hit the fetch cap", or "a fetch was
+   refused"), never the bare `WALK_*` constant. Quote the ceiling shown at step 4
+   alongside the actuals, so the operator can see the actuals landed at or under it.
+   The per-page `scores` stay internal to the walk — not part of this report; what the
+   operator needs is what was found and what it cost, not the page-by-page arithmetic.
 
    Group the held rows by `reason_code` — "held: 4" must never appear on its own.
    Report the five codes separately: `no_email` (no usable email at all),
