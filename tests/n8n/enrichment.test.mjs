@@ -486,3 +486,60 @@ test("toCandidates: ZoomInfo live naicsCodes are objects, not code strings", () 
   assert.equal(find(c, "industry", "zoominfo").normalizedValue, "arts, entertainment, and recreation");
 });
 
+
+// --- Phase 66 Plan 01 Task 2 (T-66-02): non-clobber fetch-list coverage -------------
+//
+// A `fill_blank_only` field's protection is computed from `existingRecord` — a property
+// the search never requests reads as blank regardless of what is actually stored live,
+// silently turning non-clobber into clobber. These assertions read the property list off
+// the REGENERATED n8n/wf_enrichment_cloud.json node (what the workflow will actually
+// request), and read config/field_policy.yaml's contacts keys off the YAML itself rather
+// than a hardcoded copy, so the assertion tracks the policy file (repo convention: no npm
+// YAML dependency, see companyNativeFields.test.mjs's hand-rolled extractor).
+
+function loadEnrichmentWorkflow() {
+  const wfPath = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
+  const wf = JSON.parse(fs.readFileSync(wfPath, "utf8"));
+  const byName = {};
+  for (const n of wf.nodes) byName[n.name] = n;
+  return byName;
+}
+
+function yamlContactsKeys() {
+  const yamlText = fs.readFileSync(path.join(ROOT, "config/field_policy.yaml"), "utf8");
+  const lines = yamlText.split("\n");
+  const startIdx = lines.findIndex((l) => l === "contacts:");
+  assert.ok(startIdx !== -1, "config/field_policy.yaml contacts section not found");
+  const keys = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (/^\S/.test(lines[i])) break; // dedent to column 0 -> next top-level section
+    const m = /^  ([A-Za-z0-9_]+):\s*$/.exec(lines[i]);
+    if (m) keys.push(m[1]);
+  }
+  return keys;
+}
+
+test("T-66-02: the regenerated HubSpot Search node's contacts property list contains lv_linkedin_url and lv_persona_group", () => {
+  const nodes = loadEnrichmentWorkflow();
+  const body = JSON.stringify(nodes["HubSpot Search"].parameters);
+  assert.ok(body.includes("lv_linkedin_url"), "HubSpot Search must request lv_linkedin_url");
+  assert.ok(body.includes("lv_persona_group"), "HubSpot Search must request lv_persona_group");
+});
+
+test("T-66-02: the regenerated HubSpot Fetch By Id node requests lv_linkedin_url and lv_persona_group exactly once each", () => {
+  const nodes = loadEnrichmentWorkflow();
+  const body = JSON.stringify(nodes["HubSpot Fetch By Id"].parameters);
+  const countOf = (needle) => body.split(needle).length - 1;
+  assert.equal(countOf("lv_linkedin_url"), 1,
+    "lv_linkedin_url must appear exactly once — the by-id list is the search list plus a suffix");
+  assert.equal(countOf("lv_persona_group"), 1);
+});
+
+test("T-66-02: every config/field_policy.yaml contacts key is requested by the regenerated HubSpot Search node", () => {
+  const nodes = loadEnrichmentWorkflow();
+  const body = JSON.stringify(nodes["HubSpot Search"].parameters);
+  const keys = yamlContactsKeys();
+  assert.ok(keys.length >= 12, `expected at least 12 contacts policy keys, got ${keys.length}`);
+  const missing = keys.filter((k) => !body.includes(k));
+  assert.deepEqual(missing, [], `HubSpot Search does not request: ${missing.join(",")}`);
+});

@@ -2023,6 +2023,10 @@ return $input.all().map((it) => {
 """
 
 # HubSpot read-only search body (existence check): by email if present, else first+last name.
+# Phase 66 Plan 01 Task 2: a KNOWN-NARROWER sibling of ENRICH_CONTACT_SEARCH_PROPERTIES_CSV
+# (used only by build_enrichment_local_live()) — deliberately left untouched by this plan.
+# It already omits the five location properties too; widening it is out of this plan's
+# scope. Recorded here so plan 66-02's coverage matrix can carry it as an open row.
 HS_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '($json.identity_keys.email ? [ { propertyName: "email", operator: "EQ", value: $json.identity_keys.email } ] '
@@ -4867,18 +4871,31 @@ def _credit_http_node(name, url, method, x, y, auth=None, extra_headers=None):
 # as the location candidates (normalizeProviders.js) — fill_blank_only decides from
 # existingRecord, and a property that was never fetched here reads as blank regardless of
 # what is actually stored live, silently turning non-clobber into clobber.
+#
+# Phase 66 Plan 01 Task 2 (T-66-02, upstream_corrections item 4): `lv_linkedin_url` and
+# `lv_persona_group` added — the two remaining `config/field_policy.yaml` `contacts` keys
+# that were never on this list. Both are `fill_blank_only`/`protect_if_current_present` in
+# both that policy file and mergeContacts.js's DEFAULT_CONTACT_POLICY, and that protection
+# is computed from existingRecord: a property this list omits reads blank, so the guard
+# meant to protect a populated value would instead permit overwriting it — same defect
+# class the location-properties comment above already names. Lands BEFORE Task 3's
+# LinkedIn producer and REQUIRED widening so a produced candidate can never reach a merge
+# with nothing real to compare against.
 ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
     "email,firstname,lastname,jobtitle,phone,"
     "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
     "lv_mobilephone_verified_at,seniority,"
     "lv_contact_enrichment_provenance,lusha_contact_id,"
-    "city,state,country,hs_state_code,hs_country_region_code"
+    "city,state,country,hs_state_code,hs_country_region_code,"
+    "lv_linkedin_url,lv_persona_group"
 )
-# The fetch-by-id list adds `company`/`lv_linkedin_url` — HubSpot's default contact
-# freetext-company property and the PN-1-renamed LinkedIn property, feeding
-# identity_keys.companyName/.linkedin_url on the backfill. The existing search lane never
-# needed them; deliberately NOT the broader CLAUDE.md §18.4 list (several of those
-# properties do not exist in portal 22617666 and HubSpot silently drops unknown names).
+# The fetch-by-id list adds `company` — HubSpot's default contact freetext-company
+# property, feeding identity_keys.companyName on the backfill. `lv_linkedin_url` moved
+# INTO the search CSV above (Phase 66 Plan 01 Task 2) and is deliberately NOT repeated
+# here — the by-id list is the search list plus this suffix, and a name present in both
+# halves would be requested twice. The existing search lane never needed `company`;
+# deliberately NOT the broader CLAUDE.md §18.4 list (several of those properties do not
+# exist in portal 22617666 and HubSpot silently drops unknown names).
 #
 # Phase 61 Plan 02 Task 1 (REVIEW-02): `hs_linkedin_url` added — HubSpot's own native
 # LinkedIn property, confirmed present (hubspotDefined: true) in the committed live
@@ -4889,7 +4906,7 @@ ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
 # plan exists to remove. Additive to the fetch-by-id lane this CSV already feeds (HubSpot
 # returns one more property; nothing there reads it).
 ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = (
-    ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,lv_linkedin_url,hs_linkedin_url"
+    ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,hs_linkedin_url"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js", "matchProposal.js") + r"""
