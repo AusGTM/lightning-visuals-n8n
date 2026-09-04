@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 66
 current_phase_name: Rich enrichment, not minimum enrichment
 status: executing
-stopped_at: Completed 66-01-PLAN.md
-last_updated: "2026-09-04T07:43:22.730Z"
+stopped_at: Completed 66-02-PLAN.md
+last_updated: "2026-09-04T08:00:28.238Z"
 last_activity: 2026-09-05
 last_activity_desc: Phase 66 execution started
-state_head: d0296d9c8d8abe6738c9d9a86f06ea4508e13ef2
+state_head: d198ec66ed1d950c37a0502dc269db5b6f71d943
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 17
 ---
 
@@ -358,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 66 (Rich enrichment, not minimum enrichment) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-04 — Phase 66 execution started
 
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-04T07:43:22.586Z
-**Stopped at:** Completed 66-01-PLAN.md
+**Last session:** 2026-09-04T08:00:28.151Z
+**Stopped at:** Completed 66-02-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -630,6 +630,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P12 | ~20min | 3 tasks | 8 files |
 | Phase 64 P01 | 15min | 3 tasks | 5 files |
 | Phase 66 P01 | 50min | 3 tasks | 13 files |
+| Phase 66 P02 | 45min | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -743,6 +744,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 64]: D-64-10: a refusal is checked before a page's people are touched, keyed only on a fetched page's own disposition
 - [Phase 66]: D-66-01: decideAction's CREATE branch now returns missingFields === requiredFields, the root-cause fix for a landline that was never chased on any brand-new contact
 - [Phase 66]: Apollo LinkedIn producer pushes the UNPREFIXED linkedin_url key, matching what ENRICH_MERGE already reads at scoreCandidates winners — corrects PATTERNS.md's reversed direction
+- [Phase 66]: 66-02: companies REQUIRED derived by three-part rule (promote_to_canonical true, non-recomputed class, matrix-recorded producer) — 13 of 17 policy keys chased, domain/annualrevenue/veto fields excluded
+- [Phase 66]: 66-02: research-lane producer status derived from field_policy.yaml's allow_web_research flag rather than parsing webResearch.js's wholesale spread
 
 ### Roadmap Evolution
 

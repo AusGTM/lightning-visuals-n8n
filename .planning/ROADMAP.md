@@ -147,7 +147,7 @@ makes a contact usable.
 - Deliverable includes a producer/consumer matrix per field, and the same audit for companies.
 
 **Requirements:** RICH-01, RICH-02, RICH-03, RICH-05, RICH-06
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -156,7 +156,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 66-02-PLAN.md — the producer/consumer matrix for both lanes, then the companies gate derived from it (wave 2)
+- [x] 66-02-PLAN.md — the producer/consumer matrix for both lanes, then the companies gate derived from it (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

@@ -58,14 +58,14 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 - [x] **RICH-01**: `phone` is chased, not merely accepted. *Operator target 2026-09-04: phone
   AND email, email-only as fallback.*
-- [ ] **RICH-02**: A producer/consumer matrix exists for all 12 promotable contact fields —
+- [x] **RICH-02**: A producer/consumer matrix exists for all 12 promotable contact fields —
   which provider responses carry each, and which normalize branch emits it — and the gate's
   `REQUIRED` list is derived from that matrix rather than from intuition.
 - [x] **RICH-03**: `lv_linkedin_url` acquires a producer. *It is `fill_blank_only` at 85 with
   NO provider branch emitting it, while Apollo and ZoomInfo both return one — verified by grep
   2026-09-04. It is also one of the three identity groups, so filling it makes those contacts
   matchable on a privileged key.*
-- [ ] **RICH-05**: The same audit is run for companies; this measurement covered contacts only.
+- [x] **RICH-05**: The same audit is run for companies; this measurement covered contacts only.
 - [x] **RICH-06**: Provider cost is confirmed, not assumed — Lusha's flat-per-contact billing
   is documented, ZoomInfo's fields ride an already-paid request, and Apollo is VERIFIED rather
   than generalised from the other two.
