@@ -184,6 +184,29 @@ test("SJ-2: an Adapt step of the ENRICH_ADAPT_CO_SEARCH shape feeds Company Gate
     "Company Gate must read row.existingRecord (populated by the Adapt step), never a raw search row");
 });
 
+// 66-REVIEW-FIX.md WR-02: SJ-2 Company Gate now builds from its own SJ2_CO_GATE constant,
+// not the shared (now 13-field) ENRICH_CO_GATE — a record fresh on lv_org_type/
+// lv_produces_content alone must still reach `skip` here. This pins the REQUIRED array
+// itself (the same snapshot-pin pattern 66-02-SUMMARY used for CONFLICT_WATCH/
+// MATERIAL_CONFLICT_GROUPS): without it, someone re-pointing this node at the wider
+// ENRICH_CO_GATE would pass every other test in this file (they only check node shape/
+// wiring, not REQUIRED's contents) and the over-triggering regression would come back
+// silently.
+test("SJ-2 Company Gate's REQUIRED stays the 2-field staleness pair, never the wider companies-completeness list", () => {
+  const wf = loadWorkflow();
+  const gate = findNode(wf, "SJ-2 Company Gate");
+  const m = /const REQUIRED\s*=\s*\[([\s\S]*?)\]/.exec(gate.parameters.jsCode);
+  assert.ok(m, "const REQUIRED = [...] not found in SJ-2 Company Gate's jsCode");
+  const required = [];
+  const re = /"([A-Za-z0-9_]+)"/g;
+  let mm;
+  while ((mm = re.exec(m[1]))) required.push(mm[1]);
+  assert.deepEqual(required, ["lv_org_type", "lv_produces_content"],
+    "SJ-2 Company Gate's REQUIRED drifted from SJ2_CO_GATE's 2-field staleness pair " +
+    "(scripts/build_cloud_workflows.py) — see that constant's comment for why SJ-2 must " +
+    "never reuse ENRICH_CO_GATE's wider companies-completeness REQUIRED list");
+});
+
 test("SJ-2: terminates in a HubSpot Update that sets lv_enrichment_requested=true, gated behind the Company Gate's skip decision", () => {
   const wf = loadWorkflow();
   const node = findNode(wf, "SJ-2 Set Requested");

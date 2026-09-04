@@ -2063,6 +2063,16 @@ return $input.all().map((it) => {
 # the non-clobber comparison in mergeContacts.js then reads "blank" and computes a wrong
 # promote decision. Widened here to every one of ENRICH_GATE's 12 REQUIRED fields, same
 # fields ENRICH_CONTACT_SEARCH_PROPERTIES_CSV already fetches for the CLOUD lane.
+#
+# NOT mechanically derived from ENRICH_GATE's REQUIRED (hand-synced, same as
+# ENRICH_CONTACT_SEARCH_PROPERTIES_CSV already was before this fix): REQUIRED is a JS
+# array literal embedded inside ENRICH_GATE's `r"""..."""` string, not a Python-level list
+# this module could import (66-02-SUMMARY's own D-66-10 parity note makes the same
+# observation about the companies side). Lifting REQUIRED out into a shared Python
+# constant both JS sites read from is a real refactor, out of scope for a review fix.
+# tests/n8n/fieldProducerMatrix.test.mjs's generic fetch-gate assertion (WR-03) is the
+# drift guard in lieu of derivation — it fails loudly if this list and ENRICH_GATE's
+# REQUIRED are ever hand-edited out of sync again.
 HS_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '($json.identity_keys.email ? [ { propertyName: "email", operator: "EQ", value: $json.identity_keys.email } ] '
@@ -2202,6 +2212,11 @@ return $input.all().map((it) => {
 # fetches for the CLOUD lane (see that constant's own Plan 02 Task 2 comment). Without
 # these, mergeCompanies.js reads a genuinely-populated field as blank on this lane's
 # preview and computes a wrong promote decision (reproduced live in 66-REVIEW.md WR-01).
+#
+# NOT mechanically derived from ENRICH_CO_GATE's REQUIRED — same reason as
+# HS_SEARCH_BODY_EXPR above: REQUIRED is a JS array literal inside a `r"""..."""` string,
+# not a Python-level list either could import without a real refactor (out of scope here).
+# fieldProducerMatrix.test.mjs's generic fetch-gate assertion (WR-03) is the drift guard.
 HS_CO_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '

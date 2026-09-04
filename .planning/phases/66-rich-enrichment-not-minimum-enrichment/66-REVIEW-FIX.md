@@ -37,9 +37,18 @@ Added 3 regression tests: `_build_row_report` with a dict value, with a list val
 ### WR-01 / WR-02 / WR-03: the widened companies/contacts gate REQUIRED lists were reused by search nodes whose fetch lists were never widened to match, and the phase's own audit test only ever checked one of the (at least) four search-node configurations that embed the shared gate code
 
 **Files modified:** `scripts/build_cloud_workflows.py`, `tests/n8n/fieldProducerMatrix.test.mjs`,
-`n8n/wf_enrichment_cloud.json` (comment-only jsCode delta), `n8n/wf_enrichment_local_live.json`,
-`n8n/wf_scheduled_maintenance_cloud.json`
-**Commit:** `6b3edf2`
+`tests/n8n/sjPredicates.test.mjs`, `n8n/wf_enrichment_cloud.json` (comment-only jsCode delta),
+`n8n/wf_enrichment_local_live.json`, `n8n/wf_scheduled_maintenance_cloud.json`
+**Commit:** `6b3edf2` (WR-01/WR-02/WR-03 fix) + a follow-up commit adding the SJ-2 REQUIRED
+snapshot-pin test and the "why not derived" comments named below
+**Commit status:** CR-01 = `fixed`. WR-01 = `fixed`. WR-03 = `fixed`. **WR-02 =
+`fixed: requires human verification`** — WR-02's own Fix section offered two options
+(widen SJ-2's fetch to match the 13-field gate, or give SJ-2 its own narrower REQUIRED);
+this fix chose narrowing, a behavioral/design decision that diverges from the orchestrator's
+initial lean toward "derive the fetch list from the widened gate." The reasoning is laid out
+below — the operator should confirm SJ-2 staying a 2-field ICP-classification staleness gate
+(rather than growing into a 13-field companies-completeness gate, same as the other two
+lanes) is the intended scope for SJ-2's job before this ships to production.
 
 These three findings are one root cause with two manifestations and one missing guard, fixed
 together rather than as three separate patches, per the orchestrator's analysis.
@@ -113,16 +122,41 @@ reflect the split. `SJ-2 Set Requested` — the one write path among these three
 that is real today, per the review (`lv_enrichment_requested=true`, gated behind the
 lane's own write-safety gate before any live PATCH) — is now gated correctly again.
 
-**Regeneration and verification:**
+**Follow-up hardening (post-advisor review, same iteration):**
+- Neither `SJ2_CO_GATE`'s narrower `REQUIRED` nor the design choice to narrow rather than
+  widen was itself pinned by a test — the generic WR-03 fetch-gate assertion only checks
+  `REQUIRED ⊆ fetched`, which holds under either design (narrow SJ-2 gate, or SJ-2 reused
+  at the wide `ENRICH_CO_GATE` with a correspondingly widened fetch). Added
+  `tests/n8n/sjPredicates.test.mjs#"SJ-2 Company Gate's REQUIRED stays the 2-field
+  staleness pair..."`, snapshot-pinning `SJ-2 Company Gate`'s `REQUIRED` to exactly
+  `["lv_org_type", "lv_produces_content"]` — the same snapshot-pin pattern
+  66-02-SUMMARY used for `CONFLICT_WATCH`/`MATERIAL_CONFLICT_GROUPS`. A future
+  re-point of `SJ-2 Company Gate` at `ENRICH_CO_GATE` now fails this test loudly instead
+  of passing silently.
+- `HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR` are hand-typed widened lists, not
+  mechanically derived from `ENRICH_GATE`/`ENRICH_CO_GATE`'s `REQUIRED` — the orchestrator
+  asked for derivation "or say why not, in a comment and in the SUMMARY." The honest
+  reason (this line is that documentation): `REQUIRED` is a JS array literal embedded
+  inside a Python `r"""..."""` string, not a Python-level list either constant's module
+  could import without a real refactor (lifting `REQUIRED` into a shared Python constant
+  both JS sites read from) — out of scope for a review fix. `fieldProducerMatrix.test.mjs`'s
+  generic fetch-gate assertion (WR-03) is the drift guard in lieu of derivation: it fails
+  loudly the next time these lists and their gate's `REQUIRED` go out of sync. Comments
+  naming this reasoning were added at both `HS_SEARCH_BODY_EXPR` and `HS_CO_SEARCH_BODY_EXPR`.
+
+**Regeneration and verification (ran in the main checkout — `workflow.use_worktrees=false`
+in `.planning/config.json`, so no isolated worktree was created for this fix session; all
+suite counts below are reproducible directly from this working tree):**
 - Regenerated via `scripts/build_cloud_workflows.py` (never hand-edited); only
   `n8n/wf_enrichment_cloud.json` (a single comment-only jsCode line, from the
   `ENRICH_CO_GATE` `RECOMPUTE_REQUESTED` comment edit — content and behavior unchanged),
   `n8n/wf_enrichment_local_live.json`, and `n8n/wf_scheduled_maintenance_cloud.json`
   differ from the pre-fix tree. Node count on `n8n/wf_enrichment_cloud.json` unchanged at
   **123**. A second regeneration run produces no further diff (idempotent).
-- `node --test tests/n8n/*.test.mjs`: **939 pass / 0 fail** (baseline 938 + 1 new
-  top-level test — the WR-03 assertion; the pre-existing single-lane assertion was kept,
-  renamed for clarity, not removed).
+- `node --test tests/n8n/*.test.mjs`: **940 pass / 0 fail** (baseline 938 + 2 new
+  top-level tests — the WR-03 fetch-gate assertion, plus the follow-up SJ-2 `REQUIRED`
+  snapshot-pin in `sjPredicates.test.mjs`; the pre-existing single-lane fetch-gate
+  assertion was kept, renamed for clarity, not removed).
 - `.venv/bin/python -m pytest -q` (repo root): **4250 passed / 154 skipped** (baseline
   4247 + 3 new CR-01 regression tests; unchanged by the WR-01/WR-02/WR-03 fix, which has
   no Python-side `REQUIRED`-shaped constant to move — matches 66-02-SUMMARY's own D-66-10
