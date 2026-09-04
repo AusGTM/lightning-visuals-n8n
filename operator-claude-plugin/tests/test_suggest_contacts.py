@@ -1123,3 +1123,120 @@ def test_walk_pages_end_to_end_into_extraction_validate():
     result = extraction.validate(suggest_contacts.round_artifact(records))
     assert result.rejected == []
     assert len(result.accepted) == 3
+
+
+# =====================================================================================
+# Phase 64 Task 2 — the closed `ended` vocabulary: a refusal stays terminal, and
+# cap_exhausted / ladder_exhausted are read off next_candidates()'s own dict
+# (D-64-08, D-64-10, D-64-11, D-64-13, SAFE-02, SAFE-03).
+# =====================================================================================
+
+def test_walk_pages_ends_on_refused_disposition_even_with_candidates_left():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Board Member"}]}
+    page_2 = {"url": "https://example-club.example/board", "people": [],
+              "disposition": "refused"}
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+
+    result = suggest_contacts.walk_pages(
+        [page_1, page_2], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert result["ended"] == suggest_contacts.WALK_REFUSED
+
+
+def test_walk_pages_refused_page_contributes_no_people_and_no_score_entry():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Board Member"}]}
+    page_2 = {"url": "https://example-club.example/board",
+              "people": [{"firstname": "Sam", "lastname": "Reilly", "jobtitle": "Board Member"}],
+              "disposition": "refused"}
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+
+    result = suggest_contacts.walk_pages(
+        [page_1, page_2], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert len(result["people"]) == 1
+    assert [s["url"] for s in result["scores"]] == [page_1["url"]]
+
+
+def test_walk_pages_ends_cap_exhausted_when_budget_spent_and_nothing_unfetched_remains():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Receptionist"}]}
+    candidates = {"accepted": [page_1["url"]], "budget_remaining": 0}
+
+    result = suggest_contacts.walk_pages(
+        [page_1], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert result["ended"] == suggest_contacts.WALK_CAP_EXHAUSTED
+
+
+def test_walk_pages_ends_ladder_exhausted_when_budget_remains_but_nothing_unfetched_remains():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Receptionist"}]}
+    candidates = {"accepted": [page_1["url"]], "budget_remaining": 3}
+
+    result = suggest_contacts.walk_pages(
+        [page_1], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert result["ended"] == suggest_contacts.WALK_LADDER_EXHAUSTED
+
+
+def test_walk_pages_keeps_walking_while_an_unfetched_accepted_candidate_remains():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Receptionist"}]}
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+
+    result = suggest_contacts.walk_pages(
+        [page_1], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert result["ended"] is None
+
+
+def test_walk_pages_does_not_count_an_already_walked_url_as_remaining():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Receptionist"}]}
+    # This company's own pasted URL is still `accepted` (it was, before it was fetched) --
+    # already appearing in `pages` must not read as an unfetched candidate remaining.
+    candidates = {"accepted": [page_1["url"]], "budget_remaining": 2}
+
+    result = suggest_contacts.walk_pages(
+        [page_1], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert result["ended"] == suggest_contacts.WALK_LADDER_EXHAUSTED
+
+
+def test_walk_ending_vocabulary_pins_to_search_fallbacks_disposition_constants():
+    assert suggest_contacts.WALK_REFUSED == search_fallback.DISPOSITION_REFUSED
+    assert suggest_contacts.WALK_CAP_EXHAUSTED == search_fallback.DISPOSITION_CAP_EXHAUSTED
+
+
+def test_walk_pages_return_carries_no_extra_key_inviting_another_fetch():
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Receptionist"}]}
+    candidates = {"accepted": [page_1["url"]], "budget_remaining": 0}
+
+    result = suggest_contacts.walk_pages(
+        [page_1], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+
+    assert result["ended"] == suggest_contacts.WALK_CAP_EXHAUSTED
+    assert set(result.keys()) == {"people", "selected", "dropped", "scores", "ended", "bar"}
+
+
+def test_walk_pages_never_imports_search_fallback():
+    source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
+    assert "import search_fallback" not in source
+    assert not hasattr(suggest_contacts, "search_fallback")
