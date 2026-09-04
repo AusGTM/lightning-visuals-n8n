@@ -5,9 +5,14 @@ title: nothing in the pipeline can propose a company domain, so the correction m
 area: n8n
 severity: major
 files:
+
   - n8n/code/normalizeProviders.js
   - n8n/code/mergeCompanies.js
   - scripts/build_cloud_workflows.py
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The gap

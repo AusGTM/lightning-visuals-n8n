@@ -6,10 +6,15 @@ area: operator-plugin
 severity: enhancement
 goal: frictionless enrichment (operator, 2026-09-04); wanted as DEFAULT, not gated on the autonomy flag
 files:
+
   - operator-claude-plugin/skills/suggest-contacts/SKILL.md
   - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
   - operator-claude-plugin/skills/enrich-records/SKILL.md
   - operator-claude-plugin/scripts/write_grant.py
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The request

@@ -5,10 +5,15 @@ title: Enrichment throughput — the judge fires on nearly every record and cost
 area: n8n
 severity: major
 files:
+
   - n8n/code/judge.js:145
   - n8n/code/escalation.generated.js:9
   - config/escalation_policy.yaml
   - n8n/wf_enrichment_cloud.json
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## Amendment 2026-09-03 — `resolves_phase: 63` REMOVED; this todo stays OPEN

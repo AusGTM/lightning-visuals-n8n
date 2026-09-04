@@ -6,10 +6,15 @@ area: n8n
 severity: major
 goal: rich enrichment, not minimum enrichment (operator, 2026-09-04)
 files:
+
   - scripts/build_cloud_workflows.py   # ENRICH_GATE's REQUIRED list
   - n8n/code/enrichmentGate.js
   - n8n/code/normalizeProviders.js
   - config/field_policy.yaml
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The gap
@@ -77,7 +82,6 @@ frozen module and the `REQUIRED` list lives in the WRAPPER, not the module. Rege
 `n8n/*.json` via the builder — never hand-edit. Check whether `src/` has an equivalent
 required-field list that must move in the same commit.
 
-
 ## The general defect the phone case is one instance of (operator, 2026-09-04)
 
 > "Enrichment appears sparse. I want enrichment to fill as many available fields that are
@@ -135,7 +139,6 @@ provider spend — which inverts the usual reason to keep a required list short.
    `lv_linkedin_url` hole above was found this way and there may be others.
 2. Decide the gate's `REQUIRED` list from that matrix rather than by intuition.
 3. Companies deserve the same audit; this todo measured contacts only.
-
 
 ## Live evidence, first suggest-contacts round (Brisbane Roar FC, 2026-09-04)
 

@@ -5,10 +5,15 @@ title: suggest-contacts step 8 routes partition holds into held_queue, which del
 area: operator-plugin
 severity: major
 files:
+
   - operator-claude-plugin/skills/suggest-contacts/SKILL.md
   - operator-claude-plugin/scripts/suggest_contacts.py
   - operator-claude-plugin/scripts/confidence.py
   - operator-claude-plugin/scripts/held_queue.py
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The defect, hit live

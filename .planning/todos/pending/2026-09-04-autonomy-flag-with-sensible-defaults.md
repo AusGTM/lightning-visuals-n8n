@@ -6,11 +6,16 @@ area: operator-plugin
 severity: enhancement
 goal: frictionless enrichment (operator, 2026-09-04) — same intent as the rich-enrichment todo
 files:
+
   - operator-claude-plugin/config/operator.local.example.json
   - operator-claude-plugin/scripts/config_gate.py
   - operator-claude-plugin/scripts/write_grant.py
   - operator-claude-plugin/scripts/n8n_arming.py
   - operator-claude-plugin/skills/*/SKILL.md
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The request

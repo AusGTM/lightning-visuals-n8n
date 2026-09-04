@@ -5,9 +5,14 @@ title: the search fallback fires on LADDER-empty, but the operator's intent is R
 area: operator-plugin
 severity: major
 files:
+
   - operator-claude-plugin/scripts/suggest_contacts.py
   - operator-claude-plugin/scripts/search_fallback.py
   - operator-claude-plugin/skills/suggest-contacts/SKILL.md
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The gap

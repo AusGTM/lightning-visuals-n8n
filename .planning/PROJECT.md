@@ -9,22 +9,40 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
-## Current State (as of 2026-09-02)
+## Current State (as of 2026-09-04)
 
-**In flight: v1.1 — Unattended Session Runs (phases 53–63).** Complete: 53, 54, 57, 58, 59, 61.
-Absorbed into 61 by operator decision D-61-08: 55 (async run) and 56 (unattended pair pipeline).
-Phase 57 ("Ceilings, refusal-before-start, and post-run proof") completed 2026-09-01. **Phase
-62** ("Suggest the contacts nobody named") has executed — 6 plans, verification `human_needed`
-at 13/13 must-haves, UAT partial (3 items blocked on a live attended sitting with real
-`web_fetch` and real Lusha credit spend); closes SUGGEST-01/-02/-04/-05 and amends SUGGEST-03
-per D-62-11's cost-envelope decision and the 62-06 cap-enforcement gap closure. **Phase 63** ("The
-unattended lane actually runs unattended") was numbered 2026-09-02 and is not yet planned. Open:
-**Phase 60** (review-lane authority) and Phase 63. Phase 61 closed 2026-08-30 with 6/6 plans and
-12/12 verification; all five cloud workflows are deployed and bounced but were exercised by
-**disarmed** runs only. **The first live unattended, credit-spending batch has NOT run** — Phase
-57 shipped, so naming it as the pending gate is stale; the fact that no such batch has run yet
-still stands.
-Detail: `.planning/ROADMAP.md`, `.planning/milestones/v1.1-ROADMAP.md`.
+**v1.1 — Unattended Session Runs: SHIPPED 2026-09-04.** 10 phases, 62 plans, 162 tasks
+(`.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-phases/`; tag `v1.1`).
+An operator working only in Claude can open a bounded, revocable write grant, hand over a
+batch and get it back done — with ceilings that refuse *before* the run starts, a post-run
+account of what actually landed in HubSpot, and held rows for anything the pipeline could not
+stand behind. Phase 62 added finding the people nobody had named at a company, by crawling
+that company's own website.
+
+**Closed as an OVERRIDE close, recorded as such.** Phases 52, 55 and 56 carry no verification
+and none is open work: 52 is deferred INDEFINITELY by operator decision (2026-08-25); 55 and
+56 were absorbed into 61 (D-61-08) precisely so they would not be planned separately. 11 open
+artifacts were acknowledged rather than resolved — listed in `STATE.md` § Deferred Items, with
+5 of the 8 todos among them already scheduled as v1.2 phases.
+
+**Two live `suggest-contacts` rounds ran on 2026-09-04** — the system's first real outings.
+Brisbane Roar FC: 2 contacts created and associated. The Roma Turf Club: 0 sendable, 2
+correctly held, including a different Craig Smith at a US insurer that the domain-relatedness
+rule refused. Between them they surfaced more actionable defects than the preceding offline
+verification did, and those became v1.2.
+
+**In flight: v1.2 — Yield and Friction (phases 64–69), DEFINED, NOT STARTED.** Every phase
+moves one direction — yield more, stop less, without moving any safety gate — under five
+binding `SAFE-*` constraints. Detail: `.planning/milestones/v1.2-ROADMAP.md`.
+
+**Standing fact, unchanged by this close: the first live unattended, credit-spending batch has
+NOT run, and nothing is armed.** Phase 57 landed its ceilings and post-run proof; at 57-05's
+Task 4 gate the operator chose a small *supervised* first live batch, explicitly not the
+unattended one. D-61-08's gate stays shut until v1.2's `AUTO-04` asks and the operator answers.
+
+**Second standing fact: the committed `n8n/*.json` is AHEAD of the running n8n Cloud
+instance** — regenerated and committed without deploying since 2026-09-02 (CLAUDE.md §13.0.2).
+An in-repo node is not evidence of what n8n is executing.
 
 **v1.0 Direct Backfill & Scoring Coverage is paused:** Phase 51 complete, **Phase 52 deferred
 INDEFINITELY by the operator (2026-08-25)** — not merely in favour of v1.1. The v1.0 requirements
@@ -216,7 +234,9 @@ proven entirely in dry-run locally, before touching a single production record.
 
 ## Requirements
 
-Full detail and traceability live in `.planning/REQUIREMENTS.md`.
+Full detail and traceability live in the ACTIVE milestone's own requirements file —
+`.planning/milestones/v1.2-REQUIREMENTS.md` as of 2026-09-04. The root `REQUIREMENTS.md` was
+archived at the v1.1 close and a fresh one is written by the next `/gsd-new-milestone`.
 
 > **Section hygiene note (2026-08-11, v0.8 close).** This section had drifted: the "Active"
 > heading still carried v0.4 items that MILESTONES.md records as shipped 2026-07-29, and the
@@ -226,6 +246,15 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 
 ### Validated
 
+- ✓ **Unattended session runs** — v1.1. An operator opens a bounded, revocable write grant in
+  conversation; a batch is refused before it starts if it cannot afford its own ceiling; every
+  run leaves a durable account of what landed; unconfident rows are held rather than guessed.
+  *Caveat kept deliberately: shipped and disarmed-proven, but the first live unattended
+  credit-spending batch has not run.*
+- ✓ **Suggest the contacts nobody named** — v1.1 (Phase 62). A company with no people on it is
+  crawled from its own sitemap, staff are proposed with the page they came from, and a row
+  whose email domain is unrelated to the company is held, not sent. Live-proven both ways on
+  2026-09-04.
 - ✓ **Execution budget safety** — v0.8. SJ-3 cannot dispatch work it cannot finish (gate), a stuck
   `lv_enrichment_requested` flag drains instead of re-accumulating, one tick's fan-out is capped
   at a build-time value derived from the plan allowance and baked cadence, and the sweep reports

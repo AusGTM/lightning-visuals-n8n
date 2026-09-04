@@ -5,9 +5,14 @@ title: the web-search fallback never fires for a company with no usable website 
 area: operator-claude-plugin
 severity: minor
 files:
+
   - operator-claude-plugin/scripts/suggest_contacts.py:143-152
   - operator-claude-plugin/scripts/search_fallback.py
   - operator-claude-plugin/skills/suggest-contacts/SKILL.md
+
+audit_acknowledged:
+  milestone: v1.1
+  at: 2026-09-04
 ---
 
 ## The gap
