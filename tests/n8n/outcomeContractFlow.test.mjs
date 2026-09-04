@@ -99,3 +99,99 @@ test("Build Response stamps the contract even on the Skip terminal, which bypass
   assert.equal(built.match.tier, "high");
   assert.equal(built.candidate_count, 0, "high tier's own candidates array is deliberately emptied — count is meaningful for medium tier only");
 });
+
+// Phase 66 Plan 03 (D-66-05/D-66-06): per-row phone+email completeness. Drives the REAL
+// "Decide Action" jsCode too, so this also proves existingRecord/merge survive that
+// node's own explicit return object (they did not, before this plan).
+
+test("D-66-06: a contacts row whose post-run state carries an email AND a phone stamps the complete state", () => {
+  const row = {
+    row_id: "row-4", object_type: "contacts", mode: "write", action: "enrich",
+    existingRecord: { hs_object_id: "1", email: "jane@example.com" },
+    merge: { canonicalPatch: { mobilephone: "0400000000" }, provenance: {}, cacheKeys: {}, decisions: [] },
+  };
+
+  const [decided] = runDecideAction([row]);
+  const [built] = runBuildResponse([decided]);
+
+  assert.equal(built.contactability, "complete");
+  assert.deepEqual(built.contactability_fields, { email: "email", phone: "mobilephone" });
+});
+
+test("D-66-06: either phone field satisfies the phone half — a landline alone counts", () => {
+  const row = {
+    row_id: "row-5", object_type: "contacts", mode: "write", action: "enrich",
+    existingRecord: { hs_object_id: "1", email: "jane@example.com", phone: "0299999999" },
+    merge: null,
+  };
+
+  const [decided] = runDecideAction([row]);
+  const [built] = runBuildResponse([decided]);
+
+  assert.equal(built.contactability, "complete");
+  assert.deepEqual(built.contactability_fields, { email: "email", phone: "phone" });
+});
+
+test("D-66-06: an email with the phone fields blank stamps the email-only state", () => {
+  const row = {
+    row_id: "row-6", object_type: "contacts", mode: "write", action: "enrich",
+    existingRecord: { hs_object_id: "1", email: "jane@example.com" },
+    merge: null,
+  };
+
+  const [decided] = runDecideAction([row]);
+  const [built] = runBuildResponse([decided]);
+
+  assert.equal(built.contactability, "email_only");
+  assert.deepEqual(built.contactability_fields, { email: "email", phone: null });
+});
+
+test("D-66-06: a row with neither email nor phone stamps a third, distinct state", () => {
+  const row = {
+    row_id: "row-7", object_type: "contacts", mode: "write", action: "enrich",
+    existingRecord: { hs_object_id: "1" },
+    merge: null,
+  };
+
+  const [decided] = runDecideAction([row]);
+  const [built] = runBuildResponse([decided]);
+
+  assert.equal(built.contactability, "none");
+  assert.notEqual(built.contactability, "complete");
+  assert.notEqual(built.contactability, "email_only");
+});
+
+test("D-66-06: post-run state is the union of existingRecord and this run's promoted patch — a blank email promoted THIS run reads as complete", () => {
+  const row = {
+    row_id: "row-8", object_type: "contacts", mode: "write", action: "enrich",
+    existingRecord: { hs_object_id: "1" }, // email was blank before this run
+    merge: {
+      canonicalPatch: { email: "new@example.com", phone: "0299999999" },
+      provenance: {}, cacheKeys: {}, decisions: [],
+    },
+  };
+
+  const [decided] = runDecideAction([row]);
+  const [built] = runBuildResponse([decided]);
+
+  assert.equal(built.contactability, "complete");
+});
+
+test("D-66-06: a companies row stamps the absence value explicitly, never a missing key", () => {
+  const row = { row_id: "row-9", object_type: "companies", action: "skip" };
+
+  const [built] = runBuildResponse([row]);
+
+  assert.ok("contactability" in built, "the key itself must be present, even when its value is null");
+  assert.equal(built.contactability, null);
+  assert.ok("contactability_fields" in built);
+  assert.equal(built.contactability_fields, null);
+});
+
+test("D-66-06: outcome_contract_version is UNCHANGED by this task — a later accidental bump fails here", () => {
+  const row = { row_id: "row-10", object_type: "contacts", action: "skip", existingRecord: {} };
+
+  const [built] = runBuildResponse([row]);
+
+  assert.equal(built.outcome_contract_version, 2);
+});

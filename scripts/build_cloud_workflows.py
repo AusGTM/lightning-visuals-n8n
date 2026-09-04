@@ -1776,6 +1776,13 @@ return $input.all().map((it) => {
     scored: row.scored ?? null,
     material_conflicts: row.material_conflicts ?? null,
     judge_confidence_by_field: row.judge_confidence_by_field ?? null,
+    // Phase 66 Plan 03 (D-66-06): same carry-BY-NAME idiom as the three fields above —
+    // Build Response's contactability projection needs the POST-RUN state (existing
+    // record + this run's promoted patch), and `properties` alone is insufficient
+    // (email/phone are fill_blank_only/manual_protected, so an already-populated value
+    // never appears in `properties`; only a value promoted blank-to-filled would).
+    existingRecord: row.existingRecord ?? null,
+    merge: row.merge ?? null,
     properties
   }};
 });
@@ -4871,7 +4878,51 @@ function _agreementByField(scored) {
 // reshaped). The client parser (preingest.py) widens its known-version set in the same
 // commit rather than moving it, since the currently-deployed backend still stamps 1
 // until this regenerated JSON is deployed — either deploy order must keep parsing.
+//
+// Phase 66 Plan 03 (D-66-05/D-66-06): contactability (below) is ALSO additive and
+// DELIBERATELY does NOT bump this constant a second time. preingest.py refuses outright
+// any version outside its frozen known set rather than degrading, and the installed
+// plugin marketplace clone does not self-refresh — a backend stamping a version the
+// installed plugin has never learned would refuse EVERY row, not lose a field (T-66-12).
+// An additive key at the CURRENT version has no such failure mode: an unknown extra key
+// is simply not read by an older client. Bump only when a field is removed or reshaped.
 const OUTCOME_CONTRACT_VERSION = 2;
+
+// Phase 66 Plan 03 (D-66-05/D-66-06): per-row phone+email completeness, REPORT-ONLY.
+// Nothing anywhere may branch on this value — no gate, hold, refusal or write decision
+// reads it (D-66-05); it is stamped here and rendered by the plugin's report, nothing
+// else consumes it. Computed from the POST-RUN state — the union of the record HubSpot
+// already held (existingRecord) and whatever THIS run promoted (merge.canonicalPatch) —
+// never the raw provider return, so a value this run promoted counts and a value merely
+// staged (not yet written) does not.
+const CONTACTABILITY_COMPLETE = "complete";
+const CONTACTABILITY_EMAIL_ONLY = "email_only";
+const CONTACTABILITY_NONE = "none";
+function _hasValue(v) { return v !== undefined && v !== null && v !== ""; }
+function _postRunFieldValue(field, existingRecord, canonicalPatch) {
+  if (canonicalPatch && _hasValue(canonicalPatch[field])) return canonicalPatch[field];
+  if (existingRecord && _hasValue(existingRecord[field])) return existingRecord[field];
+  return null;
+}
+function _contactability(row) {
+  // Companies (and anything not a contact) stamp explicit absence — never a missing key
+  // — matching this node's existing num_associated_contacts discipline above.
+  if (row.object_type === "companies") return { state: null, fields: null };
+  const existingRecord = row.existingRecord || {};
+  const canonicalPatch = (row.merge && row.merge.canonicalPatch) || {};
+  const emailField = _postRunFieldValue("email", existingRecord, canonicalPatch) !== null ? "email" : null;
+  // Either phone field satisfies the phone half (D-66-05, deliberate): ZoomInfo's
+  // verified-direct-dial fields (directPhone/hasDirectPhone) are 400/unentitled on this
+  // account, so the ceiling this account can buy is a landline (often a switchboard)
+  // plus a mobile — requiring a mobile specifically would make "complete" largely
+  // unreachable.
+  const phoneField = _postRunFieldValue("phone", existingRecord, canonicalPatch) !== null ? "phone"
+    : (_postRunFieldValue("mobilephone", existingRecord, canonicalPatch) !== null ? "mobilephone" : null);
+  let state = CONTACTABILITY_NONE;
+  if (emailField && phoneField) state = CONTACTABILITY_COMPLETE;
+  else if (emailField) state = CONTACTABILITY_EMAIL_ONLY;
+  return { state, fields: { email: emailField, phone: phoneField } };
+}
 return $input.all().map((item) => {
   const row = item.json || {};
   const match = row.match || null;
@@ -4879,6 +4930,7 @@ return $input.all().map((item) => {
   // encode their own cardinality in the tier itself, and summarizeMatch deliberately
   // empties `candidates` for a high-tier auto-match.
   const candidate_count = (match && Array.isArray(match.candidates)) ? match.candidates.length : 0;
+  const contactability = _contactability(row);
   return { json: {
     ...row,
     remaining_credits,
@@ -4891,6 +4943,9 @@ return $input.all().map((item) => {
     // row that never went through the search (e.g. contacts-only requests) and a
     // company genuinely unreadable cannot look alike to a parser.
     num_associated_contacts: row.num_associated_contacts ?? null,
+    // D-66-05/D-66-06: report-only, no branch anywhere reads these two keys.
+    contactability: contactability.state,
+    contactability_fields: contactability.fields,
   }};
 });
 """
