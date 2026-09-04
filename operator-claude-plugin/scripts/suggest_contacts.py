@@ -205,6 +205,142 @@ def select_people(people, family_list, chosen_families, known_contacts):
     return {"selected": selected, "dropped": dropped}
 
 
+# The closed vocabulary for how a company's page walk ended (D-64-08). Mirrors
+# `search_fallback.py`'s `DISPOSITION_*` / `ELIGIBLE_DISPOSITIONS` shape: a small,
+# named set of strings rather than free text, pinned by test rather than by import
+# (see `walk_pages` below and Task 2's equality tests against
+# `search_fallback.DISPOSITION_REFUSED` / `DISPOSITION_CAP_EXHAUSTED`). Task 1 makes
+# only `WALK_GOOD_ENOUGH` and `None` reachable; the other three become reachable in
+# Task 2, but the vocabulary and the function signature are final now.
+WALK_GOOD_ENOUGH = "good_enough"
+WALK_LADDER_EXHAUSTED = "ladder_exhausted"
+WALK_CAP_EXHAUSTED = "cap_exhausted"
+WALK_REFUSED = "refused"
+WALK_ENDINGS = (WALK_GOOD_ENOUGH, WALK_LADDER_EXHAUSTED, WALK_CAP_EXHAUSTED, WALK_REFUSED)
+
+
+def walk_bar(chosen_families, per_company_cap):
+    """The cumulative role-filter hit count a company's page walk must reach before it
+    stops early (D-64-06): `max(len(chosen_families or []), per_company_cap)`, one
+    expression and nothing else. The floor at `per_company_cap` is load-bearing, not
+    decoration -- without it a round choosing a single family would stop on its very
+    first hit, reproducing the "stop at the first page" defect this walk exists to fix.
+
+    Both inputs are already-computed numbers the round already has --
+    `role_classify.chosen_families(vocabulary, labels)` and this module's own
+    `agreed_cap(chosen_cap, figures)` -- and neither is recomputed here, mirroring how
+    `next_candidates` takes `attempts` and calls the one existing budget helper rather
+    than deriving a number itself. No validation guard: `per_company_cap` is documented
+    as `agreed_cap()`'s already-validated return, and a non-int raises loudly from
+    `max()` at the call site rather than from a second bespoke check here."""
+    return max(len(chosen_families or []), per_company_cap)
+
+
+def walk_pages(pages, candidates, bar, family_list, chosen_families, known_contacts):
+    """Fold the pages fetched so far for ONE company, in ladder order, into one
+    deduped union, and decide whether the walk should keep going.
+
+    Two lists, deliberately distinct. `pages` is EVERY page fetched for this company,
+    INCLUDING the pasted URL -- entries `{"url", "people", "disposition"}` -- and is
+    the list this function folds. `attempts` (untouched, not a parameter here) is
+    `url_fallback.give_up_message`'s own list of what was tried AFTER the pasted URL
+    came back empty; folding `attempts` instead of `pages` would silently drop the
+    receptionist page -- the very page the live case starts from -- so the walk takes
+    its own list rather than reusing that one. `candidates` is
+    `next_candidates(...)`'s return dict, verbatim; only its `accepted` and
+    `budget_remaining` keys are ever read, nothing is re-derived.
+
+    D-64-01/D-64-02: every page's people accumulate into ONE set, deduped by
+    `_name_key` (the same normalised first+last name key `select_people` already uses
+    for its known-contact pre-filter) -- a winner never replaces the rest. A person
+    with a missing firstname or lastname has a `None` key and is never deduped away;
+    both copies stay in and are resolved downstream, exactly as D-62-18's conservative
+    half already rules.
+
+    D-64-03/D-64-04: `select_people` runs ONCE PER PAGE, over that page's newly
+    admitted (post-dedupe) people -- calling it per page rather than once over the
+    whole union is exactly equivalent, since it is per-person independent, and it is
+    what makes `role_classify.classify_title` run MID-walk, which is the whole reason
+    the walk can decide whether to continue.
+
+    D-64-05/D-64-07: the bar is measured against the CUMULATIVE union, never a single
+    page in isolation -- two officers on one page plus two on another reaches four and
+    stops, where a per-page bar would have walked the whole cap. The bar is a stop
+    condition and never a budget: not clearing it simply means `ended` stays `None`.
+
+    This function enlarges no budget (D-64-09): it keeps no fetch counter of its own,
+    and `MAX_FOLLOWUP_FETCHES` is never referenced here -- that axis belongs to
+    `company_budget` and `filter_candidates` alone. It also acts on none of the
+    `ended` values it returns (D-64-08's boundary) -- a future caller decides what
+    happens next; this function only reports why it stopped.
+
+    Returns `{"people", "selected", "dropped", "scores", "ended", "bar"}`. `people` is
+    the deduped union in walk order; `selected`/`dropped` are the accumulated
+    `select_people` outputs across every folded page; `scores` is
+    `[{"url", "score", "cumulative"}, ...]`, one entry per folded page -- `score` is
+    that page's own marginal (post-dedupe) hit count, `cumulative` the running total;
+    `ended` is one of `WALK_ENDINGS` or `None` (keep walking).
+
+    Raises `ValueError` when `candidates` is not a dict carrying both `accepted` and
+    `budget_remaining` -- the same register `rejoin_enriched` already uses for a
+    malformed caller argument. A silently-defaulted candidate dict would later render
+    as a terminal ending the ladder never actually reached, which reads as a finding
+    rather than a caller bug.
+    """
+    if (
+        not isinstance(candidates, dict)
+        or "accepted" not in candidates
+        or "budget_remaining" not in candidates
+    ):
+        raise ValueError(
+            f"candidates must be a dict carrying both 'accepted' and "
+            f"'budget_remaining' (next_candidates()'s own return shape, verbatim) -- "
+            f"got {candidates!r}."
+        )
+
+    seen_keys = set()
+    people = []
+    selected = []
+    dropped = []
+    scores = []
+    ended = None
+
+    for page in pages:
+        new_people = []
+        for person in page.get("people") or []:
+            key = _name_key(person)
+            if key is not None:
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+            new_people.append(person)
+        people.extend(new_people)
+
+        page_selection = select_people(
+            new_people, family_list, chosen_families, known_contacts
+        )
+        selected.extend(page_selection["selected"])
+        dropped.extend(page_selection["dropped"])
+        scores.append({
+            "url": page.get("url"),
+            "score": len(page_selection["selected"]),
+            "cumulative": len(selected),
+        })
+
+        if len(selected) >= bar:
+            ended = WALK_GOOD_ENOUGH
+            break
+
+    return {
+        "people": people,
+        "selected": selected,
+        "dropped": dropped,
+        "scores": scores,
+        "ended": ended,
+        "bar": bar,
+    }
+
+
 class CapRefused(ValueError):
     """Raised when a per-company cap cannot be trusted to bound a suggestion round's
     spend to what the operator agreed to (D-62-12, SUGGEST-05: a round may spend LESS

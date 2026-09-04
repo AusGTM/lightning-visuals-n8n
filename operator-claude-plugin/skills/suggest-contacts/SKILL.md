@@ -98,7 +98,24 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    as a library and never rebuilt (D-62-01). Fetch with the native `web_fetch` tool and
    nothing else — the same INGEST-05 contract `contact-upload/SKILL.md`'s own URL adapter
    already follows: candidates are fetched only in the order the ladder shows, only after
-   the operator has approved them, stopping at the first one that yields people.
+   the operator has approved them, and the walk keeps going until
+   `suggest_contacts.walk_pages(pages, candidates, bar, ...)` says it is done — never
+   until the first fetch that happens to yield anyone.
+
+   **Pages accumulate; they do not compete.** Every page fetched contributes its people
+   to one deduped set (`suggest_contacts.walk_pages`'s `people`), deduped by normalised
+   first+last name — a `/board/` page naming nine officers never gets discarded because
+   `/contact` already named a receptionist (D-64-01). The walk stops once the cumulative
+   role-filter hit count over that union reaches
+   `suggest_contacts.walk_bar(chosen_families, per_company_cap)` — `max(len(chosen_
+   families), per_company_cap)` — which is computed once per round, alongside `vocabulary`
+   and `per_company_cap` above, never re-asked per company.
+
+   **`pages` is not `attempts`.** `pages` is every page fetched for this company,
+   `{"url", "people", "disposition"}` each, and is what `walk_pages` folds. `attempts`
+   stays exactly what it always was — the record fed to `no_candidates` and
+   `search_fallback.eligible_after_ladder` once the ladder yields nobody — and is never
+   passed to `walk_pages` in its place.
 
    Thread the fetch budget per company through `suggest_contacts.company_budget(attempts)`
    and `suggest_contacts.next_candidates(company_row, attempts, sitemap_urls)` — the
