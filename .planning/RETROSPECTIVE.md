@@ -102,6 +102,82 @@ the configured share.
   schedule triggers (405) and the natural tick was ~21h out. Recorded honestly rather than implied
   as a scheduled firing.
 
+## Milestone: v1.1 — Unattended Session Runs
+
+**Shipped:** 2026-09-04
+**Phases:** 10 | **Plans:** 62 | **Tasks:** 162
+
+### What Was Built
+
+An operator working only in Claude can now open a bounded, revocable write grant, hand over a
+batch, and get it back done — with ceilings that refuse before the run starts, a post-run
+account of what actually landed in HubSpot, and held rows for anything the pipeline could not
+stand behind. Phase 62 added finding the people nobody had named at a company by crawling that
+company's own site.
+
+### What Worked
+
+- **Deciding by measurement, not preference.** The quick tasks that closed this milestone's
+  tail each killed their obvious fix with a measurement first — the derived role vocabulary
+  misses the same titles the curated one does; label-prefix matching fixes 1 of 3 cases;
+  `<label>.com.au` and `<label>.org.au` are separately registrable. Every one of those would
+  have shipped as a plausible-looking wrong fix.
+- **Live rounds as the real verifier.** Two `suggest-contacts` rounds produced more actionable
+  defects in an afternoon than the preceding offline verification did: a role filter that
+  selected 0 of 3 real staff, a domain rule holding correct emails, a skill instructing a call
+  the code deliberately refuses. None was visible from the tests, all of which were green.
+- **Refusals that fired correctly.** The domain-relatedness rule held `craig.smith@thehartford.com`
+  — a different Craig Smith at a US insurer — on its first live outing. The precision-for-recall
+  trade was accepted with its cost measured in advance, and it behaved as agreed.
+
+### What Was Inefficient
+
+- **ROADMAP.md drifted far enough to mislead.** At close it still listed Phases 60, 62 and 63
+  as open when all three were complete and passed on disk — 63 at 28/28, despite the line
+  calling it "not yet planned". That stale line directly caused one wrong decision during the
+  session (skipping the milestone switch for a reason that was no longer true). The document
+  that describes state was less reliable than the state.
+- **A staleness check that reads mtimes produced a false positive at exactly the wrong moment.**
+  Phase 53 was flagged stale because a metadata edit *recording that the phase was verified*
+  gave its SUMMARY a newer mtime than its VERIFICATION. Nearly cost a redundant verification
+  pass on a phase that was closed by live operator walk.
+- **A minimum became a ceiling without anyone deciding it should.** The enrichment gate's
+  `REQUIRED` list of three fields also drives Lusha's selective reveal, so 9 of 12 promotable
+  contact fields are never asked for. Nobody chose that; it fell out of a list written for a
+  different purpose.
+
+### Patterns Established
+
+- **Record what a fix is NOT, next to the fix.** Several todos this milestone carry an
+  explicit "do not fix it this way" section with the measurement that rules the tempting
+  option out. That is what stopped the derived-vocabulary adoption being re-proposed twice.
+- **Two hold vocabularies, kept disjoint on purpose.** `confidence.ALL_HOLD_CODES` means "could
+  not identify"; the partition codes mean "identified fine, declined to send". The `HeldQueueError`
+  raised when one was fed to the other was the guard working, not a bug.
+- **Acknowledgement over resolution at close, disclosed in a table.** 11 items were deferred
+  with their reasons and their v1.2 destinations named, rather than either fixed under time
+  pressure or quietly dropped.
+
+### Key Lessons
+
+1. **A green suite is not evidence the feature works.** The search fallback passed 11/11
+   offline and has still never opened against a real site across two live attempts — because
+   its trigger is keyed on ladder-empty when the operator meant round-empty. Offline
+   verification confirmed the code did what the decision said; nobody checked the decision.
+2. **Read state from the artifact, not the document about the artifact.** git history and
+   on-disk verification files were right every time ROADMAP.md and an mtime check were wrong.
+3. **When raising yield, write the safety constraints down first.** v1.2 opens with five
+   binding `SAFE-*` requirements precisely because the obvious way to raise yield is to lower
+   a gate, and every one of its six phases is a temptation to do so.
+
+### Cost Observations
+
+- Model mix: planning and execution on opus; verification and review on a mix.
+- Notable: the two cheapest fixes of the milestone (`rf1`, `ad2`) each turned a live zero into
+  a non-zero and cost no provider credits at all. The expensive-looking option — richer
+  enrichment — turns out to be near-free too, since Lusha bills flat per contact regardless of
+  reveal-field count and ZoomInfo's extra fields ride a request already paid for.
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Notable |
