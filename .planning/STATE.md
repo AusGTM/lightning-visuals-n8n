@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.2
-milestone_name: Yield and Friction
+milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
+current_phase: 64
 status: Planning
-stopped_at: context exhaustion at 100% (2026-09-03)
-last_updated: "2026-09-04T00:08:50.421Z"
-last_activity: 2026-09-04
+stopped_at: Phase 64 context gathered
+last_updated: "2026-09-04T00:52:50.421Z"
+last_activity: 2026-09-05
 last_activity_desc: Milestone v1.1 completed and archived
-state_head: b527e22c67ef90de068788fd9c3ca10979075cce
+state_head: d1a40d7199f5ece474ba344cde26b84ee3a79903
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-current_phase: 64
 current_phase_name: The ladder stops at the best page, not the first
 ---
 
@@ -500,12 +500,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T18:06:32.273Z
-**Stopped at:** context exhaustion at 100% (2026-09-03)
+**Last session:** 2026-09-04T00:52:50.399Z
+**Stopped at:** Phase 64 context gathered
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** None
+**Resume file:** .planning/phases/64-the-ladder-stops-at-the-best-page-not-the-first/64-CONTEXT.md
 
 ## Performance Metrics
 
