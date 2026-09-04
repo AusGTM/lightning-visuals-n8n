@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 66
-current_phase_name: Rich enrichment, not minimum enrichment
-status: verifying
-stopped_at: Completed 66-03-PLAN.md
-last_updated: "2026-09-04T08:17:38.705Z"
+current_phase: 65
+current_phase_name: Round-empty re-entry, keyed on the cause
+status: planning
+stopped_at: Phase 66 complete, ready to plan Phase 65
+last_updated: "2026-09-04T08:57:10.881Z"
 last_activity: 2026-09-05
-last_activity_desc: Phase 66 execution started
-state_head: 7a4a57e12ece35727c3b412a68431ad71036e75e
+last_activity_desc: Phase 66 complete, transitioned to Phase 65
+state_head: c42d3b599420b32daaf1c833b149d2a96c9ca007
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
   completed_plans: 4
-  percent: 17
+  percent: 33
 ---
 
 # Project State
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 66 (Rich enrichment, not minimum enrichment) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-09-04 — Phase 66 execution started
+Phase: 65 — Round-empty re-entry, keyed on the cause
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-04 — Phase 66 complete, transitioned to Phase 65
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -501,7 +501,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-04T08:17:38.558Z
-**Stopped at:** Completed 66-03-PLAN.md
+**Stopped at:** Phase 66 complete, ready to plan Phase 65
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.

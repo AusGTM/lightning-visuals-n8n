@@ -58,7 +58,7 @@ carrying its live evidence.
 
 - [x] Phase 64: The ladder stops at the best page, not the first (completed 2026-09-04)
 - [ ] Phase 65: Round-empty re-entry, keyed on the cause
-- [ ] Phase 66: Rich enrichment, not minimum enrichment
+- [x] Phase 66: Rich enrichment, not minimum enrichment (completed 2026-09-04)
 - [ ] Phase 67: An autonomy flag with sensible defaults
 - [ ] Phase 68: State the price and keep moving
 - [ ] Phase 69: Held rows survive the round
@@ -147,7 +147,7 @@ makes a contact usable.
 - Deliverable includes a producer/consumer matrix per field, and the same audit for companies.
 
 **Requirements:** RICH-01, RICH-02, RICH-03, RICH-05, RICH-06
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
