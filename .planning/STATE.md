@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 64
 status: Planning
-stopped_at: Phase 64 context gathered
-last_updated: "2026-09-04T00:52:50.421Z"
+stopped_at: Phases 64-69 context gathered (v1.2 fully discussed)
+last_updated: "2026-09-04T03:32:07.264Z"
 last_activity: 2026-09-05
 last_activity_desc: Milestone v1.1 completed and archived
-state_head: d1a40d7199f5ece474ba344cde26b84ee3a79903
+state_head: db7529f3e7ece01bf1932328159d7f69cafcee65
 progress:
   total_phases: 6
   completed_phases: 0
@@ -500,12 +500,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-04T00:52:50.399Z
-**Stopped at:** Phase 64 context gathered
+**Last session:** 2026-09-04T03:32:07.237Z
+**Stopped at:** Phases 64-69 context gathered (v1.2 fully discussed)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** .planning/phases/64-the-ladder-stops-at-the-best-page-not-the-first/64-CONTEXT.md
+**Resume file:** .planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-CONTEXT.md
 
 ## Performance Metrics
 
