@@ -127,7 +127,12 @@ designed against noise.
 **Plans:** 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 65-01-PLAN.md — the pure `round_outcome` cause classifier, its at-most-one cause-selected re-entry through `eligible_after_ladder`, and the per-company cause + breakdown the report reads (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 65-02-PLAN.md — RICH-04: `merge_enriched`'s allowlist widened to the field policy's promotable contact keys, with the dispatch-boundary strip and both callers traced (wave 2)
 
 ### Phase 66: Rich enrichment, not minimum enrichment
