@@ -122,7 +122,7 @@ reported success.
 **Depends on:** 64, and on the two quick tasks — until false zeros stop, this phase would be
 designed against noise.
 
-**Requirements:** RICH-04 (re-routed from Phase 66 by operator ruling 2026-09-04 — `merge_enriched` lives in `suggest_contacts.py`, which 66's domain excludes)
+**Requirements:** LADDER-03, LADDER-04, LADDER-05, RICH-04 (RICH-04 re-routed from Phase 66 by operator ruling 2026-09-04 — `merge_enriched` lives in `suggest_contacts.py`, which 66's domain excludes; LADDER-03/04/05 were always mapped to Phase 65 in REQUIREMENTS.md's LADDER section but were missing from this line until 2026-09-07)
 
 ### Phase 66: Rich enrichment, not minimum enrichment
 
