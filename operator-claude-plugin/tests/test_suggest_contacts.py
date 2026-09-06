@@ -1278,3 +1278,172 @@ def test_walk_pages_source_contains_no_while_loop():
     source = inspect.getsource(suggest_contacts.walk_pages)
     tree = ast.parse(source)
     assert not any(isinstance(node, ast.While) for node in ast.walk(tree))
+
+
+# =====================================================================================
+# Phase 65 Task 1 — round_outcome: the ONE place a round's cause is named (D-65-01).
+# The routing call (all four terminal-marker args None) decides `reentry`; a terminal
+# call (any of rows/sendable/held/fallback given) never routes again (D-65-08/D-65-12).
+# =====================================================================================
+
+def _empty_walk(bar=2, ended=suggest_contacts.WALK_LADDER_EXHAUSTED):
+    return {
+        "people": [], "selected": [], "dropped": [], "scores": [], "ended": ended,
+        "bar": bar,
+    }
+
+
+def test_round_outcome_cause_vocabulary_is_the_closed_six_value_tuple():
+    assert suggest_contacts.ROUND_CAUSES == (
+        suggest_contacts.CAUSE_UNKNOWN,
+        suggest_contacts.CAUSE_NO_PEOPLE_FOUND,
+        suggest_contacts.CAUSE_NONE_CLASSIFIED,
+        suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL,
+        suggest_contacts.CAUSE_PEOPLE_THIN,
+        suggest_contacts.CAUSE_PROPOSED,
+    )
+
+
+def test_round_outcome_reentry_vocabulary_is_the_closed_two_value_tuple():
+    assert suggest_contacts.ROUND_REENTRIES == (
+        suggest_contacts.REENTRY_SEARCH_FALLBACK,
+        suggest_contacts.REENTRY_NONE,
+    )
+
+
+def test_round_outcome_routes_an_empty_walk_to_the_search_fallback():
+    outcome = suggest_contacts.round_outcome(_empty_walk())
+    assert outcome["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
+    assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+    assert outcome["reason"]
+
+
+def test_round_outcome_never_routes_a_walk_that_found_one_person():
+    walk = {
+        "people": [{"firstname": "Jamie", "lastname": "Fox"}],
+        "selected": [], "dropped": [{"person": {"firstname": "Jamie"}, "reason": "role_not_selected"}],
+        "scores": [], "ended": suggest_contacts.WALK_LADDER_EXHAUSTED, "bar": 2,
+    }
+    outcome = suggest_contacts.round_outcome(walk)
+    assert outcome["cause"] == suggest_contacts.CAUSE_NONE_CLASSIFIED
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+def test_round_outcome_classifies_none_classified_when_every_person_was_dropped():
+    walk = {
+        "people": [
+            {"firstname": "Jamie", "lastname": "Fox"},
+            {"firstname": "Alex", "lastname": "Nguyen"},
+        ],
+        "selected": [],
+        "dropped": [
+            {"person": {"firstname": "Jamie"}, "reason": "role_not_selected"},
+            {"person": {"firstname": "Alex"}, "reason": "already_associated"},
+        ],
+        "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+    }
+    outcome = suggest_contacts.round_outcome(walk)
+    assert outcome["cause"] == suggest_contacts.CAUSE_NONE_CLASSIFIED
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+    assert outcome["breakdown"]["dropped"] == {
+        "role_not_selected": 1, "already_associated": 1,
+    }
+
+
+def test_round_outcome_classifies_all_held_on_email_when_nothing_is_sendable():
+    walk = {
+        "people": [{"firstname": "Jamie", "lastname": "Fox"}],
+        "selected": [{"firstname": "Jamie", "lastname": "Fox"}],
+        "dropped": [], "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+    }
+    held = [
+        {"index": 0, "row": {"row_id": "row-1"}, "reason": "no email",
+         "reason_code": "no_email"},
+        {"index": 1, "row": {"row_id": "row-2"}, "reason": "mismatch",
+         "reason_code": "email_domain_mismatch"},
+    ]
+    outcome = suggest_contacts.round_outcome(walk, sendable=[], held=held)
+    assert outcome["cause"] == suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+    assert outcome["breakdown"]["held"] == {
+        "no_email": 1, "email_domain_mismatch": 1,
+    }
+    assert outcome["breakdown"]["sendable"] == 0
+
+
+def test_round_outcome_classifies_people_thin_one_under_the_bar_and_proposed_at_the_bar():
+    def _walk_with_selected_count(n, bar):
+        return {
+            "people": [{"firstname": f"P{i}", "lastname": "X"} for i in range(n)],
+            "selected": [{"firstname": f"P{i}", "lastname": "X"} for i in range(n)],
+            "dropped": [], "scores": [], "ended": suggest_contacts.WALK_LADDER_EXHAUSTED,
+            "bar": bar,
+        }
+    thin = suggest_contacts.round_outcome(_walk_with_selected_count(2, bar=3))
+    assert thin["cause"] == suggest_contacts.CAUSE_PEOPLE_THIN
+    assert thin["reentry"] == suggest_contacts.REENTRY_NONE
+
+    proposed = suggest_contacts.round_outcome(_walk_with_selected_count(3, bar=3))
+    assert proposed["cause"] == suggest_contacts.CAUSE_PROPOSED
+    assert proposed["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+@pytest.mark.parametrize("bad_walk", [
+    None, {}, {"people": "x"},
+])
+def test_round_outcome_fails_closed_to_unknown_on_a_malformed_walk(bad_walk):
+    outcome = suggest_contacts.round_outcome(bad_walk)
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+    assert outcome["reason"]
+
+
+def test_round_outcome_fails_closed_to_unknown_on_a_malformed_held_entry():
+    walk = _empty_walk()
+    outcome = suggest_contacts.round_outcome(walk, sendable=[], held=["not-a-dict"])
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+def test_round_outcome_does_not_raise_on_any_malformed_input():
+    for bad in (
+        None, {}, {"people": []}, {"people": [], "selected": [], "dropped": [], "bar": "x"},
+    ):
+        outcome = suggest_contacts.round_outcome(bad)
+        assert set(outcome.keys()) == {"cause", "reentry", "reason", "breakdown"}
+    walk = {"people": [], "selected": [], "dropped": [], "bar": 1}
+    outcome = suggest_contacts.round_outcome(walk, held="x")
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+    outcome = suggest_contacts.round_outcome(walk, sendable="x")
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+    outcome = suggest_contacts.round_outcome(walk, rows="x")
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+    outcome = suggest_contacts.round_outcome(walk, fallback="x")
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+
+
+def test_round_outcome_breakdown_counts_are_ints_and_name_each_reason_literal_verbatim():
+    walk = {
+        "people": [
+            {"firstname": "A", "lastname": "One"}, {"firstname": "B", "lastname": "Two"},
+        ],
+        "selected": [],
+        "dropped": [
+            {"person": {"firstname": "A"}, "reason": "role_not_selected"},
+            {"person": {"firstname": "B"}, "reason": "role_not_selected"},
+        ],
+        "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+    }
+    outcome = suggest_contacts.round_outcome(walk)
+    assert outcome["breakdown"]["dropped"] == {"role_not_selected": 2}
+    assert all(isinstance(v, int) for v in outcome["breakdown"]["dropped"].values())
+    assert isinstance(outcome["breakdown"]["people"], int)
+    assert isinstance(outcome["breakdown"]["selected"], int)
+    assert outcome["breakdown"]["sendable"] is None
+    assert outcome["breakdown"]["bar"] == 1
+    assert outcome["breakdown"]["ended"] == suggest_contacts.WALK_GOOD_ENOUGH
+
+
+def test_round_outcome_key_set_is_exactly_cause_reentry_reason_breakdown():
+    outcome = suggest_contacts.round_outcome(_empty_walk())
+    assert set(outcome.keys()) == {"cause", "reentry", "reason", "breakdown"}
