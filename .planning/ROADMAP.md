@@ -124,6 +124,12 @@ designed against noise.
 
 **Requirements:** LADDER-03, LADDER-04, LADDER-05, RICH-04 (RICH-04 re-routed from Phase 66 by operator ruling 2026-09-04 — `merge_enriched` lives in `suggest_contacts.py`, which 66's domain excludes; LADDER-03/04/05 were always mapped to Phase 65 in REQUIREMENTS.md's LADDER section but were missing from this line until 2026-09-07)
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 65-01-PLAN.md — the pure `round_outcome` cause classifier, its at-most-one cause-selected re-entry through `eligible_after_ladder`, and the per-company cause + breakdown the report reads (wave 1)
+- [ ] 65-02-PLAN.md — RICH-04: `merge_enriched`'s allowlist widened to the field policy's promotable contact keys, with the dispatch-boundary strip and both callers traced (wave 2)
+
 ### Phase 66: Rich enrichment, not minimum enrichment
 
 **Goal:** the waterfall fills every field it can confidently reach, instead of the minimum that
