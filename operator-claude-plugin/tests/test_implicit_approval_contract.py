@@ -256,3 +256,33 @@ def test_the_skill_names_backend_controls_direct_grant_route_inline(name):
         f"{name}: must state plainly that a phrase inside an invocation argument "
         "string is not a machine grant"
     )
+
+
+def test_suggest_contacts_binds_send_domains_as_a_named_variable_reused_at_dispatch():
+    """WR-01 (68-REVIEW.md): unlike the other three skills, `suggest-contacts`'s
+    implicit open used to price `record_domains` from an inline list-comprehension
+    expression rather than a variable named `send_domains` the way the other three
+    skills do (`enrich-before-ingest/SKILL.md:287`,
+    `enrich-records/SKILL.md:194`, `contact-upload/SKILL.md:240`). Because
+    `write_grant.covers()` does exact-membership checking, only a single named
+    `send_domains` binding reused verbatim at dispatch time can guarantee the grant
+    opened at step 3 actually covers step 7's dispatch. Pins both halves: the bind
+    at step 3, and the prose naming that SAME variable at step 7's reused dispatch
+    block."""
+    text = _text(SUGGEST_CONTACTS_PATH)
+    open_span = _open_span(TARGETS["suggest-contacts"])
+    assert "send_domains = [" in open_span, (
+        "suggest-contacts step 3 must bind the domain list to a named `send_domains` "
+        "variable, mirroring the other three converted skills, rather than inlining "
+        "the expression directly into plan_grant's record_domains= kwarg"
+    )
+    assert "record_domains=send_domains" in open_span, (
+        "suggest-contacts step 3's plan_grant call must pass the bound `send_domains` "
+        "variable, not a fresh expression"
+    )
+    step_7 = _step(text, 7)
+    assert "send_domains" in step_7, (
+        "suggest-contacts step 7 must name `send_domains` explicitly when describing "
+        "the reused dispatch block's authorize_send/covers() call, so the value is "
+        "provably the same variable bound at step 3, not merely likely to be"
+    )

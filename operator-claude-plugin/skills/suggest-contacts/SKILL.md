@@ -86,18 +86,23 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    against until a grant has priced a suggestion allowance:
 
    ```python
+   send_domains = [c.get("website") or c.get("domain") for c in eligible_companies
+                    if c.get("website") or c.get("domain")]
    proposal = write_grant.plan_grant(
        config, lanes=["enrichment", "contacts", "review"], object_type="companies",
        record_ids=[c.get("id") for c in eligible_companies if c.get("id")],
-       record_domains=[c.get("website") or c.get("domain") for c in eligible_companies
-                        if c.get("website") or c.get("domain")],
+       record_domains=send_domains,
        allow_create=True, label="suggest-contacts batch",
        suggestion_companies=len(eligible_companies))
    ```
 
    This call leaves `suggestion_cap` unset, pricing this round's own ceiling at
    `PRICED_CAP` — the same `priced_cap` the `agreed_cap` call right below checks the
-   stated default of 2 against.
+   stated default of 2 against. `send_domains` is bound here, by that name, exactly
+   like the other three converted skills — because it is the SAME `send_domains` step
+   7's reused dispatch block passes to `write_grant.authorize_send`/`covers()` at
+   dispatch time (`enrich-before-ingest/SKILL.md:436-438`'s idiom), never re-derived
+   from a different expression there.
 
    **If `plan_grant` refuses** — `allow_write_grants` is not set, the eligible set is
    empty, or the ceiling verdict is `"over"` — relay `proposal["detail"]` exactly as it
@@ -301,8 +306,13 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
    `watch.recover_async_dispatch`, `preingest.merge_enriched` — and builds no second
    dispatch path; that reuse is load-bearing, not incidental, since this skill hands that
-   block a plan rather than re-documenting its grant/arming/ceiling machinery. The
-   stage-1 rows (firstname, lastname, company, jobtitle, no email) are exactly what the
+   block a plan rather than re-documenting its grant/arming/ceiling machinery. That
+   reused block's own `write_grant.authorize_send`/`covers()` call reads
+   `record_domains=send_domains` — the SAME `send_domains` step 3 bound before
+   `plan_grant`, never re-derived from each proposed person's own fields, so the grant
+   opened over exactly this batch's companies is provably the grant this dispatch is
+   checked against. The stage-1 rows (firstname, lastname, company, jobtitle, no email)
+   are exactly what the
    waterfall needs to resolve a person by identity group 2.
 
    **The re-join, after.** `preingest.merge_enriched` returns FRESH rows and never
