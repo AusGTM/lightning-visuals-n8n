@@ -254,6 +254,8 @@ Plans:
 
 **Goal:** a correctly-held person is not lost when the session ends.
 
+**Requirements:** HELD-01, HELD-02, HELD-03
+
 **Brief:** `.planning/todos/pending/2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md`.
 
 - `SKILL.md` step 8 routes partition holds through `held_queue.build_entry`; `held_queue.save`
