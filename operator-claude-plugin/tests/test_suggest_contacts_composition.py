@@ -22,6 +22,7 @@ import preingest
 import role_classify
 import search_fallback
 import suggest_contacts
+import suggestion_declines
 import url_fallback
 
 FAMILY_LABEL = "Head of Broadcast"  # a real label in the shipped generic-fallback
@@ -30,13 +31,20 @@ FAMILY_LABEL = "Head of Broadcast"  # a real label in the shipped generic-fallba
 # same function the documented sequence names.
 
 
-def _company_row(row_id, num_associated_contacts):
-    return {
+def _company_row(row_id, num_associated_contacts, id=None):
+    """Phase 69: `id` is optional and omitted by every pre-Phase-69 call site --
+    added only where a test needs a HubSpot company id to key a
+    `suggestion_declines` entry (`company_id_for_index` reads `company.get("id")`,
+    which is `None` -- and therefore unkeyable -- when the key is absent)."""
+    row = {
         "row_id": row_id,
         "name": f"Example Company {row_id}",
         "website": "https://example-club.example/board",
         "num_associated_contacts": num_associated_contacts,
     }
+    if id is not None:
+        row["id"] = id
+    return row
 
 
 def test_a_company_marked_has_contacts_never_reaches_discovery_plan():
@@ -835,3 +843,255 @@ def test_the_documented_round_pipeline_never_crashes_when_every_company_finds_no
     for entry in rounds:
         assert entry["outcome"]["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
         assert entry["outcome"]["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
+
+# =====================================================================================
+# Phase 69 Plan 02 (HELD-01, HELD-03): step 8's held routing -- a partition-declined
+# person, from the real `partition_for_dispatch` result, through the sequence
+# `suggest-contacts/SKILL.md` step 8 now documents (`suggestion_declines.load` ->
+# `company_id_for_index` -> `entry_key` -> `build_entry` -> `first_refusal` ->
+# `save` -> `partition_by_run`), driven end to end, offline, under `tmp_path`.
+# =====================================================================================
+
+def _held_routing(held, records, rounds, run_id, declines):
+    """The exact sequence `suggest-contacts/SKILL.md` step 8's held-routing fence
+    documents, copied here rather than imported (there is nothing to import -- the
+    fence IS the documentation, and this function drives it for real). Returns
+    `(unkeyable, unstorable, added)`; mutates `declines` in place, matching the
+    fence's own `declines[key] = candidate`."""
+    unkeyable = []
+    unstorable = []
+    added = 0
+    for entry in held:
+        company_id = suggest_contacts.company_id_for_index(rounds, entry["index"])
+        key = suggestion_declines.entry_key(company_id, entry["row"])
+        if key is None:
+            unkeyable.append(entry)
+            continue
+        candidate = suggestion_declines.build_entry(
+            entry["row"], entry["reason_code"], entry["reason"], run_id, company_id,
+            records[entry["index"]]["provenance"])
+        refusal = suggestion_declines.first_refusal(key, candidate)
+        if refusal is not None:
+            unstorable.append(refusal)
+            continue
+        declines[key] = candidate
+        added += 1
+    return unkeyable, unstorable, added
+
+
+def test_the_documented_step_8_held_routing_persists_a_declined_person(tmp_path):
+    """Two eligible companies, each carrying a real HubSpot `id`, each producing
+    exactly one held row through the real `partition_for_dispatch` -- one held for
+    `no_email`, the other for `email_domain_mismatch`. Driving step 8's documented
+    held-routing sequence over that real result persists one entry per held row, each
+    keyed to the OWNING company's id (never the other company's), each carrying the
+    reason_code the partition actually stamped -- and the whole sequence raises
+    neither `held_queue.HeldQueueError` (never imported, never called -- see
+    `test_step_8_held_routing_never_calls_held_queue` below) nor
+    `suggestion_declines.SuggestionDeclineError`."""
+    company_a = _company_row("held-a", 0, id="2001")
+    company_b = _company_row("held-b", 0, id="2002")
+
+    records = [
+        {"row": {"firstname": "Pat", "lastname": "Alpha", "company": company_a["name"],
+                 "jobtitle": "Vice President"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_a["website"]}},
+        {"row": {"firstname": "Sam", "lastname": "Beta", "company": company_b["name"],
+                 "jobtitle": "Treasurer", "email": "sam.beta@stranger.example"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_b["website"]}},
+    ]
+    rounds = [
+        {"company": company_a, "start": 0, "count": 1},
+        {"company": company_b, "start": 1, "count": 1},
+    ]
+    company_domains = {
+        company_a["name"]: company_a["website"], company_b["name"]: company_b["website"],
+    }
+
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records], company_domains)
+    assert sendable == []
+    assert [entry["reason_code"] for entry in held] == [
+        "no_email", "email_domain_mismatch",
+    ]
+
+    run_id = "run-held-a"
+    store_path = tmp_path / "suggestion_declines.json"
+    declines = suggestion_declines.load(path=store_path)
+    assert declines == {}
+
+    unkeyable, unstorable, added = _held_routing(held, records, rounds, run_id, declines)
+    assert unkeyable == []
+    assert unstorable == []
+    assert added == 2
+
+    if added:
+        suggestion_declines.save(declines, path=store_path)
+    batch = suggestion_declines.partition_by_run(declines, run_id)
+
+    saved = suggestion_declines.load(path=store_path)
+    assert len(saved) == 2
+
+    key_a = suggestion_declines.entry_key(company_a["id"], records[0]["row"])
+    key_b = suggestion_declines.entry_key(company_b["id"], records[1]["row"])
+    assert saved[key_a]["reason_code"] == "no_email"
+    assert saved[key_a]["company_id"] == str(company_a["id"])
+    assert saved[key_b]["reason_code"] == "email_domain_mismatch"
+    assert saved[key_b]["company_id"] == str(company_b["id"])
+    # never the OTHER company's id
+    assert saved[key_a]["company_id"] != saved[key_b]["company_id"]
+
+    assert batch == {"this_run": saved, "backlog": {}}
+
+
+def test_a_second_round_merges_into_the_first_rounds_declines(tmp_path):
+    """A first run's map is saved, then a second round's `held` carries one
+    RE-DISCOVERED person (same company + name key, a different reason_code this
+    time) and one brand-new person. Loading before merging (as the fence documents)
+    means the file afterwards holds three entries -- not two, not four -- the
+    re-found person's entry now carries the SECOND run's `run_id`, and the
+    un-rediscovered first-run entry is still present byte-for-byte in its `row`."""
+    store_path = tmp_path / "suggestion_declines.json"
+
+    company_a = _company_row("merge-a", 0, id="3001")
+    company_b = _company_row("merge-b", 0, id="3002")
+    company_c = _company_row("merge-c", 0, id="3003")
+
+    # Run 1: Pat Alpha (company_a, no email) and Sam Beta (company_b, mismatched
+    # email) are both held.
+    records_run1 = [
+        {"row": {"firstname": "Pat", "lastname": "Alpha", "company": company_a["name"],
+                 "jobtitle": "Vice President"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_a["website"]}},
+        {"row": {"firstname": "Sam", "lastname": "Beta", "company": company_b["name"],
+                 "jobtitle": "Treasurer", "email": "sam.beta@stranger.example"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_b["website"]}},
+    ]
+    rounds_run1 = [
+        {"company": company_a, "start": 0, "count": 1},
+        {"company": company_b, "start": 1, "count": 1},
+    ]
+    company_domains_run1 = {
+        company_a["name"]: company_a["website"], company_b["name"]: company_b["website"],
+    }
+    _, held_run1 = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records_run1], company_domains_run1)
+    assert [entry["reason_code"] for entry in held_run1] == [
+        "no_email", "email_domain_mismatch",
+    ]
+
+    run_id_1 = "run-1"
+    declines = suggestion_declines.load(path=store_path)
+    _, _, added = _held_routing(held_run1, records_run1, rounds_run1, run_id_1, declines)
+    assert added == 2
+    suggestion_declines.save(declines, path=store_path)
+
+    personb_key = suggestion_declines.entry_key(company_b["id"], records_run1[1]["row"])
+    personb_entry_before = suggestion_declines.load(path=store_path)[personb_key]
+
+    # Run 2: Pat Alpha is RE-FOUND at the same company (same name key), this time
+    # with a freemail address -- a DIFFERENT reason_code -- plus a brand-new person,
+    # Robin Gamma, at a third company.
+    records_run2 = [
+        {"row": {"firstname": "Pat", "lastname": "Alpha", "company": company_a["name"],
+                 "jobtitle": "Vice President", "email": "pat.alpha@gmail.com"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_a["website"]}},
+        {"row": {"firstname": "Robin", "lastname": "Gamma", "company": company_c["name"],
+                 "jobtitle": "Treasurer"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_c["website"]}},
+    ]
+    rounds_run2 = [
+        {"company": company_a, "start": 0, "count": 1},
+        {"company": company_c, "start": 1, "count": 1},
+    ]
+    company_domains_run2 = {
+        company_a["name"]: company_a["website"], company_c["name"]: company_c["website"],
+    }
+    _, held_run2 = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records_run2], company_domains_run2)
+    assert [entry["reason_code"] for entry in held_run2] == [
+        "email_domain_freemail", "no_email",
+    ]
+
+    run_id_2 = "run-2"
+    declines = suggestion_declines.load(path=store_path)  # loaded BEFORE merging
+    assert len(declines) == 2
+    _, _, added = _held_routing(held_run2, records_run2, rounds_run2, run_id_2, declines)
+    assert added == 2
+    suggestion_declines.save(declines, path=store_path)
+
+    saved = suggestion_declines.load(path=store_path)
+    assert len(saved) == 3  # not two, not four
+
+    reencountered_key = suggestion_declines.entry_key(company_a["id"], records_run2[0]["row"])
+    assert saved[reencountered_key]["run_id"] == run_id_2
+    assert saved[reencountered_key]["reason_code"] == "email_domain_freemail"
+
+    # the un-rediscovered first-run entry survives byte-for-byte in its own `row`
+    assert saved[personb_key]["row"] == personb_entry_before["row"]
+    assert saved[personb_key]["run_id"] == run_id_1
+
+
+def test_a_decline_with_no_company_id_is_reported_unkeyable_and_never_dropped(tmp_path):
+    """A company row that carries no `id` yields `entry_key(...) is None` --
+    `company_id_for_index` returns `None` for it. The documented fence's `unkeyable`
+    list carries that held entry (so step 9's report has something to name), and the
+    saved map stays empty -- an unkeyable decline is reported, never silently
+    dropped."""
+    store_path = tmp_path / "suggestion_declines.json"
+    company_no_id = _company_row("no-id", 0)  # id omitted -- carries no "id" key
+    assert "id" not in company_no_id
+
+    records = [
+        {"row": {"firstname": "Jesse", "lastname": "Delta", "company": company_no_id["name"],
+                 "jobtitle": "Treasurer"},
+         "provenance": {"input": "suggest_contacts_ladder",
+                        "locator": company_no_id["website"]}},
+    ]
+    rounds = [{"company": company_no_id, "start": 0, "count": 1}]
+    company_domains = {company_no_id["name"]: company_no_id["website"]}
+
+    _, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records], company_domains)
+    assert len(held) == 1
+    assert held[0]["reason_code"] == "no_email"
+
+    run_id = "run-no-id"
+    declines = suggestion_declines.load(path=store_path)
+    unkeyable, unstorable, added = _held_routing(held, records, rounds, run_id, declines)
+
+    assert unkeyable == held
+    assert unstorable == []
+    assert added == 0
+    assert declines == {}
+
+    if added:
+        suggestion_declines.save(declines, path=store_path)  # pragma: no cover
+    batch = suggestion_declines.partition_by_run(declines, run_id)
+
+    assert suggestion_declines.load(path=store_path) == {}
+    assert batch == {"this_run": {}, "backlog": {}}
+
+
+def test_step_8_held_routing_never_calls_held_queue():
+    """Parses `suggest-contacts/SKILL.md`'s python fences with the sequence-coverage
+    module's own `extract_python_blocks`/`parse_calls` helpers and asserts no
+    extracted call is `held_queue.build_entry`, `held_queue.save`, or
+    `confidence.assess` -- plus a plain substring check over the whole file, since
+    the prose sentence naming the correction is not inside a fence."""
+    import test_skill_sequence_coverage as seq_cov
+
+    skill_path = seq_cov.PLUGIN_ROOT / "skills" / "suggest-contacts" / "SKILL.md"
+    text = skill_path.read_text()
+    modules = seq_cov.scripts_modules()
+    forbidden = {"held_queue.build_entry", "held_queue.save", "confidence.assess"}
+
+    for _block_index, line_number, source in seq_cov.extract_python_blocks(text):
+        calls = seq_cov.parse_calls(source, modules)
+        hit = set(calls) & forbidden
+        assert not hit, f"line {line_number}: forbidden call(s) {hit} in held routing"
+
+    assert "held_queue." not in text
+    assert "confidence.assess" not in text
+
