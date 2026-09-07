@@ -269,9 +269,12 @@ says nothing per record, this lane reports at chunk granularity and says so.
    **A grant removes the question, not the safety.** The preview still runs and is still
    shown, the records are still named, each send still arms and disarms its own window
    bounded to that send's records, and a failed disarm is still reported loudly as its own
-   state. Revoking a grant **refuses the next send** — it **does not stop a dispatch already
-   running**, so a revoke arriving mid-dispatch still lets every remaining chunk of that
-   send go out.
+   state. Revoking a grant **refuses the next send** — it **does not stop a dispatch already running**,
+   so a revoke arriving mid-dispatch still lets every remaining chunk of that send go out.
+   The pre-spend pause below is the free interrupt window: an interrupt landing inside it
+   stops the round here, before anything is spent or written. Once that pause has elapsed
+   the grant is already open, and an interrupt from that point on is a revoke — refusing
+   the next send while a dispatch already running finishes its chunks.
 
    Whichever consent applies — a standing grant, or this send's own yes — step 8's dispatch
    opens the same kind of record-scoped armed window; see there for the code (F2,

@@ -385,7 +385,11 @@ whatever seven columns happened to be in the source file.
 
    They can still stop the run by revoking the grant, and revoking
    **refuses the next send** — it **does not stop a dispatch already running**, so a revoke
-   arriving mid-dispatch still lets every remaining chunk of that send go out.
+   arriving mid-dispatch still lets every remaining chunk of that send go out. The
+   pre-spend pause above is the free interrupt window: an interrupt landing inside it
+   stops the round here, before anything is spent or written. Once that pause has
+   elapsed the grant is already open, and an interrupt from that point on is a revoke —
+   refusing the next send while a dispatch already running finishes its chunks.
 
    **A grant removes the question, not the safety.** The previews still run and are still
    shown, the rows are still named individually, each send still arms and disarms its own

@@ -116,9 +116,13 @@ before; the unattended gate itself — the autonomy levels and their fail-closed
 conditions — is Phase 67's to open (D-68-04).
 
 **Revoking a grant** — `write_grant.revoke_grant(grant)`, and it is idempotent. Say
-plainly when it bites: it **refuses the next SEND**, and it **does not stop a dispatch
-already running**. At the two-record chunk ceiling a forty-record send is twenty chunks,
-and all twenty go out after a revoke. Never describe revoking as stopping the run.
+plainly when it bites: it **refuses the next SEND**, and it **does not stop a dispatch already running**.
+At the two-record chunk ceiling a forty-record send is twenty chunks, and all twenty go
+out after a revoke. Never describe revoking as stopping the run. The pre-spend pause is
+the free interrupt window: an interrupt landing inside it stops the round here, before
+anything is spent or written. Once that pause has elapsed the grant is already open, and
+an interrupt from that point on is a revoke — refusing the next send while a dispatch
+already running finishes its chunks.
 
 **Closing a grant** — `write_grant.close_grant(grant, reason)`, with a reason from the
 recorded set; a free-text reason raises rather than being silently accepted. A grant also
