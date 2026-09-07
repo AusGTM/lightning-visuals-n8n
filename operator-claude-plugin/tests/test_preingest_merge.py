@@ -280,6 +280,29 @@ def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
         == preingest.REPO_POLICY_PATH.read_bytes()
     )
 
+    # Phase 65 Plan 02 Task 3 (SAFE-01): the widening changes only WHICH keys may be
+    # written, never whether a candidate clears the bar to be written at all -- pin
+    # every contacts: entry's min_confidence to this plan's own Findings, so no future
+    # edit to either copy can quietly lower a threshold under cover of this widening.
+    import yaml as _yaml
+    data = _yaml.safe_load(preingest.REPO_POLICY_PATH.read_text(encoding="utf-8"))
+    contacts = data["contacts"]
+    expected_min_confidence = {
+        "email": 80, "city": 80, "state": 80, "country": 80,
+        "hs_state_code": 80, "hs_country_region_code": 80, "phone": 80,
+        "mobilephone": 85, "jobtitle": 75, "lv_linkedin_url": 85,
+        "seniority": 75, "lv_persona_group": 75,
+    }
+    assert set(contacts) == set(expected_min_confidence), (
+        "the contacts: key set drifted from this plan's own Findings -- update both "
+        "this test and promotable_contact_props' expectations together"
+    )
+    for key, expected in expected_min_confidence.items():
+        assert contacts[key]["min_confidence"] == expected, (
+            f"{key}'s min_confidence changed from {expected} -- SAFE-01 forbids "
+            "lowering a threshold as a rider on this widening"
+        )
+
 
 def test_promotable_contact_props_names_the_twelve_promotable_contact_keys():
     result = sorted(preingest.promotable_contact_props())
@@ -594,6 +617,37 @@ def test_a_merged_row_with_a_widened_key_builds_a_held_queue_entry_without_raisi
         "held_queue's ROW_FIELD_ALLOWLIST is a pre-existing, deliberate allowlist -- "
         "not something this phase widens or is in scope to change"
     )
+
+
+# =====================================================================================
+# Phase 65 Plan 02 Task 3 (SAFE-01): a present value for a widened key is never
+# overwritten -- the widening changes only WHICH keys may be written, never whether a
+# present value is overwritten.
+# =====================================================================================
+
+def test_a_present_widened_key_is_never_overwritten_and_records_a_conflict():
+    rows = _rows(1)
+    rows[0]["seniority"] = "Director"
+    responses = [_response(rows[0]["row_id"], {"seniority": "Manager"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert result.rows[0]["seniority"] == "Director"
+    assert result.conflicts == (
+        {"row_id": rows[0]["row_id"], "field": "seniority",
+         "kept": "Director", "provider_value": "Manager"},
+    )
+
+
+def test_a_byte_equal_widened_key_records_no_conflict_and_writes_nothing():
+    rows = _rows(1)
+    rows[0]["seniority"] = "Director"
+    responses = [_response(rows[0]["row_id"], {"seniority": "Director"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert result.rows[0]["seniority"] == "Director"
+    assert result.conflicts == ()
 
 
 # =====================================================================================
