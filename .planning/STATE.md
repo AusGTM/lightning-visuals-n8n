@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 67
 current_phase_name: an-autonomy-flag-with-sensible-defaults
 status: executing
-stopped_at: Completed 67-02-PLAN.md
-last_updated: "2026-09-07T08:01:31.149Z"
+stopped_at: Completed 67-03-PLAN.md
+last_updated: "2026-09-07T08:22:23.043Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 67 execution started
-state_head: 86016e60790b7a275c394f81fba0f18dd515faa4
+state_head: 49c542f9ddd763f4a0a283ee489110b43d192731
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 33
 ---
 
@@ -358,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 67 (an-autonomy-flag-with-sensible-defaults) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 67 execution started
 
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T08:01:30.972Z
-**Stopped at:** Completed 67-02-PLAN.md
+**Last session:** 2026-09-07T08:22:22.866Z
+**Stopped at:** Completed 67-03-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -639,6 +639,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 68 P03 | 15min | 3 tasks | 6 files |
 | Phase 67 P01 | 25min | 3 tasks | 5 files |
 | Phase 67 P02 | 25min | 3 tasks | 5 files |
+| Phase 67 P03 | 35min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -767,6 +768,9 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 67]: 67-01: operator reversed 57-05 Task 4 option-a — autonomy defaults ON for all three levels (read_only/spend_no_write/write); config_gate.autonomy_enabled reads absence as ON and every near-miss/malformed-parent as OFF; ALLOW_N8N_ARM and allow_write_grants remain the only authorities, pinned by symbol-absence tests against scheduled_arm.py/n8n_arming.py. — Recorded per AUTO-04/SAFE-05 requirement that the D-61-08 unattended-gate reversal be put to the operator explicitly, verbatim, before any default is written to disk.
 - [Phase 67]: 67-02 Task 1: D-67-09 rendering confirmed as-proposed (all four items: the sentence, three unknowns by cause, reportless pre-start refusal, off-path settings-key line).
 - [Phase 67]: 67-02: backend-control/SKILL.md excluded by name from the 'Phase 67's to' structural absence check — its own forward reference is D-68-04's, a different decision retired by 67-04, and this plan's prohibitions forbid editing it.
+- [Phase 67]: contact-upload mints its own run_id (run_state.new_run_id()) before the ceiling branch and passes it into dispatch.dispatch(..., run_id=run_id) — the mint-then-pass idiom for a single-shot dispatch.
+- [Phase 67]: suggest-contacts sources run_id/outcome/disarm from step 8's reused enrich-before-ingest step-5 dispatch block, never minting a second run_id.
+- [Phase 67]: REVIEW-57-L5's contact-upload exclusion paragraph is retired at enrich-before-ingest and enrich-records: contact-upload now builds the mandatory report too, since autonomy breaks the real-time-watching premise.
 
 ### Roadmap Evolution
 

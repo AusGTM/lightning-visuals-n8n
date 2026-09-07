@@ -198,7 +198,7 @@ per tier.
   and `CapRefused` remain the bounds.** Does not replace `ALLOW_N8N_ARM` for the headless path.
 - "All functions" is three tiers — read-only, spend-no-write, write — not one boolean.
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -213,7 +213,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 67-03-PLAN.md — the end-of-run report becomes mandatory at `contact-upload` and
+- [x] 67-03-PLAN.md — the end-of-run report becomes mandatory at `contact-upload` and
   `suggest-contacts`, and the two paragraphs that forbade one of them are corrected (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
