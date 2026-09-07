@@ -193,8 +193,9 @@ per tier.
 - **It reverses a recorded decision.** At 57-05's Task 4 gate the operator chose option-a — a
   small, supervised first live batch, explicitly not the first unattended credit-spending one.
   The phase must present that reversal as such, not smuggle it in as a config default.
-- Fails closed on `CEILING_UNKNOWN`, on an unread provider balance, and on a missing allowance
-  key. Does not replace `ALLOW_N8N_ARM` for the headless path.
+- ~~Fails closed on `CEILING_UNKNOWN`, on an unread provider balance, and on a missing allowance
+  key.~~ **Reversed 2026-09-07 (D-67-09): discloses the unknown state and proceeds; `CEILING_OVER`
+  and `CapRefused` remain the bounds.** Does not replace `ALLOW_N8N_ARM` for the headless path.
 - "All functions" is three tiers — read-only, spend-no-write, write — not one boolean.
 
 ### Phase 68: State the price and keep moving

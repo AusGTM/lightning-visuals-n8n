@@ -110,6 +110,44 @@ the end-of-run report mandatory under autonomy.
   autonomous path refuses loudly into the mandatory report (D-67-06) or whether RUN-05 must
   land first.
 
+## Planning-time rulings (operator, 2026-09-07, put by plan-phase after 67-RESEARCH.md)
+
+- **D-67-09: REVERSES D-67-05 and AUTO-03. Autonomy ON discloses an unknown state and
+  PROCEEDS.** On `CEILING_UNKNOWN` (the n8n monthly execution allowance could not be
+  sampled), an unread provider balance, or a missing `n8n_monthly_execution_allowance` key,
+  an autonomous spend/write round states the unknown in the pre-spend line and continues —
+  identical to Phase 68's attended path (D-68-10, D-57-02). It does NOT refuse. The bounds
+  that remain are `CEILING_OVER` (refuses only when sampled) and `CapRefused`. Reason, on
+  the record: two of three provider balances already read `unknown` on this account
+  (`write_grant.py` ~1006), so refuse-on-unknown would block essentially every autonomous
+  round. Offered and not taken: restore D-67-05 (refuse on all three); a split (refuse only
+  on the missing key). Operator reaffirmed after the reversal was named explicitly.
+  — **Reversibility:** one-way in effect — credits an unattended round spends under an
+  unsampled ceiling are not recoverable. Reinstating a refusal later is a one-line code change.
+
+- **D-67-10: D-67-03 governs; REQUIREMENTS.md AUTO-02 is rewritten to match.** Defaults
+  apply on update; an absent autonomy key reads as ON. AUTO-02 becomes "a plugin update that
+  changes write posture states it plainly (release notes + first-round notice); it never
+  changes it silently". AUTO-02's 2026-09-04 text predated the 2026-09-05 discuss-phase.
+
+- **D-67-11: The mandatory end-of-run report (D-67-06) covers the four batch skills.**
+  `contact-upload` and `suggest-contacts` gain `run_report.build_run_report`/`record_audit`;
+  `enrich-before-ingest` and `enrich-records` already call it. `review-triage` keeps its
+  per-record ritual (no batch report); `backend-control` is out of scope.
+
+- **D-67-12 (orchestrator, from CONTEXT's discretion note): `backend-control` is in no
+  tier.** Its arm/deploy/structural mutations stay confirm-and-wait regardless of any
+  autonomy key — they are D-68-09 genuine decision points and are not in D-67-01's write list.
+
+- **D-67-13 (orchestrator, from CONTEXT's discretion note): RUN-05 is a documented
+  limitation, not a dependency.** A `CEILING_OVER` batch is still refused whole; under
+  autonomy that refusal lands loudly in the mandatory end-of-run report (D-67-06), never a
+  silent no-op. The affordable-subset split stays unbuilt.
+
+- **Vocabulary (binding, from Phase 68-01):** the substring "tier" is banned in every
+  operator-facing SKILL.md body (`test_report_enrichment.py` D-10b). Say "autonomy levels";
+  key names `read_only` / `spend_no_write` / `write` carry no banned substring.
+
 ### Claude's Discretion
 
 - The settings keys' names and nesting in `operator.local.json`.

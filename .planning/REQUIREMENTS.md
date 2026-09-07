@@ -74,10 +74,16 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 - [ ] **AUTO-01**: Autonomy is expressed per tier (read-only / spend-no-write / write), not as
   one boolean.
-- [ ] **AUTO-02**: Every default preserves CURRENT behaviour, so a plugin update never turns
-  autonomy on for an existing install.
-- [ ] **AUTO-03**: It fails closed on `CEILING_UNKNOWN`, on an unread provider balance
-  (D-57-02: unreadable is `unknown`, never headroom), and on a missing allowance key.
+- [ ] **AUTO-02**: A plugin update that changes write posture states it plainly (release notes
+  and a first-round notice); it never changes it silently. *Rewritten 2026-09-07 (D-67-10):
+  the original "every default preserves CURRENT behaviour" text predated D-67-03, which the
+  operator chose on 2026-09-05 — new defaults apply on update, an absent autonomy key reads as
+  ON.*
+- [ ] **AUTO-03**: On `CEILING_UNKNOWN`, an unread provider balance, or a missing allowance
+  key, an autonomous round DISCLOSES the unknown state in its pre-spend line and proceeds — the
+  same disclose-and-proceed as the attended path (D-68-10, D-57-02). The remaining bounds are
+  `CEILING_OVER` and `CapRefused`. *Reversed 2026-09-07 by operator ruling D-67-09 from the
+  original "fails closed" text; the reversal is recorded, not silent.*
 - [ ] **AUTO-04**: The phase puts the D-61-08 reversal to the operator explicitly, as a
   reversal of the 57-05 Task 4 option-a decision — and records the answer.
 - [ ] **AUTO-05**: It does not replace `ALLOW_N8N_ARM` for the headless/cron path.
