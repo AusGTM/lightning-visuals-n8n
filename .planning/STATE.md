@@ -1,21 +1,21 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 68
 current_phase_name: state-the-price-and-keep-moving
-status: executing
-stopped_at: Completed 68-02-PLAN.md
-last_updated: "2026-09-07T04:27:52.606Z"
+status: verifying
+stopped_at: Completed 68-03-PLAN.md
+last_updated: "2026-09-07T04:46:36.739Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 68 execution started
-state_head: 65ce73bee809149eb6b04100fc05b0af07aa41da
+state_head: efbf476eade05b6010f5ed666f7700a88ac7fde7
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 8
-  percent: 33
+  completed_plans: 9
+  percent: 50
 ---
 
 # Project State
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 68 (state-the-price-and-keep-moving) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-07 — Phase 68 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████░░░░░] 50% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T04:27:44.689Z
-**Stopped at:** Completed 68-02-PLAN.md
+**Last session:** 2026-09-07T04:46:36.305Z
+**Stopped at:** Completed 68-03-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -636,6 +636,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 65 P02 | 24min | 3 tasks | 6 files |
 | Phase 68 P01 | 17min | 3 tasks | 5 files |
 | Phase 68 P02 | ~50min | 3 tasks | 5 files |
+| Phase 68 P03 | 15min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -759,6 +760,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 68]: 68-01 reworded 'autonomy tiers' to 'autonomy levels' in backend-control/SKILL.md — test_report_enrichment.py bans the literal substring tier/icp from every operator-facing skill body (D-10b)
 - [Phase 68]: Task 1 (checkpoint:decision) pre-resolved by the operator: price-state-pause-open -- the default path prices a grant over this batch, states it, pauses, opens it, continues; the ungranted two-phase ask survives verbatim as the interrupted path. — Every mechanism reused as-is; every pinned literal in the contract tests stays verbatim; agreed_cap/CapRefused keep working because a real priced_cap now exists.
 - [Phase 68]: suggest-contacts step 3 reorders (role ask stays genuine; cap default of 2 stated not asked; grant reuse-or-plan; agreed_cap) rather than only inserting a block, because agreed_cap raises CapRefused with no priced suggestion allowance. — Leaving the implicit open at step 4 (mirroring the other three skills) would make every default-path round refuse at step 3 before reaching it.
+- [Phase 68]: Sharpened the D-59-06/FLOW-05 interrupt/revoke statement at all four sites (contact-upload, enrich-before-ingest, enrich-records, backend-control) with one canonical sentence reused near-verbatim, pinned by a declared four-entry SITES tuple.
+- [Phase 68]: Shipped the FLOW-04/D-68-09 disclosure audit as a tested ratchet: a per-skill verdict table in test_disclosure_audit.py's docstring backed by a machine-checked AUDIT dict, covering all 10 shipped skills with every genuine decision point pinned present by its own literal.
 
 ### Roadmap Evolution
 

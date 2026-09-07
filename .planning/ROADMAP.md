@@ -215,7 +215,7 @@ per tier.
   on a granted round, disarmed-status statements, provenance summaries, post-run reports —
   distinguished from genuine decision points, which stay.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 
@@ -223,7 +223,7 @@ Plans:
   test pinning `scheduled_arm.py` grant-free, so the new posture cannot reach the headless lane
 - [x] 68-02-PLAN.md — the default path prices a grant over the batch, states it, pauses, opens it and
   proceeds, at all four batch skills; the ungranted ask survives as the interrupted path
-- [ ] 68-03-PLAN.md — D-59-06 re-stated honestly for implicit consent at all four sites, and the
+- [x] 68-03-PLAN.md — D-59-06 re-stated honestly for implicit consent at all four sites, and the
   per-skill disclosure audit shipped as a ratchet with its verdict table
 
 ### Phase 69: Held rows survive the round

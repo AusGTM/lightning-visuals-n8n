@@ -92,9 +92,9 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 - [x] **FLOW-03**: Opening a real session/batch grant is easy enough that a round does not fall
   to the per-round ask. *Live: `285507657175 - grant approved for session` yielded no machine
   grant, so the round asked anyway.*
-- [ ] **FLOW-04**: Every skill is swept for disclosures that halt but should not, with genuine
+- [x] **FLOW-04**: Every skill is swept for disclosures that halt but should not, with genuine
   decision points (roles, cap, arming, held-row adjudication) left in place.
-- [ ] **FLOW-05**: If FLOW-02 chooses implicit consent, D-59-06's revoke-refuses-next-send
+- [x] **FLOW-05**: If FLOW-02 chooses implicit consent, D-59-06's revoke-refuses-next-send
   semantics are re-stated against it — the gap between the operator reading a line and deciding
   to interrupt is a gap in which spend may already have started.
 
