@@ -4,18 +4,18 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 69
 current_phase_name: Held rows survive the round
-status: planning
+status: executing
 stopped_at: Phase 67 complete, ready to plan Phase 68
-last_updated: "2026-09-07T08:56:04.232Z"
+last_updated: "2026-09-07T12:17:53.818Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 67 complete, transitioned to Phase 68
-state_head: 9fa27921ef548ba71bc12fb9e8e66432138d2226
+state_head: 534c05a46dab8a5a3cfc83f5d3a0fb9e66182b9a
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 13
+  total_plans: 16
   completed_plans: 13
-  percent: 50
+  percent: 33
 ---
 
 # Project State
@@ -357,9 +357,9 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 69 — Held rows survive the round
+Phase: 69 (Held rows survive the round) — READY TO EXECUTE
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-09-07 — Phase 67 complete; Phase 68 was already complete, so the next open phase is 69
 
 *The v1.1 retained sections below are history, not current position.*
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████░░░░░] 50% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
