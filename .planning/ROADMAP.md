@@ -203,6 +203,8 @@ per tier.
 
 **Brief:** `.planning/todos/pending/2026-09-04-state-the-price-and-keep-moving.md`.
 
+**Requirements:** FLOW-01, FLOW-02, FLOW-03, FLOW-04, FLOW-05 (always mapped to Phase 68 in REQUIREMENTS.md's FLOW section; line added 2026-09-07 so the planner coverage gates see them)
+
 - Step 4 already branches: with a grant open it SHOWS the price and does not stop. The halting
   case is the no-grant branch, whose affirmative **is** what arms the run — that is consent,
   not a price confirmation. The two must not be conflated.
