@@ -27,10 +27,16 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   the search path from a ladder containing a `refused` attempt, by any route.
 - [x] **SAFE-03**: `MAX_FOLLOWUP_FETCHES` and `MAX_FALLBACK_SEARCHES` bound a company's WHOLE
   round. No phase resets them, and `cap_exhausted` never becomes a retry trigger.
-- [ ] **SAFE-04**: Ceilings remain refusals in code (`CapRefused`, the per-run ceiling), not
-  prose. "Proceed unless interrupted" never becomes "proceed past a refusal".
-- [ ] **SAFE-05**: D-61-08's unattended gate stays shut unless AUTO-04 is explicitly answered
-  by the operator. No phase opens it as a side effect.
+- [x] **SAFE-04**: Ceilings remain refusals in code (`CapRefused`, the per-run ceiling), not
+  prose. "Proceed unless interrupted" never becomes "proceed past a refusal". *Holds through
+  Phase 67 close: `write_grant.py` is byte-identical to `238d1ab` across all four plans
+  (67-01..67-04); `CEILING_OVER` and `CapRefused` remain refusals in code, D-67-09 only reverses
+  the treatment of `CEILING_UNKNOWN`/an unread balance/a missing allowance key.*
+- [x] **SAFE-05**: D-61-08's unattended gate stays shut unless AUTO-04 is explicitly answered
+  by the operator. No phase opens it as a side effect. *Satisfied 2026-09-07: AUTO-04 was ASKED
+  (67-01 Task 1, `gate="blocking-human"`) and ANSWERED — the operator reversed the gate open.
+  This is a decision recorded, not an execution: no live unattended credit-spending batch has
+  run and nothing is armed (see ROADMAP.md § Standing facts).*
 
 ## LADDER — the walk finds what the site actually publishes (Phases 64, 65)
 
@@ -74,18 +80,26 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 - [x] **AUTO-01**: Autonomy is expressed per tier (read-only / spend-no-write / write), not as
   one boolean.
-- [ ] **AUTO-02**: A plugin update that changes write posture states it plainly (release notes
+- [x] **AUTO-02**: A plugin update that changes write posture states it plainly (release notes
   and a first-round notice); it never changes it silently. *Rewritten 2026-09-07 (D-67-10):
   the original "every default preserves CURRENT behaviour" text predated D-67-03, which the
   operator chose on 2026-09-05 — new defaults apply on update, an absent autonomy key reads as
-  ON.*
+  ON.* *Closed 2026-09-07: the round-level first-round notice landed in 67-02 (the off-path
+  sentence naming `autonomy.<level>` and `operator.local.json`); the release-notes half landed
+  in 67-04's `## [0.41.0]` CHANGELOG section, in the same commit as the `plugin.json` version
+  bump.*
 - [x] **AUTO-03**: On `CEILING_UNKNOWN`, an unread provider balance, or a missing allowance
   key, an autonomous round DISCLOSES the unknown state in its pre-spend line and proceeds — the
   same disclose-and-proceed as the attended path (D-68-10, D-57-02). The remaining bounds are
   `CEILING_OVER` and `CapRefused`. *Reversed 2026-09-07 by operator ruling D-67-09 from the
-  original "fails closed" text; the reversal is recorded, not silent.*
-- [ ] **AUTO-04**: The phase puts the D-61-08 reversal to the operator explicitly, as a
-  reversal of the 57-05 Task 4 option-a decision — and records the answer.
+  original "fails closed" text; the reversal is recorded, not silent.* *The disclose-and-proceed
+  prose lands at all four batch skills: `enrich-before-ingest/SKILL.md`, `enrich-records/SKILL.md`,
+  `contact-upload/SKILL.md`, `suggest-contacts/SKILL.md` (67-02).*
+- [x] **AUTO-04**: The phase puts the D-61-08 reversal to the operator explicitly, as a
+  reversal of the 57-05 Task 4 option-a decision — and records the answer. *Answered 2026-09-07
+  (67-01 Task 1, `gate="blocking-human"`); the answer is recorded in
+  `operator-claude-plugin/skills/backend-control/SKILL.md`, beside the `ALLOW_N8N_ARM`
+  paragraph (67-04 Task 1), pinned by `test_disclosure_audit.py`.*
 - [x] **AUTO-05**: It does not replace `ALLOW_N8N_ARM` for the headless/cron path.
 - [x] **AUTO-06**: The end-of-run report becomes mandatory when autonomy is on — with nobody
   watching, it is the only account of what happened.

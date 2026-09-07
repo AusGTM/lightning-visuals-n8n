@@ -17,7 +17,7 @@
 
 These outlive any single milestone. Read them before planning anything that writes.
 
-- **The first live unattended, credit-spending batch has NOT run, and nothing is armed.** Phase 57 landed the ceilings, refusal-before-start and post-run proof; Phase 61's backend is deployed and disarmed-proven only. At 57-05's Task 4 gate the operator chose a small, *supervised* first live batch — explicitly not the unattended one. D-61-08's unattended gate stays shut until a phase asks and the operator answers (v1.2 `AUTO-04`).
+- **The first live unattended, credit-spending batch has NOT run, and nothing is armed.** Phase 57 landed the ceilings, refusal-before-start and post-run proof; Phase 61's backend is deployed and disarmed-proven only. At 57-05's Task 4 gate the operator chose a small, *supervised* first live batch — explicitly not the unattended one. **Updated 2026-09-07 (Phase 67, AUTO-04): the gate has been ASKED and ANSWERED — the operator reversed the 57-05 decision, and autonomy now defaults ON for all three levels (`read_only`/`spend_no_write`/`write`), recorded verbatim in `operator-claude-plugin/skills/backend-control/SKILL.md`.** This is a decision, not an execution: Phase 67 ran nothing and armed nothing, so the first live unattended credit-spending batch still has NOT run and nothing is armed — only the standing REFUSAL that no phase may open this gate as a side effect is what changed, by explicit answer rather than default.
 - **The committed `n8n/*.json` is AHEAD of the running n8n Cloud instance** — regenerated and committed without deploying since 2026-09-02 (CLAUDE.md §13.0.2). An in-repo node is not evidence of what n8n is executing.
 - **Never hand-edit `n8n/wf_*.json`** — change `n8n/code/*.js` or the builder and re-run `scripts/build_cloud_workflows.py`.
 
@@ -59,7 +59,7 @@ carrying its live evidence.
 - [x] Phase 64: The ladder stops at the best page, not the first (completed 2026-09-04)
 - [x] Phase 65: Round-empty re-entry, keyed on the cause (completed 2026-09-07)
 - [x] Phase 66: Rich enrichment, not minimum enrichment (completed 2026-09-04)
-- [ ] Phase 67: An autonomy flag with sensible defaults
+- [x] Phase 67: An autonomy flag with sensible defaults (completed 2026-09-07)
 - [x] Phase 68: State the price and keep moving (completed 2026-09-07)
 - [ ] Phase 69: Held rows survive the round
 
@@ -198,7 +198,7 @@ per tier.
   and `CapRefused` remain the bounds.** Does not replace `ALLOW_N8N_ARM` for the headless path.
 - "All functions" is three tiers — read-only, spend-no-write, write — not one boolean.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -218,7 +218,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 67-04-PLAN.md — the reversal recorded where the arming posture is read, and release 0.41.0
+- [x] 67-04-PLAN.md — the reversal recorded where the arming posture is read, and release 0.41.0
   stating the changed write posture plainly (wave 4)
 
 ### Phase 68: State the price and keep moving
