@@ -673,3 +673,33 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    opening HubSpot first; a `search_source_not_strong` reason quotes the **source URL**
    specifically, so the operator can judge a third-party claim themselves rather than
    taking the hold on trust.
+
+   **Then build the mandatory end-of-run account (AUTO-06, D-67-06).** `run_id`,
+   `outcome`, and `disarm` all come from step 8's REUSED `enrich-before-ingest/SKILL.md`
+   step-5 dispatch block — the same block, the same run, never a second dispatch path
+   and never a second `run_id`; `ceiling` and `balances_at_grant` come from the
+   proposal step 3 priced.
+
+   ```python
+   import run_report
+
+   report = run_report.build_run_report(
+       run_id, cfg, outcomes=[outcome], disarm=disarm,
+       balances=balances_at_grant, ceiling=ceiling)
+   ```
+
+   Render `report["block"]` verbatim, after this step's own per-company lines above.
+   It adds what those lines do not: this step reports the ROUND — who was found, what
+   it cost per company; the block above reports the RUN that landed the proposals, and
+   under autonomy it is the only account of that half (AUTO-06, D-67-06).
+
+   **When `records` is empty, there is no run and no report.** The round never reaches
+   step 8's dispatch block at all — this step's own per-company lines above, including
+   each company's cause, are the whole account for a round that never dispatched. Do
+   not invent a run handle for a round that never dispatched.
+
+   **The revocation bound (D-67-07).** Revoking refuses the NEXT send while a dispatch
+   already running finishes its remaining chunks — the free interrupt window before
+   the grant opens is the only point an interrupt stops a spend before it happens; once
+   it has elapsed, under autonomy this report is where that window is accounted for.
+   Chunk-granular revocation is not built.
