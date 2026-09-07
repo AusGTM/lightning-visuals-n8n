@@ -120,6 +120,57 @@ def write_grants_enabled(config: dict) -> bool:
     return (config or {}).get(WRITE_GRANT_SETTINGS_KEY) is True
 
 
+# --- the autonomy levels (67-01, D-67-01/D-67-02/D-67-03) ---------------------------------
+#
+# NOT an authority gate. `autonomy_enabled` decides only whether an action ALREADY
+# authorised by `write_grants_enabled` (interactive) or `ALLOW_N8N_ARM` (headless, an
+# environment variable read only by n8n_arming.py / scheduled_arm.py — never imported
+# here) proceeds without asking. Naming these three levels adds no new authority
+# (D-67-02); a settings key here can never arm a live write by itself.
+#
+# Deliberately NOT `write_grants_enabled`'s identity-on-absence shape. That function's
+# `is True` check means "absent -> False" and is reserved for AUTHORITY gates, where
+# absence must never be read as permission. This key is the opposite kind of default: an
+# existing install with no `autonomy` object at all must read every level as ON
+# (D-67-03/D-67-10 — an update moves an install to the new defaults without anything
+# being written into its file). Do NOT "fix" the absence branch below into
+# `write_grants_enabled`'s shape; that would silently violate D-67-03.
+#
+# The near-miss rule differs from `write_grants_enabled`'s in DIRECTION, not in spirit:
+# an authority gate fails toward not-authorised on a near miss; this default-setter
+# fails toward ASKING on a near miss (Task 1's recorded answer, b-near-miss-asks) — only
+# the JSON boolean `true`, or the level being absent from a present `autonomy` object,
+# reads as ON. Every other value (`"true"`, `"false"`, `0`, `1`, `"yes"`, an explicit
+# `null`) reads OFF, i.e. that round asks first rather than proceeding silently.
+AUTONOMY_SETTINGS_KEY = "autonomy"
+AUTONOMY_LEVELS = ("read_only", "spend_no_write", "write")  # D-67-01 — three, independent
+
+
+def autonomy_enabled(config: dict, level: str) -> bool:
+    """Whether `level` may proceed without asking, once already authorised elsewhere.
+
+    Pure and repeatable (D-67-02): never touches disk or the network, and two calls on
+    the same config dict return the same value without mutating it.
+
+    - `level` not in `AUTONOMY_LEVELS` raises `ValueError` naming it.
+    - No `autonomy` object in `config` at all (or `config` itself is falsy/`None`) ->
+      `True` for every level (D-67-03: absence reads as ON here).
+    - An `autonomy` object present but not a `dict` (e.g. `{"autonomy": true}`, a bare
+      boolean where the object belongs) -> `False` for every level. A malformed config
+      degrades to asking rather than raising mid-batch (b-malformed-off).
+    - Otherwise: `True` only when the level is absent from the object, or explicitly the
+      JSON boolean `true`. Every other value, including an explicit `null`, is `False`.
+    """
+    if level not in AUTONOMY_LEVELS:
+        raise ValueError(f"unknown autonomy level: {level!r}. Valid levels: {AUTONOMY_LEVELS}")
+    parent = (config or {}).get(AUTONOMY_SETTINGS_KEY)
+    if parent is None:
+        return True
+    if not isinstance(parent, dict):
+        return False
+    return parent.get(level, True) is True
+
+
 class ConfigError(Exception):
     """Raised when the plugin's local config is missing or invalid.
 
