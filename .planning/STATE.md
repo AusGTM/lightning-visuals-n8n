@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 67
 current_phase_name: an-autonomy-flag-with-sensible-defaults
-status: executing
-stopped_at: Completed 67-03-PLAN.md
-last_updated: "2026-09-07T08:22:23.043Z"
+status: verifying
+stopped_at: Completed 67-04-PLAN.md
+last_updated: "2026-09-07T08:35:10.521Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 67 execution started
-state_head: 49c542f9ddd763f4a0a283ee489110b43d192731
+state_head: e6c9898d9543eecb76034a49e7226545b6582e41
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 33
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 67 (an-autonomy-flag-with-sensible-defaults) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-07 — Phase 67 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T08:22:22.866Z
-**Stopped at:** Completed 67-03-PLAN.md
+**Last session:** 2026-09-07T08:35:10.339Z
+**Stopped at:** Completed 67-04-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -640,6 +640,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 67 P01 | 25min | 3 tasks | 5 files |
 | Phase 67 P02 | 25min | 3 tasks | 5 files |
 | Phase 67 P03 | 35min | 3 tasks | 6 files |
+| Phase 67 P04 | 20min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -771,6 +772,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 67]: contact-upload mints its own run_id (run_state.new_run_id()) before the ceiling branch and passes it into dispatch.dispatch(..., run_id=run_id) — the mint-then-pass idiom for a single-shot dispatch.
 - [Phase 67]: suggest-contacts sources run_id/outcome/disarm from step 8's reused enrich-before-ingest step-5 dispatch block, never minting a second run_id.
 - [Phase 67]: REVIEW-57-L5's contact-upload exclusion paragraph is retired at enrich-before-ingest and enrich-records: contact-upload now builds the mandatory report too, since autonomy breaks the real-time-watching premise.
+- [Phase 67]: AUTO-02/AUTO-04 closed: plugin 0.41.0 released with a CHANGELOG section stating the changed autonomy write posture; the D-61-08 reversal recorded verbatim beside ALLOW_N8N_ARM in backend-control/SKILL.md, pinned by test_disclosure_audit.py.
 
 ### Roadmap Evolution
 

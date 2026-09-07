@@ -198,7 +198,7 @@ per tier.
   and `CapRefused` remain the bounds.** Does not replace `ALLOW_N8N_ARM` for the headless path.
 - "All functions" is three tiers — read-only, spend-no-write, write — not one boolean.
 
-**Plans:** 4/4 plans complete
+**Plans:** 4/4 plans executed
 
 Plans:
 **Wave 1**
