@@ -14,10 +14,31 @@ as a named limitation (D-67-13, RUN-05).
 reason for staying separate (independent evolution, no risk of colliding with work in
 flight in the file it mirrors).
 
-Task 2 lands `enrich-before-ingest` alone (`TARGETS` holds one entry). Task 3 widens
-`TARGETS` to all four batch skills and adds structural assertions (exact `TARGETS`
-size, every path exists, `review-triage`/`backend-control` name no autonomy read) in
-the same commit as the prose edits.
+Task 2 landed `enrich-before-ingest` alone. Task 3 (this commit) widens `TARGETS` to
+all four batch skills and adds structural assertions at the bottom of this file: exact
+`TARGETS` size, every path exists, and `review-triage`/`backend-control` name no
+autonomy read (D-67-12's "in no level" as a checked fact).
+
+**`suggest-contacts` has no pre-existing "two-phase ask" to point the off-path at.**
+Unlike the other three skills, `suggest-contacts` never had its own independent
+ungranted-ask literal even before this phase (68-02-SUMMARY.md: "suggest-contacts
+never had its own independent ungranted-ask literal ... this skill has no 'survives'
+literal in the test's TARGETS entry"). Its off-path sentence therefore describes
+asking for an explicit go-ahead before `open_grant`, rather than pointing at a
+documented fallback path that does not exist in this file — the only content
+divergence among the four skills' off-path sentences; every other edit mirrors
+`enrich-before-ingest`'s wording exactly.
+
+**`Phase 67's to` at `backend-control/SKILL.md` — a known, deliberate exclusion.**
+`backend-control/SKILL.md:116` carries its OWN forward reference ("the unattended gate
+itself — the autonomy levels and their fail-closed conditions — is Phase 67's to open
+(D-68-04)") — a different decision (D-68-04, the headless/cron gate) from the one this
+plan retires (D-67-09, the four batch skills' pre-spend disclosure). `67-02-PLAN.md`
+explicitly prohibits editing `backend-control/SKILL.md` in this plan (D-67-12: it is in
+no autonomy level), and `67-04-PLAN.md` explicitly claims that exact line for its own,
+later retirement. The global absence check below therefore excludes
+`backend-control/SKILL.md` BY NAME rather than narrowing to `TARGETS` — every other
+skill, including the two read-only skills and `review-triage`, is still checked.
 """
 import re
 from pathlib import Path
@@ -33,7 +54,27 @@ TARGETS = {
         "level": "write",
         "open_steps": (5,),
     },
+    "enrich-records": {
+        "path": SKILLS_DIR / "enrich-records" / "SKILL.md",
+        "level": "write",
+        "open_steps": (5, 6),
+    },
+    "contact-upload": {
+        "path": SKILLS_DIR / "contact-upload" / "SKILL.md",
+        "level": "write",
+        "open_steps": (4, 5),
+    },
+    "suggest-contacts": {
+        "path": SKILLS_DIR / "suggest-contacts" / "SKILL.md",
+        "level": "spend_no_write",
+        "open_steps": (3, 4),
+    },
 }
+
+# The one skill this plan is explicitly prohibited from editing (D-67-12) and whose
+# OWN, unrelated "Phase 67's to" forward reference belongs to 67-04 (D-68-04). See the
+# module docstring.
+BACKEND_CONTROL_EXCLUDED_BY_NAME = "backend-control/SKILL.md"
 
 
 def _text(path):
@@ -215,4 +256,47 @@ def test_the_pre_start_refusal_limitation_is_stated(name):
     )
     assert "D-67-13" in normalized, f"{name}: D-67-13 must be cited"
     assert "RUN-05" in normalized, f"{name}: RUN-05 must be cited as the unbuilt split"
+
+
+# =====================================================================================
+# Structural assertions (Task 3) — once TARGETS carries all four batch skills.
+# =====================================================================================
+
+def test_targets_has_exactly_four_entries():
+    assert len(TARGETS) == 4, (
+        f"TARGETS must name exactly the four batch skills, found {sorted(TARGETS)}"
+    )
+
+
+def test_every_target_path_exists_on_disk():
+    for name, target in TARGETS.items():
+        assert target["path"].exists(), f"{name}: {target['path']} does not exist"
+
+
+def test_phase_67s_to_appears_in_no_skill_except_the_excluded_backend_control():
+    """The plan's own structural instruction, applied to every skill on disk — not
+    just TARGETS — so a stray copy of the retired forward reference elsewhere (a
+    read-only skill, review-triage) would also be caught. See the module docstring for
+    why backend-control/SKILL.md is excluded by name rather than by narrowing to
+    TARGETS."""
+    offenders = []
+    for path in sorted(SKILLS_DIR.glob("*/SKILL.md")):
+        rel = f"{path.parent.name}/SKILL.md"
+        if rel == BACKEND_CONTROL_EXCLUDED_BY_NAME:
+            continue
+        if "Phase 67's to" in _text(path):
+            offenders.append(rel)
+    assert not offenders, (
+        f"the stale forward reference \"Phase 67's to\" must be retired from every "
+        f"skill this plan can touch; still present in: {offenders}"
+    )
+
+
+def test_review_triage_and_backend_control_read_no_autonomy_level():
+    """D-67-12's 'in no level' as a checked fact, not an omission — neither
+    `review-triage` (unmodified by this whole phase) nor `backend-control` (untouched
+    by this plan; 67-04's later job) ever calls `config_gate.autonomy_enabled`."""
+    for skill in ("review-triage", "backend-control"):
+        text = _text(SKILLS_DIR / skill / "SKILL.md")
+        assert "autonomy_enabled" not in text, f"{skill} must name no autonomy_enabled call"
 
