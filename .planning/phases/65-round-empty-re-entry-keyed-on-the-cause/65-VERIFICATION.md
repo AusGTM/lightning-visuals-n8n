@@ -4,7 +4,7 @@ verified: 2026-09-07T01:15:00Z
 status: passed
 score: 38/38 must-haves verified
 covered_files: [".planning/REQUIREMENTS.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-01-PLAN.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-01-SUMMARY.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-02-PLAN.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-02-SUMMARY.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-REVIEW.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-REVIEW-FIX.md", ".planning/todos/pending/2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present.md", "operator-claude-plugin/config/field_policy.yaml", "operator-claude-plugin/scripts/preingest.py", "operator-claude-plugin/scripts/suggest_contacts.py", "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md", "operator-claude-plugin/skills/suggest-contacts/SKILL.md", "operator-claude-plugin/tests/test_preingest_merge.py", "operator-claude-plugin/tests/test_skill_sequence_coverage.py", "operator-claude-plugin/tests/test_suggest_contacts.py", "operator-claude-plugin/tests/test_suggest_contacts_composition.py"]
-covered_digest: "v1:sha256:6bbc319f193371ace973f6e3c4138df5d9c4d4f4fa4b6e8a56dc0a03997150f5"
+covered_digest: "v1:sha256:9164124922aafca543953ac10d981bbca717e25109417659a0a5df46148bbe23"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
