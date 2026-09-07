@@ -16,6 +16,43 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-09-07
+
+### Changed
+
+- **Autonomy is now three named levels, and all three default to ON.** `read_only`,
+  `spend_no_write` and `write` under a new `autonomy` object in `operator.local.json`.
+  This changes write posture on update: an install that has no `autonomy` key — which
+  is every existing install — reads all three as ON, and a round at one of those levels
+  now states its price and proceeds rather than pausing to ask first. Set any level to
+  `false` to turn it off; turning a level off restores asking for rounds at that level.
+  This entry is the release-notes half of that statement; the other half is the
+  first-round notice the round itself now shows.
+
+- **The levels authorise nothing on their own.** `allow_write_grants` still gates the
+  interactive path, and `ALLOW_N8N_ARM` still gates the scheduled and cron paths — both
+  unchanged, and neither is settable from inside a conversation. A round that was not
+  authorised before this update is not authorised now.
+
+- **Unknown bounds are disclosed, not refused.** An unsampled or unreadable monthly
+  ceiling, a provider balance the backend could not read, and an unconfigured monthly
+  execution-allowance key are each stated in the pre-spend line and the round continues
+  — the same behaviour the attended path already had. An over-ceiling verdict still
+  refuses, and the per-round cap still refuses.
+
+- **A batch over the sampled ceiling is still refused whole.** Trimming an over-ceiling
+  batch to an affordable subset is not built; this is a known limitation, not a defect.
+  The recovery is a smaller batch.
+
+- **The end-of-run report is now built by all four batch skills.** `contact-upload` and
+  `suggest-contacts` gained it this release; `enrich-before-ingest` and `enrich-records`
+  already had it. With nobody watching an autonomous round, this report is the only
+  account of what happened.
+
+**Two steps remain for the operator to make this reach an installed copy:** push to
+`master`, then refresh the marketplace clone — it never fetches on its own, so a bumped
+version stays invisible until it does.
+
 ## [0.40.0] - 2026-09-05
 
 ### Added
