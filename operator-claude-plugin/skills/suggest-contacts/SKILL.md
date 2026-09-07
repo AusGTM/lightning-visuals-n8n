@@ -80,6 +80,19 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    priced_cap = suggest_contacts.agreed_cap(2, grant["envelope"])
    ```
 
+   **A `CapRefused` here has one specific, foreseeable cause worth naming by itself:**
+   a grant opened through `backend-control/SKILL.md`'s "Opening a write grant" action
+   never prices `suggestion_companies` unless whoever opened it passed that kwarg
+   explicitly — that action is general-purpose and does not know this skill exists.
+   Relay `CapRefused`'s own message verbatim (per step 1's discipline), then add: this
+   open grant was never priced for a suggestion round, so it cannot be reused for one
+   — re-run `backend-control/SKILL.md`'s "Opening a write grant" action with
+   `suggestion_companies=<count of this batch's eligible companies>` passed
+   explicitly to get a grant this round CAN reuse. Do not stop the round on a bare
+   relay of `agreed_cap`'s generic message alone — the operator did exactly what
+   D-68-07 told them to do, and is owed the specific reason and the specific next
+   step, not just the fact of a refusal.
+
    **With no grant open, price one now over exactly this batch's eligible companies** —
    the same implicit open every other batch skill makes by default (D-68-01, D-68-03),
    landing here rather than at step 4 because `agreed_cap` has nothing to check the cap

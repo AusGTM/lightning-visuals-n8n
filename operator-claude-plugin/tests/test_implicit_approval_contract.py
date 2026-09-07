@@ -286,3 +286,28 @@ def test_suggest_contacts_binds_send_domains_as_a_named_variable_reused_at_dispa
         "the reused dispatch block's authorize_send/covers() call, so the value is "
         "provably the same variable bound at step 3, not merely likely to be"
     )
+
+
+def test_suggest_contacts_names_the_caprefused_cause_on_the_reuse_branch():
+    """WR-02 (68-REVIEW.md): a grant opened via `backend-control/SKILL.md`'s "Opening
+    a write grant" action -- the direct route D-68-07 tells every skill to advertise --
+    never prices `suggestion_companies` unless the opener passed it explicitly, so a
+    following `suggest-contacts` round's reuse branch raises `CapRefused` on the
+    operator's own recommended path. Step 3's reuse branch must name this specific
+    cause and the specific next step, not just relay `agreed_cap`'s generic message."""
+    step_3 = _step(_text(SUGGEST_CONTACTS_PATH), 3)
+    normalized = _normalized(step_3)
+    assert "CapRefused" in step_3 and "specific" in normalized, (
+        "suggest-contacts step 3's reuse branch must name CapRefused's specific, "
+        "foreseeable cause (a grant opened without suggestion_companies priced) "
+        "rather than only relaying the generic agreed_cap message"
+    )
+    assert "suggestion_companies=<count of this batch" in normalized, (
+        "suggest-contacts step 3's reuse branch must tell the operator exactly which "
+        "kwarg to pass when re-opening a grant via backend-control's 'Opening a "
+        "write grant' action so this round can reuse it"
+    )
+    assert "cannot be reused for one" in normalized, (
+        "suggest-contacts step 3's reuse branch must state plainly that the "
+        "unpriced grant cannot be reused for a suggestion round"
+    )
