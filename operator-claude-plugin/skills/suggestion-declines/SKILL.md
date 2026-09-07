@@ -89,8 +89,20 @@ step 9 points here at the end of every round rather than reimplementing any of t
    place (D-69-07) — no tombstone, no suppression key — so the next round that finds the
    same person again offers them again.
 
-6. **Export.** *(This step is filled by a later task of this plan — it writes a
-   spreadsheet the operator fixes by hand and feeds back through `contact-upload`.)*
+6. **Export.** One fence, over the entries the operator chose to export:
+
+   ```python
+   header = suggestion_declines.export_rows(declines, chosen_keys, out_path)
+   ```
+
+   Tell the operator what they now have: a spreadsheet with the same column names
+   `contact-upload` already accepts, one row per chosen person, with whatever field
+   made this decline unsendable left blank for them to fill in. The `company_id`
+   column is what re-associates the contact to the right company on the way back in
+   (CLAUDE.md 13.0.1's manual override) — it must not be deleted. The entry stays in
+   the store until it is sent or deleted from here, so an exported person still
+   appears in the next batch unless the operator says otherwise. `contact-upload` is
+   the way back in — name it.
 
 7. **Apply and save.** For a `send`, the entry for that person is applied here only
    after `write_grant.record_dispatch_outcome` has already been called for it at the

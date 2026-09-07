@@ -43,12 +43,14 @@ weaken another. This is the third instance of the same discipline in this plugin
 # PUBLIC: the caller pre-checks with it and reports the one entry it cannot store
 # rather than losing a whole batch's save to it.
 """
+import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 import durable_paths
 import enrichment
+import extraction
 import suggest_contacts
 
 QUEUE_FILENAME = "suggestion_declines.json"
@@ -321,3 +323,44 @@ def apply_action(entries, key, action):
     if action in ("send", "delete"):
         del result[key]
     return result
+
+
+def export_rows(entries, keys, out_path) -> list[str]:
+    """Write one CSV row per `key` in `keys` to `out_path`, ready for the operator to
+    fix by hand and feed back through `contact-upload`. Returns the header it wrote
+    (`extraction.canonical_props()`, unchanged) so the caller can name the columns to
+    the operator.
+
+    Deliberately NOT `extraction.write_dispatch_csv` -- that function raises
+    `emailless_row_cannot_ingest` on exactly the rows most declines are (D-69-01: a
+    `no_email`/`email_domain_*` decline has no usable email by definition), and the
+    header it would refuse to widen is the SAME header this writer uses. The
+    difference is the guard, not the shape: `write_dispatch_csv` exists to stop a
+    silent HubSpot write with no object id; `export_rows` exists to hand the operator
+    an incomplete row THEY will complete before it ever reaches a dispatch. No email
+    guard runs here on purpose.
+
+    `company_id` is OVERLAID from the entry's own field onto the row -- never read
+    from `entry["row"]`, which may not carry it at all -- so the exported column is
+    always what re-associates the contact to the right company on the way back in
+    (CLAUDE.md 13.0.1's manual override), even for a row `build_entry` stored before
+    any `company_id` key existed on it.
+
+    Never touches `entries` or the file `save()`/`load()` read from -- a copy, never a
+    move (D-69-06): the entry stays in the store until it is sent or deleted.
+    """
+    header = extraction.canonical_props()
+    rows = []
+    for key in keys:
+        entry = entries[key]
+        row = dict(entry.get("row") or {})
+        row["company_id"] = entry.get("company_id")
+        rows.append(row)
+
+    target = Path(out_path)
+    with target.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=header, restval="", extrasaction="raise")
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return header
