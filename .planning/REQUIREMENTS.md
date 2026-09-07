@@ -49,8 +49,8 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 - [x] **RICH-04**: `merge_enriched`'s keep/replace rule for a CREATE row is audited as its own
   seam. *Live: on an all-blank CREATE row the round discovered `Head of Marketing and Content`
   and `seniority: Director` and kept neither.* **Routed to Phase 65 by operator ruling
-  2026-09-04** — `merge_enriched` lives in `suggest_contacts.py`, which 66-CONTEXT.md's
-  `<domain>` explicitly excludes; 65 already has that file in scope and was not yet planned.
+  2026-09-04** — `merge_enriched` lives in `preingest.py` (shared, corrected by 65-RESEARCH.md 2026-09-07;
+  the ruling said `suggest_contacts.py`), which 66-CONTEXT.md's `<domain>` excludes; 65 was not yet planned.
 
 ## RICH — the waterfall fills what it can reach (Phase 66)
 
