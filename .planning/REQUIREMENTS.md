@@ -86,10 +86,10 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 ## FLOW — stop halting on statements (Phase 68)
 
-- [ ] **FLOW-01**: A disclosure the operator cannot act on differently does not halt the round.
-- [ ] **FLOW-02**: The no-grant two-phase ask is NOT silently removed. Either it stays, or the
+- [x] **FLOW-01**: A disclosure the operator cannot act on differently does not halt the round.
+- [x] **FLOW-02**: The no-grant two-phase ask is NOT silently removed. Either it stays, or the
   operator explicitly chooses implicit consent for spend and writes, with that choice recorded.
-- [ ] **FLOW-03**: Opening a real session/batch grant is easy enough that a round does not fall
+- [x] **FLOW-03**: Opening a real session/batch grant is easy enough that a round does not fall
   to the per-round ask. *Live: `285507657175 - grant approved for session` yielded no machine
   grant, so the round asked anyway.*
 - [ ] **FLOW-04**: Every skill is swept for disclosures that halt but should not, with genuine

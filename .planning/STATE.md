@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 68
 current_phase_name: state-the-price-and-keep-moving
 status: executing
-stopped_at: Completed 68-01-PLAN.md
-last_updated: "2026-09-07T03:39:32.683Z"
+stopped_at: Completed 68-02-PLAN.md
+last_updated: "2026-09-07T04:27:52.606Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 68 execution started
-state_head: be44a8c329bbc2bd7979f3bf9b9ee1e718ecdf3a
+state_head: 65ce73bee809149eb6b04100fc05b0af07aa41da
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 33
 ---
 
@@ -358,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 68 (state-the-price-and-keep-moving) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 68 execution started
 
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T03:39:32.518Z
-**Stopped at:** Completed 68-01-PLAN.md
+**Last session:** 2026-09-07T04:27:44.689Z
+**Stopped at:** Completed 68-02-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -635,6 +635,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 65 P01 | 27min | 3 tasks | 5 files |
 | Phase 65 P02 | 24min | 3 tasks | 6 files |
 | Phase 68 P01 | 17min | 3 tasks | 5 files |
+| Phase 68 P02 | ~50min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -756,6 +757,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 65]: RICH-04 closed as an audit plus the seniority half: merge_enriched's allowlist widened to the union of extraction.canonical_props() and field_policy.yaml's 12 promotable contact keys; widened keys are stripped at the dispatch-CSV boundary and never reach HubSpot through it; the richer-jobtitle half is deferred to a named pending todo.
 - [Phase 68]: 68-01 Task 2 resolved prose-and-pin: D-68-04's unattended-posture reversal recorded in backend-control/SKILL.md beside ALLOW_N8N_ARM and pinned by test_headless_grant_boundary.py — operator-visible record + checked boundary for Phase 67 to inherit
 - [Phase 68]: 68-01 reworded 'autonomy tiers' to 'autonomy levels' in backend-control/SKILL.md — test_report_enrichment.py bans the literal substring tier/icp from every operator-facing skill body (D-10b)
+- [Phase 68]: Task 1 (checkpoint:decision) pre-resolved by the operator: price-state-pause-open -- the default path prices a grant over this batch, states it, pauses, opens it, continues; the ungranted two-phase ask survives verbatim as the interrupted path. — Every mechanism reused as-is; every pinned literal in the contract tests stays verbatim; agreed_cap/CapRefused keep working because a real priced_cap now exists.
+- [Phase 68]: suggest-contacts step 3 reorders (role ask stays genuine; cap default of 2 stated not asked; grant reuse-or-plan; agreed_cap) rather than only inserting a block, because agreed_cap raises CapRefused with no priced suggestion allowance. — Leaving the implicit open at step 4 (mirroring the other three skills) would make every default-path round refuse at step 3 before reaching it.
 
 ### Roadmap Evolution
 
