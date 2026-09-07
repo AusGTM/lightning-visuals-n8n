@@ -215,15 +215,25 @@ COVERED = {
     # the branch's OWN wiring (the remainder_queue calls actually appear, are real
     # code, and carry REASON_CEILING_BREACH) is pinned separately by
     # `test_write_grant.py::test_the_single_shot_ceiling_breach_writes_the_remainder_queue`.
+    # Phase 67 Plan 03 (AUTO-06, D-67-06, D-67-11), following the 57-05 precedent
+    # directly above (`enrich-before-ingest`'s tuple gained the same kind of
+    # `run_report.record_audit` pair for the same reason): the tuple gains
+    # `run_state.new_run_id` (the run handle, minted before the ceiling branch) and
+    # two `run_report.record_audit` calls (one at the moment the ceiling verdict and
+    # grant balances are observed, one in the `finally` alongside the second
+    # `record_dispatch_outcome`). The sink is still `write_grant.record_dispatch_outcome`
+    # (the second, closing call), so the covering nodeid is unchanged.
     (
         "contact-upload",
         (
             "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "tabular.read_table",
+            "write_grant.authorize_ungranted_send", "run_state.new_run_id",
+            "run_report.record_audit", "tabular.read_table",
             "remainder_queue.save", "remainder_queue.build_entry",
             "write_grant.record_dispatch_outcome",
             "n8n_arming.armed_window", "dispatch.dispatch",
             "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
+            "run_report.record_audit",
         ),
     ): "test_write_grant.py::test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally",
     # 57-05 Task 3: both `write_grant.record_dispatch_outcome` closes in the

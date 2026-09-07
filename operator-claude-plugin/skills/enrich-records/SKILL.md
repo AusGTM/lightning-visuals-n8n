@@ -634,10 +634,11 @@ says nothing per record, this lane reports at chunk granularity and says so.
    says the row would have been written and is recoverable by opening a grant and
    re-sending it — never a failure, and never worded like a `written` row.
 
-   `contact-upload/SKILL.md`'s own step 7 report is a single-shot upload the operator
-   watches in real time; it is deliberately NOT a call site for this report (REVIEW-57-L5)
-   — AFTER-01 exists for the run nobody is watching, and that lane keeps its existing
-   report unchanged.
+   `contact-upload/SKILL.md` now builds this report too (AUTO-06, D-67-11) — REVIEW-57-L5's
+   original reasoning was that its lane is a single-shot upload the operator watches in
+   real time, and autonomy is precisely the condition under which that premise stops
+   holding: nobody is necessarily watching that lane in real time either. Its own step-7
+   per-record report is unchanged and still renders first.
 
    **When this batch's `object_type` is `companies` and every row in the manifest has
    reached a terminal verdict (D-62-15), offer the suggestion round yourself — do not

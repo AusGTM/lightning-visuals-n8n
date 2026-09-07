@@ -379,7 +379,7 @@ be sent, and — only when explicitly armed — send it.
    (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, tabular, uuid
+   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, run_report, run_state, tabular, uuid
    import write_grant
 
    cfg = config_gate.load_config()
@@ -410,6 +410,24 @@ be sent, and — only when explicitly armed — send it.
        execution_ceiling = ceiling["projected_executions"]
    else:
        execution_ceiling = ceiling["projected_executions"]
+
+   # Phase 67 Plan 03 (AUTO-06, D-67-06, D-67-11): mint the run handle BEFORE the
+   # ceiling branch, the same "minted before any HTTP call" reason
+   # `enrich-before-ingest/SKILL.md` gives (REVIEW-C14) — a run that dies mid-dispatch
+   # must still leave its audit record under an id somebody can find. Passed into
+   # `dispatch.dispatch(..., run_id=run_id)` below so `result["run_id"]` is this SAME
+   # value, never a second one `dispatch.py` would otherwise mint on its own.
+   run_id = run_state.new_run_id()
+   balances_at_grant = decision["grant"].get("envelope", {}).get("verdicts")
+   # 57-05's own two-observation shape, mirrored from `enrich-records/SKILL.md`: the
+   # ceiling verdict and this grant's balance readability, recorded the MOMENT they
+   # are observed — before either branch below runs, so a run that dies mid-dispatch
+   # still leaves this on disk for the end-of-run report to reconstruct from. Wrapped
+   # so a bookkeeping defect can never halt a live dispatch (D-59-10's same posture).
+   try:
+       run_report.record_audit(run_id, ceiling=ceiling, balances=balances_at_grant)
+   except run_report.RunReportError:
+       pass
 
    would_be = 1 + send_row_count
    if execution_ceiling is not None and would_be > execution_ceiling:
@@ -449,7 +467,7 @@ be sent, and — only when explicitly armed — send it.
        try:
            with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
                                         allow_create, cfg, grant=decision["grant"]) as window:
-               result = dispatch.dispatch(send_path, True, cfg)
+               result = dispatch.dispatch(send_path, True, cfg, run_id=run_id)
                # One spend vocabulary (REVIEW-57-H7): wrap this single-shot send's
                # result into the SAME `DispatchOutcome` shape every chunked leg
                # produces, so `chunking.projected_spend` sees it exactly as it sees a
@@ -464,7 +482,25 @@ be sent, and — only when explicitly armed — send it.
            close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
            grant = write_grant.record_dispatch_outcome(
                decision["grant"], outcome, cfg, disarm=disarm, reason=close_reason)
+           # Phase 67 Plan 03: the second of this run's two audit observations — the
+           # disarm result, observed at the END of the run, merged into the same
+           # record rather than replacing the first (REVIEW-57-M11). Wrapped for the
+           # same reason the first call is.
+           try:
+               run_report.record_audit(run_id, disarm=disarm)
+           except run_report.RunReportError:
+               pass
    ```
+
+   **The pre-call ceiling-breach branch reports nothing to the mandatory end-of-run
+   report, and says so (D-67-13).** This branch stops before `dispatch.dispatch` is
+   ever called — nothing was armed, nothing was sent, so there is no dispatch outcome
+   for `run_report.build_run_report` to describe. The audit record just written above,
+   carrying the ceiling verdict that caused the stop, plus the remainder-queue entry
+   naming the unsent rows, plus the stop stated to the operator, is that branch's whole
+   account — no report call is made there. The rows are recoverable and unsent, never
+   lost; trimming the batch to an affordable subset is not built (RUN-05) — the stated
+   recovery is a smaller batch.
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole
    record set**. That narrowing is what keeps every window strictly smaller than the grant
@@ -554,6 +590,22 @@ be sent, and — only when explicitly armed — send it.
    re-check whenever they want one — **the re-check happens only when they ask**.
    Never offer a countdown, an automatic refresh, or a "checking again shortly"; this
    skill does not watch a run on its own.
+
+   **Then build the mandatory end-of-run account (AUTO-06, D-67-06).** The report
+   above is what the operator reads DURING a send they are watching; this one is the
+   account for a send nobody watched, and under autonomy it is the only one there is.
+   Render `report["block"]` verbatim — it already carries its own `REPORT INCOMPLETE`
+   banner and its own balance-readability sentence. A `gated` row on this surface must
+   never read as a completed one, exactly as `enrich-records/SKILL.md` and
+   `enrich-before-ingest/SKILL.md` already state for their own reports.
+
+   ```python
+   import run_report
+
+   report = run_report.build_run_report(
+       run_id, cfg, outcomes=[outcome], disarm=disarm,
+       balances=balances_at_grant, ceiling=ceiling)
+   ```
 
 8. **Re-check, only when the operator asks.** The report handed you a run handle in step
    7. If the operator asks to re-check it, perform exactly **one** fetch —
