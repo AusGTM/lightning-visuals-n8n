@@ -276,12 +276,70 @@ whatever seven columns happened to be in the source file.
 
 5. **Ask for this waterfall run, then run it — or, under a grant, just run it.**
 
+   **With no write grant open, this run does not ask — it states.** Price a grant over
+   exactly the rows step 2 confirmed, say what it will do and what it costs, wait a few
+   seconds so an interrupt can land, then open it and continue on the granted branch
+   below (D-68-01, D-68-03).
+
+   ```python
+   proposal = write_grant.plan_grant(
+       config, lanes=["enrichment", "contacts", "review"], object_type="contacts",
+       record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
+       label="enrich-before-ingest batch",
+       suggestion_companies=len(set(send_domains)))
+   ```
+
+   Show the operator `proposal["envelope"]["block"]` and `proposal["consequence"]` — the
+   same arithmetic the explicit grant path already shows before its yes
+   (`backend-control/SKILL.md`'s "Opening a write grant" action), never a second
+   renderer. `suggestion_companies` prices the count of distinct companies these rows'
+   domains represent, so a later suggest-contacts round in this same sitting reuses this
+   grant instead of pricing its own (D-68-08); this leaves `suggestion_cap` unset, which
+   prices that later round's ceiling at `PRICED_CAP` rather than a Phase-68 arithmetic
+   invention. When `proposal["ceiling"]["verdict"]` is `"unknown"`, that block already
+   renders `Execution ceiling: **unconfirmed**` — add one sentence: this batch is not
+   bounded by the monthly ceiling this run, and proceeding anyway is how this backend
+   already operates on the explicit grant path (D-57-02, D-68-10). No Phase-68-only
+   fence sits on top of that — the fail-closed conditions on an unsampled ceiling are
+   Phase 67's to add.
+
+   **If `plan_grant` refuses** — `allow_write_grants` is not set, the record set step 2
+   resolved is empty, or the ceiling verdict is `"over"` — relay `proposal["detail"]`
+   exactly as it reads and STOP. Never fall through to
+   `write_grant.authorize_ungranted_send`: proceeding unless interrupted is never
+   proceeding past a refusal (D-68-06).
+
+   Then wait — a real pause, not a prompt, so the window between the operator reading
+   the line above and reacting to it actually exists:
+
+   ```python
+   watch.pre_spend_pause()
+   ```
+
+   An interrupt arriving in that window stops the round here, before `open_grant` runs
+   and before any provider credit is spent.
+
+   ```python
+   grant = write_grant.open_grant(proposal, "yes", config)
+   ```
+
+   Continue on the granted branch below, which asks for nothing — and every later round
+   in this batch takes that same branch: one consent point per batch, never one per
+   round (D-68-08).
+
+   **Want a grant that spans more than this batch?** `backend-control/SKILL.md`'s
+   "Opening a write grant" action is the direct route to it — a phrase inside this
+   invocation's own argument string is not a machine grant (D-68-07).
+
    **If a write grant covering this lane and these rows is open, ask for nothing here.**
    The operator approved this send when they opened the grant, and for a two-lane grant
    they were told at that moment that the HubSpot write was being authorized before this
    preview existed (D-53-05). Re-asking now would restore the stop-and-ask the grant
    exists to remove while giving back none of the protection that was traded (D-53-06,
    operator 2026-08-25). Name the grant the send runs under and continue.
+
+   The path below is what runs instead when the operator interrupts the open above and
+   asks for a single ungranted send.
 
    With no grant open, everything below is exactly as it was. Disarmed is the default and
    the state of every new conversation. Say plainly that sending is off, then ask for this
