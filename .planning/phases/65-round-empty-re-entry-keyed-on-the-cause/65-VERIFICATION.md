@@ -1,191 +1,227 @@
 ---
 phase: 65-round-empty-re-entry-keyed-on-the-cause
-verified: 2026-09-07T00:46:42Z
+verified: 2026-09-07T01:15:00Z
 status: passed
 score: 38/38 must-haves verified
-covered_files: [".planning/REQUIREMENTS.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-01-PLAN.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-01-SUMMARY.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-02-PLAN.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-02-SUMMARY.md", ".planning/todos/pending/2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present.md", "operator-claude-plugin/config/field_policy.yaml", "operator-claude-plugin/scripts/preingest.py", "operator-claude-plugin/scripts/suggest_contacts.py", "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md", "operator-claude-plugin/skills/suggest-contacts/SKILL.md", "operator-claude-plugin/tests/test_preingest_merge.py", "operator-claude-plugin/tests/test_skill_sequence_coverage.py", "operator-claude-plugin/tests/test_suggest_contacts.py", "operator-claude-plugin/tests/test_suggest_contacts_composition.py"]
-covered_digest: "v1:sha256:6364fef3c8e886839375dfc030c20531aa871f2d07152338dc6e13f9dfe3bbdb"
+covered_files: [".planning/REQUIREMENTS.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-01-PLAN.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-01-SUMMARY.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-02-PLAN.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-02-SUMMARY.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-REVIEW.md", ".planning/phases/65-round-empty-re-entry-keyed-on-the-cause/65-REVIEW-FIX.md", ".planning/todos/pending/2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present.md", "operator-claude-plugin/config/field_policy.yaml", "operator-claude-plugin/scripts/preingest.py", "operator-claude-plugin/scripts/suggest_contacts.py", "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md", "operator-claude-plugin/skills/suggest-contacts/SKILL.md", "operator-claude-plugin/tests/test_preingest_merge.py", "operator-claude-plugin/tests/test_skill_sequence_coverage.py", "operator-claude-plugin/tests/test_suggest_contacts.py", "operator-claude-plugin/tests/test_suggest_contacts_composition.py"]
+covered_digest: "v1:sha256:6bbc319f193371ace973f6e3c4138df5d9c4d4f4fa4b6e8a56dc0a03997150f5"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 38/38
+  gaps_closed:
+    - "CR-01 (post-review defect, not part of the original 38 must-haves): an all-companies-empty round no longer crashes with an uncaught preingest.RowSpecError before any cause is reported"
+  gaps_remaining: []
+  regressions: []
 ---
 
-# Phase 65: Round-empty re-entry, keyed on the cause — Verification Report
+# Phase 65: Round-empty re-entry, keyed on the cause — Verification Report (Re-verification)
 
 **Phase Goal:** a round that ends with nothing usable does not stop because an intermediate
 stage reported success.
-**Verified:** 2026-09-07T00:46:42Z
+**Verified:** 2026-09-07T01:15:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after code-review fix CR-01 (commit `67d3f1a`)
 
-## Goal Achievement
+## What Changed Since the Previous Verification
 
-### Observable Truths
+The previous verification (2026-09-07T00:46:42Z, 38/38 passed) preceded a code review
+(`65-REVIEW.md`) that found one critical defect, CR-01: the documented per-batch pipeline in
+`operator-claude-plugin/skills/suggest-contacts/SKILL.md` called
+`suggest_contacts.mint_row_ids(records)` unconditionally on the whole batch's accumulated
+`records`. When every company in a round finds nobody (an empty page walk AND an ineligible or
+unsuccessful search fallback for every company — including the ordinary one-company invocation),
+`records` stays `[]`, and `mint_row_ids([]) -> preingest.build_rows_spec([])` raises
+`preingest.RowSpecError` by design. This crash happened *before* the terminal classify loop that
+Phase 65 Task 2 built to name each company's cause, and the earlier per-company *routing* call's
+own already-computed outcome was discarded (never written onto the `rounds.append({...})` dict).
+The net effect: the exact scenario `round_outcome` exists to explain (`CAUSE_NO_PEOPLE_FOUND`,
+listed first in `ROUND_CAUSES`) produced an unhandled crash instead of a reported cause — a
+regression against the phase's own goal.
 
-Both plans' `must_haves.truths` are the authoritative list (no `65-SPEC.md`, `EDGE_ABSENT=1`;
-ROADMAP.md's own success narrative for Phase 65 is folded into these truths — the phase has no
-separate `success_criteria` array distinct from the plans' must-haves). 38 truths total
-(25 in 65-01, 13 in 65-02); all 38 verified against the actual codebase, not SUMMARY prose.
+Fix commit `67d3f1a` (`fix(65): CR-01 keep the routing-call outcome and guard the empty-batch
+mint`) applied both of the review's compatible options in `SKILL.md`'s documented pipeline only:
+
+1. Each `rounds.append({...})` entry now carries `"outcome": outcome` — the routing call's own
+   result — from the moment it is built, so a company's cause survives even if the terminal
+   classify loop is never reached.
+2. The whole mint/dispatch/terminal-classify block (`mint_row_ids` through
+   `extraction.validate`) is now guarded on `if records:`, so an all-companies-empty batch never
+   calls `mint_row_ids([])` at all.
+
+The fix touched exactly two files: `operator-claude-plugin/skills/suggest-contacts/SKILL.md`
+(58 insertions, 38 deletions — structural re-indent plus the two changes above, no new call
+targets) and `operator-claude-plugin/tests/test_suggest_contacts_composition.py` (one new test,
+90 lines added). `git show 67d3f1a --stat` confirms no other file was touched — in particular
+neither `suggest_contacts.py` nor `preingest.py` (where `round_outcome` and `mint_row_ids`/
+`build_rows_spec` themselves live) changed at all in this commit.
+
+## Re-verification of the Fix
+
+| Check | Command / Evidence | Result |
+|---|---|---|
+| Fix commit exists and matches the review-fix's own description | `git show 67d3f1a --stat` | 2 files changed: `SKILL.md` (+58/-38), `test_suggest_contacts_composition.py` (+90) |
+| `rounds.append({...})` now carries the routing call's `outcome` | direct read of `SKILL.md` diff | `"outcome": outcome,` present at the append site, with an explanatory comment naming CR-01 |
+| Mint/dispatch/terminal-classify block guarded on `if records:` | direct read of `SKILL.md` diff | `if records:` wraps `mint_row_ids` through the `extraction.validate` loop; comment names CR-01 and explains why an empty batch never reaches it |
+| Two `round_outcome` call sites still present (routing + terminal) | `grep -n "round_outcome(" .../suggest-contacts/SKILL.md` | lines 424 and 508 — still exactly two |
+| New composition test exists and passes | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_suggest_contacts_composition.py -k never_crashes_when_every_company_finds_nobody -v` | 1 passed — drives two companies, both `people: []`, both ladders `refused`; asserts no `RowSpecError`, `records == []`, and both `rounds[]` entries carry `cause == CAUSE_NO_PEOPLE_FOUND` / `reentry == REENTRY_SEARCH_FALLBACK` |
+| Pre-existing sibling test (duplicate-row-id `RowSpecError` branch) unaffected | `pytest -k test_mint_row_ids_propagates_row_spec_error_for_a_row_that_already_has_one` | 1 passed |
+| Full composition file green | `pytest operator-claude-plugin/tests/test_suggest_contacts_composition.py -q` | 15 passed |
+| `test_skill_sequence_coverage.py` unmodified by the fix, still green | `git show 67d3f1a --stat` (file absent from the fix's changed-file list); `pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q` | 11 passed; `round_outcome` still named exactly twice in the suggest-contacts tuple (lines 398, 405) — the AST-based sequence parser records every call regardless of the enclosing `if`, so wrapping the block changed nothing about the recorded tuple |
+| Full plugin suite | `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` | **2565 passed, 5 skipped** (was 2564/5 before the fix — count grew by exactly the one new test, matching `65-REVIEW-FIX.md`'s own claim) |
+| No `while` loop introduced anywhere in plugin scripts (D-65-13/LADDER-04) | AST walk over every `operator-claude-plugin/scripts/*.py` | only pre-existing `watch.py:306,467` (both untouched by this phase — `git diff --stat becba5747..HEAD -- .../watch.py` empty) |
+| No debt markers introduced by the fix | `git show 67d3f1a \| grep -nE "TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER"` | no match |
+| Cap/budget logic untouched by the fix | `git show 67d3f1a -- SKILL.md \| grep -iE "cap\|budget"` | no match — the fix is purely a persistence/guard change, no cap semantics touched |
+| `search_fallback.py`, `confidence.py`, `n8n/` still untouched since phase start | `git diff --stat becba5747..HEAD -- <those paths>` | empty for all |
+| `suggest_contacts.py`/`preingest.py` untouched by the fix commit itself | `git show 67d3f1a --stat` | absent from the changed-file list — `round_outcome`'s purity (no I/O, no module-level mutable state) and `merge_enriched`'s allowlist logic are unchanged from the previously-verified state |
+| REQUIREMENTS.md checkbox states unchanged | `sed -n '40,50p' .planning/REQUIREMENTS.md` | LADDER-03 `[x]`, LADDER-04 `[x]`, LADDER-05 `[ ]` (deliberate disposition, unchanged), RICH-04 `[x]` |
+
+**Conclusion on CR-01:** the fix closes the defect as described. The all-companies-empty round
+(the phase's own worst case, and an ordinary single-company invocation that finds nobody) now
+completes without raising, and every company's line carries a `CAUSE_NO_PEOPLE_FOUND` /
+`REENTRY_SEARCH_FALLBACK` outcome instead of crashing before any cause is ever reported. This
+was not one of the original 38 must-haves (it is a review-found regression in the *composition*
+of already-verified pieces, not a failure of any individual must-have's own truth), so it does
+not change the 38/38 score — but it directly restores the phase goal ("a round that ends with
+nothing usable does not stop because an intermediate stage reported success") for the specific
+path the review found broken.
+
+## Goal Achievement (Re-checked)
+
+Every one of the 38 must-have truths from the initial verification was re-checked against
+current file content (not copied). All 38 still hold; none regressed as a side effect of the
+CR-01 fix.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | D-65-01: `round_outcome` is the ONE place a cause is named; SKILL.md consults it, no prose cause of its own | ✓ VERIFIED | `suggest_contacts.py:915` defines `round_outcome`; `grep -c "if not people"` on SKILL.md = 0; two call sites at SKILL.md:424,488 both read `outcome["cause"]`/`outcome["reentry"]` |
-| 2 | D-65-02: fixed precedence unknown>no_people_found>none_classified>all_held_on_email>people_thin>proposed, breakdown names every contributor | ✓ VERIFIED | `ROUND_CAUSES` tuple at `suggest_contacts.py:231` in that exact order; `test_round_outcome_precedence_is_fixed_when_causes_mix` passes |
-| 3 | D-65-03: unreadable input -> unknown/none/named reason, never raises | ✓ VERIFIED | `_unknown_outcome` fail-closed guards lines 954-1029; `test_round_outcome_does_not_raise_on_any_malformed_input`, `..._fails_closed_to_unknown_on_a_malformed_walk`/`..._held_entry` pass |
-| 4 | D-65-04/LADDER-05: `no_people_found` is the ONLY cause with `reentry: search_fallback`, routes through unmodified `eligible_after_ladder` | ✓ VERIFIED | lines 1059-1065; `git diff --stat becba57..HEAD -- .../search_fallback.py` empty |
-| 5 | D-65-05: below-bar selected -> `people_thin`/`reentry: none` | ✓ VERIFIED | lines 1052-1054; `test_round_outcome_classifies_people_thin_one_under_the_bar_and_proposed_at_the_bar` passes |
-| 6 | D-65-06: zero selected -> `none_classified`, breakdown separates drop reasons | ✓ VERIFIED | lines 1046-1048; `test_round_outcome_classifies_none_classified_when_every_person_was_dropped` passes |
-| 7 | D-65-07: zero sendable + >=1 held -> `all_held_on_email`, breakdown names each `reason_code` | ✓ VERIFIED | lines 1049-1051; `test_round_outcome_classifies_all_held_on_email_when_nothing_is_sendable` passes |
-| 8 | D-65-08/LADDER-04: exactly two straight-line call sites; any of rows/sendable/held/fallback -> `reentry: none` | ✓ VERIFIED | SKILL.md:424 (routing, no extras) and :488 (terminal, all four given); `test_round_outcome_terminal_call_never_returns_a_reentry` (24 cases) passes; sequence tuple names `round_outcome` exactly twice (`test_skill_sequence_coverage.py`) |
-| 9 | D-65-09: no `round_empty` boolean, no unconditional retry, `reentry` is `search_fallback` for exactly one of six | ✓ VERIFIED | `grep -n round_empty` over suggest_contacts.py/SKILL.md = 0 matches; `ROUND_REENTRIES` two-value tuple, only one cause routes (line 1059-1065) |
-| 10 | D-65-10/SAFE-02: refused ladder never reaches `rank_results` by any route, classifier duplicates no refusal check | ✓ VERIFIED | `round_outcome` performs no disposition/refusal check (source read, lines 915-1090); `test_a_refused_ladder_is_routed_by_cause_and_still_refused_at_the_gate` drives real `eligible_after_ladder`, asserts verbatim refusal string, asserts `rank_results` guard is False — test run, passes |
-| 11 | D-65-11/SAFE-03: SAME `attempts` threaded; `company_budget` never decreases across second pass | ✓ VERIFIED | `test_the_second_pass_spends_from_the_same_company_budget` drives real `company_budget`/`next_candidates` before and after — test run, passes |
-| 12 | D-65-12: `cap_exhausted` never produces `reentry: search_fallback`, never causes a fetch | ✓ VERIFIED | precedence check has no `cap_exhausted` special case that grants reentry; only `people_count==0` grants it, and `cap_exhausted` implies people were found on a prior pass in this codebase's usage — covered by parametrised terminal-call test plus dedicated unit test named in plan |
-| 13 | D-65-13/LADDER-04: no plugin script contains `while` | ✓ VERIFIED | `test_report_sufficiency.py::test_no_plugin_script_polls_sleeps_or_loops_on_execution_status` run directly: `1 passed`; manual grep of `operator-claude-plugin/scripts/*.py` for literal `while ` shows only prose/comment occurrences and pre-existing `watch.py` (untouched by this phase, `git diff --stat` empty) |
-| 14 | LADDER-03 boundary: `bar-1` -> people_thin, `bar` -> proposed | ✓ VERIFIED | lines 1052-1057; `test_round_outcome_classifies_people_thin_one_under_the_bar_and_proposed_at_the_bar` passes |
-| 15 | LADDER-03 empty: empty people -> no_people_found; one under bar -> people_thin; `walk=None` -> unknown, no raise | ✓ VERIFIED | `test_round_outcome_routes_an_empty_walk_to_the_search_fallback`, `test_round_outcome_never_routes_a_walk_that_found_one_person`, malformed-input tests all pass |
-| 16 | LADDER-03 encoding: literal string tally, no case-folding/normalisation | ✓ VERIFIED | `_tally` keys on `entry.get(key)` verbatim (breakdown construction, lines 1067-1074); `test_round_outcome_breakdown_counts_are_ints_and_name_each_reason_literal_verbatim` passes |
-| 17 | LADDER-03 precision: every count is `int` via `len()`, no float/division/rounding | ✓ VERIFIED | source reads `len(...)` exclusively for counts (lines 1031-1041); same test as above asserts `isinstance(v, int)` |
-| 18 | LADDER-03 idempotency: two calls with same inputs equal, no mutation | ✓ VERIFIED | `test_round_outcome_is_idempotent_and_mutates_no_input` (deep-copy compare) passes |
-| 19 | LADDER-03 concurrency (backstop): no module-level mutable state, no I/O | ✓ VERIFIED | direct source inspection: `round_outcome` (lines 915-1090) references only module-level immutable constants (`CAUSE_*`, `ROUND_CAUSES` tuples) and performs no file/network I/O; no global accumulator is written |
-| 20 | LADDER-04 adjacency: two call sites in documented block, no loop between them, sequence tuple names `round_outcome` exactly twice | ✓ VERIFIED | SKILL.md:424/488; `test_skill_sequence_coverage.py` suggest-contacts tuple has exactly 2 occurrences, confirmed by grep+read |
-| 21 | LADDER-04 empty: no page fetched -> routing call returns no_people_found, `eligible_after_ladder([])` refuses | ✓ VERIFIED | `test_round_outcome_routes_an_empty_walk_to_the_search_fallback` plus composition test drives `eligible_after_ladder` for real |
-| 22 | LADDER-04 ordering: routing call precedes `eligible_after_ladder`; terminal call precedes `extraction.validate`; `round_artifact` is sink | ✓ VERIFIED | sequence tuple order confirmed by direct read of `test_skill_sequence_coverage.py` lines 391-408 |
-| 23 | LADDER-05 boundary: `walk['people']==[]` is the exact and only trigger | ✓ VERIFIED | line 1043 `if people_count == 0`, only entry to `CAUSE_NO_PEOPLE_FOUND`; one-person test proves non-trigger |
-| 24 | LADDER-05 precision (backstop): fallback's own budget stays an integer `already_searched` in the CALLER, `round_outcome` computes no budget/cap constant | ✓ VERIFIED | direct source inspection of `round_outcome` body: no `MAX_`/budget/cap reference; `test_round_outcome_source_names_no_cap_constant` passes |
-| 25 | LADDER-05 disposition (backstop, orchestrator ruling 2, Option A) | ✓ VERIFIED (disposition confirmed, per verifier instructions this is the expected state) | 65-01-SUMMARY.md § "LADDER-05 disposition" quotes the exact sentence from the plan's `<output>` instruction verbatim; `.planning/REQUIREMENTS.md:47` shows `[ ]` (unticked) for LADDER-05 while LADDER-03/04/RICH-04 are `[x]` — matches the required disposition exactly |
-| 26 | RICH-04: allowlist is UNION of `canonical_props()` and policy `promote_to_canonical: true` contact keys | ✓ VERIFIED | `preingest.py:712` `allowed_keys = set(extraction.canonical_props()) \| set(promotable_contact_props())`; `promotable_contact_props()` returns 12 keys including `seniority`, `lv_linkedin_url`, `mobilephone`, `city`, `state`, `country`, `hs_state_code`, `hs_country_region_code`, `lv_persona_group` (confirmed by direct interpreter call) |
-| 27 | RICH-04 boundary: policy-only key kept; key in neither set (e.g. `lastmodifieddate`) still dropped/reported | ✓ VERIFIED | `test_a_key_in_neither_set_is_still_dropped_and_reported`, `test_a_properties_key_outside_canonical_props_is_dropped_and_reported` both pass |
-| 28 | RICH-04 adjacency: shared key (email/phone/jobtitle) behaves byte-identically, union not a second pass | ✓ VERIFIED | `test_the_allowlist_is_a_union_and_a_shared_key_behaves_as_before` passes; single `allowed_keys` set-membership check unchanged in the merge loop (preingest.py:718-729, byte-identical control flow to pre-phase) |
-| 29 | RICH-04 empty: no resolvable policy -> allowlist == `canonical_props()` exactly, nothing raises | ✓ VERIFIED | `promotable_contact_props` returns `[]` on any resolution/read/shape failure (preingest.py, try/except + isinstance guards); `test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unreadable` passes |
-| 30 | RICH-04 ordering: response `properties` iteration order does not change merged row | ✓ VERIFIED | `test_response_property_order_does_not_change_the_merged_row` passes |
-| 31 | RICH-04 precision: kept value written verbatim, `str(value).strip() != str(current).strip()` unchanged, no coercion | ✓ VERIFIED | direct diff of `preingest.py`'s fill-vs-conflict branch (lines 718-729) shows the comparison line byte-identical to pre-phase code |
-| 32 | RICH-04 idempotency: merging same responses twice changes no value | ✓ VERIFIED | `test_merging_the_same_responses_twice_changes_no_value` passes |
-| 33 | RICH-04 concurrency (backstop): no module-level mutable state, policy re-read per call | ✓ VERIFIED | direct source inspection: `promotable_contact_props`/`resolve_policy_path` open and parse the YAML fresh on every call, no module cache, no global dict |
-| 34 | SAFE-01: no threshold lowered, no fill_blank_only weakened, only WHICH keys may be written changes | ✓ VERIFIED | `test_a_present_widened_key_is_never_overwritten_and_records_a_conflict` passes; `test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source` (`cmp -s` also run directly, exits 0) |
-| 35 | Widened keys never reach `write_dispatch_csv`; `strip_enrichment_extras` drops exactly `promotable - canonical`; STRUCT-01 still raises on unknown key | ✓ VERIFIED | `preingest.strip_enrichment_extras` (preingest.py, closed-set diff); SKILL.md:697 calls it before `strip_row_id`; `test_write_dispatch_csv_still_raises_on_a_genuinely_unknown_key_after_the_strip` and `test_without_the_new_strip_the_step_7_chain_raises_non_canonical_key_in_row` both pass |
-| 36 | Held/remainder path carries widened key through untouched/unstripped, no strip added there | ✓ VERIFIED (with documented correction) | 65-02-SUMMARY.md records that `held_queue.build_entry` actually strips via a pre-existing, unrelated `ROW_FIELD_ALLOWLIST` security allowlist (a plan-finding correction, not a phase defect) while `remainder_queue.build_entry` does carry it through untouched; both are asserted by tests (`test_a_merged_row_with_a_widened_key_builds_a_held_queue_entry_without_raising`, `..._remainder_queue_entry_untouched`), no production code touched for either |
-| 37 | Both `merge_enriched` callers traced and asserted (enrich-before-ingest write path; suggest-contacts tolerate-and-report path) | ✓ VERIFIED | `test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv`, `test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate` both pass |
-| 38 | Root cause 2 (jobtitle's own `protect_if_current_present`) NOT built, recorded as pending todo without `resolves_phase` | ✓ VERIFIED | todo file exists at the exact path; frontmatter parsed, no key containing `resolve`; `merge_enriched`'s fill-vs-conflict branch (preingest.py:722-729) unchanged — no per-field branch added |
+| 1 | D-65-01: `round_outcome` is the ONE place a cause is named; SKILL.md consults it, no prose cause of its own | ✓ VERIFIED | `suggest_contacts.py` defines `round_outcome`; `grep -c "if not people"` on SKILL.md = 0; two call sites (lines 424, 508 post-fix) both read `outcome["cause"]`/`outcome["reentry"]` |
+| 2 | D-65-02: fixed precedence unknown>no_people_found>none_classified>all_held_on_email>people_thin>proposed | ✓ VERIFIED | `ROUND_CAUSES` tuple unchanged (file untouched by fix); `test_round_outcome_precedence_is_fixed_when_causes_mix` passes |
+| 3 | D-65-03: unreadable input -> unknown/none/named reason, never raises | ✓ VERIFIED | `suggest_contacts.py` unchanged by fix; malformed-input tests pass |
+| 4 | D-65-04/LADDER-05: `no_people_found` is the ONLY cause with `reentry: search_fallback`, routes through unmodified `eligible_after_ladder` | ✓ VERIFIED | `git diff --stat becba5747..HEAD -- .../search_fallback.py` empty; new composition test drives real `eligible_after_ladder` and asserts the routing |
+| 5 | D-65-05: below-bar selected -> `people_thin`/`reentry: none` | ✓ VERIFIED | unchanged; test passes |
+| 6 | D-65-06: zero selected -> `none_classified`, breakdown separates drop reasons | ✓ VERIFIED | unchanged; test passes |
+| 7 | D-65-07: zero sendable + >=1 held -> `all_held_on_email` | ✓ VERIFIED | unchanged; test passes |
+| 8 | D-65-08/LADDER-04: exactly two straight-line call sites; any of rows/sendable/held/fallback -> `reentry: none` | ✓ VERIFIED | SKILL.md:424 (routing) and :508 (terminal, post-fix line numbers); sequence-coverage tuple still names `round_outcome` exactly twice |
+| 9 | D-65-09: no `round_empty` boolean, no unconditional retry, `reentry` is `search_fallback` for exactly one of six | ✓ VERIFIED | `grep -n round_empty` = 0 matches; `ROUND_REENTRIES` unchanged |
+| 10 | D-65-10/SAFE-02: refused ladder never reaches `rank_results`, classifier duplicates no refusal check | ✓ VERIFIED | `round_outcome` body unchanged by fix; refusal test passes |
+| 11 | D-65-11/SAFE-03: SAME `attempts` threaded; `company_budget` never decreases across second pass | ✓ VERIFIED | budget test passes; fix touches no budget logic |
+| 12 | D-65-12: `cap_exhausted` never produces `reentry: search_fallback` | ✓ VERIFIED | precedence logic unchanged by fix |
+| 13 | D-65-13/LADDER-04: no plugin script contains `while` | ✓ VERIFIED | AST walk confirms only pre-existing untouched `watch.py` |
+| 14-19 | LADDER-03 boundary/empty/encoding/precision/idempotency/concurrency | ✓ VERIFIED | `suggest_contacts.py` unmodified by the fix; all cited tests re-run, pass |
+| 20 | LADDER-04 adjacency: two call sites, no loop between, sequence tuple names `round_outcome` exactly twice | ✓ VERIFIED | confirmed post-fix at lines 424/508; `test_skill_sequence_coverage.py` (unmodified by the fix commit) passes, 11 passed |
+| 21 | LADDER-04 empty: no page fetched -> routing call returns no_people_found, `eligible_after_ladder([])` refuses | ✓ VERIFIED | new composition test drives this exact path for real and asserts it |
+| 22 | LADDER-04 ordering: routing precedes fallback eligibility check; terminal precedes `extraction.validate`; `round_artifact` sink | ✓ VERIFIED | order preserved post-fix — the `if records:` guard wraps a contiguous suffix of the block, it does not reorder any call |
+| 23 | LADDER-05 boundary: `walk['people']==[]` exact and only trigger | ✓ VERIFIED | unchanged in `suggest_contacts.py` |
+| 24 | LADDER-05 precision (backstop): fallback's own budget integer, `round_outcome` computes no budget constant | ✓ VERIFIED | unchanged; test passes |
+| 25 | LADDER-05 disposition (backstop, orchestrator ruling 2, Option A) | ✓ VERIFIED (disposition confirmed) | `.planning/REQUIREMENTS.md` line 47 still `[ ]`; LADDER-03/04/RICH-04 still `[x]` — the required disposition is unchanged by the fix |
+| 26-38 | RICH-04 family: allowlist union, boundary, adjacency, empty, ordering, precision, idempotency, concurrency, SAFE-01 pin, strip_enrichment_extras, held/remainder path, both callers traced, jobtitle-todo not built | ✓ VERIFIED (all 13) | `preingest.py` and `field_policy.yaml` untouched by the CR-01 fix commit (`git show 67d3f1a --stat` — neither file listed); `.venv/bin/python -m pytest operator-claude-plugin/tests/test_preingest_merge.py -q` re-run, all pass; pending todo file still present with no `resolves_phase` key |
 
-**Score:** 38/38 truths verified (0 present-but-behavior-unverified)
+**Score:** 38/38 truths verified (0 present-but-behavior-unverified) — unchanged from the
+initial verification. CR-01's fix is tracked separately above as the re-verification's specific
+subject, not folded into or double-counted against this score.
 
-### Required Artifacts
+### Required Artifacts (Re-checked)
+
+All ten artifacts from the initial verification were re-checked; all still VERIFIED. The two
+artifacts the fix touched:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `operator-claude-plugin/scripts/suggest_contacts.py` | `round_outcome` + two closed vocabularies | ✓ VERIFIED | present, substantive, wired into SKILL.md at two call sites |
-| `operator-claude-plugin/skills/suggest-contacts/SKILL.md` | step 7 routes on `outcome["reentry"]`, step 9 reads `outcome` | ✓ VERIFIED | no `if not people` cause decision remains; step 9 report reads `entry["outcome"]` |
-| `operator-claude-plugin/tests/test_suggest_contacts.py` | 49+ `round_outcome` unit tests | ✓ VERIFIED | 49 tests collected and passing under `-k round_outcome` |
-| `operator-claude-plugin/tests/test_suggest_contacts_composition.py` | extended pipeline test + 4 new composition tests | ✓ VERIFIED | 14 tests total, all pass |
-| `operator-claude-plugin/tests/test_skill_sequence_coverage.py` | suggest-contacts tuple carries `round_outcome` x2; enrich-before-ingest tuple carries `strip_enrichment_extras` | ✓ VERIFIED | both tuples confirmed by direct read; sinks unchanged (`round_artifact`, `write_dispatch_csv`) |
-| `operator-claude-plugin/scripts/preingest.py` | `resolve_policy_path`, `promotable_contact_props`, `strip_enrichment_extras`, widened `allowed_keys` | ✓ VERIFIED | all four present, substantive (real YAML read, real set-diff logic), wired (called from `merge_enriched` and from SKILL.md) |
-| `operator-claude-plugin/config/field_policy.yaml` | byte-identical shipped copy | ✓ VERIFIED | `cmp -s` exits 0 |
-| `operator-claude-plugin/skills/enrich-before-ingest/SKILL.md` | step 7 gains `strip_enrichment_extras` call + `import preingest` | ✓ VERIFIED | present at line 697, `import preingest` at line 685/108 |
-| `operator-claude-plugin/tests/test_preingest_merge.py` | 15+ new/renamed test functions | ✓ VERIFIED | 57 total tests in file (up from 35), all pass |
-| `.planning/todos/pending/2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present.md` | pending todo, no `resolves_phase` | ✓ VERIFIED | exists, frontmatter has no `resolve*` key |
+| `operator-claude-plugin/skills/suggest-contacts/SKILL.md` | step 7 routes on `outcome["reentry"]`, step 9 reads `outcome`; CR-01: mint/dispatch/terminal-classify guarded on `if records:`, routing outcome persisted | ✓ VERIFIED | both CR-01 changes present and correctly placed; no `if not people` cause decision reintroduced; step 9 still reads `entry["outcome"]` |
+| `operator-claude-plugin/tests/test_suggest_contacts_composition.py` | extended pipeline test + 4 new composition tests (initial) + 1 CR-01 regression test | ✓ VERIFIED | 15 tests total (was 14), all pass |
 
-### Key Link Verification
+The remaining eight artifacts (`suggest_contacts.py`, `test_suggest_contacts.py`,
+`test_skill_sequence_coverage.py`, `preingest.py`, `field_policy.yaml`,
+`enrich-before-ingest/SKILL.md`, `test_preingest_merge.py`, the pending todo) are untouched by
+the CR-01 fix commit and were re-confirmed present/substantive/wired by direct inspection —
+unchanged from the initial verification's findings.
+
+### Key Link Verification (Re-checked)
+
+All eight key links from the initial verification re-checked; all still WIRED. The routing-call
+link gained one property: the routing call's `outcome` now also flows directly onto the
+`rounds[]` entry (not only used transiently to decide the fallback branch) — confirmed by direct
+read of the `rounds.append({...})` diff.
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| `walk_pages` return | `round_outcome(walk)` routing call | direct call, SKILL.md:424 | ✓ WIRED | confirmed by direct read |
-| routing `round_outcome` | `search_fallback.eligible_after_ladder(attempts)` | `outcome["reentry"]` guard, SKILL.md:425-428 | ✓ WIRED | `eligible_after_ladder` unmodified (`git diff` empty); refusal test drives it for real |
-| `partition_for_dispatch` + `hold_weak_sources` (sendable, held) | terminal `round_outcome(...)` | SKILL.md:488-491 | ✓ WIRED | terminal loop reads batch-wide `sendable`/`held`, filters by row_id inside `round_outcome` |
-| `select_people` fallback return | `fallback=` terminal call | `fallback_selection` name bound at walk time, passed at terminal call, SKILL.md:418,489-490 | ✓ WIRED | confirmed: `fallback_selection` initialised `None` before the branch, set in the fallback branch, stored on `rounds` entry, read at terminal call |
-| `config/field_policy.yaml` `contacts:` | `preingest.promotable_contact_props()` | `resolve_policy_path` + YAML read | ✓ WIRED | direct interpreter call returns the 12 expected keys |
-| `merge_enriched` merged rows | `extraction.hold_emailless` -> `strip_enrichment_extras` -> `strip_row_id` -> `write_dispatch_csv` | SKILL.md:687-698 | ✓ WIRED | sequence-coverage test drives this chain for a row carrying `seniority`, writes a CSV, header equals `canonical_props()` |
-| `merge_enriched` merged rows | `rejoin_enriched` -> `partition_for_dispatch` -> `extraction.validate` | suggest-contacts SKILL.md step 7/8 | ✓ WIRED | `test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate` drives a real merge/rejoin/validate, record accepted, widened key in `dropped_keys` |
+| `walk_pages` return | `round_outcome(walk)` routing call | direct call, SKILL.md:424 | ✓ WIRED | confirmed post-fix |
+| routing `round_outcome` result | `rounds[]` entry's `"outcome"` key (NEW since CR-01) | `rounds.append({..., "outcome": outcome})` | ✓ WIRED | confirmed by diff read; this is the link CR-01 added |
+| routing `round_outcome` | `search_fallback.eligible_after_ladder(attempts)` | `outcome["reentry"]` guard | ✓ WIRED | unchanged |
+| `partition_for_dispatch` + `hold_weak_sources` (sendable, held) | terminal `round_outcome(...)` (now inside `if records:`) | SKILL.md terminal loop | ✓ WIRED | guard does not break the link — it only skips the whole sub-block when there is nothing to mint |
+| `select_people` fallback return | `fallback=` terminal call | `fallback_selection` name | ✓ WIRED | unchanged |
+| `config/field_policy.yaml` `contacts:` | `preingest.promotable_contact_props()` | YAML read | ✓ WIRED | unchanged, file untouched by fix |
+| `merge_enriched` merged rows | dispatch chain to `write_dispatch_csv` | SKILL.md step 7 | ✓ WIRED | unchanged, file untouched by fix |
+| `merge_enriched` merged rows | `rejoin_enriched` -> `partition_for_dispatch` -> `extraction.validate` | suggest-contacts step 7/8 | ✓ WIRED | unchanged |
 
-### Data-Flow Trace (Level 4)
-
-Not applicable in the UI-rendering sense — this phase's outputs are a classifier's return dict
-(`round_outcome`) and a merge function's allowlist, both consumed by an LLM-orchestrated skill's
-prose report, not by a rendered frontend. Traced instead via the key-link table above: every
-value in `outcome["breakdown"]`/`outcome["cause"]` derives from `len()` over the same
-`walk`/`sendable`/`held`/`fallback` structures the caller passed in — no static literal, no mock
-fallback found in `round_outcome`'s body.
-
-### Behavioral Spot-Checks
+### Behavioral Spot-Checks (Re-run)
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full plugin suite is green above baseline | `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` | `2564 passed, 5 skipped` (baseline 2492+5) | ✓ PASS |
-| No-`while` guard | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_report_sufficiency.py::test_no_plugin_script_polls_sleeps_or_loops_on_execution_status -q` | `1 passed` | ✓ PASS |
-| `round_outcome` vocabulary is the closed six-value tuple | `python -c "import suggest_contacts as s; print(s.ROUND_CAUSES)"` | `('unknown', 'no_people_found', 'none_classified', 'all_held_on_email', 'people_thin', 'proposed')` | ✓ PASS |
-| `promotable_contact_props()` names 12 keys | direct interpreter call | 12 keys incl. `seniority`, `lv_linkedin_url`, `mobilephone`, `lv_persona_group` | ✓ PASS |
-| Shipped policy copy byte-identical | `cmp -s config/field_policy.yaml operator-claude-plugin/config/field_policy.yaml` | exit 0 | ✓ PASS |
-| Refusal composition test (SAFE-02) | `pytest ... -k test_a_refused_ladder_is_routed_by_cause_and_still_refused_at_the_gate` | pass, verbatim refusal string asserted | ✓ PASS |
-| Budget composition test (SAFE-03) | `pytest ... -k test_the_second_pass_spends_from_the_same_company_budget` | pass, budget non-decrease asserted | ✓ PASS |
-| n8n / build script untouched | `git status --porcelain -- n8n/ scripts/build_cloud_workflows.py` | empty | ✓ PASS |
-| `search_fallback.py`/`confidence.py`/both `column_mapping.yaml` unchanged | `git diff --stat becba57..HEAD -- <those paths>` | empty | ✓ PASS |
-| `merge_enriched` fill-vs-conflict branch byte-identical | direct read of `preingest.py:718-729` pre/post diff | comparison line and control flow unchanged; only `allowed_keys` line and docstrings touched | ✓ PASS |
-| Pending todo has no `resolves_phase` key | `python -c "import yaml; ... print(sorted(k for k in d if 'resolve' in k))"` | `[]` | ✓ PASS |
+| Full plugin suite green, count matches fix's own claim | `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` | `2565 passed, 5 skipped` | ✓ PASS |
+| CR-01 regression test passes | `pytest .../test_suggest_contacts_composition.py -k never_crashes_when_every_company_finds_nobody -v` | 1 passed | ✓ PASS |
+| No-`while` guard | `pytest .../test_report_sufficiency.py::test_no_plugin_script_polls_sleeps_or_loops_on_execution_status -q` | 1 passed | ✓ PASS |
+| Sequence-coverage ratchet still green | `pytest .../test_skill_sequence_coverage.py -q` | 11 passed | ✓ PASS |
+| `round_outcome` still named exactly twice in SKILL.md | `grep -n "round_outcome(" .../suggest-contacts/SKILL.md` | lines 424, 508 | ✓ PASS |
+| `preingest.py`/`config/field_policy.yaml` test suite still green (untouched by fix) | `pytest .../test_preingest_merge.py -q` | all pass | ✓ PASS |
+| `search_fallback.py`/`confidence.py`/n8n untouched since phase baseline | `git diff --stat becba5747..HEAD -- <paths>` | empty | ✓ PASS |
+| No debt marker introduced by the fix commit | `git show 67d3f1a \| grep -nE "TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER"` | no match | ✓ PASS |
 
 ### Probe Execution
 
-Not applicable — this is a pure-Python plugin phase with no `scripts/*/tests/probe-*.sh` files
-declared or discovered (`find scripts -path '*/tests/probe-*.sh'` — no such directory structure
-exists in this repo for the operator-claude-plugin). Skipped per the probe-execution step's own
-discovery rule (no probes found).
+Not applicable — no `scripts/*/tests/probe-*.sh` files exist for this plugin (unchanged from
+initial verification).
 
-### Requirements Coverage
+### Requirements Coverage (Re-checked)
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|--------------|--------|----------|
-| LADDER-03 | 65-01 | A round that ends with nothing usable re-enters, naming the CAUSE of the zero | ✓ SATISFIED | `round_outcome`'s fixed precedence, all boundary/empty/encoding/precision/idempotency truths verified above; REQUIREMENTS.md `[x]` |
-| LADDER-04 | 65-01 | Re-entry expressed without a `while` loop | ✓ SATISFIED | no-while guard test passes; two straight-line call sites confirmed; REQUIREMENTS.md `[x]` |
-| LADDER-05 | 65-01 | The search fallback becomes reachable in a real round | ◐ DELIBERATELY NOT SATISFIED (by design, this phase) | wiring proven offline (`test_round_outcome_routes_an_empty_walk_to_the_search_fallback` + composition test), live reachability opportunistic per orchestrator ruling 2; REQUIREMENTS.md correctly shows `[ ]` — this is the expected disposition, not a gap |
-| RICH-04 | 65-02 | `merge_enriched`'s keep/replace rule for a CREATE row audited as its own seam | ✓ SATISFIED | allowlist widened to union, 9 keys now survive onto a blank field, dispatch-boundary strip proven load-bearing, both callers traced, SAFE-01 pinned; REQUIREMENTS.md `[x]` |
+| LADDER-03 | 65-01 | A round that ends with nothing usable re-enters, naming the CAUSE of the zero | ✓ SATISFIED | all boundary/empty/encoding/precision/idempotency truths re-verified; REQUIREMENTS.md `[x]`; CR-01 fix specifically restores this for the all-empty case |
+| LADDER-04 | 65-01 | Re-entry expressed without a `while` loop | ✓ SATISFIED | no-while guard re-run, passes; two straight-line call sites confirmed post-fix; REQUIREMENTS.md `[x]` |
+| LADDER-05 | 65-01 | The search fallback becomes reachable in a real round | ◐ DELIBERATELY NOT SATISFIED (by design, this phase) | unchanged disposition — wiring proven offline, live reachability opportunistic per orchestrator ruling 2; REQUIREMENTS.md correctly shows `[ ]` |
+| RICH-04 | 65-02 | `merge_enriched`'s keep/replace rule for a CREATE row audited as its own seam | ✓ SATISFIED | unchanged, `preingest.py`/`field_policy.yaml` untouched by the fix; REQUIREMENTS.md `[x]` |
 
-No orphaned requirements: `grep -E "Phase 65" .planning/REQUIREMENTS.md` shows no additional IDs
-beyond LADDER-03/04/05/RICH-04, all four of which appear in both plans' `requirements:`
-frontmatter fields (65-01: `[LADDER-03, LADDER-04, LADDER-05]`; 65-02: `[RICH-04]`).
+No orphaned requirements: `grep -E "Phase 65" .planning/REQUIREMENTS.md` shows no additional IDs.
 
 ### Anti-Patterns Found
 
-None. `grep -n -E "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` over every phase-modified file
-(`suggest_contacts.py`, `preingest.py`, both `SKILL.md` files) returns zero matches. No stub
-return values (`return null`/`return {}`/`return []`), no empty handlers, no hardcoded-empty
-props found in the diffed code — every new function (`round_outcome`, `promotable_contact_props`,
-`strip_enrichment_extras`, `resolve_policy_path`) has a substantive, real implementation that a
-passing behavioral test exercises.
+None in the fix. `git show 67d3f1a | grep -nE "TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER"` returns no
+match. The fix adds no stub, no empty handler, no hardcoded-empty prop — it adds a real
+persistence assignment and a real conditional guard, both exercised by the new passing test.
 
-### Prohibitions Check
+### Prohibitions Check (Re-checked)
 
-Both plans' `must_haves.prohibitions` blocks (19 items total across 65-01 and 65-02) are all
-marked `status: kept`, `verification: explicit` in the PLAN frontmatter — none is
-descriptor-less/flagged-unverified. Spot-checked the highest-risk ones directly rather than
-trusting the frontmatter claim:
+Both plans' `must_haves.prohibitions` blocks (19 items) remain `status: kept`,
+`verification: explicit`. Re-spot-checked the ones most relevant to a control-flow fix:
 
-- No `while` in plugin scripts — confirmed (test run + manual grep).
-- `search_fallback.py`, `confidence.py` unmodified — confirmed (`git diff --stat` empty).
-- `n8n/`, `scripts/build_cloud_workflows.py` unmodified — confirmed (`git status --porcelain` empty).
-- `merge_enriched`'s fill-vs-conflict branch unmodified — confirmed (direct source read, byte-identical comparison logic).
-- `column_mapping.yaml` (both copies), `review_queue.py`, `extraction.py` unmodified — confirmed (`git diff --stat` empty).
-- `confidence.ALL_HOLD_CODES` not widened, `search_source_not_strong` literal restated (not imported) — confirmed by reading `suggest_contacts.py`'s no-import structure and the dedicated pinning test.
-- Third pass / route list not built; Phase 69's decline store not built — confirmed by reading `round_outcome`'s two-value `ROUND_REENTRIES` and the absence of any persistence call in `suggest_contacts.py`.
+- No `while` in plugin scripts — confirmed (AST walk + test run).
+- `search_fallback.py`, `confidence.py`, `n8n/` unmodified — confirmed (`git diff --stat` empty).
+- `round_outcome`'s purity (no module-level mutable state, no I/O) — confirmed unchanged
+  (`suggest_contacts.py` absent from the fix commit's changed-file list).
+- At most one re-entry per company, terminal call always `reentry: none` — confirmed unchanged
+  (fix touches no precedence/reentry logic, only persistence/guarding of the existing calls).
+- Caps/budget never reset — confirmed (`grep -iE "cap|budget"` over the fix's diff returns no
+  match; the fix is a pure control-flow/persistence change).
 
-All prohibitions hold as stated. None flagged.
+All prohibitions hold. None flagged by the fix.
 
 ### Human Verification Required
 
-None. All 38 must-haves resolved to VERIFIED via direct codebase evidence (source reading,
-running the actual test suite, running the plan's own verify commands) — no item required
-visual, real-time, or external-service judgment, and the one "backstop"-tagged disposition item
-(LADDER-05) was explicitly pre-dispositioned by orchestrator ruling and confirmed to match its
-required state (checkbox unticked, disposition sentence recorded verbatim) rather than left
-ambiguous.
+None. The CR-01 fix and all 38 must-haves resolve to VERIFIED via direct codebase evidence
+(source diff reading, running the actual test suite including the new regression test). LADDER-05
+remains the one pre-dispositioned backstop item, confirmed to match its required state exactly as
+in the initial verification.
 
 ### Gaps Summary
 
-None. Every must-have truth, artifact, and key link traces to real, running code and a passing
-test. The full plugin suite (`2564 passed, 5 skipped`) exceeds the phase's own 2492-passed
-baseline by 72, matching both SUMMARYs' claimed new-test counts. Hard constraints (no `while`,
-refusal-terminal-by-every-route, no cap reset, `search_fallback.py`/`confidence.py`/n8n
-untouched) all verified directly rather than taken from SUMMARY prose. LADDER-05's incomplete
-checkbox in REQUIREMENTS.md is the correct, deliberate state for this phase (recorded by
-orchestrator ruling, not an oversight) and is not counted as a gap.
+None. The code-review-found defect (CR-01) is closed: the documented pipeline no longer crashes
+on an all-companies-empty round, and every company's line carries a reported cause instead. No
+must-have regressed as a side effect — the fix is scoped to exactly the two files the review-fix
+report claims, and every other artifact and key link this phase depends on is byte-for-byte
+unchanged since the initial (passed) verification. The full plugin suite count (2565 passed, 5
+skipped) matches the fix report's own claim exactly.
 
 ---
-*Verified: 2026-09-07T00:46:42Z*
+*Verified: 2026-09-07T01:15:00Z*
 *Verifier: Claude (gsd-verifier)*
