@@ -33,11 +33,19 @@ SKILLS_DIR = PLUGIN_ROOT / "skills"
 SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
 
 # The two batch skills this plan makes call sites for — Task 1 lands contact-upload;
-# Task 2 adds suggest-contacts.
+# Task 2 adds suggest-contacts. `anchor` is a literal that must already exist in the
+# report step, immediately BEFORE the new build_run_report fence — the skill's own
+# pre-existing report content, never replaced by this plan.
 TABLE = {
     "contact-upload": {
         "path": SKILLS_DIR / "contact-upload" / "SKILL.md",
         "report_step": 7,
+        "anchor": "print the run handle",
+    },
+    "suggest-contacts": {
+        "path": SKILLS_DIR / "suggest-contacts" / "SKILL.md",
+        "report_step": 9,
+        "anchor": "taking the hold on trust",
     },
 }
 
@@ -156,14 +164,14 @@ def test_build_run_report_is_in_the_report_step_and_after_the_run_handle(name):
     assert "run_report.build_run_report(" in span, (
         f"{name}: build_run_report must appear in step {target['report_step']}"
     )
-    # The run-handle paragraph ("print the run handle") is the existing per-record
-    # report's own closing line — the new fence must come after it.
-    handle_idx = span.find("print the run handle")
+    # The anchor is the skill's own pre-existing report content — the new fence must
+    # come after it, never replacing or preceding it.
+    anchor_idx = span.find(target["anchor"])
     report_idx = span.find("run_report.build_run_report(")
-    assert handle_idx != -1, f"{name}: expected the existing run-handle paragraph"
-    assert handle_idx < report_idx, (
-        f"{name}: build_run_report must be added AFTER the existing per-record report, "
-        f"never replacing or preceding it"
+    assert anchor_idx != -1, f"{name}: expected the existing anchor {target['anchor']!r}"
+    assert anchor_idx < report_idx, (
+        f"{name}: build_run_report must be added AFTER the existing per-record/"
+        f"per-company report, never replacing or preceding it"
     )
 
 
@@ -287,6 +295,62 @@ def test_contact_upload_pre_spend_pause_appears_exactly_once():
 
 
 # =====================================================================================
+# suggest-contacts specific — sourced from step 8's reused dispatch block, the
+# empty-round case, and the revocation bound.
+# =====================================================================================
+
+
+def _suggest_contacts_text():
+    return _text(TABLE["suggest-contacts"]["path"])
+
+
+def test_suggest_contacts_run_id_is_sourced_not_minted():
+    text = _suggest_contacts_text()
+    assert "run_state.new_run_id()" not in text, (
+        "suggest-contacts must never mint a run_id of its own — it is sourced from "
+        "step 8's reused enrich-before-ingest dispatch block"
+    )
+    assert text.count("run_report.build_run_report(") == 1
+
+
+def test_suggest_contacts_states_the_empty_round_case():
+    text = _suggest_contacts_text()
+    normalized = _normalized(text)
+    assert "no run and no report" in normalized, (
+        "the empty-round case (records empty) must state there is no run and no report"
+    )
+    assert "Do not invent a run handle" in normalized, (
+        "must state a run handle is never invented for a round that never dispatched"
+    )
+
+
+def test_suggest_contacts_states_the_revocation_bound():
+    text = _suggest_contacts_text()
+    normalized = _normalized(text)
+    assert "D-67-07" in normalized, "D-67-07 must be cited"
+    assert "chunk-granular revocation is not built" in normalized.lower(), (
+        "the revocation bound must state chunk-granular revocation is not built"
+    )
+    assert "pre_spend_pause" not in text.split("D-67-07")[-1], (
+        "the revocation bound sentence must refer to the pause in words only, never "
+        "by its symbol name"
+    )
+
+
+def test_suggest_contacts_step_numbering_is_unchanged():
+    text = _suggest_contacts_text()
+    assert re.search(r"^9\. \*\*", text, flags=re.MULTILINE), "step 9 must still exist"
+    assert not re.search(r"^10\. \*\*", text, flags=re.MULTILINE), (
+        "no step 10 must exist — nothing renumbered"
+    )
+
+
+def test_suggest_contacts_pre_spend_pause_appears_exactly_once():
+    text = _suggest_contacts_text()
+    assert text.count("pre_spend_pause") == 1
+
+
+# =====================================================================================
 # The two analog skills — the corrected paragraph, not the retired one.
 # =====================================================================================
 
@@ -318,3 +382,35 @@ def test_analog_own_report_call_unchanged(name):
     assert text.count("run_report.build_run_report(") == 1, (
         f"{name}: its own existing report call must be unchanged (exactly one)"
     )
+
+
+# =====================================================================================
+# Structural assertions (Task 2) — once TABLE carries both batch skills this plan
+# converts, and the two deliberately-excluded skills (D-67-11, D-67-12) stay excluded.
+# =====================================================================================
+
+
+def test_table_has_exactly_two_entries():
+    assert len(TABLE) == 2, (
+        f"TABLE must name exactly the two batch skills this plan converts, found "
+        f"{sorted(TABLE)}"
+    )
+
+
+def test_every_table_path_exists_on_disk():
+    for name, target in TABLE.items():
+        assert target["path"].exists(), f"{name}: {target['path']} does not exist"
+
+
+def test_review_triage_and_backend_control_carry_no_report_call():
+    """D-67-11's exclusion of review-triage, D-67-12's exclusion of backend-control —
+    checked, not assumed. Neither has a batch run scope in the run_manifest/run_state
+    sense, so extending the mandatory report to them was not taken this phase."""
+    for skill in ("review-triage", "backend-control"):
+        text = _text(SKILLS_DIR / skill / "SKILL.md")
+        assert "run_report.build_run_report(" not in text, (
+            f"{skill} must carry no build_run_report call"
+        )
+        assert "run_report.record_audit(" not in text, (
+            f"{skill} must carry no record_audit call"
+        )
