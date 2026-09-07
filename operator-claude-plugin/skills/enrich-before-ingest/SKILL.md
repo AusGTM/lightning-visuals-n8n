@@ -682,6 +682,7 @@ whatever seven columns happened to be in the source file.
 
    ```python
    import extraction
+   import preingest
 
    sendable_rows, held = extraction.hold_emailless(merge_report.rows)
    # Kept row_id-bearing, separately from the CSV-bound copy below, so a pre-call
@@ -689,6 +690,11 @@ whatever seven columns happened to be in the source file.
    # individually in the remainder queue — `strip_row_id` below removes the join key
    # `write_dispatch_csv` refuses to see, and there is no getting it back after.
    sendable_rows_for_remainder = list(sendable_rows)
+   # Phase 65 Plan 02 (RICH-04): drops the field-policy-widened keys (`seniority`,
+   # `mobilephone`, ...) `merge_enriched`'s allowlist now admits but the deployed
+   # ingest lane's own column map has no header for — must run BEFORE `strip_row_id`,
+   # at the same dispatch boundary, never upstream of it.
+   sendable_rows = preingest.strip_enrichment_extras(sendable_rows)
    sendable_rows = extraction.strip_row_id(sendable_rows)
    extraction.write_dispatch_csv(sendable_rows, out_path)
    ```
@@ -819,6 +825,15 @@ whatever seven columns happened to be in the source file.
    `write_dispatch_csv` refuses any row that still carries it (STRUCT-01). This is the
    only place in this flow that call belongs — every earlier stage still needs `row_id`
    to join by.
+
+   `preingest.strip_enrichment_extras`, called immediately before `strip_row_id` above,
+   drops the field-policy-widened keys `merge_enriched`'s allowlist now admits
+   (`seniority`, `mobilephone`, `lv_linkedin_url`, and the rest of the twelve
+   `config/field_policy.yaml` contact keys not already in `column_mapping.yaml`'s eight)
+   — the deployed ingest lane's own column map has no header for any of them, so a row
+   still carrying one would raise the same STRUCT-01 guard `strip_row_id` protects
+   against (Phase 65 Plan 02, RICH-04). These fields serve the report, the held-row
+   path, and a future decline store; they do not reach HubSpot through this CSV.
 
    `write_dispatch_csv` raises, and writes nothing, if a held row ever slipped through
    this far — treat that raise as a bug to stop and report, not something to retry

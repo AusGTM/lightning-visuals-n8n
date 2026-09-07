@@ -1,0 +1,232 @@
+# config/field_policy.yaml
+
+companies:
+  domain:
+    class: manual_protected
+    promote_to_canonical: false
+    stage_only: true
+    min_confidence: 95
+    # quick task 260904-pav: the provenance sources whose recorded value the merge engines
+    # may correct despite manual_protected. Exactly ONE member, and not by accident:
+    # `create_seed` (the company create branch's identity echo) is the only source in the
+    # system that ever writes a canonical `domain`. Every other source's `domain`
+    # provenance entry is a STAGED REFUSAL, so admitting waterfall/claude_web/
+    # hubspot_native/june_2026 would let a candidate the gate already refused authorise
+    # its own promotion next run. An absent key means "never correctable" — which is what
+    # every other field here keeps. Mirrored in n8n/code/mergeCompanies.js's
+    # DEFAULT_COMPANY_POLICY (same commit; tests/test_field_policy_conformance.py pins it).
+    system_correctable_sources:
+      - create_seed
+
+  industry:
+    class: stale_refreshable
+    promote_to_canonical: true
+    min_confidence: 75
+    stale_after_days: 365
+
+  # 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
+  # 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
+  # Scope: THIS lane only, blank-fill, provider-sourced values -- a non-blank existing
+  # headcount is now protected outright rather than routed to needs_review.
+  numberofemployees:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 70
+    protect_if_current_present: true
+
+  annualrevenue:
+    class: review_required
+    promote_to_canonical: false
+    stage_only: true
+    min_confidence: 85
+
+  lv_revenue_band:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+    allow_sonnet_escalation: true
+
+  lv_employee_band:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 70
+
+  # 75: deliberately above the flat-firmographic band (lv_employee_band at 70) because
+  # this field is the geography input to the non-ANZ hard veto, so a wrong promotion
+  # disqualifies a real account -- and below the evidence-gated judgment fields (85)
+  # because it is a normalized enum with no evidence-URL requirement, so demanding
+  # provider certainty here would leave it effectively stage-only and defeat the
+  # purpose. This threshold is a reviewable judgment, not a derived constant.
+  lv_country_region_normalized:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+
+  # 58-05 Task 1: native `country` -- fill_blank_only (a blank fills, a non-blank existing
+  # value is protected), sourced from the same provider location signal as
+  # lv_country_region_normalized above, hence the same 75 threshold. Live evidence: the
+  # portal's existing `country` values are full names ("Australia"), matching the shape
+  # every provider's own country field already carries (see normalizeProviders.js).
+  country:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 75
+    protect_if_current_present: true
+
+  # 58-05 Task 2: native `city` -- same class/confidence reasoning as `country` above.
+  city:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 75
+    protect_if_current_present: true
+
+  lv_org_type:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 80
+    allow_web_research: true
+    allow_sonnet_escalation: true
+    require_evidence_url_for:
+      - governing_body_league
+      - content_producer
+      - hardware_vendor
+      - gambling_operator
+
+  lv_produces_content:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 85
+    allow_web_research: true
+    allow_sonnet_escalation: true
+    require_evidence_url: true
+
+  lv_content_type:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+    allow_web_research: true
+
+  lv_sponsorship_reliant:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 70
+    allow_web_research: true
+    allow_sonnet_escalation: true
+
+  lv_is_hardware_vendor:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 85
+    allow_web_research: true
+    allow_sonnet_escalation: true
+
+  lv_is_gambling_operator:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 85
+    allow_web_research: true
+    allow_sonnet_escalation: true
+
+  # lv_icp_fit_score / lv_icp_tier: Approach C (Phase 15 criterion 4) — HubSpot owns
+  # these derived outputs; the pipeline never writes them. Policy entries removed so
+  # nothing classifies them as promotable if they ever appear in a candidate set.
+
+  lv_anti_icp_flag:
+    class: veto_output
+    promote_to_canonical: true
+    recompute_always: true
+
+  lv_anti_icp_reason:
+    class: veto_output
+    promote_to_canonical: true
+    recompute_always: true
+
+contacts:
+  # EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01, operator ruling): was
+  # manual_protected/95, which no real candidate ever cleared (the three real ingest
+  # lanes flat-confidence at 85/85/80 -- 260826-20w-CALIBRATION.md). HubSpot's own
+  # dedupe/merge handles identity collisions on write; this client does not rebuild that
+  # logic. 80 is the highest bar that still admits all three lanes. The n8n JS engine
+  # (mergeContacts.js) redirects a promoted email's validation_status to the human-review
+  # literal so it lands in the triage queue -- this config change alone gives the Python
+  # oracle (src/merge_policy.py's shared deterministic_gate) the same promote/stage_only
+  # split; the oracle does not (yet) carry an equivalent review-flag redirect.
+  email:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  # 260826-20w Task 2 commit 1: five HubSpot-native contact location properties,
+  # confirmed present/string/writable in the operator's 2026-08-26 portal export
+  # (docs/hs_props/hubspot-properties-export-contacts-19-other-objects-2026-08-26/contact.csv).
+  # 80 matches the email threshold above; the only live source (waterfall) is at 85, so
+  # any value at or below 85 is behaviourally identical today.
+  city:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  state:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  country:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  hs_state_code:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  hs_country_region_code:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  phone:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  mobilephone:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 85
+    protect_if_current_present: true
+
+  jobtitle:
+    class: stale_refreshable
+    promote_to_canonical: true
+    min_confidence: 75
+    stale_after_days: 180
+    protect_if_current_present: false
+    allow_sonnet_escalation: true
+
+  # PN-1: linkedin_url is NOT HubSpot-native (absent from the verified-native list) —
+  # renamed lv_linkedin_url.
+  lv_linkedin_url:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 85
+    protect_if_current_present: true
+
+  seniority:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+
+  # PN-1: persona_group is NOT HubSpot-native — renamed lv_persona_group.
+  lv_persona_group:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75

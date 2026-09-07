@@ -185,9 +185,18 @@ def extracted_identities():
 # =====================================================================================
 
 COVERED = {
+    # Phase 65 Plan 02 (RICH-04): the tuple gained `preingest.strip_enrichment_extras`,
+    # inserted right before `extraction.strip_row_id` -- the new dispatch-boundary strip
+    # that drops the field-policy-widened keys `merge_enriched`'s allowlist now admits.
+    # The sink is still `extraction.write_dispatch_csv`, so the covering nodeid is
+    # unchanged; that test now drives a response carrying a widened key (`seniority`)
+    # through the whole sequence, proving the new call is DRIVEN, not merely registered.
     (
         "enrich-before-ingest",
-        ("extraction.hold_emailless", "extraction.strip_row_id", "extraction.write_dispatch_csv"),
+        (
+            "extraction.hold_emailless", "preingest.strip_enrichment_extras",
+            "extraction.strip_row_id", "extraction.write_dispatch_csv",
+        ),
     ): "test_preingest_merge.py::test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv",
     # Phase 57 Task 4 (RUN-05, REVIEW-57-H7/H8): these four entries' tuples grew a
     # `write_grant.record_dispatch_outcome` close (and, for the single-shot legs, a

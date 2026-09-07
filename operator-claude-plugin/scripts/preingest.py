@@ -12,9 +12,11 @@ shift every later row onto the wrong person's verdict, and nothing downstream co
 detect it (37-CONTEXT §12, §7).
 """
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import SimpleNamespace
 
 import requests
+import yaml
 
 import chunking
 import config_gate
@@ -25,6 +27,71 @@ import held_queue
 import preview
 from dispatch import DispatchError
 from tabular import read_table
+
+# The one rule for finding config/field_policy.yaml, mirroring `preview.
+# resolve_mapping_path`'s exact three-step order (explicit path, then the plugin's own
+# shipped copy, then the repo's) and reusing `preview.PLUGIN_ROOT`/`preview.REPO_ROOT`
+# rather than re-deriving them a second time in this module. The plugin copy exists
+# because the marketplace ships `operator-claude-plugin/` alone -- without it, a
+# repo-root-only lookup resolves to nothing in an installed plugin tree and this
+# widening would be inert in production (RICH-04 finding 2). `tests/test_preingest_
+# merge.py::test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source`
+# pins the two copies byte-for-byte in a dev checkout.
+PLUGIN_POLICY_PATH = preview.PLUGIN_ROOT / "config" / "field_policy.yaml"
+REPO_POLICY_PATH = preview.REPO_ROOT / "config" / "field_policy.yaml"
+
+
+def resolve_policy_path(policy_path=None):
+    """The one rule for finding `config/field_policy.yaml`: an explicit path argument,
+    then the plugin's own shipped copy, then the repo's (dev checkouts), then None
+    (unavailable) -- the same three-step rule `preview.resolve_mapping_path` uses for
+    `column_mapping.yaml`, so exactly one resolution rule exists per config file this
+    plugin reads, never a second ad hoc lookup."""
+    if policy_path is not None:
+        return Path(policy_path)
+    if PLUGIN_POLICY_PATH.exists():
+        return PLUGIN_POLICY_PATH
+    if REPO_POLICY_PATH.exists():
+        return REPO_POLICY_PATH
+    return None
+
+
+def promotable_contact_props(policy_path=None) -> list[str]:
+    """The sorted `contacts:` keys of `config/field_policy.yaml` whose entry carries
+    `promote_to_canonical: true` -- the waterfall's promotable contact output. Re-reads
+    the YAML fresh on every call, exactly as `extraction.canonical_props()` re-reads
+    its own mapping: no module-level cache, so there is no shared mutable state for two
+    concurrent merges to interfere through.
+
+    Returns `[]` when the policy cannot be resolved, cannot be read, or is malformed
+    (not a mapping, or its `contacts:` section is missing or not a mapping) -- this
+    read is WIDENING-ONLY, in the sense `review_queue.py`'s own D-06/D-07 read is
+    DISPLAY-ONLY: it may add a key to `merge_enriched`'s allowlist and may never
+    refuse, filter or reorder a write the backend would accept. An absent or malformed
+    policy therefore degrades to `[]`, which collapses `merge_enriched`'s allowlist
+    back to `extraction.canonical_props()` alone -- today's behaviour, and a smaller,
+    stricter set, never a wider one. This is the OPPOSITE of `extraction._load_mapping`
+    's hard error on an unresolvable column mapping: that IS a control (an empty
+    canonical set there would make every row's key look unknown), while this is a
+    widening whose absence costs nothing but the widening itself.
+    """
+    resolved = resolve_policy_path(policy_path)
+    if resolved is None:
+        return []
+    try:
+        with Path(resolved).open(encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    contacts = data.get("contacts")
+    if not isinstance(contacts, dict):
+        return []
+    return sorted(
+        key for key, entry in contacts.items()
+        if isinstance(entry, dict) and entry.get("promote_to_canonical") is True
+    )
 
 # The six keys the backend's own `mediumCandidates()` ships (n8n/code/matchProposal.js)
 # — this IS Phase 36's information-disclosure control (T-36-04), and this module must
@@ -564,7 +631,10 @@ def _present(value) -> bool:
 
 def merge_enriched(rows, responses):
     """Join `responses` onto `rows` by `row_id` — the ONLY join key, never position.
-    Pure: no I/O, no config read.
+    Not pure in the I/O sense any more (Phase 65 Plan 02, RICH-04): building the
+    allowlist below reads `extraction.canonical_props()` (a config read `merge_enriched`
+    already had) and now also `promotable_contact_props()` (a second config read) — no
+    other I/O, no writes, no mutation of its own arguments.
 
     A waterfall response that was dropped, reordered, or duplicated is the central
     data-integrity risk this whole phase exists to close: a positional zip would
@@ -591,12 +661,20 @@ def merge_enriched(rows, responses):
     row nothing is known about at all, and that difference is the whole point of the
     group (T-38-01).
 
-    Each response's `properties` map is filtered to `extraction.canonical_props()`
-    before anything is written — a key outside that set is dropped and reported by
-    row and name (`dropped_property_keys`), never widened onto the row. A widened row
-    would otherwise raise at `write_dispatch_csv` much later, with a message about
-    canonical keys rather than about enrichment; catching it here keeps the cause
-    visible where it happened.
+    Each response's `properties` map is filtered to the UNION of
+    `extraction.canonical_props()` and `promotable_contact_props()` before anything is
+    written — a key outside that union is dropped and reported by row and name
+    (`dropped_property_keys`), never widened onto the row. The union exists because the
+    waterfall's promotable output IS the field policy's twelve `contacts:` keys, while
+    `extraction.canonical_props()` is only the 8 CSV-header keys `column_mapping.yaml`
+    ships — filtering the waterfall's own output through the CSV-header alias set
+    dropped nine of those twelve keys (`seniority`, `lv_linkedin_url`, `mobilephone`,
+    the five location fields, `lv_persona_group`) before the fill-versus-conflict rule
+    below was ever consulted (RICH-04). A key admitted only by the widened half of the
+    union never reaches HubSpot through the dispatch CSV — its own column map has no
+    header for it — so it is stripped back off at the dispatch boundary by
+    `strip_enrichment_extras`, defined below, rather than reaching `write_dispatch_csv`
+    and raising there with a message about canonical keys instead of about enrichment.
 
     Fill-not-overwrite: a `properties` value only fills a key the row currently holds
     empty or absent. A DIFFERING value for a key the row already holds non-empty is
@@ -631,7 +709,7 @@ def merge_enriched(rows, responses):
     known_row_ids = {row["row_id"] for row in rows}
     unknown_response_row_ids = sorted(set(index) - known_row_ids)
 
-    allowed_keys = set(extraction.canonical_props())
+    allowed_keys = set(extraction.canonical_props()) | set(promotable_contact_props())
 
     merged_rows = []
     dropped_property_keys = []
@@ -671,6 +749,30 @@ def merge_enriched(rows, responses):
         conflicts=tuple(conflicts),
         unanswered=tuple(unanswered),
     )
+
+
+def strip_enrichment_extras(rows, policy_path=None) -> list[dict]:
+    """Drop exactly the keys `merge_enriched`'s widened allowlist admits that
+    `extraction.canonical_props()` does not — `promotable_contact_props() -
+    extraction.canonical_props()`, a CLOSED, NAMED set, never "everything unknown".
+    Mirrors `extraction.strip_row_id`'s shape exactly: returns fresh dicts, never
+    mutates an input row, and a row without any of those keys passes through
+    unchanged.
+
+    This is the dispatch-boundary strip RICH-04's widening needs: a widened key
+    (`seniority`, `mobilephone`, ...) is not in the deployed ingest lane's own column
+    map, so it must never reach `extraction.write_dispatch_csv`'s STRUCT-01 guard,
+    which raises on any row key outside `canonical_props()`. Call this immediately
+    before `extraction.strip_row_id`, the same boundary `row_id` is stripped at — never
+    upstream of it, since the held/remainder path (`confidence.assess`,
+    `held_queue.build_entry`, `remainder_queue.build_entry`) is meant to keep seeing a
+    widened key on a row it stores.
+
+    Lives here, in `preingest.py`, rather than in `extraction.py` because `preingest`
+    already imports `extraction` and the reverse import would be circular.
+    """
+    extras = set(promotable_contact_props(policy_path)) - set(extraction.canonical_props())
+    return [{k: v for k, v in row.items() if k not in extras} for row in rows]
 
 
 def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests, *,
