@@ -4,10 +4,23 @@ D-68-09's test, applied per line: a statement of fact the operator cannot act on
 differently is not a decision point, and each one costs a round trip. This module is
 the TRACKED artifact recording that audit's outcome -- not a second copy of
 68-RESEARCH.md's "Skill-by-Skill Audit" table (a doc copy would be a second place for
-the two to drift), but the thing that keeps the verdict true as Phase 67 edits this
-same prose next. Every reclassification recorded below names the operator action the
+the two to drift). Every reclassification recorded below names the operator action the
 halt was asking for, so a future reclassification made without one is visibly
 incomplete against this file's own pattern.
+
+**Honest scope (68-REVIEW.md WR-03):** this file pins what is already known -- it does
+NOT detect new halts. Every assertion below is one of: the AUDIT dict's keys match the
+skills on disk (an added/removed *skill*, not added/removed *prose*), a specific
+pre-recorded literal is still present (deletion of an already-known-good sentence, not
+addition of a new one), or a specific symbol is absent from the read-only skills. None
+of these fail if a converted skill's already-converted step grows a brand-new
+"Confirm before proceeding? (yes/no)"-style block -- there is no scan here for
+newly-added question-like text on any converted skill's disclosure surface, and a
+scanner precise enough to add one without drowning in the pervasive, legitimate
+"confirm"/"?" language the PRESERVED decision points already use throughout these same
+files (held-row review, per-header confirmation, company-domain confirmation) is not
+built. A human reviewer re-reading a converted skill's disclosure prose after an edit
+is still how a new halt gets caught, same as before this file existed.
 
 Row order is `sorted()` over the skill directory name, matching
 `test_skill_sequence_coverage.py`'s own `SKILL_PATHS = sorted(glob(...))` idiom, so two
