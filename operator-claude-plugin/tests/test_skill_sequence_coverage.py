@@ -443,6 +443,20 @@ COVERED = {
         "suggest-contacts",
         ("suggestion_declines.load", "suggestion_declines.partition_by_run"),
     ): "test_suggest_contacts_composition.py::test_the_documented_empty_records_path_still_reads_the_backlog",
+    # Phase 69 Plan 03 Task 1: the standalone drain's own step 1 fence -- a SEPARATE
+    # skill (`suggestion-declines`), so this is a distinct identity from the tuple
+    # immediately above even though the call sequence reads identically. No round is
+    # in progress here at all, so `partition_by_run` is always called with `run_id=None`.
+    (
+        "suggestion-declines",
+        ("suggestion_declines.load", "suggestion_declines.partition_by_run"),
+    ): "test_suggestion_declines_skill.py::test_the_documented_drain_spine_deletes_one_entry_and_leaves_the_rest",
+    # Phase 69 Plan 03 Task 1: the drain's own step 7 apply-and-save fence -- one
+    # `apply_action` call per operator pick, folded into `entries`, then one `save`.
+    (
+        "suggestion-declines",
+        ("suggestion_declines.apply_action", "suggestion_declines.save"),
+    ): "test_suggestion_declines_skill.py::test_the_documented_drain_spine_deletes_one_entry_and_leaves_the_rest",
 }
 
 NOT_A_PIPELINE = {

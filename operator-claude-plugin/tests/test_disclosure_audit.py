@@ -38,6 +38,7 @@ skills sharing a verdict keep a stable, reproducible order run to run.
 | loss-reason-report   | swept-no-findings                         | Read-only report; no write/spend path. |
 | review-triage        | decision-point-preserved (verified non-change) | Unmodified by this phase -- its own prose already states the exemption: "This per-record ritual is unchanged by the grant... what changed underneath it is only the authority, never the act." Recorded here as a VERIFIED non-change, not an oversight. |
 | suggest-contacts     | converted + decision-point-preserved (split, step 3) | Step 3 is SPLIT, never collapsed into one verdict: role selection stays a genuine ask ("no default to state instead of asking it", D-68-02); the per-company cap default of 2 is a converted statement (D-68-02, D-62-12). `CapRefused` fences anything above the grant's priced cap either way (D-68-06). |
+| suggestion-declines  | decision-point-preserved                  | Phase 69 Plan 03: step 3's per-entry `send`/`defer`/`delete`/`export` choice is a genuine decision the system cannot make for the operator -- there is no default to state instead of asking it, and every entry gets its own answer. |
 
 Read-only skills (`backend-status`, `backend-sweep`, `initialize`,
 `loss-reason-report`) are pinned by SYMBOL absence, not prose-phrase absence -- a
@@ -80,6 +81,7 @@ AUDIT = {
     "loss-reason-report": "swept-no-findings",
     "review-triage": "decision-point-preserved",
     "suggest-contacts": "converted",
+    "suggestion-declines": "decision-point-preserved",
 }
 
 READ_ONLY_SKILLS = ("backend-status", "backend-sweep", "initialize", "loss-reason-report")
@@ -93,6 +95,11 @@ PRESERVED_LITERALS = {
     "contact-upload": "one confirmation per header, each answered before the next is asked",
     # backticks are stripped by _normalized() too, so this reads as plain words.
     "enrich-before-ingest": "approve / deny / pick <sub-label> / email: <address>",
+    # Phase 69 Plan 03: the drain skill's own preserved-decision-point sentence, step 3.
+    "suggestion-declines": (
+        "this per-entry choice is genuine, and there is no default to state instead "
+        "of asking it"
+    ),
 }
 
 # suggest-contacts step 3 is split -- both halves pinned separately (never collapsed).
