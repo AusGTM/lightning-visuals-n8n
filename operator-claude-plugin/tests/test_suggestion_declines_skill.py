@@ -12,16 +12,28 @@ re-implementing that parser -- the same idiom `test_autonomy_switch_prose.py` us
 file states: independent evolution, no risk of colliding with work in flight in the
 file it mirrors.
 """
+import ast
 import csv
 import re
+import textwrap
 from pathlib import Path
 
 import pytest
 
+import chunking
+import config_gate
+import dispatch
+import executions_client
 import extraction
+import n8n_arming
+import preingest
+import suggest_contacts
 import suggestion_declines
+import watch
+import write_grant
 
 from test_skill_sequence_coverage import extract_python_blocks, parse_calls, scripts_modules
+from test_write_grant import CONTACTS_WORKFLOW_ID, _executions_page, _workflow_list
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILL_PATH = PLUGIN_ROOT / "skills" / "suggestion-declines" / "SKILL.md"
@@ -273,3 +285,343 @@ def test_export_never_calls_write_dispatch_csv():
         "export must never reach write_dispatch_csv's STRUCT-02 emailless refusal -- "
         "handing the operator an incomplete row to fix is the whole point of export"
     )
+
+
+# =====================================================================================
+# Task 3: send -- the existing write path, re-entered, with no exemption
+# =====================================================================================
+
+COMPANY_ID = "5001"
+COMPANY_DOMAIN = "roma-example.example"
+
+
+@pytest.fixture(autouse=True)
+def _clear_workflow_id_cache_for_this_module():
+    """`executions_client._workflow_id_cache` is process-lifetime (no global autouse
+    clears it in conftest.py) -- without this, a resolved id from an earlier test in
+    this module leaks into the next one and its own workflow-list read is silently
+    skipped, consuming the scripted transport queue one entry out of step."""
+    executions_client._workflow_id_cache.clear()
+    yield
+    executions_client._workflow_id_cache.clear()
+
+
+@pytest.fixture
+def granting_config(fake_config):
+    """A config whose admin set the settings key to the JSON boolean true -- same
+    shape as `test_write_grant.py`'s own fixture, defined locally per that file's own
+    stated reason for staying separate (independent evolution)."""
+    return {**fake_config, config_gate.WRITE_GRANT_SETTINGS_KEY: True}
+
+
+def _contacts_workflow(record_writes='"false"', create='"false"', ids='""', domains='""'):
+    """Same miniature two-gate shape `test_write_grant.py::_base_workflow` uses,
+    scoped to the CONTACTS lane -- a drained send is a contacts-lane send, never the
+    enrichment lane's own workflow id."""
+    gate = (
+        f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
+        f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+        'const ALLOW_HUBSPOT_REVIEW_WRITES = "false";\n'
+        f"const TEST_RECORD_IDS = {ids};\n"
+        f"const TEST_RECORD_DOMAINS = {domains};\n"
+        "function _writeSafetyAllows() { return false; }\n"
+    )
+    return {
+        "id": CONTACTS_WORKFLOW_ID,
+        "name": write_grant.LANES["contacts"],
+        "active": True,
+        "settings": {},
+        "connections": {},
+        "nodes": [
+            {"name": "Update Write Gate", "parameters": {"jsCode": gate}},
+            {"name": "Create Write Gate", "parameters": {"jsCode": gate}},
+            {"name": "Webhook", "parameters": {}},
+        ],
+    }
+
+
+def _armed_contacts_workflow(ids=f'"{COMPANY_ID}"', domains='""'):
+    return _contacts_workflow(record_writes='"true"', create='"true"', ids=ids,
+                              domains=domains)
+
+
+def _contacts_plan_reads(guardrail=None):
+    """Everything ONE `plan_grant` over a single contacts-lane record consumes, in
+    frozen call order -- mirrors `test_write_grant.py::_plan_reads(lanes=1)`."""
+    return [
+        _workflow_list(), _executions_page(),
+        guardrail if guardrail is not None else _contacts_workflow(),
+    ]
+
+
+def _armed_window_reads(ids=f'"{COMPANY_ID}"', domains='""'):
+    """Everything ONE `armed_window` enter+exit consumes over a fresh arm -- mirrors
+    `test_write_grant.py`'s own 12-item arm+disarm shape (5 arm + 1 verify + 6
+    disarm). `domains` must echo the SAME value the arm itself requests, or the
+    independent read-back guard (`ArmingRefused`) fires -- the arm-verification and
+    disarm-observation reads both carry the domain allowlist too, not only the ids."""
+    return [
+        _contacts_workflow(), _contacts_workflow(), {}, {}, {},
+        _contacts_workflow(record_writes='"true"', create='"true"', ids=ids,
+                           domains=domains),
+        _armed_contacts_workflow(ids=ids, domains=domains),
+        _armed_contacts_workflow(ids=ids, domains=domains),
+        {}, {}, {}, _contacts_workflow(),
+    ]
+
+
+def _entry_with_provenance(run_id, company_id, first, last, reason_code="no_email",
+                           reason="no usable email"):
+    row = {"firstname": first, "lastname": last, "company": f"{last} Racing Club"}
+    provenance = {
+        "input": "suggest_contacts_ladder",
+        "locator": "https://example-club.example/committee",
+    }
+    return suggestion_declines.build_entry(
+        row, reason_code, reason, run_id, company_id, provenance)
+
+
+def test_a_drained_send_clears_the_same_gates_a_normal_send_clears(
+        granting_config, stub_module_transport_factory, stub_transport, tmp_path):
+    entry = _entry_with_provenance("run-1", COMPANY_ID, "Pat", "Alpha")
+    key = suggestion_declines.entry_key(COMPANY_ID, entry["row"])
+    chosen = {key: entry}
+    supplied_email = "pat.alpha@roma-example.example"
+    supplied = {key: {"email": supplied_email}}
+
+    records = [
+        {"record_type": "contacts",
+         "row": {**e["row"], **supplied.get(k, {}), "company_id": e["company_id"]},
+         "provenance": e["provenance"]}
+        for k, e in chosen.items()
+    ]
+    result = extraction.validate(suggest_contacts.round_artifact(records))
+    assert not result.rejected, (
+        f"the drained row must clear extraction.validate() on its own: {result.rejected}"
+    )
+    assert len(result.accepted) == 1
+
+    rows = [record["row"] for record in records]
+    rows = preingest.strip_enrichment_extras(rows)
+    rows = extraction.strip_row_id(rows)
+    out_path = tmp_path / "dispatch.csv"
+    extraction.write_dispatch_csv(rows, out_path)
+
+    send_ids = sorted({e["company_id"] for e in chosen.values()})
+    send_domains = [record["row"]["email"].rpartition("@")[2] for record in records]
+    allow_create = True
+
+    ungranted_transport = stub_module_transport_factory(
+        _contacts_plan_reads() + _armed_window_reads(
+            ids=f'"{send_ids[0]}"', domains=f'"{send_domains[0]}"')
+    )
+    decision = write_grant.authorize_ungranted_send(
+        granting_config, lane="contacts", object_type="contacts",
+        record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
+        label="drained send", transport=ungranted_transport)
+    assert decision["armed"] is True, decision.get("detail")
+
+    with n8n_arming.armed_window(
+            decision["workflow_id"], send_ids, send_domains, allow_create,
+            granting_config, transport=ungranted_transport,
+            grant=decision["grant"]) as window:
+        dispatch_result = dispatch.dispatch(
+            str(out_path), True, granting_config, transport=stub_transport)
+
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert dispatch_result["run_id"]
+    assert len(stub_transport.calls) == 1, "exactly one call on the authorized path"
+
+    with out_path.open(newline="", encoding="utf-8") as f:
+        data_rows = list(csv.DictReader(f))
+    assert len(data_rows) == 1
+    assert data_rows[0]["email"] == supplied_email
+
+
+def test_a_drained_send_runs_step_5s_gates_before_step_7(
+        granting_config, fake_config, stub_module_transport_factory, stub_transport,
+        tmp_path):
+    out_path = tmp_path / "dispatch.csv"
+    out_path.write_text("email\njamie.fox@roma-example.example\n", encoding="utf-8")
+    events = []
+
+    def _sleep_recorder(seconds):
+        events.append(("pause", seconds))
+
+    class _LoggingTransport:
+        def __init__(self, inner):
+            self._inner = inner
+            self.calls = inner.calls
+
+        def __call__(self, *args, **kwargs):
+            events.append(("transport", args[0] if args else None))
+            return self._inner(*args, **kwargs)
+
+    cfg_on = {**granting_config, "autonomy": {"write": True}}
+    assert config_gate.autonomy_enabled(cfg_on, "write") is True
+
+    plan_transport = stub_module_transport_factory(_contacts_plan_reads())
+    proposal = write_grant.plan_grant(
+        cfg_on, lanes=["contacts"], object_type="contacts",
+        record_ids=[COMPANY_ID], record_domains=[COMPANY_DOMAIN], allow_create=True,
+        label="drained send", suggestion_companies=1, transport=plan_transport)
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND, proposal
+    assert proposal["envelope"]["suggestion_allowance"]["company_count"] == 1
+
+    watch.pre_spend_pause(sleep=_sleep_recorder)
+    assert events == [("pause", watch.PRE_SPEND_PAUSE_SECONDS)]
+
+    grant = write_grant.open_grant(proposal, "yes", cfg_on)
+    decision = write_grant.authorize_send(
+        grant, lane="contacts", record_ids=[COMPANY_ID], record_domains=[COMPANY_DOMAIN])
+    assert decision["armed"] is True
+
+    arm_transport = stub_module_transport_factory(
+        _armed_window_reads(domains=f'"{COMPANY_DOMAIN}"'))
+    logging_dispatch_transport = _LoggingTransport(stub_transport)
+
+    with n8n_arming.armed_window(
+            decision["workflow_id"], [COMPANY_ID], [COMPANY_DOMAIN], True, cfg_on,
+            transport=arm_transport, grant=decision["grant"]) as window:
+        dispatch.dispatch(str(out_path), True, cfg_on, transport=logging_dispatch_transport)
+
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    pause_index = events.index(("pause", watch.PRE_SPEND_PAUSE_SECONDS))
+    transport_indices = [i for i, e in enumerate(events) if e[0] == "transport"]
+    assert transport_indices, "the send must have reached the dispatch transport"
+    assert pause_index < min(transport_indices), (
+        "the pause must land before the first credit-spending call of step 7"
+    )
+
+    cfg_off = {**granting_config, "autonomy": {"write": False}}
+    assert config_gate.autonomy_enabled(cfg_off, "write") is False, (
+        "with autonomy off, the documented branch is the two-phase ask, never the "
+        "stated price/pause/open path"
+    )
+
+
+def test_the_drain_send_fence_binds_step_5s_inputs():
+    text = _skill_text()
+    span = _step(text, 4)
+    fence_match = re.search(r"```python\n(.*?)```", span, re.DOTALL)
+    assert fence_match, "step 4 must contain exactly one python fence"
+    tree = ast.parse(textwrap.dedent(fence_match.group(1)))
+    assigned_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned_names.add(target.id)
+    for name in ("send_ids", "send_domains", "allow_create"):
+        assert name in assigned_names, (
+            f"step 4's fence must bind {name} by name -- the re-entered fences read "
+            "it and never define it"
+        )
+
+
+def test_a_drained_send_is_removed_only_after_the_outcome_is_recorded(
+        granting_config, stub_module_transport_factory, stub_post_transport_factory,
+        tmp_path):
+    text = _skill_text()
+    rdo_index = text.index("write_grant.record_dispatch_outcome")
+    apply_index = text.index("suggestion_declines.apply_action(")
+    assert rdo_index < apply_index, (
+        "the apply_action call for a send must appear AFTER the sentence naming "
+        "write_grant.record_dispatch_outcome"
+    )
+
+    entry = _entry_with_provenance("run-1", COMPANY_ID, "Jamie", "Fox")
+    key = suggestion_declines.entry_key(COMPANY_ID, entry["row"])
+    declines = {key: entry}
+    row = {**entry["row"], "email": "jamie.fox@roma-example.example",
+           "company_id": entry["company_id"]}
+    record = {"record_type": "contacts", "row": row, "provenance": entry["provenance"]}
+    result = extraction.validate(suggest_contacts.round_artifact([record]))
+    assert not result.rejected
+
+    rows = preingest.strip_enrichment_extras([row])
+    rows = extraction.strip_row_id(rows)
+    out_path = tmp_path / "dispatch.csv"
+    extraction.write_dispatch_csv(rows, out_path)
+
+    send_ids = [entry["company_id"]]
+    send_domains = ["roma-example.example"]
+    allow_create = True
+
+    plan_transport = stub_module_transport_factory(_contacts_plan_reads())
+    proposal = write_grant.plan_grant(
+        granting_config, lanes=["contacts"], object_type="contacts",
+        record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
+        label="drained send", transport=plan_transport)
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND
+    grant = write_grant.open_grant(proposal, "yes", granting_config)
+    decision = write_grant.authorize_send(
+        grant, lane="contacts", record_ids=send_ids, record_domains=send_domains)
+    assert decision["armed"] is True
+
+    arm_transport = stub_module_transport_factory(
+        _armed_window_reads(domains=f'"{send_domains[0]}"'))
+    dead_transport = stub_post_transport_factory(
+        responses=[ConnectionError("connection refused")])
+
+    def _run_send_and_apply():
+        outcome_ingest = None
+        disarm = None
+        crashed = False
+        grant_local = decision["grant"]
+        try:
+            with n8n_arming.armed_window(
+                    decision["workflow_id"], send_ids, send_domains, allow_create,
+                    granting_config, transport=arm_transport,
+                    grant=grant_local) as window:
+                dispatch_result = dispatch.dispatch(
+                    str(out_path), True, granting_config, transport=dead_transport)
+                outcome_ingest = chunking.single_dispatch_outcome(
+                    dispatch_result, record_count=len(rows))
+            disarm = window.disarm_result
+        except Exception:
+            crashed = True
+            raise
+        finally:
+            close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
+            write_grant.record_dispatch_outcome(
+                grant_local, outcome_ingest, granting_config, disarm=disarm,
+                reason=close_reason)
+        # Unreachable on a failed send -- mirrors step 7's apply_action call, which
+        # this fence never reaches because the exception above already propagated.
+        return suggestion_declines.apply_action(declines, key, "send")
+
+    with pytest.raises(dispatch.DispatchError):
+        _run_send_and_apply()
+
+    assert key in declines, "a refused or failed send must leave the person in the store"
+
+
+def test_an_ungranted_drained_send_is_refused_not_waved_through(
+        fake_config, stub_module_transport_factory, stub_transport):
+    transport = stub_module_transport_factory([])
+
+    decision = write_grant.authorize_ungranted_send(
+        fake_config, lane="contacts", object_type="contacts",
+        record_ids=[COMPANY_ID], record_domains=[COMPANY_DOMAIN], allow_create=True,
+        label="drained send", transport=transport)
+
+    assert decision["armed"] is False
+    assert transport.calls == [], "a drained entry is not a back door -- zero calls on refusal"
+    assert stub_transport.calls == []
+
+
+def test_the_drain_skill_names_the_two_steps_it_re_enters():
+    span = _step(_skill_text(), 4)
+    assert "enrich-before-ingest/SKILL.md" in span
+    assert "step 5" in span
+    assert "step 7" in span
+    assert "step 9" in span
+
+
+def test_the_inline_pointer_names_the_standalone_skill():
+    suggest_path = PLUGIN_ROOT / "skills" / "suggest-contacts" / "SKILL.md"
+    step9 = _step(suggest_path.read_text(encoding="utf-8"), 9)
+    assert "suggestion-declines" in step9
+    assert "suggestion_declines.apply_action" not in step9
+    assert "suggestion_declines.export_rows" not in step9
