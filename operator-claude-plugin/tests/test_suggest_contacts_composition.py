@@ -1095,3 +1095,71 @@ def test_step_8_held_routing_never_calls_held_queue():
     assert "held_queue." not in text
     assert "confidence.assess" not in text
 
+
+# =====================================================================================
+# Phase 69 Plan 02 Task 2 (HELD-01, D-69-05): step 9's decline surface -- this run's
+# declines beside the deferred backlog, including the round that dispatched nothing.
+# =====================================================================================
+
+def test_the_documented_empty_records_path_still_reads_the_backlog(tmp_path):
+    """A store already holding two entries from EARLIER runs; this round's `records`
+    is empty (every company found nobody), so there is no `run_id`. Driving step 9's
+    documented backlog fence -- `suggestion_declines.load()` then
+    `partition_by_run(declines, None)` -- puts everything in `backlog`, `this_run`
+    stays empty, and nothing raises."""
+    store_path = tmp_path / "suggestion_declines.json"
+    company_a = _company_row("empty-a", 0, id="4001")
+    company_b = _company_row("empty-b", 0, id="4002")
+
+    row_a = {"firstname": "Pat", "lastname": "Alpha", "company": company_a["name"]}
+    row_b = {"firstname": "Sam", "lastname": "Beta", "company": company_b["name"]}
+    entries = {
+        suggestion_declines.entry_key(company_a["id"], row_a): suggestion_declines.build_entry(
+            row_a, "no_email", "no usable email address was found", "run-earlier-1",
+            company_a["id"]),
+        suggestion_declines.entry_key(company_b["id"], row_b): suggestion_declines.build_entry(
+            row_b, "email_domain_mismatch",
+            "email domain stranger.example does not match this company's recorded domain",
+            "run-earlier-2", company_b["id"]),
+    }
+    suggestion_declines.save(entries, path=store_path)
+
+    declines = suggestion_declines.load(path=store_path)
+    batch = suggestion_declines.partition_by_run(declines, None)
+
+    assert batch["this_run"] == {}
+    assert batch["backlog"] == entries
+
+
+def test_partition_by_run_splits_this_rounds_declines_from_the_backlog():
+    """A store holding entries from run A and run B; `partition_by_run(entries,
+    "run-B")` puts exactly run B's entries in `this_run` and run A's in `backlog`,
+    and the two halves reunite to the original input -- pure, no I/O."""
+    company = _company_row("split-a", 0, id="5001")
+    row_a = {"firstname": "Pat", "lastname": "Alpha", "company": company["name"]}
+    row_b = {"firstname": "Sam", "lastname": "Beta", "company": company["name"]}
+    entry_a = suggestion_declines.build_entry(
+        row_a, "no_email", "no usable email address was found", "run-A", company["id"])
+    entry_b = suggestion_declines.build_entry(
+        row_b, "email_domain_mismatch",
+        "email domain stranger.example does not match this company's recorded domain",
+        "run-B", company["id"])
+    entries = {"key-a": entry_a, "key-b": entry_b}
+
+    batch = suggestion_declines.partition_by_run(entries, "run-B")
+
+    assert batch["this_run"] == {"key-b": entry_b}
+    assert batch["backlog"] == {"key-a": entry_a}
+    assert {**batch["this_run"], **batch["backlog"]} == entries
+
+
+def test_step_9_decline_section_names_the_three_read_states():
+    """A plain assertion over `suggest-contacts/SKILL.md`'s text that step 9's
+    decline section names the store's three read states, so an unreadable store is
+    reported honestly rather than as "nothing to drain"."""
+    import test_skill_sequence_coverage as seq_cov
+
+    text = (seq_cov.PLUGIN_ROOT / "skills" / "suggest-contacts" / "SKILL.md").read_text()
+    assert "absent" in text
+    assert "parseable" in text
+    assert "anomalous" in text
