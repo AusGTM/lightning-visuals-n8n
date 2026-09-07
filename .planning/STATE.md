@@ -5,17 +5,17 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 68
 current_phase_name: state-the-price-and-keep-moving
 status: executing
-stopped_at: Phase 65 complete, ready to plan Phase 67 (66 already complete)
-last_updated: "2026-09-07T03:16:46.895Z"
+stopped_at: Completed 68-01-PLAN.md
+last_updated: "2026-09-07T03:39:32.683Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 68 execution started
-state_head: be7c293e4f093aa4e1bc8e35f2944cf6110a01b2
+state_head: be44a8c329bbc2bd7979f3bf9b9ee1e718ecdf3a
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 6
-  percent: 50
+  completed_plans: 7
+  percent: 33
 ---
 
 # Project State
@@ -357,8 +357,8 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 68 (state-the-price-and-keep-moving) — READY TO EXECUTE
-Plan: 1 of ?
+Phase: 68 (state-the-price-and-keep-moving) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 68 execution started
 
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████░░░░░] 50% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T00:39:18.905Z
-**Stopped at:** Phase 65 complete, ready to plan Phase 67 (Phase 66 was already complete; phase.complete advanced by roadmap order)
+**Last session:** 2026-09-07T03:39:32.518Z
+**Stopped at:** Completed 68-01-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -634,6 +634,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 66 P03 | 40min | 2 tasks | 5 files |
 | Phase 65 P01 | 27min | 3 tasks | 5 files |
 | Phase 65 P02 | 24min | 3 tasks | 6 files |
+| Phase 68 P01 | 17min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -753,6 +754,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 65]: Phase 65-01: suggest_contacts.round_outcome is now the ONE place a round's cause is decided -- six-value closed vocabulary, fixed precedence, fail-closed to unknown on malformed input without raising, and reentry: search_fallback only for no_people_found on the routing call (any terminal call carrying rows/sendable/held/fallback structurally returns reentry: none).
 - [Phase 65]: LADDER-05 not ticked complete by 65-01: the search fallback's trigger condition (walk[people] empty) is unchanged, so live reachability stays opportunistic; both live rounds to date found some people, so the fallback still has not fired outside offline tests.
 - [Phase 65]: RICH-04 closed as an audit plus the seniority half: merge_enriched's allowlist widened to the union of extraction.canonical_props() and field_policy.yaml's 12 promotable contact keys; widened keys are stripped at the dispatch-CSV boundary and never reach HubSpot through it; the richer-jobtitle half is deferred to a named pending todo.
+- [Phase 68]: 68-01 Task 2 resolved prose-and-pin: D-68-04's unattended-posture reversal recorded in backend-control/SKILL.md beside ALLOW_N8N_ARM and pinned by test_headless_grant_boundary.py — operator-visible record + checked boundary for Phase 67 to inherit
+- [Phase 68]: 68-01 reworded 'autonomy tiers' to 'autonomy levels' in backend-control/SKILL.md — test_report_enrichment.py bans the literal substring tier/icp from every operator-facing skill body (D-10b)
 
 ### Roadmap Evolution
 
