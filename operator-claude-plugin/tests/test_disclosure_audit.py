@@ -44,6 +44,8 @@ and are what stay checked.
 import re
 from pathlib import Path
 
+import pytest
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILL_PATHS = sorted(PLUGIN_ROOT.glob("skills/*/SKILL.md"))
 
@@ -62,10 +64,7 @@ AUDIT = {
     "enrich-before-ingest": "converted",
     "enrich-records": "converted",
     "initialize": "swept-no-findings",
-    # RECORDED EDIT -- 68-03 Task 3 RED seed. "loss-reason-report" is deliberately
-    # omitted here to take RED on the completeness assertion (this repo already
-    # satisfies every other assertion below, so an honest RED needs a seeded gap
-    # rather than an inverted assertion). Restored for GREEN in the next commit.
+    "loss-reason-report": "swept-no-findings",
     "review-triage": "decision-point-preserved",
     "suggest-contacts": "converted",
 }
@@ -123,18 +122,22 @@ def test_at_least_four_skills_are_swept_no_findings():
     assert sum(1 for v in AUDIT.values() if v == "swept-no-findings") >= 4
 
 
-def test_read_only_skills_have_no_pre_spend_pause_or_open_grant_symbol():
-    for skill in READ_ONLY_SKILLS:
-        assert AUDIT[skill] == "swept-no-findings"
-        text = _text(skill)
-        assert "pre_spend_pause" not in text, f"{skill} names pre_spend_pause"
-        assert "open_grant" not in text, f"{skill} names open_grant"
+@pytest.mark.parametrize("skill", READ_ONLY_SKILLS)
+def test_read_only_skill_is_classified_swept_no_findings(skill):
+    assert AUDIT[skill] == "swept-no-findings"
 
 
-def test_every_preserved_decision_point_literal_is_present():
-    for skill, literal in PRESERVED_LITERALS.items():
-        normalized = _normalized(_text(skill))
-        assert literal in normalized, f"{skill} is missing its preserved-decision-point literal"
+@pytest.mark.parametrize("skill", READ_ONLY_SKILLS)
+def test_read_only_skill_has_no_pre_spend_pause_or_open_grant_symbol(skill):
+    text = _text(skill)
+    assert "pre_spend_pause" not in text, f"{skill} names pre_spend_pause"
+    assert "open_grant" not in text, f"{skill} names open_grant"
+
+
+@pytest.mark.parametrize("skill", sorted(PRESERVED_LITERALS))
+def test_preserved_decision_point_literal_is_present(skill):
+    normalized = _normalized(_text(skill))
+    assert PRESERVED_LITERALS[skill] in normalized, f"{skill} is missing its preserved-decision-point literal"
 
 
 def test_suggest_contacts_step_3_is_split_not_collapsed():
