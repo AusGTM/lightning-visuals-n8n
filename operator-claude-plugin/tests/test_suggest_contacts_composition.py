@@ -564,6 +564,87 @@ def test_a_chosen_cap_above_the_priced_cap_refuses_and_synthesises_no_rows():
     # synthesise_rows was ever called.
 
 
+# =====================================================================================
+# Phase 65 Task 2 — the terminal classify, driven for real over an interleaved batch:
+# `rounds`' start/count slice keeps each company's own rows filtered against the
+# BATCH-WIDE sendable/held lists (D-65-02, D-65-06, D-65-07).
+# =====================================================================================
+
+def test_two_interleaved_companies_each_get_their_own_cause_and_breakdown():
+    """Company A's one person ends up with an email on a stranger's domain (held,
+    zero sendable) -- all_held_on_email. Company B's one person ends up with a
+    related-domain email and reaches the bar -- proposed. Both records interleave in
+    ONE batch, minted and merged together, so this proves the `rows` filter scopes the
+    shared `sendable`/`held` lists to each company's OWN rows rather than the whole
+    batch's."""
+    company_a = _company_row_with_website(
+        "interleave-a", "https://example-club-a.example/board")
+    company_b = _company_row_with_website(
+        "interleave-b", "https://example-club-b.example/board")
+
+    vocabulary = role_classify.load_families()
+    family_list = vocabulary["families"]
+    chosen_families = [FAMILY_LABEL]
+    figures = {"suggestion_allowance": {"priced_cap": 1}}
+    per_company_cap = suggest_contacts.agreed_cap(1, figures)
+    bar = suggest_contacts.walk_bar(chosen_families, per_company_cap)
+
+    rounds = []
+    records = []
+    for company_row, firstname, lastname in (
+            (company_a, "Craig", "Smith"), (company_b, "Jamie", "Fox")):
+        people = [{"firstname": firstname, "lastname": lastname, "jobtitle": FAMILY_LABEL}]
+        selection = suggest_contacts.select_people(
+            people, family_list, chosen_families, known_contacts=[])
+        walk = {
+            "people": people, "selected": selection["selected"],
+            "dropped": selection["dropped"], "scores": [],
+            "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": bar,
+        }
+        company_records = suggest_contacts.synthesise_rows(
+            company_row, selection["selected"], "https://example.example/board",
+            per_company_cap)
+        rounds.append({
+            "company": company_row, "walk": walk, "fallback": None,
+            "start": len(records), "count": len(company_records),
+        })
+        records.extend(company_records)
+
+    # The mint -- ONCE, over the whole interleaved batch, never per company.
+    minted = suggest_contacts.mint_row_ids(records)
+
+    # Stage 2: Craig's waterfall email is a stranger's domain; Jamie's is related.
+    responses = [
+        {"row_id": "row-1", "properties": {"email": "craig.smith@thehartford.com"}},
+        {"row_id": "row-2", "properties": {"email": "jamie.fox@example-club-b.example"}},
+    ]
+    merge_report = preingest.merge_enriched(minted["spec"]["rows"], responses)
+    rejoined = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+
+    company_domains = {
+        company_a["name"]: company_a["website"], company_b["name"]: company_b["website"],
+    }
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in rejoined], company_domains)
+    sendable, held = search_fallback.hold_weak_sources(rejoined, sendable, held)
+
+    for entry in rounds:
+        company_rows = [
+            rec["row"] for rec in rejoined[entry["start"]:entry["start"] + entry["count"]]
+        ]
+        entry["outcome"] = suggest_contacts.round_outcome(
+            entry["walk"], rows=company_rows, sendable=sendable, held=held,
+            fallback=entry["fallback"])
+
+    assert rounds[0]["outcome"]["cause"] == suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL
+    assert rounds[0]["outcome"]["reentry"] == suggest_contacts.REENTRY_NONE
+    assert rounds[0]["outcome"]["breakdown"]["sendable"] == 0
+
+    assert rounds[1]["outcome"]["cause"] == suggest_contacts.CAUSE_PROPOSED
+    assert rounds[1]["outcome"]["reentry"] == suggest_contacts.REENTRY_NONE
+    assert rounds[1]["outcome"]["breakdown"]["sendable"] == 1
+
+
 def test_config_gate_style_modules_used_in_the_documented_block_are_real_scripts_modules():
     """A cheap guard against the census's own module-name derivation silently going
     stale: `scripts_modules()` derives its allowlist from `scripts/*.py` at runtime, so a

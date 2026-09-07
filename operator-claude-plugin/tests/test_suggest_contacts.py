@@ -1447,3 +1447,59 @@ def test_round_outcome_breakdown_counts_are_ints_and_name_each_reason_literal_ve
 def test_round_outcome_key_set_is_exactly_cause_reentry_reason_breakdown():
     outcome = suggest_contacts.round_outcome(_empty_walk())
     assert set(outcome.keys()) == {"cause", "reentry", "reason", "breakdown"}
+
+
+# =====================================================================================
+# Phase 65 Task 2 — the terminal classify: the `rows` filter scopes a shared batch-wide
+# `sendable`/`held` to THIS company's own rows, and the fallback branch's own dropped
+# people are folded into the breakdown (D-65-02, D-65-06, D-65-07).
+# =====================================================================================
+
+def test_round_outcome_folds_the_fallback_selection_into_the_breakdown():
+    walk = _empty_walk(bar=1)
+    fallback = {
+        "selected": [{"firstname": "Robin", "lastname": "Lee"}],
+        "dropped": [{"person": {"firstname": "Alex"}, "reason": "role_not_selected"}],
+    }
+    outcome = suggest_contacts.round_outcome(walk, fallback=fallback)
+    assert outcome["breakdown"]["dropped"] == {"role_not_selected": 1}
+    assert outcome["breakdown"]["people"] == 2  # 0 walk + 1 fallback selected + 1 dropped
+    assert outcome["breakdown"]["selected"] == 1
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+def test_round_outcome_rows_filter_scopes_sendable_and_held_to_this_companys_rows():
+    walk = {
+        "people": [{"firstname": "A", "lastname": "B"}],
+        "selected": [{"firstname": "A", "lastname": "B"}],
+        "dropped": [], "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+    }
+    rows = [{"row_id": "row-1"}]
+    sendable = [{"row_id": "row-2"}]  # belongs to a DIFFERENT company in this batch
+    held = [{"index": 0, "row": {"row_id": "row-1"}, "reason": "x", "reason_code": "no_email"}]
+    outcome = suggest_contacts.round_outcome(walk, rows=rows, sendable=sendable, held=held)
+    assert outcome["cause"] == suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL
+    assert outcome["breakdown"]["sendable"] == 0
+    assert outcome["breakdown"]["held"] == {"no_email": 1}
+
+
+def test_round_outcome_rows_filter_fails_closed_when_a_row_is_missing_row_id():
+    walk = _empty_walk(bar=1)
+    outcome = suggest_contacts.round_outcome(
+        walk, rows=[{"name": "no id"}], sendable=[], held=[])
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+
+
+def test_round_outcome_rows_filter_fails_closed_when_a_sendable_row_is_missing_row_id():
+    walk = _empty_walk(bar=1)
+    outcome = suggest_contacts.round_outcome(
+        walk, rows=[{"row_id": "row-1"}], sendable=[{"name": "no id"}], held=[])
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+
+
+def test_round_outcome_rows_filter_fails_closed_when_a_held_entrys_row_is_missing_row_id():
+    walk = _empty_walk(bar=1)
+    held = [{"index": 0, "row": {"name": "no id"}, "reason": "x", "reason_code": "no_email"}]
+    outcome = suggest_contacts.round_outcome(
+        walk, rows=[{"row_id": "row-1"}], sendable=[], held=held)
+    assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
