@@ -481,7 +481,7 @@ the SKILL.md routing and a new sibling store are being added.
 
 **If this table is empty:** N/A — see above.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the new store's `run_id` field be validated against anything, or accepted as
    an opaque string?**
@@ -491,10 +491,14 @@ the SKILL.md routing and a new sibling store are being added.
      cross-check against `run_state`.
    - Recommendation: treat it the same as every other store — an opaque string, no
      validation beyond type-checking, consistent with existing precedent.
+   - **RESOLVED (planning, 2026-09-07):** opaque string, type-checked only. Adopted by
+     plan 69-01's store validation; no cross-check against `run_state`.
 
 2. **Retention of the accumulating store** (explicitly deferred in CONTEXT.md's "Deferred
    Ideas") — not this phase's concern, flagged here only so the plan does not
    accidentally scope it in.
+   - **RESOLVED (planning, 2026-09-07):** out of scope. No plan task touches retention;
+     CONTEXT § Deferred Ideas owns it.
 
 ## Environment Availability
 
