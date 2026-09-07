@@ -2,8 +2,8 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 68
-current_phase_name: State the price and keep moving
+current_phase: 69
+current_phase_name: Held rows survive the round
 status: planning
 stopped_at: Phase 67 complete, ready to plan Phase 68
 last_updated: "2026-09-07T08:56:04.232Z"
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 68 — State the price and keep moving
+Phase: 69 — Held rows survive the round
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-09-07 — Phase 67 complete, transitioned to Phase 68
+Last activity: 2026-09-07 — Phase 67 complete; Phase 68 was already complete, so the next open phase is 69
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -501,7 +501,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-07T08:35:10.339Z
-**Stopped at:** Phase 67 complete, ready to plan Phase 68
+**Stopped at:** Phase 67 complete, ready to discuss/plan Phase 69 (68 already complete; phase.complete advanced by roadmap order)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.

@@ -38,7 +38,7 @@ covered_files:
   - operator-claude-plugin/tests/test_disclosure_audit.py
   - .planning/REQUIREMENTS.md
   - .planning/ROADMAP.md
-covered_digest: "v1:sha256:895dc3e829ed20c29d4efccc49f7ae02535cb420c6d78509b1e811478c65c87f"
+covered_digest: "v1:sha256:0cdcd31705e63be43dd1d2d3e38d964c7ec898829ead696592b16418739411bc"
 behavior_unverified: 0
 overrides_applied: 0
 ---
