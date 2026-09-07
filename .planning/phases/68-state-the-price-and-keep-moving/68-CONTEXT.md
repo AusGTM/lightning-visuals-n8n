@@ -100,6 +100,19 @@ the autonomy tier switch and its fail-closed conditions (Phase 67 — see D-68-0
   ambiguous match, a conflict the judge could not adjudicate, a destructive or irreversible
   action.
 
+## Planning-time rulings (operator, 2026-09-07, put by plan-phase after 68-RESEARCH.md)
+
+- **D-68-10: An implicit open on `CEILING_UNKNOWN` PROCEEDS, with the blind spot disclosed.**
+  The implicit-open path inherits the explicit path's behaviour unchanged (`plan_grant`
+  refuses only `CEILING_OVER`; `CEILING_UNKNOWN` proceeds with the blind spot disclosed,
+  D-57-02, `write_grant.py` ~1117). The pre-spend line MUST state the unsampled ceiling in
+  words. No Phase-68-only fence; fail-closed on `CEILING_UNKNOWN` stays Phase 67's (D-68-04).
+  Option B (fall back to the old ask on unknown) was offered and not taken.
+
+- **D-68-11: The pre-spend pause fires ONCE per SKILL.md invocation.** One pause, immediately
+  before the first credit-spending call of the whole batch, consistent across every skill
+  touched. Per-company / per-record pauses were offered and not taken.
+
 ### Claude's Discretion
 
 - The exact pause constant inside 5–10s, and where it lives.
