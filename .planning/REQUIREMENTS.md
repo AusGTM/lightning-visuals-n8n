@@ -44,7 +44,7 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   two different causes, and a blanket retry would have helped neither.*
 - [x] **LADDER-04**: Re-entry is expressed without a `while` loop
   (`test_report_sufficiency.py::_has_while_loop` scans every plugin script).
-- [x] **LADDER-05**: The search fallback becomes reachable in a real round — i.e.
+- [ ] **LADDER-05**: The search fallback becomes reachable in a real round — i.e.
   `260904-QUICK-UAT.md` test 8 can finally be exercised rather than skipped a third time.
 - [x] **RICH-04**: `merge_enriched`'s keep/replace rule for a CREATE row is audited as its own
   seam. *Live: on an all-blank CREATE row the round discovered `Head of Marketing and Content`

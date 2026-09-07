@@ -360,7 +360,7 @@ Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 67 — An autonomy flag with sensible defaults
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-09-07 — Phase 65 complete, transitioned to Phase 66
+Last activity: 2026-09-07 — Phase 65 complete, transitioned to Phase 67 (66 already complete)
 
 *The v1.1 retained sections below are history, not current position.*
 
