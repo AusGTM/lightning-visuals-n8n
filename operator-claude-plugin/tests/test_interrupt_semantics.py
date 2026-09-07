@@ -11,10 +11,16 @@ REVOKE (refuses the next send, does not stop a dispatch already running) to tell
 same truth about the INTERRUPT: free inside the pause, a revoke once it has elapsed.
 
 `SITES` is deliberately a declared list, not a glob -- adding a fifth site later
-without adding it here is a visible gap, not a silent one. This file ships with
-`SITES` holding only `contact-upload` (Task 1, "the honest interrupt, end to end at
-one site") -- Task 2 widens it to all four and adds the two structural assertions
-that a fifth-site drift would trip.
+without adding it here is a visible gap, not a silent one. Task 1 shipped this file
+with `SITES` holding only `contact-upload` (Task 1, "the honest interrupt, end to
+end at one site").
+
+RECORDED EDIT -- Task 2. Widened `SITES` from that single entry to all four sites
+FLOW-05 names, and added the two structural tests at the bottom of this file: one
+pinning `len(SITES) == 4` and one pinning that every declared path exists on disk.
+Together they mean a fifth site added later without being registered here fails
+loudly (a length assertion or a missing-file assertion), rather than the test suite
+silently continuing to cover only the original four.
 """
 import re
 from pathlib import Path
@@ -25,6 +31,9 @@ PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 
 SITES = (
     "skills/contact-upload/SKILL.md",
+    "skills/enrich-before-ingest/SKILL.md",
+    "skills/enrich-records/SKILL.md",
+    "skills/backend-control/SKILL.md",
 )
 
 
@@ -74,3 +83,12 @@ def test_never_claims_an_interrupt_can_stop_an_in_flight_dispatch(site):
     )
     for phrase in banned:
         assert phrase not in normalized, f"{site} overstates the interrupt: {phrase!r}"
+
+
+def test_sites_declares_exactly_the_four_flow_05_paths():
+    assert len(SITES) == 4, "a fifth site must be added here, not silently covered"
+
+
+def test_every_declared_site_path_exists_on_disk():
+    missing = [site for site in SITES if not (PLUGIN_ROOT / site).is_file()]
+    assert not missing, f"SITES names a path that does not exist: {missing}"
