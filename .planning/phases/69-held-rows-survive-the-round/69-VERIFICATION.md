@@ -24,7 +24,7 @@ covered_files:
   - operator-claude-plugin/tests/test_suggest_contacts_composition.py
   - operator-claude-plugin/tests/test_suggestion_declines.py
   - operator-claude-plugin/tests/test_suggestion_declines_skill.py
-covered_digest: "v1:sha256:612ca1b44793be13774ad54dc3273d5d1407db9ff6987978bd16cd9341a22951"
+covered_digest: 
 overrides_applied: 0
 behavior_unverified: 0
 ---
