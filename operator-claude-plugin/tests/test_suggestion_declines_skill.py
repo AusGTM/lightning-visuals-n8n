@@ -12,11 +12,13 @@ re-implementing that parser -- the same idiom `test_autonomy_switch_prose.py` us
 file states: independent evolution, no risk of colliding with work in flight in the
 file it mirrors.
 """
+import csv
 import re
 from pathlib import Path
 
 import pytest
 
+import extraction
 import suggestion_declines
 
 from test_skill_sequence_coverage import extract_python_blocks, parse_calls, scripts_modules
@@ -197,3 +199,77 @@ def test_the_drain_skill_never_touches_the_match_gate_vocabulary():
             f"{forbidden} is the match-gate vocabulary; a suggestion-round decline "
             "answers a different question and must never route through it"
         )
+
+
+# =====================================================================================
+# Task 2: export -- a spreadsheet the operator fixes by hand and feeds back through
+# contact-upload
+# =====================================================================================
+
+
+def test_export_writes_canonical_headers_including_company_id(tmp_path):
+    e1 = _entry("run-1", "2001", "Pat", "Alpha")
+    k1 = suggestion_declines.entry_key("2001", e1["row"])
+    entries = {k1: e1}
+    out_path = tmp_path / "export.csv"
+
+    header = suggestion_declines.export_rows(entries, [k1], out_path)
+
+    assert header == extraction.canonical_props()
+    with out_path.open(newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        written_header = next(reader)
+    assert written_header == extraction.canonical_props()
+    assert "company_id" in written_header
+
+
+def test_export_writes_an_emailless_row_rather_than_refusing_it(tmp_path):
+    e1 = _entry("run-1", "2002", "Sam", "Beta")  # no_email -- row carries no email key
+    assert "email" not in e1["row"]
+    k1 = suggestion_declines.entry_key("2002", e1["row"])
+    entries = {k1: e1}
+    out_path = tmp_path / "export.csv"
+
+    suggestion_declines.export_rows(entries, [k1], out_path)
+
+    with out_path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    assert rows[0]["email"] == "", "an emailless decline must export a blank cell, not raise"
+
+
+def test_export_fills_company_id_from_the_entry_not_the_row(tmp_path):
+    e1 = _entry("run-1", "2003", "Robin", "Gamma")
+    assert "company_id" not in e1["row"], "build_entry never adds company_id to row on its own"
+    k1 = suggestion_declines.entry_key("2003", e1["row"])
+    entries = {k1: e1}
+    out_path = tmp_path / "export.csv"
+
+    suggestion_declines.export_rows(entries, [k1], out_path)
+
+    with out_path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["company_id"] == "2003"
+
+
+def test_export_leaves_the_store_unchanged(tmp_path):
+    path = tmp_path / "suggestion_declines.json"
+    entries, (k1, _k2, _k3) = _seed_three_entries(path)
+    before = path.read_bytes()
+
+    loaded = suggestion_declines.load(path=path)
+    out_path = tmp_path / "export.csv"
+    suggestion_declines.export_rows(loaded, [k1], out_path)
+
+    assert path.read_bytes() == before, "export must never write to the store's own file"
+
+    updated = suggestion_declines.apply_action(loaded, k1, "export")
+    assert updated == loaded, "export is a copy, never a move"
+
+
+def test_export_never_calls_write_dispatch_csv():
+    calls = _extracted_calls(_skill_text())
+    assert "extraction.write_dispatch_csv" not in calls, (
+        "export must never reach write_dispatch_csv's STRUCT-02 emailless refusal -- "
+        "handing the operator an incomplete row to fix is the whole point of export"
+    )
