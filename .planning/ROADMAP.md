@@ -185,6 +185,8 @@ per tier.
 
 **Brief:** `.planning/todos/pending/2026-09-04-autonomy-flag-with-sensible-defaults.md`.
 
+**Requirements:** AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05, AUTO-06 (always mapped to Phase 67 in REQUIREMENTS.md's AUTO section; line added 2026-09-07 so the planner coverage gates see them)
+
 - The safety scaffolding already exists (Phase 57: per-run ceilings, refusal-before-start,
   post-run proof; Phase 61: run scope, resume, held rows). **This is the missing switch, not
   missing safety.**
