@@ -416,6 +416,23 @@ COVERED = {
             "extraction.validate", "suggest_contacts.round_artifact",
         ),
     ): "test_suggest_contacts_composition.py::test_the_documented_round_pipeline_drives_its_real_joins_end_to_end",
+    # Phase 69 Plan 02 Task 1 (HELD-01, D-69-02): a NEW, SEPARATE fence -- step 8's
+    # held routing, added immediately after the tuple above's own fence, never
+    # inside it, so the pipeline tuple's own identity (above) is unchanged. The
+    # partition's held rows no longer route into `held_queue` (a suggestion-round
+    # decline answers "identified fine, declined to send", a different question
+    # from `held_queue`'s match-gate vocabulary) -- they route into
+    # `suggestion_declines`, a sibling durable store (plan 01). The sink is
+    # `suggestion_declines.partition_by_run`, the structure step 9 renders.
+    (
+        "suggest-contacts",
+        (
+            "suggestion_declines.load", "suggest_contacts.company_id_for_index",
+            "suggestion_declines.entry_key", "suggestion_declines.build_entry",
+            "suggestion_declines.first_refusal", "suggestion_declines.save",
+            "suggestion_declines.partition_by_run",
+        ),
+    ): "test_suggest_contacts_composition.py::test_the_documented_step_8_held_routing_persists_a_declined_person",
 }
 
 NOT_A_PIPELINE = {

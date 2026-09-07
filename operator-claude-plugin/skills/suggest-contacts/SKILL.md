@@ -437,9 +437,21 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    stands, not a decision point. `row_id` is a plugin-internal join key, not a canonical
    prop, so `validate()` reports it among each record's `dropped_keys` and still accepts
    the record; `extraction.strip_row_id` is the boundary strip before a dispatch CSV,
-   exactly where `enrich-before-ingest/SKILL.md` step 7 already places it. The held half
-   is handled exactly as `enrich-before-ingest/SKILL.md`'s own held-row path:
-   `confidence.assess()`, then `held_queue.build_entry()`, then `run_manifest.save()`.
+   exactly where `enrich-before-ingest/SKILL.md` step 7 already places it.
+
+   **Correction, not a widening (HELD-01, D-69-02).** The held half does NOT follow
+   `enrich-before-ingest/SKILL.md`'s own held-row path. A suggestion-round partition
+   code answers a different question than the held-queue module's match-gate
+   vocabulary does — `confidence.ALL_HOLD_CODES` means "could not identify this
+   person"; `suggest_contacts.partition_for_dispatch`'s own codes mean "identified
+   fine, declined to send" (no usable email, a stranger's email domain, an unknown
+   company domain, a weak search source). A decline routes to its own store,
+   `suggestion_declines` — never into the held-queue module's own confidence
+   assessment or entry-building functions — and the held-queue module's own refusal
+   on every one of these codes stays correct behaviour; nothing about that refusal
+   changes. The live case that made this a correction rather than a widening: the
+   Roma Turf Club round correctly held two real committee members, and the only
+   record of them afterwards was a chat message.
 
    Send the round's per-field source map with the final dispatch — `dispatch.dispatch(...,
    source_by_field=...)` — so the written contacts carry mixed provenance: `claude_web`
@@ -637,6 +649,44 @@ and what `enrich-before-ingest/SKILL.md` already calls.
                continue  # a held row never reaches extraction.validate()
            result = extraction.validate(suggest_contacts.round_artifact([record]))
    ```
+
+   **The held routing (HELD-01, D-69-02, D-69-03, D-69-04).** Still inside the
+   `if records:` branch, immediately after the terminal classify loop above, over
+   `held`, `records`, `rounds` and the step-5-sourced `run_id`, in one pass:
+
+   ```python
+   import suggestion_declines
+
+   declines = suggestion_declines.load()
+   unkeyable = []
+   unstorable = []
+   added = 0
+   for entry in held:
+       company_id = suggest_contacts.company_id_for_index(rounds, entry["index"])
+       key = suggestion_declines.entry_key(company_id, entry["row"])
+       if key is None:
+           unkeyable.append(entry)
+           continue
+       candidate = suggestion_declines.build_entry(
+           entry["row"], entry["reason_code"], entry["reason"], run_id, company_id,
+           records[entry["index"]]["provenance"])
+       refusal = suggestion_declines.first_refusal(key, candidate)
+       if refusal is not None:
+           unstorable.append(refusal)
+           continue
+       declines[key] = candidate
+       added += 1
+
+   if added:
+       suggestion_declines.save(declines)
+   batch = suggestion_declines.partition_by_run(declines, run_id)
+   ```
+
+   Three ceilings, stated plainly. The pre-check with `first_refusal` exists so one
+   odd string costs one decline instead of the whole batch's save. An `unkeyable` or
+   `unstorable` decline is named individually in step 9's report below and is never
+   silently dropped. And `save` merges into what `load()` returned, rather than
+   overwriting it, so an earlier run's deferred entries survive this round (D-69-03).
 
 9. **Report.** Per company: eligible / skipped / unknown, people named, people already
    known and dropped before the cap, fetches spent against the per-company bound, and
