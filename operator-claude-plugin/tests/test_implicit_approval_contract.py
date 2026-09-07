@@ -9,11 +9,25 @@ round verbatim and never falls through to `write_grant.authorize_ungranted_send`
 proceeded past (D-68-10). The pre-existing two-phase ask is never deleted — it survives
 as the path taken when the operator interrupts the implicit open (FLOW-02).
 
-Task 2 scopes every assertion to `enrich-before-ingest/SKILL.md` only — the source of
-truth every other skill's ask either quotes (`suggest-contacts`) or independently
-mirrors (`enrich-records`, `contact-upload`). Task 3 parameterises the same shape over
-those three remaining skills, added to `TARGETS` below in the same commit as their own
-SKILL.md edits, plus per-skill assertions for the literals each one owns.
+Task 2 landed `enrich-before-ingest/SKILL.md` alone — the source of truth every other
+skill's ask either quotes (`suggest-contacts`, before this task) or independently
+mirrors (`enrich-records`, `contact-upload`). Task 3 (this commit) parameterises the
+same shape over those three remaining skills.
+
+Two skills split the three fences across TWO numbered steps rather than one:
+`enrich-records` (`plan_grant` in step 5, `pause`+`open_grant` at the end of step 6,
+immediately before step 8's dispatch fence) and `contact-upload` (`plan_grant` in step
+4, `pause`+`open_grant` at the end of step 5, before step 6's dispatch) —
+`suggest-contacts` splits the same way (`plan_grant`/`agreed_cap` in step 3, `pause`
+[already landed by Plan 01] + `open_grant` in step 4). `open_steps` is therefore always
+a tuple, concatenated in order for every span-scoped assertion below, so a two-step
+split is not read as "the call is missing".
+
+`suggestion_companies` is priced only when the batch's own `object_type` can be
+`"companies"` (`enrich-before-ingest`, `enrich-records`, `suggest-contacts`) — never for
+`contact-upload`, which is contacts-only end to end; `envelope()` defaults the argument
+to `None` and skips the whole suggestion-allowance branch when omitted, so omitting it
+for a contacts-only skill is correct, not an oversight (`has_suggestion=False`).
 
 `_normalized()` is copied from `test_enrich_before_ingest_skill_contract.py`'s own
 idiom (collapse whitespace, strip `>` and `*`) rather than imported, matching that
@@ -33,17 +47,34 @@ ENRICH_RECORDS_PATH = SKILLS_DIR / "enrich-records" / "SKILL.md"
 CONTACT_UPLOAD_PATH = SKILLS_DIR / "contact-upload" / "SKILL.md"
 SUGGEST_CONTACTS_PATH = SKILLS_DIR / "suggest-contacts" / "SKILL.md"
 
-# Task 2 scope: enrich-before-ingest only. Task 3 adds the remaining three skills here,
-# each carrying the step number its own implicit-open block lives in and the
-# arming-scope literal that skill's OWN ungranted ask uses (or None where the skill
-# never had its own literal to begin with -- suggest-contacts only ever cross-quoted
-# enrich-before-ingest's).
 TARGETS = {
     "enrich-before-ingest": {
         "path": EBI_PATH,
-        "open_step": 5,
+        "open_steps": (5,),
         "no_pause_steps": (7,),
+        "has_suggestion": True,
         "survives": ("arms this run and nothing else", "arms this write and nothing else"),
+    },
+    "enrich-records": {
+        "path": ENRICH_RECORDS_PATH,
+        "open_steps": (5, 6),
+        "no_pause_steps": (7, 8),
+        "has_suggestion": True,
+        "survives": ("arms this send and nothing else",),
+    },
+    "contact-upload": {
+        "path": CONTACT_UPLOAD_PATH,
+        "open_steps": (4, 5),
+        "no_pause_steps": (6,),
+        "has_suggestion": False,
+        "survives": ("arms this send and nothing else",),
+    },
+    "suggest-contacts": {
+        "path": SUGGEST_CONTACTS_PATH,
+        "open_steps": (3, 4),
+        "no_pause_steps": (5,),
+        "has_suggestion": True,
+        "survives": (),
     },
 }
 
@@ -80,22 +111,30 @@ def _step(text, number):
     raise AssertionError(f"no top-level numbered step {number} found in SKILL.md")
 
 
+def _open_span(target):
+    """The concatenation, in order, of every step this skill's implicit-open sequence
+    is split across — a single string so every span-scoped assertion below reads as
+    one logical block regardless of how many numbered steps it physically spans."""
+    text = _text(target["path"])
+    return "".join(_step(text, n) for n in target["open_steps"])
+
+
 @pytest.mark.parametrize("name", sorted(TARGETS))
-def test_the_open_step_calls_plan_grant_then_pause_then_open_grant_in_order(name):
+def test_the_open_span_calls_plan_grant_then_pause_then_open_grant_in_order(name):
     target = TARGETS[name]
-    step = _step(_text(target["path"]), target["open_step"])
-    plan_idx = step.find("write_grant.plan_grant(")
-    pause_idx = step.find("watch.pre_spend_pause()")
-    open_idx = step.find("write_grant.open_grant(")
+    span = _open_span(target)
+    plan_idx = span.find("write_grant.plan_grant(")
+    pause_idx = span.find("watch.pre_spend_pause()")
+    open_idx = span.find("write_grant.open_grant(")
     assert plan_idx != -1, (
-        f"{name} step {target['open_step']} must call write_grant.plan_grant — a "
+        f"{name} step(s) {target['open_steps']} must call write_grant.plan_grant — a "
         "find() of -1 must fail loudly rather than compare as 'earlier' than the rest"
     )
     assert pause_idx != -1, (
-        f"{name} step {target['open_step']} must call watch.pre_spend_pause"
+        f"{name} step(s) {target['open_steps']} must call watch.pre_spend_pause"
     )
     assert open_idx != -1, (
-        f"{name} step {target['open_step']} must call write_grant.open_grant"
+        f"{name} step(s) {target['open_steps']} must call write_grant.open_grant"
     )
     assert plan_idx < pause_idx < open_idx, (
         f"{name}: the documented order must be plan_grant -> pause -> open_grant "
@@ -106,8 +145,8 @@ def test_the_open_step_calls_plan_grant_then_pause_then_open_grant_in_order(name
 @pytest.mark.parametrize("name", sorted(TARGETS))
 def test_open_grant_is_supplied_the_literal_yes_by_the_round_itself(name):
     target = TARGETS[name]
-    step = _step(_text(target["path"]), target["open_step"])
-    assert 'write_grant.open_grant(proposal, "yes", config)' in step, (
+    span = _open_span(target)
+    assert 'write_grant.open_grant(proposal, "yes", config)' in span, (
         f"{name}: the round itself must supply the literal string \"yes\" to "
         "open_grant — this is what makes the open implicit rather than a second, "
         "hidden ask"
@@ -117,16 +156,17 @@ def test_open_grant_is_supplied_the_literal_yes_by_the_round_itself(name):
 @pytest.mark.parametrize("name", sorted(TARGETS))
 def test_a_plan_grant_refusal_is_relayed_verbatim_and_never_falls_through(name):
     target = TARGETS[name]
-    step = _normalized(_step(_text(target["path"]), target["open_step"]))
-    assert "write_grant.authorize_ungranted_send" in step, (
+    span = _open_span(target)
+    normalized = _normalized(span)
+    assert "write_grant.authorize_ungranted_send" in normalized, (
         f"{name}: the refusal rule must name authorize_ungranted_send as the path "
         "that is NOT taken after a plan_grant refusal"
     )
-    assert "proceeding unless interrupted is never proceeding past a refusal" in step, (
+    assert "proceeding unless interrupted is never proceeding past a refusal" in normalized, (
         f"{name}: a plan_grant refusal must be stated as a hard stop, never softened "
         "into a disclosure (D-68-06)"
     )
-    assert "STOP" in _step(_text(target["path"]), target["open_step"]), (
+    assert "STOP" in span, (
         f"{name}: the refusal rule must say STOP, not merely describe the refusal"
     )
 
@@ -134,27 +174,39 @@ def test_a_plan_grant_refusal_is_relayed_verbatim_and_never_falls_through(name):
 @pytest.mark.parametrize("name", sorted(TARGETS))
 def test_the_unsampled_ceiling_verdict_is_named_and_disclosed(name):
     target = TARGETS[name]
-    step = _normalized(_step(_text(target["path"]), target["open_step"]))
-    assert '"unknown"' in step, (
-        f"{name}: the open step must name the unknown ceiling verdict literally"
+    normalized = _normalized(_open_span(target))
+    assert '"unknown"' in normalized, (
+        f"{name}: the open span must name the unknown ceiling verdict literally"
     )
-    assert "not bounded by the monthly ceiling this run" in step, (
+    assert "not bounded by the monthly ceiling this run" in normalized, (
         f"{name}: D-68-10 requires the blind spot stated in words, not silently "
         "proceeded past"
     )
 
 
-@pytest.mark.parametrize("name", sorted(TARGETS))
+@pytest.mark.parametrize("name", [n for n in TARGETS if TARGETS[n]["has_suggestion"]])
 def test_suggestion_companies_is_priced_and_suggestion_cap_is_left_unset(name):
     target = TARGETS[name]
-    step = _normalized(_step(_text(target["path"]), target["open_step"]))
-    assert "suggestion_companies" in step, (
+    normalized = _normalized(_open_span(target))
+    assert "suggestion_companies" in normalized, (
         f"{name}: the implicit open must price suggestion_companies so a later "
         "suggest-contacts round in this sitting reuses this grant (D-68-08)"
     )
-    assert "suggestion_cap` unset" in step or "suggestion_cap\" unset" in step, (
+    assert "suggestion_cap` unset" in normalized or 'suggestion_cap" unset' in normalized, (
         f"{name}: suggestion_cap must be left unset so the envelope prices the "
         "suggestion round at PRICED_CAP, not a Phase-68 arithmetic invention"
+    )
+
+
+@pytest.mark.parametrize("name", ["contact-upload"])
+def test_contact_upload_never_prices_a_suggestion_allowance(name):
+    """Rule 2 (Task 3 action): a contacts-only batch omits suggestion_companies rather
+    than passing zero — `envelope()`'s documented skip for `None` (D-62-11)."""
+    target = TARGETS[name]
+    normalized = _normalized(_open_span(target))
+    assert "suggestion_companies" not in normalized, (
+        f"{name} is contacts-only end to end — it must never price a suggestion "
+        "round it will never run"
     )
 
 
@@ -170,7 +222,7 @@ def test_pre_spend_pause_appears_exactly_once_and_never_in_a_no_pause_step(name)
         excluded_step = _step(text, excluded)
         assert "pre_spend_pause" not in excluded_step, (
             f"{name}: step {excluded} must carry no pause of its own — the batch's "
-            "one pause lives in step {target['open_step']} only"
+            f"one pause lives in step(s) {target['open_steps']} only"
         )
 
 
@@ -184,3 +236,21 @@ def test_every_pre_existing_arming_scope_literal_survives(name):
             "on the interrupted (ungranted) path — this phase never deletes the "
             "two-phase ask, only makes it non-default (FLOW-02)"
         )
+
+
+@pytest.mark.parametrize("name", sorted(TARGETS))
+def test_the_skill_names_backend_controls_direct_grant_route_inline(name):
+    """D-68-07: every batch skill offers the direct route to a grant spanning more
+    than this batch, and states that a phrase inside this invocation's own argument
+    string is not a machine grant — the live Brisbane Roar friction this phase
+    fixes."""
+    target = TARGETS[name]
+    body = _normalized(_text(target["path"]))
+    assert "Opening a write grant" in body, (
+        f"{name}: must name backend-control's existing 'Opening a write grant' action "
+        "as the direct route to a grant spanning more than this batch"
+    )
+    assert "not a machine grant" in body, (
+        f"{name}: must state plainly that a phrase inside an invocation argument "
+        "string is not a machine grant"
+    )
