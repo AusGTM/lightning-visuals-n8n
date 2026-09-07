@@ -122,7 +122,7 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 - [ ] **HELD-01**: The skill and the code agree on where partition holds go. *Live: step 8
   routes them to `held_queue`, which raises `HeldQueueError` on them.*
-- [ ] **HELD-02**: `confidence.ALL_HOLD_CODES` is NOT widened by the partition codes, and a
+- [x] **HELD-02**: `confidence.ALL_HOLD_CODES` is NOT widened by the partition codes, and a
   test pins that disjointness as deliberate. *The two vocabularies answer different questions:
   "could not identify" vs "identified fine, declined to send".*
 - [ ] **HELD-03**: Either correctly-held people persist somewhere durable, or the skill states
