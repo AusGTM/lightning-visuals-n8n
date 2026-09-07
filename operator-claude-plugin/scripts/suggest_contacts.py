@@ -158,10 +158,14 @@ def discovery_plan(company_row):
     return plan
 
 
-def _name_key(person):
+def name_key(person):
     """`(firstname, lastname)`, case-folded and whitespace-collapsed, or `None` when
     either half is missing -- an incomplete name is never a dedupe key, so a blank
-    firstname on one side can never accidentally match a blank firstname on the other."""
+    firstname on one side can never accidentally match a blank firstname on the other.
+
+    PUBLIC (Phase 69, D-69-04): the same key `select_people`'s dedupe already trusts
+    is also half of `suggestion_declines`'s composite entry key -- a cross-module
+    contract now, not an internal helper."""
     first = _normalize_name(person.get("firstname"))
     last = _normalize_name(person.get("lastname"))
     if not first or not last:
@@ -187,13 +191,13 @@ def select_people(people, family_list, chosen_families, known_contacts):
     "reason"}` with reason `"already_associated"` or `"role_not_selected"`."""
     chosen = set(chosen_families or [])
     known_keys = {
-        key for key in (_name_key(c) for c in (known_contacts or [])) if key is not None
+        key for key in (name_key(c) for c in (known_contacts or [])) if key is not None
     }
 
     selected = []
     dropped = []
     for person in people:
-        key = _name_key(person)
+        key = name_key(person)
         if key is not None and key in known_keys:
             dropped.append({"person": person, "reason": "already_associated"})
             continue
@@ -272,7 +276,7 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
     `budget_remaining` keys are ever read, nothing is re-derived.
 
     D-64-01/D-64-02: every page's people accumulate into ONE set, deduped by
-    `_name_key` (the same normalised first+last name key `select_people` already uses
+    `name_key` (the same normalised first+last name key `select_people` already uses
     for its known-contact pre-filter) -- a winner never replaces the rest. A person
     with a missing firstname or lastname has a `None` key and is never deduped away;
     both copies stay in and are resolved downstream, exactly as D-62-18's conservative
@@ -362,7 +366,7 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
 
         new_people = []
         for person in page.get("people") or []:
-            key = _name_key(person)
+            key = name_key(person)
             if key is not None:
                 if key in seen_keys:
                     continue
@@ -675,6 +679,25 @@ def no_candidates(company_row, pasted_url, attempts):
     }
 
 
+# The closed vocabulary for WHY a suggestion round declined to send a row (Phase 69,
+# D-69's own naming discretion). Mirrors `confidence.ALL_HOLD_CODES`'s role for the
+# OTHER vocabulary -- that set means "could not identify this person"; this one means
+# "identified fine, declined to send". A LITERAL frozenset, not built from imports:
+# this module gains no `search_fallback` import (its own purity tests pin that import
+# list) and no `confidence` import. Members are pinned to their three real sources by
+# test (`test_suggestion_declines.py`), not by import -- `"no_email"` is a bare
+# literal below, `_RELATION_REASON_CODES.values()` (below) supplies three more, and
+# `search_fallback.SOURCE_TIER_HOLD_CODE` supplies the fifth. HELD-02's disjointness
+# from `confidence.ALL_HOLD_CODES` is asserted by test, not by construction here.
+PARTITION_REASON_CODES = frozenset({
+    "no_email",
+    "email_domain_freemail",
+    "email_domain_mismatch",
+    "company_domain_unknown",
+    "search_source_not_strong",
+})
+
+
 _RELATION_REASON_CODES = {
     "freemail": "email_domain_freemail",
     "mismatch": "email_domain_mismatch",
@@ -859,10 +882,10 @@ def partition_for_dispatch(rows, company_domains):
     read as one list.
 
     Every held entry carries `{"index", "row", "reason", "reason_code"}` -- a uniform
-    shape across both passes. `confidence.ALL_HOLD_CODES` is not widened by these
-    codes: they describe why a SUGGESTION round declined to send, not a held-queue
-    class, and the held-row path downstream (`confidence.assess()` ->
-    `held_queue.build_entry()`) is unchanged.
+    shape across both passes. These codes are the closed `PARTITION_REASON_CODES`
+    vocabulary and route to `suggestion_declines` (Phase 69), not to `held_queue`:
+    `confidence.ALL_HOLD_CODES` is still not widened by them, and `held_queue.save`'s
+    refusal on any of them stays correct behaviour.
     """
     _, no_email_held = extraction.hold_emailless(rows)
     held_indices = {entry["index"] for entry in no_email_held}
@@ -894,6 +917,18 @@ def partition_for_dispatch(rows, company_domains):
 
     held.sort(key=lambda entry: entry["index"])
     return sendable, held
+
+
+def company_id_for_index(rounds, index):
+    """The owning company's HubSpot id for the row at `index` in the round's flat
+    `records` list (Phase 69, D-69-04). Reads the SAME `{start, count}` ranges the
+    terminal `round_outcome` classify already slices at SKILL.md step 8 -- a second
+    per-row cache is never built to answer this question a second way. `None` means
+    the decline is unkeyable and must be reported as such, never silently dropped."""
+    for entry in rounds:
+        if entry["start"] <= index < entry["start"] + entry["count"]:
+            return entry["company"].get("id")
+    return None
 
 
 def _unknown_outcome(reason):
