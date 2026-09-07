@@ -46,7 +46,7 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   (`test_report_sufficiency.py::_has_while_loop` scans every plugin script).
 - [ ] **LADDER-05**: The search fallback becomes reachable in a real round — i.e.
   `260904-QUICK-UAT.md` test 8 can finally be exercised rather than skipped a third time.
-- [ ] **RICH-04**: `merge_enriched`'s keep/replace rule for a CREATE row is audited as its own
+- [x] **RICH-04**: `merge_enriched`'s keep/replace rule for a CREATE row is audited as its own
   seam. *Live: on an all-blank CREATE row the round discovered `Head of Marketing and Content`
   and `seniority: Director` and kept neither.* **Routed to Phase 65 by operator ruling
   2026-09-04** — `merge_enriched` lives in `suggest_contacts.py`, which 66-CONTEXT.md's

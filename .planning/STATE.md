@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 65
 current_phase_name: Round-empty re-entry, keyed on the cause
-status: executing
-stopped_at: Completed 65-01-PLAN.md
-last_updated: "2026-09-07T00:17:49.981Z"
+status: verifying
+stopped_at: Completed 65-02-PLAN.md
+last_updated: "2026-09-07T00:39:33.145Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 65 execution started
-state_head: 5757c83879cc9893ae4585bbff2970d81c5f4e72
+state_head: 15f0980c5ce745de20a87e64934e78e0a176b017
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 33
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 65 (Round-empty re-entry, keyed on the cause) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-07 — Phase 65 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T00:17:49.668Z
-**Stopped at:** Completed 65-01-PLAN.md
+**Last session:** 2026-09-07T00:39:18.905Z
+**Stopped at:** Completed 65-02-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -633,6 +633,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 66 P02 | 45min | 2 tasks | 8 files |
 | Phase 66 P03 | 40min | 2 tasks | 5 files |
 | Phase 65 P01 | 27min | 3 tasks | 5 files |
+| Phase 65 P02 | 24min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -751,6 +752,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 66]: D-66-05/D-66-06: contactability marker is report-only (complete/email_only/none), computed from post-run state (existingRecord union merge.canonicalPatch); either phone field satisfies the phone half; OUTCOME_CONTRACT_VERSION stays at 2. — Nothing branches on the value; a version bump would refuse every row on the client's frozen-version parser rather than degrade.
 - [Phase 65]: Phase 65-01: suggest_contacts.round_outcome is now the ONE place a round's cause is decided -- six-value closed vocabulary, fixed precedence, fail-closed to unknown on malformed input without raising, and reentry: search_fallback only for no_people_found on the routing call (any terminal call carrying rows/sendable/held/fallback structurally returns reentry: none).
 - [Phase 65]: LADDER-05 not ticked complete by 65-01: the search fallback's trigger condition (walk[people] empty) is unchanged, so live reachability stays opportunistic; both live rounds to date found some people, so the fallback still has not fired outside offline tests.
+- [Phase 65]: RICH-04 closed as an audit plus the seniority half: merge_enriched's allowlist widened to the union of extraction.canonical_props() and field_policy.yaml's 12 promotable contact keys; widened keys are stripped at the dispatch-CSV boundary and never reach HubSpot through it; the richer-jobtitle half is deferred to a named pending todo.
 
 ### Roadmap Evolution
 

@@ -124,7 +124,7 @@ designed against noise.
 
 **Requirements:** LADDER-03, LADDER-04, LADDER-05, RICH-04 (RICH-04 re-routed from Phase 66 by operator ruling 2026-09-04 — `merge_enriched` lives in `suggest_contacts.py`, which 66's domain excludes; LADDER-03/04/05 were always mapped to Phase 65 in REQUIREMENTS.md's LADDER section but were missing from this line until 2026-09-07)
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans executed
 
 Plans:
 **Wave 1**
@@ -133,7 +133,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 65-02-PLAN.md — RICH-04: `merge_enriched`'s allowlist widened to the field policy's promotable contact keys, with the dispatch-boundary strip and both callers traced (wave 2)
+- [x] 65-02-PLAN.md — RICH-04: `merge_enriched`'s allowlist widened to the field policy's promotable contact keys, with the dispatch-boundary strip and both callers traced (wave 2)
 
 ### Phase 66: Rich enrichment, not minimum enrichment
 
