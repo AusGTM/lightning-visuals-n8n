@@ -464,9 +464,19 @@ COVERED = {
     # `send_domains`/`allow_create` bind by name in the SAME fence, per the plan's
     # own instruction, but neither is a scripts-module call, so the extracted
     # identity is just the two-call validate/round_artifact pair.
+    #
+    # Code review fix CR-02 (69-REVIEW-FIX): gained `extraction.hold_emailless`,
+    # called BEFORE `send_domains` is computed -- a still-emailless `no_email` entry
+    # is held there rather than crashing on `record["row"]["email"]`. Same fence,
+    # same covering test (now extended to drive this exact three-call sequence);
+    # the OLD two-call tuple below no longer appears in the live file and is
+    # replaced, not kept alongside this one.
     (
         "suggestion-declines",
-        ("extraction.validate", "suggest_contacts.round_artifact"),
+        (
+            "extraction.validate", "suggest_contacts.round_artifact",
+            "extraction.hold_emailless",
+        ),
     ): "test_suggestion_declines_skill.py::test_a_drained_send_clears_the_same_gates_a_normal_send_clears",
 }
 

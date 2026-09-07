@@ -102,20 +102,30 @@ step 9 points here at the end of every round rather than reimplementing any of t
    ]
    extraction.validate(suggest_contacts.round_artifact(records))
    rows = [record["row"] for record in records]
+   sendable_rows, held_rows = extraction.hold_emailless(rows)
+   # A still-emailless row (a no_email entry the operator picked "send" for but did
+   # not supply an email for) is held HERE, before send_domains is ever computed --
+   # never a crash on a missing "email" key. Report held_rows to the operator; they
+   # stay in `declines`, unremoved, for the next drain to offer again -- exactly
+   # like any other held row (CR-02).
 
    send_ids = sorted({entry["company_id"] for entry in chosen.values()})
-   send_domains = [record["row"]["email"].rpartition("@")[2] for record in records]
+   send_domains = [row["email"].rpartition("@")[2] for row in sendable_rows]
    allow_create = True
    ```
 
    `extraction.validate()` is the gate on whatever the operator typed, exactly as it is
-   for a spreadsheet-typed address; step 7's own `extraction.hold_emailless` is the
-   backstop if the field is still missing after this fence, so a still-emailless row is
-   held there rather than written blank. `send_ids` names the company records the
-   armed window is scoped to — the person does not exist in HubSpot yet, so there is no
-   contact id to name. `send_domains` is one domain per chosen row, the figure
-   `plan_grant`'s `suggestion_companies=` prices. `allow_create = True` — a decline is a
-   person not yet in HubSpot; the ingest lane's own dedupe still decides
+   for a spreadsheet-typed address; this fence's own `extraction.hold_emailless` call —
+   the same pattern `enrich-before-ingest/SKILL.md` step 7 uses over `merge_report.rows`
+   — is the backstop if the field is still missing after the operator's answer is
+   merged in, so a still-emailless row is held here rather than crashing or being
+   written blank; step 7's own re-entered `extraction.hold_emailless` call is then a
+   redundant no-op over rows that are already all sendable. `send_ids` names the
+   company records the armed window is scoped to — the person does not exist in
+   HubSpot yet, so there is no contact id to name. `send_domains` is one domain per
+   sendable row, the figure `plan_grant`'s `suggestion_companies=` prices — computed
+   over `sendable_rows` only, never the still-held rows. `allow_create = True` — a
+   decline is a person not yet in HubSpot; the ingest lane's own dedupe still decides
    create-vs-update. `config` is already bound at step 1, read again here unchanged. A
    stored row never carries a `row_id`, so there is nothing to strip on the way in.
 

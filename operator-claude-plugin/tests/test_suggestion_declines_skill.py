@@ -402,13 +402,16 @@ def test_a_drained_send_clears_the_same_gates_a_normal_send_clears(
     assert len(result.accepted) == 1
 
     rows = [record["row"] for record in records]
-    rows = preingest.strip_enrichment_extras(rows)
+    sendable_rows, held_rows = extraction.hold_emailless(rows)
+    assert held_rows == [], "the operator-supplied email makes this row fully sendable"
+
+    rows = preingest.strip_enrichment_extras(sendable_rows)
     rows = extraction.strip_row_id(rows)
     out_path = tmp_path / "dispatch.csv"
     extraction.write_dispatch_csv(rows, out_path)
 
     send_ids = sorted({e["company_id"] for e in chosen.values()})
-    send_domains = [record["row"]["email"].rpartition("@")[2] for record in records]
+    send_domains = [row["email"].rpartition("@")[2] for row in sendable_rows]
     allow_create = True
 
     ungranted_transport = stub_module_transport_factory(
@@ -595,6 +598,62 @@ def test_a_drained_send_is_removed_only_after_the_outcome_is_recorded(
         _run_send_and_apply()
 
     assert key in declines, "a refused or failed send must leave the person in the store"
+
+
+def test_a_drained_send_on_a_still_emailless_no_email_entry_holds_it_instead_of_crashing(
+        stub_transport):
+    """CR-02: a `no_email` entry the operator picked `send` for, but did not supply
+    an email for, must be held by `extraction.hold_emailless` -- not crash the
+    fence's own `send_domains` line with an unhandled `KeyError`. The entry stays
+    in the store (never applied/removed) and no transport is ever touched."""
+    entry = _entry_with_provenance("run-1", COMPANY_ID, "Pat", "Alpha")  # no_email
+    assert "email" not in entry["row"]
+    key = suggestion_declines.entry_key(COMPANY_ID, entry["row"])
+    chosen = {key: entry}
+    supplied = {}  # the operator supplied nothing for this entry
+
+    records = [
+        {"record_type": "contacts",
+         "row": {**e["row"], **supplied.get(k, {}), "company_id": e["company_id"]},
+         "provenance": e["provenance"]}
+        for k, e in chosen.items()
+    ]
+    result = extraction.validate(suggest_contacts.round_artifact(records))
+    assert not result.rejected, (
+        "a firstname+lastname+company row still satisfies has_identity with no email"
+    )
+    rows = [record["row"] for record in records]
+
+    # The documented, FIXED step 4(a) fence: hold_emailless runs BEFORE send_domains
+    # is computed, so a still-emailless row is held rather than crashing.
+    sendable_rows, held_rows = extraction.hold_emailless(rows)
+    assert sendable_rows == []
+    assert len(held_rows) == 1
+
+    send_ids = sorted({e["company_id"] for e in chosen.values()})
+    send_domains = [row["email"].rpartition("@")[2] for row in sendable_rows]  # no KeyError
+    assert send_domains == []
+
+    assert stub_transport.calls == [], "nothing sendable means no transport call happens"
+    declines = {key: entry}
+    assert key in declines, "the entry must remain in the store -- it was never applied"
+
+
+def test_the_drain_send_fence_holds_emailless_rows_before_computing_send_domains():
+    """CR-02: step 4(a)'s documented fence must call `extraction.hold_emailless`
+    BEFORE building `send_domains`, and `send_domains` must be computed over the
+    sendable half only -- never index `record["row"]["email"]` directly, which
+    crashes with an unhandled `KeyError` on a still-emailless `no_email` entry."""
+    span = _step(_skill_text(), 4)
+    hold_index = span.index("extraction.hold_emailless(")
+    send_domains_index = span.index("send_domains = ")
+    assert hold_index < send_domains_index, (
+        "hold_emailless must run before send_domains is computed (CR-02)"
+    )
+    assert 'record["row"]["email"]' not in span, (
+        "send_domains must never index a record's email directly -- that crashes on "
+        "a still-emailless no_email entry"
+    )
 
 
 def test_an_ungranted_drained_send_is_refused_not_waved_through(
