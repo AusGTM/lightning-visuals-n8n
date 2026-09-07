@@ -3,19 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 69
-current_phase_name: Held rows survive the round
-status: executing
-stopped_at: Phase 67 complete, ready to plan Phase 68
-last_updated: "2026-09-07T20:11:38.237Z"
+status: completed
+stopped_at: Phase 69 complete — all phases complete
+last_updated: "2026-09-07T22:23:42.688Z"
 last_activity: 2026-09-08
-last_activity_desc: Phase 69 execution started
-state_head: 517ee1cc7bb5dc9e011b891df4a2a525219bc312
+last_activity_desc: Phase 69 complete
+state_head: 96f8d0b124619ebab668e0ec4d0274d0a5787f1a
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 16
-  completed_plans: 13
-  percent: 33
+  completed_plans: 16
+  percent: 50
 ---
 
 # Project State
@@ -357,10 +356,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 69 (Held rows survive the round) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 69
-Last activity: 2026-09-08 — Phase 69 execution started
+Phase: 69
+Plan: Not started
+Status: All phases complete
+Last activity: 2026-09-08 — Phase 69 complete
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -491,7 +490,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████░░░░░] 50% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,7 +500,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-07T08:35:10.339Z
-**Stopped at:** Phase 67 complete, ready to discuss/plan Phase 69 (68 already complete; phase.complete advanced by roadmap order)
+**Stopped at:** Phase 69 complete — all phases complete
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.

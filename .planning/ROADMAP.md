@@ -11,7 +11,7 @@
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50 (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) — shipped 2026-08-19
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52. Phase 51 complete; **Phase 52 deferred INDEFINITELY** (2026-08-25, reaffirmed 2026-08-30 after its gates were satisfied). Not abandoned — deferred by decision.
 - ✅ **v1.1 Unattended Session Runs** — Phases 53–63 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`, `milestones/v1.1-phases/`) — shipped 2026-09-04
-- 📋 **v1.2 Yield and Friction** — Phases 64–69 (`milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`) — **ACTIVE — Phases 64–68 complete, Phase 69 open (2026-09-07)**
+- 📋 **v1.2 Yield and Friction** — Phases 64–69 (`milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`) — **all six phases complete 2026-09-08; milestone not yet closed (`/gsd-complete-milestone`)**
 
 ## Standing facts
 
@@ -61,7 +61,7 @@ carrying its live evidence.
 - [x] Phase 66: Rich enrichment, not minimum enrichment (completed 2026-09-04)
 - [x] Phase 67: An autonomy flag with sensible defaults (completed 2026-09-07)
 - [x] Phase 68: State the price and keep moving (completed 2026-09-07)
-- [ ] Phase 69: Held rows survive the round
+- [x] Phase 69: Held rows survive the round (completed 2026-09-08)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -258,12 +258,13 @@ Plans:
 
 **Brief:** `.planning/todos/pending/2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md`.
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 69-01-PLAN.md — the decline store and its own reason-code vocabulary (wave 1)
-- [ ] 69-02-PLAN.md — step 8 routes declines into it; step 9 reports this round and the backlog (wave 2)
-- [ ] 69-03-PLAN.md — the standalone drain skill: send / defer / delete / export (wave 3)
+
+- [x] 69-01-PLAN.md — the decline store and its own reason-code vocabulary (wave 1)
+- [x] 69-02-PLAN.md — step 8 routes declines into it; step 9 reports this round and the backlog (wave 2)
+- [x] 69-03-PLAN.md — the standalone drain skill: send / defer / delete / export (wave 3)
 
 - `SKILL.md` step 8 routes partition holds through `held_queue.build_entry`; `held_queue.save`
   raises `HeldQueueError` on `no_email` / `email_domain_mismatch`. Hit live on the Roma round.
