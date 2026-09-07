@@ -60,7 +60,7 @@ carrying its live evidence.
 - [x] Phase 65: Round-empty re-entry, keyed on the cause (completed 2026-09-07)
 - [x] Phase 66: Rich enrichment, not minimum enrichment (completed 2026-09-04)
 - [ ] Phase 67: An autonomy flag with sensible defaults
-- [ ] Phase 68: State the price and keep moving
+- [x] Phase 68: State the price and keep moving (completed 2026-09-07)
 - [ ] Phase 69: Held rows survive the round
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
@@ -215,7 +215,7 @@ per tier.
   on a granted round, disarmed-status statements, provenance summaries, post-run reports —
   distinguished from genuine decision points, which stay.
 
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
