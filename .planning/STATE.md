@@ -1,20 +1,20 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 65
 current_phase_name: Round-empty re-entry, keyed on the cause
 status: executing
-stopped_at: Phase 66 complete, ready to plan Phase 65
-last_updated: "2026-09-06T23:45:58.244Z"
-last_activity: 2026-09-05
-last_activity_desc: Phase 66 complete, transitioned to Phase 65
-state_head: 2ff6132bf4864c05f74eb5c94072f207f135d592
+stopped_at: Completed 65-01-PLAN.md
+last_updated: "2026-09-07T00:17:49.981Z"
+last_activity: 2026-09-07
+last_activity_desc: Phase 65 execution started
+state_head: 5757c83879cc9893ae4585bbff2970d81c5f4e72
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 33
 ---
 
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 65 (Round-empty re-entry, keyed on the cause) — READY TO EXECUTE
-Plan: Not started
+Phase: 65 (Round-empty re-entry, keyed on the cause) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-09-04 — Phase 66 complete, transitioned to Phase 65
+Last activity: 2026-09-07 — Phase 65 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-04T08:17:38.558Z
-**Stopped at:** Phase 66 complete, ready to plan Phase 65
+**Last session:** 2026-09-07T00:17:49.668Z
+**Stopped at:** Completed 65-01-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -632,6 +632,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 66 P01 | 50min | 3 tasks | 13 files |
 | Phase 66 P02 | 45min | 2 tasks | 8 files |
 | Phase 66 P03 | 40min | 2 tasks | 5 files |
+| Phase 65 P01 | 27min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -748,6 +749,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 66]: 66-02: companies REQUIRED derived by three-part rule (promote_to_canonical true, non-recomputed class, matrix-recorded producer) — 13 of 17 policy keys chased, domain/annualrevenue/veto fields excluded
 - [Phase 66]: 66-02: research-lane producer status derived from field_policy.yaml's allow_web_research flag rather than parsing webResearch.js's wholesale spread
 - [Phase 66]: D-66-05/D-66-06: contactability marker is report-only (complete/email_only/none), computed from post-run state (existingRecord union merge.canonicalPatch); either phone field satisfies the phone half; OUTCOME_CONTRACT_VERSION stays at 2. — Nothing branches on the value; a version bump would refuse every row on the client's frozen-version parser rather than degrade.
+- [Phase 65]: Phase 65-01: suggest_contacts.round_outcome is now the ONE place a round's cause is decided -- six-value closed vocabulary, fixed precedence, fail-closed to unknown on malformed input without raising, and reentry: search_fallback only for no_people_found on the routing call (any terminal call carrying rows/sendable/held/fallback structurally returns reentry: none).
+- [Phase 65]: LADDER-05 not ticked complete by 65-01: the search fallback's trigger condition (walk[people] empty) is unchanged, so live reachability stays opportunistic; both live rounds to date found some people, so the fallback still has not fired outside offline tests.
 
 ### Roadmap Evolution
 

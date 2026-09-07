@@ -39,10 +39,10 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   `/about/contact-us/`; the general case is a contact page naming a receptionist while
   `/board/` lists the committee.*
 - [x] **LADDER-02**: "Better" is a testable predicate, not a prose instruction to the model.
-- [ ] **LADDER-03**: A round that ends with nothing usable re-enters, and the re-entry names
+- [x] **LADDER-03**: A round that ends with nothing usable re-enters, and the re-entry names
   the CAUSE of the zero rather than reading a single `round_empty` boolean. *Live: two rounds,
   two different causes, and a blanket retry would have helped neither.*
-- [ ] **LADDER-04**: Re-entry is expressed without a `while` loop
+- [x] **LADDER-04**: Re-entry is expressed without a `while` loop
   (`test_report_sufficiency.py::_has_while_loop` scans every plugin script).
 - [ ] **LADDER-05**: The search fallback becomes reachable in a real round — i.e.
   `260904-QUICK-UAT.md` test 8 can finally be exercised rather than skipped a third time.

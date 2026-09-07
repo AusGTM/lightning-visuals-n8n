@@ -309,3 +309,19 @@ None - no external service configuration required.
 ---
 *Phase: 65-round-empty-re-entry-keyed-on-the-cause*
 *Completed: 2026-09-07*
+
+## Self-Check: PASSED
+
+- All 5 key files found on disk (`suggest_contacts.py`, `SKILL.md`,
+  `test_suggest_contacts.py`, `test_suggest_contacts_composition.py`,
+  `test_skill_sequence_coverage.py`).
+- All 6 commit hashes (`06feca9`, `f16def0`, `85a5ea5`, `3075c9c`, `aaea343`,
+  `5757c83`) resolve in `git log --oneline --all`.
+- Re-ran all plan-level `<verification>` commands: full plugin suite `2544 passed,
+  5 skipped` (baseline 2492 + 52 new); the while-loop guard `1 passed`; `git status
+  --porcelain -- n8n/ scripts/build_cloud_workflows.py` empty; `git diff --stat --
+  operator-claude-plugin/scripts/search_fallback.py operator-claude-plugin/scripts/
+  confidence.py` empty; zero occurrences of `if not people` in `SKILL.md`.
+- TDD gate compliance: `test(65-01):` precedes `feat(65-01):` for both Task 1
+  (`06feca9` -> `f16def0`) and Task 2 (`85a5ea5` -> `3075c9c`); Task 3 is
+  test-only, one `test(65-01):` commit, no `feat` needed.
