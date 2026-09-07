@@ -15,6 +15,7 @@ import preingest
 from dispatch import NotArmedError
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = PLUGIN_ROOT.parent
 SAMPLES_DIR = PLUGIN_ROOT / "tests" / "samples"
 
 
@@ -230,17 +231,129 @@ def test_merge_enriched_does_not_mutate_input_rows():
     assert rows[0] == snapshot
 
 
-def test_every_merged_row_key_is_in_canonical_props_or_row_id():
+def test_every_merged_row_key_is_in_the_merge_allowlist_or_row_id():
+    # Phase 65 Plan 02 (RICH-04): broadened from `..._in_canonical_props_or_row_id` --
+    # the merge allowlist is now the UNION of canonical_props() and
+    # promotable_contact_props(), so a widened key (seniority) must be permitted here
+    # too, not just the three canonical keys the old assertion drove.
     rows = _rows(1)
     responses = [_response(rows[0]["row_id"], {
         "email": "a@x.com", "phone": "555", "linkedin_url": "https://x.com",
+        "seniority": "Director",
     })]
 
     result = preingest.merge_enriched(rows, responses)
 
-    allowed = set(extraction.canonical_props()) | {"row_id"}
+    allowed = (
+        set(extraction.canonical_props()) | set(preingest.promotable_contact_props())
+        | {"row_id"}
+    )
     for row in result.rows:
         assert set(row) <= allowed
+
+
+# =====================================================================================
+# Phase 65 Plan 02 (RICH-04): merge_enriched's allowlist widened to the union of
+# extraction.canonical_props() and the field-policy's promotable contact keys, so a
+# provider-returned field like `seniority` survives onto a blank CREATE row instead of
+# being dropped before the fill-versus-conflict rule is ever consulted.
+# =====================================================================================
+
+def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
+    if not preingest.REPO_POLICY_PATH.exists():
+        pytest.skip(
+            "no repo root beside this checkout (installed plugin tree) -- the parity "
+            "pin only bites in a dev checkout"
+        )
+    assert preingest.PLUGIN_POLICY_PATH.exists(), (
+        "the plugin must ship its own config/field_policy.yaml copy -- the "
+        "marketplace ships the plugin directory alone, so a repo-root-only lookup "
+        "resolves to nothing in an installed plugin tree (RICH-04 finding 2)"
+    )
+    assert (
+        preingest.PLUGIN_POLICY_PATH.read_bytes()
+        == preingest.REPO_POLICY_PATH.read_bytes()
+    )
+
+
+def test_promotable_contact_props_names_the_twelve_promotable_contact_keys():
+    result = sorted(preingest.promotable_contact_props())
+
+    assert result == [
+        "city", "country", "email", "hs_country_region_code", "hs_state_code",
+        "jobtitle", "lv_linkedin_url", "lv_persona_group", "mobilephone", "phone",
+        "seniority", "state",
+    ]
+
+
+def test_a_policy_promotable_key_fills_a_blank_row_field_instead_of_being_dropped():
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {
+        "email": "amy@example.com", "seniority": "Director",
+        "lv_linkedin_url": "https://li/amy",
+    })]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    merged = result.rows[0]
+    assert merged["seniority"] == "Director"
+    assert merged["lv_linkedin_url"] == "https://li/amy"
+    dropped_keys = {entry["key"] for entry in result.dropped_property_keys}
+    assert "seniority" not in dropped_keys
+    assert "lv_linkedin_url" not in dropped_keys
+
+
+def test_a_key_in_neither_set_is_still_dropped_and_reported():
+    # RICH-04 boundary: a key in NEITHER canonical_props() nor promotable_contact_props()
+    # (lastmodifieddate is in neither) is still dropped and still reported -- the union
+    # widens, it does not turn the allowlist into "accept anything".
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {"lastmodifieddate": "2026-01-01"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    merged = result.rows[0]
+    assert "lastmodifieddate" not in merged
+    assert {"row_id": rows[0]["row_id"], "key": "lastmodifieddate"} in \
+        result.dropped_property_keys
+
+
+def test_strip_enrichment_extras_drops_exactly_the_policy_only_keys():
+    row = {
+        "row_id": "row-1", "email": "amy@example.com", "seniority": "Director",
+        "lv_linkedin_url": "https://li/amy",
+    }
+
+    stripped = preingest.strip_enrichment_extras([row])
+
+    assert stripped[0] == {"row_id": "row-1", "email": "amy@example.com"}
+    # never mutates the input row
+    assert row == {
+        "row_id": "row-1", "email": "amy@example.com", "seniority": "Director",
+        "lv_linkedin_url": "https://li/amy",
+    }
+
+
+def test_strip_enrichment_extras_passes_a_row_without_the_widened_keys_through_unchanged():
+    row = {"row_id": "row-1", "email": "amy@example.com"}
+
+    stripped = preingest.strip_enrichment_extras([row])
+
+    assert stripped[0] == row
+
+
+def test_write_dispatch_csv_still_raises_on_a_genuinely_unknown_key_after_the_strip(tmp_path):
+    row = {"email": "amy@example.com", "not_a_real_property": "x"}
+
+    stripped = preingest.strip_enrichment_extras([row])
+    assert "not_a_real_property" in stripped[0], (
+        "strip_enrichment_extras only drops the closed, named policy-only set -- an "
+        "invented key must survive it and still reach STRUCT-01"
+    )
+
+    with pytest.raises(extraction.ExtractionError) as exc_info:
+        extraction.write_dispatch_csv(stripped, tmp_path / "dispatch.csv")
+    assert exc_info.value.code == "non_canonical_key_in_row"
 
 
 # bug_002 (2026-08-29 ultrareview): each of build_rows_spec, merge_enriched,
@@ -251,18 +364,27 @@ def test_every_merged_row_key_is_in_canonical_props_or_row_id():
 # no test drove all four stages in one sequence. This one does, calling
 # `strip_row_id` exactly where the skill's step 7 now calls it: between
 # `hold_emailless` and `write_dispatch_csv`.
+#
+# Phase 65 Plan 02 (RICH-04): extended so the response carries a widened key
+# (`seniority`) -- proving `preingest.strip_enrichment_extras` (inserted right before
+# `strip_row_id`, per the skill's own step 7) is actually DRIVEN by this sequence, not
+# merely registered in COVERED. Without it, `seniority` would still be on the row when
+# `write_dispatch_csv` raises `non_canonical_key_in_row` -- see the negative-half test
+# below.
 def test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv(tmp_path):
     rows = _rows(2)
     responses = [
-        _response(rows[0]["row_id"], {"email": "amy@example.com"}),
+        _response(rows[0]["row_id"], {"email": "amy@example.com", "seniority": "Director"}),
         _response(rows[1]["row_id"], {}),  # no email supplied — this row is held
     ]
 
     merge_report = preingest.merge_enriched(rows, responses)
+    assert merge_report.rows[0]["seniority"] == "Director"
     sendable, held = extraction.hold_emailless(merge_report.rows)
     assert len(sendable) == 1
     assert len(held) == 1
 
+    sendable = preingest.strip_enrichment_extras(sendable)
     sendable = extraction.strip_row_id(sendable)
 
     out_path = tmp_path / "dispatch.csv"
