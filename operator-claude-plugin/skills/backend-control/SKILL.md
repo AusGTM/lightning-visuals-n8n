@@ -112,8 +112,31 @@ conversation can set.
 
 Implicit approval (D-68-01) is a posture of this conversation only. The scheduled and
 cron paths are unchanged by this phase and stay gated by `ALLOW_N8N_ARM` exactly as
-before; the unattended gate itself — the autonomy levels and their fail-closed
-conditions — is Phase 67's to open (D-68-04).
+before.
+
+**Autonomy levels — `read_only`, `spend_no_write` and `write` in `operator.local.json`
+— are default-setters, not an authority.** Each decides only whether an already-
+authorised round proceeds without asking; an absent key reads as ON, and setting one to
+`false` puts that level's rounds back to asking. They authorise nothing on their own:
+`allow_write_grants` still gates this interactive path and `ALLOW_N8N_ARM` still gates
+the scheduled and cron paths, both unchanged by this phase, and neither is settable
+from inside a conversation (D-67-02). This skill's own mutations — turning a workflow
+on or off, changing a schedule, arming live writes for a send, opening or revoking a
+grant — are covered by none of the autonomy levels and always confirm and wait, exactly
+as the rule at the top of this file says (D-67-12).
+
+**The reversal, on the record (D-67-04, AUTO-04).** At Phase 57-05's Task 4 gate the
+operator selected option-a: a small, operator-supervised first live batch, with the
+unattended credit-spending batch on the table and not taken. On 2026-09-07 the operator
+reversed that decision:
+
+> "On 2026-09-07 the operator reversed the 57-05 Task 4 option-a decision: autonomy is
+> ON by default for read-only, spend-no-write and write; an unattended round discloses
+> an unknown ceiling, balance or allowance key and proceeds; allow_write_grants and
+> ALLOW_N8N_ARM remain the only authorities."
+
+What is true after it: nothing is armed, and the first live unattended credit-spending
+batch has not run.
 
 **Revoking a grant** — `write_grant.revoke_grant(grant)`, and it is idempotent. Say
 plainly when it bites: it **refuses the next SEND**, and it **does not stop a dispatch already running**.
