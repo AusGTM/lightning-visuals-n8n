@@ -163,10 +163,15 @@ def autonomy_enabled(config: dict, level: str) -> bool:
     """
     if level not in AUTONOMY_LEVELS:
         raise ValueError(f"unknown autonomy level: {level!r}. Valid levels: {AUTONOMY_LEVELS}")
-    parent = (config or {}).get(AUTONOMY_SETTINGS_KEY)
-    if parent is None:
+    cfg = config or {}
+    if AUTONOMY_SETTINGS_KEY not in cfg:
         return True
+    parent = cfg[AUTONOMY_SETTINGS_KEY]
     if not isinstance(parent, dict):
+        # Covers both a bare boolean (`{"autonomy": true}`) AND an explicit `null`
+        # (`{"autonomy": null}`) — `.get()` alone can't tell "key absent" from
+        # "key present with value null" (CR-01, 67-REVIEW), so membership is checked
+        # above before this branch ever sees a null parent.
         return False
     return parent.get(level, True) is True
 

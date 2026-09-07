@@ -72,6 +72,17 @@ def test_bare_boolean_parent_reads_every_level_off_and_raises_nothing():
     assert config_gate.autonomy_enabled(cfg, "spend_no_write") is False
 
 
+def test_explicit_null_parent_reads_every_level_off_not_on():
+    """CR-01 (67-REVIEW): `{"autonomy": null}` is key-PRESENT-but-not-a-dict, the same
+    malformed shape a bare boolean parent already degrades to OFF (b-malformed-off) — not
+    key-ABSENT, which is the only case that reads ON (D-67-03). `dict.get` can't tell the
+    two apart on its own; the reader must check membership before defaulting."""
+    cfg = {"autonomy": None}
+    assert config_gate.autonomy_enabled(cfg, "write") is False
+    assert config_gate.autonomy_enabled(cfg, "read_only") is False
+    assert config_gate.autonomy_enabled(cfg, "spend_no_write") is False
+
+
 def test_unknown_level_raises_value_error_naming_it():
     with pytest.raises(ValueError) as exc:
         config_gate.autonomy_enabled({}, "admin")
