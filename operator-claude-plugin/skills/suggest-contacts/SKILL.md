@@ -64,18 +64,57 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    sentence is shown exactly as it renders — never trimmed, never softened (D-62-07).
 
    Ask once for the role selection — `role_classify.chosen_families(vocabulary, labels)`
-   validates it against the vocabulary's own labels — and once for the per-company cap,
-   default 2 (D-62-12). Both are **round-level**: the same role list and the same cap
+   validates it against the vocabulary's own labels. This choice is genuine; there is no
+   default to state instead of asking it (D-68-02).
+
+   **State the per-company cap default of 2 (D-62-12) rather than asking for it** — the
+   operator may interrupt and choose a different cap, bounded by the grant's own priced
+   ceiling, but this round does not wait for a number before proceeding (D-68-02). Both
+   the role list and the cap are **round-level**: the same role list and the same cap
    apply to every eligible company in this batch. Never re-ask either one per company.
 
-   **A cap above the grant's priced cap is refused, in code, not just here in prose.**
-   The chosen cap is passed through `suggest_contacts.agreed_cap(chosen_cap, figures)` —
-   whatever it returns is the ONLY number the rest of this round spends against. It reads
-   the open grant's own `figures["suggestion_allowance"]["priced_cap"]` (3 — the top of
-   D-62-12's 2-to-3 band, what the grant was actually priced against at the moment it
-   opened) and raises `suggest_contacts.CapRefused` naming both numbers — "the grant
-   priced this round at a cap of 3; a cap of 5 was not what was agreed to" — when the
-   chosen cap exceeds it, or when the grant never priced a suggestion allowance at all.
+   **If a grant is already open and covers this batch, reuse it (D-60-02) — do not plan
+   a second one:**
+
+   ```python
+   priced_cap = suggest_contacts.agreed_cap(2, grant["envelope"])
+   ```
+
+   **With no grant open, price one now over exactly this batch's eligible companies** —
+   the same implicit open every other batch skill makes by default (D-68-01, D-68-03),
+   landing here rather than at step 4 because `agreed_cap` has nothing to check the cap
+   against until a grant has priced a suggestion allowance:
+
+   ```python
+   proposal = write_grant.plan_grant(
+       config, lanes=["enrichment", "contacts", "review"], object_type="companies",
+       record_ids=[c.get("id") for c in eligible_companies if c.get("id")],
+       record_domains=[c.get("website") or c.get("domain") for c in eligible_companies
+                        if c.get("website") or c.get("domain")],
+       allow_create=True, label="suggest-contacts batch",
+       suggestion_companies=len(eligible_companies))
+   ```
+
+   This call leaves `suggestion_cap` unset, pricing this round's own ceiling at
+   `PRICED_CAP` — the same `priced_cap` the `agreed_cap` call right below checks the
+   stated default of 2 against.
+
+   **If `plan_grant` refuses** — `allow_write_grants` is not set, the eligible set is
+   empty, or the ceiling verdict is `"over"` — relay `proposal["detail"]` exactly as it
+   reads and STOP. Never fall through to `write_grant.authorize_ungranted_send`:
+   proceeding unless interrupted is never proceeding past a refusal (D-68-06).
+
+   ```python
+   priced_cap = suggest_contacts.agreed_cap(2, proposal["envelope"])
+   ```
+
+   **A cap above the priced ceiling is refused, in code, not just here in prose.**
+   `priced_cap` is the ONLY number the rest of this round spends against.
+   `suggest_contacts.agreed_cap` reads `["suggestion_allowance"]["priced_cap"]` (3 — the
+   top of D-62-12's 2-to-3 band, what the grant was actually priced against at the
+   moment it opened) and raises `suggest_contacts.CapRefused` naming both numbers — "the
+   grant priced this round at a cap of 3; a cap of 5 was not what was agreed to" — when
+   the chosen cap exceeds it, or when nothing priced a suggestion allowance at all.
    Relay a `CapRefused` to the operator exactly as it reads (the same "relay the error
    verbatim" discipline step 1 already uses for `config_gate.py`), and stop the round.
    The round may spend LESS than the priced cap; it may never spend more.
@@ -86,10 +125,18 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    provider credits. State plainly that this is a worst-case ceiling and that actuals land
    at or under it, never over (D-62-14, SUGGEST-05).
 
-   **If no grant is open**, follow `enrich-before-ingest/SKILL.md` step 5's two-phase ask
-   verbatim: disarmed is the default, say so plainly, then ask for this round by naming
-   what it will do. An affirmative answering that question — "yes", "go ahead", "do it" —
-   arms this run and nothing else; anything ambiguous is not consent.
+   **With no grant open, this is the same `proposal` step 3 already priced** —
+   `proposal["envelope"]["block"]` and `proposal["consequence"]` are the same
+   arithmetic the explicit grant path already shows before its yes
+   (`backend-control/SKILL.md`'s "Opening a write grant" action), never a second
+   renderer. When `proposal["ceiling"]["verdict"]` is `"unknown"`, that block already
+   renders `Execution ceiling: **unconfirmed**` — add one sentence: this batch is not
+   bounded by the monthly ceiling this run, and proceeding anyway is how this backend
+   already operates on the explicit grant path (D-57-02, D-68-10).
+
+   **Want a grant that spans more than this batch?** `backend-control/SKILL.md`'s
+   "Opening a write grant" action is the direct route to it — a phrase inside this
+   invocation's own argument string is not a machine grant (D-68-07).
 
    Before the first page fetch, the round pauses for a few seconds so an interrupt lands
    before anything is spent — once for the whole batch, never per company (D-68-11):
@@ -98,6 +145,18 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    import watch
    watch.pre_spend_pause()
    ```
+
+   An interrupt arriving in that window stops the round here — no grant opens, and
+   nothing is spent. Otherwise, with no grant already open, open the one step 3 priced:
+
+   ```python
+   grant = write_grant.open_grant(proposal, "yes", config)
+   ```
+
+   With a grant already open (step 3's reuse branch), skip this call — there is nothing
+   to open. Every later round in this batch, and every later round inside this same
+   sitting, takes the already-open grant's branch: one consent point per batch, never
+   one per round (D-68-08).
 
 5. **Stage 1 — read the company's own pages.** For each eligible company in turn: the
    operator supplies or approves the starting page URL, and

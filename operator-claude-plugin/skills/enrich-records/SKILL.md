@@ -181,7 +181,45 @@ says nothing per record, this lane reports at chunk granularity and says so.
    it and a better API key would not produce one. Do not present it as broken, and do not
    suggest anyone fix it.
 
-5. **Ask for approval — unless a grant already carries it.** With no grant open: if the
+5. **Ask for approval — unless a grant already carries it.**
+
+   **With no write grant open, this round does not ask — it states.** Price a grant
+   over exactly the records this batch already resolved, say what it will do and what
+   it costs, wait a few seconds so an interrupt can land, then open it and continue on
+   the granted branch below (D-68-01, D-68-03).
+
+   ```python
+   proposal = write_grant.plan_grant(
+       config, lanes=["enrichment", "contacts", "review"], object_type=object_type,
+       record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
+       label="enrich-records batch",
+       suggestion_companies=(
+           len(set(send_domains)) if object_type == "companies" else None))
+   ```
+
+   Show the operator `proposal["envelope"]["block"]` and `proposal["consequence"]` —
+   the same arithmetic the explicit grant path already shows before its yes
+   (`backend-control/SKILL.md`'s "Opening a write grant" action), never a second
+   renderer. When `proposal["ceiling"]["verdict"]` is `"unknown"`, that block already
+   renders `Execution ceiling: **unconfirmed**` — add one sentence: this batch is not
+   bounded by the monthly ceiling this run, and proceeding anyway is how this backend
+   already operates on the explicit grant path (D-57-02, D-68-10). No Phase-68-only
+   fence sits on top of that — the fail-closed conditions on an unsampled ceiling are
+   Phase 67's to add.
+
+   **If `plan_grant` refuses** — `allow_write_grants` is not set, the record set is
+   empty, or the ceiling verdict is `"over"` — relay `proposal["detail"]` exactly as it
+   reads and STOP. Never fall through to `write_grant.authorize_ungranted_send`:
+   proceeding unless interrupted is never proceeding past a refusal (D-68-06).
+
+   **Want a grant that spans more than this batch?** `backend-control/SKILL.md`'s
+   "Opening a write grant" action is the direct route to it — a phrase inside this
+   invocation's own argument string is not a machine grant (D-68-07).
+
+   The path below is what runs instead when the operator interrupts the open above and
+   asks for this send outright.
+
+   With no grant open: if the
    operator declines, STOP here. Nothing is sent. The only thing that has happened is one
    read of the status endpoint, which costs nothing.
 
@@ -239,6 +277,26 @@ says nothing per record, this lane reports at chunk granularity and says so.
    opens the same kind of record-scoped armed window; see there for the code (F2,
    2026-08-25: the yes now arms a window for this send, where it used to arm the client's
    own POST only, and nothing on the backend).
+
+   **With no grant already open (step 5's implicit-open branch), open the one it
+   priced — once, immediately before step 8's dispatch, so the window between the
+   operator reading the price and reacting to it actually exists:**
+
+   ```python
+   watch.pre_spend_pause()
+   ```
+
+   An interrupt arriving in that window stops the round here, before `open_grant` runs
+   and before any provider credit is spent.
+
+   ```python
+   grant = write_grant.open_grant(proposal, "yes", config)
+   ```
+
+   Continue into step 8's dispatch on the granted branch — every later round in this
+   batch, and every later round inside this same sitting, takes that same branch: one
+   consent point per batch, never one per round (D-68-08). With a grant already open
+   going into this step, skip this call — there is nothing to open.
 
 7. **Before planning a grant or authorizing a send, resolve a record set that would
    otherwise be empty (D-59-08, 2026-08-28).** This is FINDING 1 of

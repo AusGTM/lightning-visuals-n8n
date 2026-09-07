@@ -201,12 +201,14 @@ def test_suggestion_companies_is_priced_and_suggestion_cap_is_left_unset(name):
 @pytest.mark.parametrize("name", ["contact-upload"])
 def test_contact_upload_never_prices_a_suggestion_allowance(name):
     """Rule 2 (Task 3 action): a contacts-only batch omits suggestion_companies rather
-    than passing zero — `envelope()`'s documented skip for `None` (D-62-11)."""
+    than passing zero — `envelope()`'s documented skip for `None` (D-62-11). Checks the
+    keyword-argument FORM, not bare substring presence, since the implicit-open prose
+    is free to explain the omission by name without passing it."""
     target = TARGETS[name]
-    normalized = _normalized(_open_span(target))
-    assert "suggestion_companies" not in normalized, (
-        f"{name} is contacts-only end to end — it must never price a suggestion "
-        "round it will never run"
+    span = _open_span(target)
+    assert "suggestion_companies=" not in span, (
+        f"{name} is contacts-only end to end — it must never pass suggestion_companies "
+        "as a keyword argument, pricing a suggestion round it will never run"
     )
 
 
