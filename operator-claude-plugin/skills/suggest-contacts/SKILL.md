@@ -348,6 +348,8 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    bar = suggest_contacts.walk_bar(chosen_families, per_company_cap)
 
    records = []
+   rounds = []  # one entry per company (Phase 65) -- IS the round's own output
+                # structure; step 9 and Phase 69's future store both read it.
    for eligible_company in eligible_companies:
        plan = suggest_contacts.discovery_plan(eligible_company)
        # Fetch in ladder order. After each fetch, append `{"url", "people",
@@ -441,8 +443,16 @@ and what `enrich-before-ingest/SKILL.md` already calls.
            selected = walk["selected"]
        # The accepted entry's own rank is the FIFTH argument; a ladder-found person
        # passes None there, which keeps that record's provenance byte-identical.
-       records.extend(suggest_contacts.synthesise_rows(
-           eligible_company, selected, fetched_url, per_company_cap, source_rank))
+       company_records = suggest_contacts.synthesise_rows(
+           eligible_company, selected, fetched_url, per_company_cap, source_rank)
+       # `mint_row_ids` mints by POSITION and `rejoin_enriched` returns one row per
+       # input row in the same order (both documented in their own docstrings), so
+       # this start/count slice still names this company's rows after both.
+       rounds.append({
+           "company": eligible_company, "walk": walk, "fallback": fallback_selection,
+           "start": len(records), "count": len(company_records),
+       })
+       records.extend(company_records)
 
    # The mint -- ONCE, over the whole accumulated batch, never per company.
    minted = suggest_contacts.mint_row_ids(records)
@@ -467,6 +477,17 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    # sendable only from the company's own host or LinkedIn. A rank-3 row is held however
    # confidently the waterfall validated it. Independent of the pass above; both hold.
    sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
+   # The terminal classify (Phase 65 Task 2): each company's OWN cause and breakdown,
+   # read off the batch-wide sendable/held filtered to this company's own rows. A
+   # terminal call (carrying rows/sendable/held/fallback) always returns
+   # reentry: "none" -- a second pass can never route a third time (D-65-08, D-65-12).
+   for entry in rounds:
+       company_rows = [
+           record["row"] for record in records[entry["start"]:entry["start"] + entry["count"]]
+       ]
+       entry["outcome"] = suggest_contacts.round_outcome(
+           entry["walk"], rows=company_rows, sendable=sendable, held=held,
+           fallback=entry["fallback"])
    for record in records:
        if record["row"] not in sendable:
            continue  # a held row never reaches extraction.validate()
@@ -474,14 +495,32 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    ```
 
 9. **Report.** Per company: eligible / skipped / unknown, people named, people already
-   known and dropped before the cap, fetches spent against the per-company bound, people
-   proposed, people held with why, and how the page walk ended for that company —
-   `walk["ended"]` in the operator's own words ("found enough on the pages read",
-   "read every candidate the ladder offered", "hit the fetch cap", or "a fetch was
-   refused"), never the bare `WALK_*` constant. Quote the ceiling shown at step 4
-   alongside the actuals, so the operator can see the actuals landed at or under it.
-   The per-page `scores` stay internal to the walk — not part of this report; what the
-   operator needs is what was found and what it cost, not the page-by-page arithmetic.
+   known and dropped before the cap, fetches spent against the per-company bound, and
+   how the page walk ended for that company — `walk["ended"]` in the operator's own
+   words ("found enough on the pages read", "read every candidate the ladder
+   offered", "hit the fetch cap", or "a fetch was refused"), never the bare `WALK_*`
+   constant. Quote the ceiling shown at step 4 alongside the actuals, so the operator
+   can see the actuals landed at or under it. The per-page `scores` stay internal to
+   the walk — not part of this report; what the operator needs is what was found and
+   what it cost, not the page-by-page arithmetic.
+
+   **The cause, read off `entry["outcome"]` — never re-derived (Phase 65, D-65-01).**
+   Every company's line names its cause in the operator's own words, straight off the
+   round's own output structure:
+
+   | `entry["outcome"]["cause"]` | Operator's words |
+   | --- | --- |
+   | `no_people_found` | "nobody was found on any page read" |
+   | `none_classified` | "people were found but none matched the roles you chose" |
+   | `all_held_on_email` | "people were found but every one was held before sending" |
+   | `people_thin` | "fewer people than the bar asked for" |
+   | `proposed` | "people were proposed" |
+   | `unknown` | "the round's own record could not be read, so no cause is claimed" |
+
+   Then render `entry["outcome"]["breakdown"]` under it: the discovered/selected/
+   sendable counts, the drop tally by reason, and the held tally by `reason_code` —
+   the same five-code grouping this step already requires (below). No cause causes a
+   stop; a report reports (Phase 68's standing rule).
 
    Group the held rows by `reason_code` — "held: 4" must never appear on its own.
    Report the five codes separately: `no_email` (no usable email at all),

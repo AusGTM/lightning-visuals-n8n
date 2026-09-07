@@ -369,6 +369,15 @@ COVERED = {
     # the routing call that replaces the inline `if not people:` cause reasoning
     # (D-65-01). It decides `reentry` from what the walk already has; the caller
     # still asks `eligible_after_ladder` for itself, unmodified (D-65-10).
+    #
+    # Phase 65 Task 2: the tuple gained its SECOND `suggest_contacts.round_outcome`
+    # call, right after `hold_weak_sources` and before `extraction.validate` -- the
+    # terminal, per-company classify that stamps each round's own `cause`/`breakdown`
+    # onto the `rounds` structure step 9 reads. A terminal call (carrying
+    # `rows`/`sendable`/`held`/`fallback`) always returns `reentry: "none"`
+    # (D-65-08/D-65-12), so this second call site can never route a third time. The
+    # sink is still `suggest_contacts.round_artifact`, so the covering nodeid is
+    # unchanged.
     (
         "suggest-contacts",
         (
@@ -384,6 +393,7 @@ COVERED = {
             "chunking.chunk_ceiling", "suggest_contacts.rejoin_enriched",
             "suggest_contacts.partition_for_dispatch",
             "search_fallback.hold_weak_sources",
+            "suggest_contacts.round_outcome",
             "extraction.validate", "suggest_contacts.round_artifact",
         ),
     ): "test_suggest_contacts_composition.py::test_the_documented_round_pipeline_drives_its_real_joins_end_to_end",

@@ -926,9 +926,15 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
     value; it never raises.
 
     `walk` is `walk_pages`'s own return, verbatim. `fallback` is `select_people`'s
-    return from the search-fallback branch (or `None` when the fallback never ran).
-    `sendable`/`held` are `partition_for_dispatch`'s pair after `search_fallback.
-    hold_weak_sources` has run. `rows` is this company's own rejoined rows.
+    return from the search-fallback branch (or `None` when the fallback never ran) --
+    its `dropped` entries fold into the breakdown's `dropped` tally alongside the
+    walk's own. `sendable`/`held` are `partition_for_dispatch`'s pair after
+    `search_fallback.hold_weak_sources` has run -- these are BATCH-WIDE lists, shared
+    across every company in the round. `rows` is this company's own rejoined rows,
+    and its PRESENCE is what scopes `sendable`/`held` down to the members whose
+    `row_id` belongs to this company before the precedence check runs; a row (or a
+    held entry's own row) missing `row_id` is malformed input and fails closed, never
+    silently skipped.
 
     THE ROUTING CALL VS THE TERMINAL CALL. `reentry` is `REENTRY_SEARCH_FALLBACK`
     only when the cause is `CAUSE_NO_PEOPLE_FOUND` AND all four of `rows`, `sendable`,
@@ -977,16 +983,62 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
                 f"({fallback!r})"
             )
 
+    # This company's own rows filter (Task 2, D-65-06/D-65-07): when `rows` is given,
+    # `sendable`/`held` are shared, batch-wide lists and must be scoped down to the
+    # members that belong to THIS company before the precedence check runs. A row (or
+    # a held entry's own row) missing 'row_id' is malformed input, not a member to
+    # silently skip (D-65-03).
+    if rows is not None:
+        row_ids = set()
+        for row in rows:
+            row_id = row.get("row_id") if isinstance(row, dict) else None
+            if row_id is None:
+                return _unknown_outcome(
+                    f"a company row is missing 'row_id' ({row!r})"
+                )
+            row_ids.add(row_id)
+
+        if sendable is not None:
+            this_sendable = []
+            for row in sendable:
+                row_id = row.get("row_id") if isinstance(row, dict) else None
+                if row_id is None:
+                    return _unknown_outcome(
+                        f"a sendable row is missing 'row_id' ({row!r})"
+                    )
+                if row_id in row_ids:
+                    this_sendable.append(row)
+        else:
+            this_sendable = None
+
+        if held is not None:
+            this_held = []
+            for entry in held:
+                nested_row = entry.get("row")
+                row_id = nested_row.get("row_id") if isinstance(nested_row, dict) else None
+                if row_id is None:
+                    return _unknown_outcome(
+                        f"a held entry's row is missing 'row_id' ({entry!r})"
+                    )
+                if row_id in row_ids:
+                    this_held.append(entry)
+        else:
+            this_held = None
+    else:
+        this_sendable = sendable
+        this_held = held
+
     people_count = len(walk["people"])
     selected_count = len(walk["selected"])
     dropped_entries = list(walk["dropped"])
     if fallback is not None:
         people_count += len(fallback["selected"]) + len(fallback["dropped"])
         selected_count += len(fallback["selected"])
+        dropped_entries += fallback["dropped"]
 
-    sendable_given = sendable is not None
-    held_given = held is not None
-    sendable_count = len(sendable) if sendable_given else None
+    sendable_given = this_sendable is not None
+    held_given = this_held is not None
+    sendable_count = len(this_sendable) if sendable_given else None
 
     if people_count == 0:
         cause = CAUSE_NO_PEOPLE_FOUND
@@ -994,7 +1046,7 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
     elif selected_count == 0:
         cause = CAUSE_NONE_CLASSIFIED
         reason = "people were found but none were selected -- every one was dropped"
-    elif sendable_given and held_given and sendable_count == 0 and len(held) >= 1:
+    elif sendable_given and held_given and sendable_count == 0 and len(this_held) >= 1:
         cause = CAUSE_ALL_HELD_ON_EMAIL
         reason = "people were selected but every one was held before sending"
     elif selected_count < bar:
@@ -1016,7 +1068,7 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
         "people": people_count,
         "selected": selected_count,
         "sendable": sendable_count,
-        "held": _tally(held, "reason_code") if held is not None else {},
+        "held": _tally(this_held, "reason_code") if this_held is not None else {},
         "dropped": _tally(dropped_entries, "reason"),
         "bar": bar,
         "ended": walk.get("ended"),
