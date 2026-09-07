@@ -744,3 +744,153 @@ def test_the_inline_pointer_names_the_standalone_skill():
     assert "suggestion-declines" in step9
     assert "suggestion_declines.apply_action" not in step9
     assert "suggestion_declines.export_rows" not in step9
+
+
+# =====================================================================================
+# End to end, one store: partition -> store -> load -> batch -> step 5 -> step 7 ->
+# apply -> save -> next round's backlog. Added after the operator asked whether the
+# functions were tested END TO END: the halves above are each real, but no test had
+# joined them over ONE file, and the deferred person's survival into the NEXT round's
+# batch -- the phase goal itself -- was asserted only piecewise.
+# =====================================================================================
+
+
+def test_the_whole_decline_lifecycle_runs_end_to_end_over_one_store(
+        granting_config, stub_module_transport_factory, stub_transport, tmp_path):
+    store = tmp_path / "suggestion_declines.json"
+    company_name = "The Roma Turf Club"
+    rounds = [{"start": 0, "count": 2,
+               "company": {"id": COMPANY_ID, "name": company_name}}]
+    rows = [
+        {"firstname": "Pat", "lastname": "Alpha", "company": company_name,
+         "email": "pat.alpha@thehartford.com"},          # email on someone else's domain
+        {"firstname": "Lee", "lastname": "Bravo", "company": company_name},  # no email
+    ]
+
+    # --- round 1: the round declines both, step 8 stores both -------------------------
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        rows, {company_name: COMPANY_DOMAIN})
+    assert sendable == [] and len(held) == 2
+    entries = suggestion_declines.load(path=store)
+    assert entries == {}, "a store that does not exist yet loads as empty"
+    for h in held:
+        company_id = suggest_contacts.company_id_for_index(rounds, h["index"])
+        key = suggestion_declines.entry_key(company_id, h["row"])
+        entries[key] = suggestion_declines.build_entry(
+            h["row"], h["reason_code"], h["reason"], "run-1", company_id,
+            {"input": "suggest_contacts_ladder", "locator": "https://x.example/committee"})
+    suggestion_declines.save(entries, path=store)
+
+    # --- the drain opens with no round running: whole backlog, this run vs backlog ------
+    declines = suggestion_declines.load(path=store)
+    batch = suggestion_declines.partition_by_run(declines, "run-1")
+    assert len(batch["this_run"]) == 2 and batch["backlog"] == {}
+    pat_key = next(k for k, e in declines.items() if e["row"]["firstname"] == "Pat")
+    lee_key = next(k for k, e in declines.items() if e["row"]["firstname"] == "Lee")
+
+    # operator: defer Lee (saved BEFORE any send is attempted -- WR-01), send Pat
+    declines = suggestion_declines.apply_action(declines, lee_key, "defer")
+    suggestion_declines.save(declines, path=store)
+
+    # --- step 4(a): build, validate, hold, bind step-5 inputs ------------------------
+    supplied_email = f"pat.alpha@{COMPANY_DOMAIN}"
+    chosen = {pat_key: declines[pat_key]}
+    records = [{"record_type": "contacts",
+                "row": {**e["row"], "email": supplied_email, "company_id": e["company_id"]},
+                "provenance": e["provenance"]} for e in chosen.values()]
+    assert not extraction.validate(suggest_contacts.round_artifact(records)).rejected
+    sendable_rows, held_rows = extraction.hold_emailless([r["row"] for r in records])
+    assert held_rows == []
+    send_ids = sorted({e["company_id"] for e in chosen.values()})
+    send_domains = [r["email"].rpartition("@")[2] for r in sendable_rows]
+    allow_create = True
+    assert send_ids == [COMPANY_ID] and send_domains == [COMPANY_DOMAIN]
+
+    # --- step 5, re-entered: autonomy read, price, pause, open, authorize --------------
+    events = []
+    cfg = {**granting_config, "autonomy": {"write": True}}
+    assert config_gate.autonomy_enabled(cfg, "write") is True
+    proposal = write_grant.plan_grant(
+        cfg, lanes=["contacts"], object_type="contacts", record_ids=send_ids,
+        record_domains=send_domains, allow_create=allow_create, label="drained send",
+        suggestion_companies=len(set(send_domains)),
+        transport=stub_module_transport_factory(_contacts_plan_reads()))
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND, proposal
+    watch.pre_spend_pause(sleep=lambda s: events.append(("pause", s)))
+    grant = write_grant.open_grant(proposal, "yes", cfg)
+    decision = write_grant.authorize_send(
+        grant, lane="contacts", record_ids=send_ids, record_domains=send_domains)
+    assert decision["armed"] is True
+
+    # --- step 7, re-entered: csv, armed window, dispatch, outcome -----------------------
+    out_path = tmp_path / "dispatch.csv"
+    extraction.write_dispatch_csv(
+        extraction.strip_row_id(preingest.strip_enrichment_extras(sendable_rows)), out_path)
+
+    class _Logging:
+        def __init__(self, inner):
+            self._inner, self.calls = inner, inner.calls
+
+        def __call__(self, *a, **kw):
+            events.append(("transport", a[0] if a else None))
+            return self._inner(*a, **kw)
+
+    with n8n_arming.armed_window(
+            decision["workflow_id"], send_ids, send_domains, allow_create, cfg,
+            transport=stub_module_transport_factory(
+                _armed_window_reads(domains=f'"{COMPANY_DOMAIN}"')),
+            grant=decision["grant"]) as window:
+        result = dispatch.dispatch(str(out_path), True, cfg, transport=_Logging(stub_transport))
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert result["run_id"] and len(stub_transport.calls) == 1
+    assert events.index(("pause", watch.PRE_SPEND_PAUSE_SECONDS)) < events.index(
+        next(e for e in events if e[0] == "transport"))
+
+    # --- only now does the sent person leave the store ---------------------------------
+    declines = suggestion_declines.apply_action(declines, pat_key, "send")
+    suggestion_declines.save(declines, path=store)
+
+    # --- round 2, later: the deferred person is the backlog; nothing was overwritten ---
+    reloaded = suggestion_declines.load(path=store)
+    assert set(reloaded) == {lee_key}
+    assert reloaded[lee_key]["run_id"] == "run-1"
+    next_batch = suggestion_declines.partition_by_run(reloaded, "run-2")
+    assert next_batch["this_run"] == {} and set(next_batch["backlog"]) == {lee_key}
+    assert reloaded[lee_key]["reason_code"] == "no_email"
+
+
+def test_an_exported_decline_round_trips_through_contact_uploads_own_reader(tmp_path):
+    """`export` promises a spreadsheet `contact-upload` reads back with `company_id`
+    intact. The export tests above check the header set; this one feeds the file
+    through the SAME reader and validator the upload lane uses."""
+    entry = _entry_with_provenance("run-1", COMPANY_ID, "Sam", "Delta")
+    key = suggestion_declines.entry_key(COMPANY_ID, entry["row"])
+    out_path = tmp_path / "declines.csv"
+    header = suggestion_declines.export_rows({key: entry}, [key], out_path)
+    assert "company_id" in header and "email" in header
+
+    # the operator fills in the missing email by hand
+    with out_path.open(newline="", encoding="utf-8") as f:
+        exported = list(csv.DictReader(f))
+    assert len(exported) == 1 and exported[0]["email"] == ""
+    exported[0]["email"] = f"sam.delta@{COMPANY_DOMAIN}"
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=header)
+        w.writeheader()
+        w.writerows(exported)
+
+    # contact-upload's own path: alias-table mapping, then extraction.validate
+    table = preingest.rows_from_table(out_path)
+    assert table["dropped_headers"] == [], table
+    (row,) = table["rows"]
+    assert row["company_id"] == COMPANY_ID
+    assert row["firstname"] == "Sam" and row["lastname"] == "Delta"
+    assert row["email"] == f"sam.delta@{COMPANY_DOMAIN}"
+
+    artifact = {"records": [{"row": row,
+                             "provenance": {"input": "spreadsheet", "locator": str(out_path)}}]}
+    result = extraction.validate(artifact)
+    assert not result.rejected, result.rejected
+    assert len(result.accepted) == 1
+    sendable, held = extraction.hold_emailless([r["row"] for r in result.accepted])
+    assert held == [] and sendable[0]["company_id"] == COMPANY_ID
