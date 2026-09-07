@@ -363,6 +363,12 @@ COVERED = {
     # it is now fetched first and walked before any ladder candidate, which is the
     # second `walk_pages` call. The sink is still `suggest_contacts.round_artifact`,
     # so the covering nodeid is unchanged.
+    #
+    # Phase 65 Task 1: the tuple gained its FIRST `suggest_contacts.round_outcome`
+    # call, right after the second `walk_pages` and before `eligible_after_ladder` --
+    # the routing call that replaces the inline `if not people:` cause reasoning
+    # (D-65-01). It decides `reentry` from what the walk already has; the caller
+    # still asks `eligible_after_ladder` for itself, unmodified (D-65-10).
     (
         "suggest-contacts",
         (
@@ -371,6 +377,7 @@ COVERED = {
             "suggest_contacts.discovery_plan", "suggest_contacts.next_candidates",
             "suggest_contacts.walk_pages", "suggest_contacts.next_candidates",
             "suggest_contacts.walk_pages",
+            "suggest_contacts.round_outcome",
             "search_fallback.eligible_after_ladder", "search_fallback.rank_results",
             "suggest_contacts.select_people", "suggest_contacts.synthesise_rows",
             "suggest_contacts.mint_row_ids", "chunking.plan_chunks",

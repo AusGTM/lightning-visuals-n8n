@@ -365,7 +365,8 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # change WHICH URLs this loop walks, only how accurately the walk reads the
        # remaining budget after each fetch.
        accepted = list(candidates["accepted"])
-       walk = {"people": [], "selected": [], "ended": None}
+       walk = {"people": [], "selected": [], "dropped": [], "scores": [], "ended": None,
+               "bar": bar}
 
        # The pasted URL is fetched FIRST, before any ladder candidate, and folds
        # into `pages` exactly like a ladder page -- `walk_pages`'s own docstring
@@ -413,10 +414,16 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        people = walk["people"]           # the walk's own deduped union, not one page's
        fetched_url = pages[-1]["url"] if pages else plan.get("pasted_url")
        source_rank = None          # a ladder-found person's provenance is unchanged
-       if not people:
+       fallback_selection = None
+       # Phase 65: name the round's CAUSE before deciding what happens next -- the
+       # routing call (no rows/sendable/held/fallback given) is the ONLY place this
+       # decides whether the round re-enters, and it routes to the search fallback for
+       # exactly one cause (D-65-01, D-65-04, D-65-09).
+       outcome = suggest_contacts.round_outcome(walk)
+       if outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK:
            # Only a ladder that found NOBODY asks this question at all.
            verdict = search_fallback.eligible_after_ladder(attempts)
-       if not people and verdict["eligible"]:
+       if outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK and verdict["eligible"]:
            # Absence of information, not a fence (D-5sd-04, D-5sd-06). `results` is what
            # your own web search returned, written to a scratch file and read back; the
            # ranker reads the URL host ONLY, so a snippet is never a source for a field.
@@ -425,8 +432,9 @@ and what `enrich-before-ingest/SKILL.md` already calls.
            # `fetched_url` and `source_rank` from the page ACTUALLY fetched and the
            # accepted entry it came from -- a rank-3 accept still yields people, and
            # step 8's gate is what holds them.
-           selected = suggest_contacts.select_people(
-               people, vocabulary["families"], chosen_families, known_contacts)["selected"]
+           fallback_selection = suggest_contacts.select_people(
+               people, vocabulary["families"], chosen_families, known_contacts)
+           selected = fallback_selection["selected"]
        else:
            # `select_people` already ran INSIDE the walk, once per page (D-64-04) --
            # never re-run it here over the same union.

@@ -218,6 +218,28 @@ WALK_REFUSED = "refused"
 WALK_ENDINGS = (WALK_GOOD_ENOUGH, WALK_LADDER_EXHAUSTED, WALK_CAP_EXHAUSTED, WALK_REFUSED)
 
 
+# The closed vocabulary for WHY a round ends with nothing usable (D-65-01/D-65-02,
+# Phase 65). Six named causes, in PRECEDENCE ORDER -- `round_outcome`'s fixed-order
+# first-match-wins rule below, pinned here as a tuple so a silent addition or
+# reordering fails a test rather than drifting quietly.
+CAUSE_UNKNOWN = "unknown"
+CAUSE_NO_PEOPLE_FOUND = "no_people_found"
+CAUSE_NONE_CLASSIFIED = "none_classified"
+CAUSE_ALL_HELD_ON_EMAIL = "all_held_on_email"
+CAUSE_PEOPLE_THIN = "people_thin"
+CAUSE_PROPOSED = "proposed"
+ROUND_CAUSES = (
+    CAUSE_UNKNOWN, CAUSE_NO_PEOPLE_FOUND, CAUSE_NONE_CLASSIFIED,
+    CAUSE_ALL_HELD_ON_EMAIL, CAUSE_PEOPLE_THIN, CAUSE_PROPOSED,
+)
+
+# At most ONE re-entry route exists (D-65-08/D-65-09): the search fallback, or none.
+# `round_outcome` never invents a second route and never asks for a fetch itself.
+REENTRY_SEARCH_FALLBACK = "search_fallback"
+REENTRY_NONE = "none"
+ROUND_REENTRIES = (REENTRY_SEARCH_FALLBACK, REENTRY_NONE)
+
+
 def walk_bar(chosen_families, per_company_cap):
     """The cumulative role-filter hit count a company's page walk must reach before it
     stops early (D-64-06): `max(len(chosen_families or []), per_company_cap)`, one
@@ -872,6 +894,135 @@ def partition_for_dispatch(rows, company_domains):
 
     held.sort(key=lambda entry: entry["index"])
     return sendable, held
+
+
+def _unknown_outcome(reason):
+    return {
+        "cause": CAUSE_UNKNOWN, "reentry": REENTRY_NONE, "reason": reason, "breakdown": {},
+    }
+
+
+def _tally(entries, key):
+    """`{value: count}` over `entries`, keyed on `entry.get(key)` (a missing key
+    tallies under the literal `None`) -- every count produced by `len()` of the
+    grouped list, per LADDER-03's precision rule (no `+=`, no float, no rounding)."""
+    groups = {}
+    for entry in entries:
+        groups.setdefault(entry.get(key), []).append(entry)
+    return {value: len(members) for value, members in groups.items()}
+
+
+def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
+    """Name the CAUSE of one company's round, and the at-most-one re-entry it earns
+    (D-65-01). This is the ONE place a round's cause is decided -- `SKILL.md` consults
+    it and reasons about cause in prose nowhere else.
+
+    FAIL-CLOSED, and deliberately so (D-65-03), copying `search_fallback.
+    eligible_after_ladder`'s idiom exactly: `walk`, `rows`, `sendable`, `held` and
+    `fallback` are each other functions' return values, verbatim, handed here by an
+    LLM-orchestrated caller copying out `SKILL.md`'s pseudocode -- a malformed or
+    truncated one is untrusted structure, not a caller bug to raise on. Any shape
+    failure returns `CAUSE_UNKNOWN`, `REENTRY_NONE`, and a reason naming the offending
+    value; it never raises.
+
+    `walk` is `walk_pages`'s own return, verbatim. `fallback` is `select_people`'s
+    return from the search-fallback branch (or `None` when the fallback never ran).
+    `sendable`/`held` are `partition_for_dispatch`'s pair after `search_fallback.
+    hold_weak_sources` has run. `rows` is this company's own rejoined rows.
+
+    THE ROUTING CALL VS THE TERMINAL CALL. `reentry` is `REENTRY_SEARCH_FALLBACK`
+    only when the cause is `CAUSE_NO_PEOPLE_FOUND` AND all four of `rows`, `sendable`,
+    `held` and `fallback` are `None` -- a call handed any one of them is a terminal
+    call BY CONSTRUCTION and returns `REENTRY_NONE` regardless of cause (D-65-08,
+    D-65-12): this is what makes a second route structurally impossible, not merely
+    untested. This function asks for no fetch itself, performs no eligibility,
+    disposition or refusal check of its own, and re-implements no part of
+    `eligible_after_ladder` -- routing to the search fallback means the CALLER asks
+    that function, which stays the single fail-closed gate.
+
+    Returns `{"cause", "reentry", "reason", "breakdown"}` and nothing else. `breakdown`
+    tallies `dropped` (keyed on each entry's own `reason`) and `held` (keyed on each
+    entry's own `reason_code`) verbatim, with no case-folding or normalisation; an
+    entry missing that key tallies under the literal `None`.
+    """
+    if not isinstance(walk, dict):
+        return _unknown_outcome(f"walk output is not a dict ({walk!r})")
+    for key in ("people", "selected", "dropped"):
+        if key not in walk or not isinstance(walk[key], list):
+            return _unknown_outcome(
+                f"walk[{key!r}] is not a list ({walk.get(key)!r})"
+            )
+    bar = walk.get("bar")
+    if not isinstance(bar, int) or isinstance(bar, bool):
+        return _unknown_outcome(f"walk['bar'] is not an int ({bar!r})")
+    for entry in walk["dropped"]:
+        if not isinstance(entry, dict):
+            return _unknown_outcome(f"a dropped entry is not an object ({entry!r})")
+
+    for name, value in (("rows", rows), ("sendable", sendable), ("held", held)):
+        if value is not None and not isinstance(value, list):
+            return _unknown_outcome(f"{name} is not a list ({value!r})")
+    if held is not None:
+        for entry in held:
+            if not isinstance(entry, dict):
+                return _unknown_outcome(f"a held entry is not an object ({entry!r})")
+    if fallback is not None:
+        if (
+            not isinstance(fallback, dict)
+            or not isinstance(fallback.get("selected"), list)
+            or not isinstance(fallback.get("dropped"), list)
+        ):
+            return _unknown_outcome(
+                f"fallback is not a dict carrying list 'selected' and 'dropped' "
+                f"({fallback!r})"
+            )
+
+    people_count = len(walk["people"])
+    selected_count = len(walk["selected"])
+    dropped_entries = list(walk["dropped"])
+    if fallback is not None:
+        people_count += len(fallback["selected"]) + len(fallback["dropped"])
+        selected_count += len(fallback["selected"])
+
+    sendable_given = sendable is not None
+    held_given = held is not None
+    sendable_count = len(sendable) if sendable_given else None
+
+    if people_count == 0:
+        cause = CAUSE_NO_PEOPLE_FOUND
+        reason = "the ladder walk discovered nobody at all"
+    elif selected_count == 0:
+        cause = CAUSE_NONE_CLASSIFIED
+        reason = "people were found but none were selected -- every one was dropped"
+    elif sendable_given and held_given and sendable_count == 0 and len(held) >= 1:
+        cause = CAUSE_ALL_HELD_ON_EMAIL
+        reason = "people were selected but every one was held before sending"
+    elif selected_count < bar:
+        cause = CAUSE_PEOPLE_THIN
+        reason = f"only {selected_count} of the {bar} needed were selected"
+    else:
+        cause = CAUSE_PROPOSED
+        reason = f"{selected_count} people were proposed, reaching the bar of {bar}"
+
+    if (
+        cause == CAUSE_NO_PEOPLE_FOUND
+        and rows is None and sendable is None and held is None and fallback is None
+    ):
+        reentry = REENTRY_SEARCH_FALLBACK
+    else:
+        reentry = REENTRY_NONE
+
+    breakdown = {
+        "people": people_count,
+        "selected": selected_count,
+        "sendable": sendable_count,
+        "held": _tally(held, "reason_code") if held is not None else {},
+        "dropped": _tally(dropped_entries, "reason"),
+        "bar": bar,
+        "ended": walk.get("ended"),
+    }
+
+    return {"cause": cause, "reentry": reentry, "reason": reason, "breakdown": breakdown}
 
 
 if __name__ == "__main__":

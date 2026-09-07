@@ -174,6 +174,13 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
             suggest_contacts.WALK_CAP_EXHAUSTED, suggest_contacts.WALK_LADDER_EXHAUSTED,
         )
 
+        # Phase 65 Task 1: the routing call, driven for real -- every company here has
+        # an empty walk, so every one routes to the search fallback; the refused-1
+        # company is refused at the very next gate regardless (D-65-10).
+        cause_outcome = suggest_contacts.round_outcome(walk)
+        assert cause_outcome["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
+        assert cause_outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
         verdict = search_fallback.eligible_after_ladder(attempts)
         if not verdict["eligible"]:
             # join 4: a refused ladder terminates here. `no_candidates` reports
@@ -292,7 +299,8 @@ def _walk_company_like_skill_md(company_row, sitemap_urls, bar, page_people_for)
     pages, attempts = [], []
     candidates = suggest_contacts.next_candidates(company_row, attempts, sitemap_urls)
     accepted = list(candidates["accepted"])
-    walk = {"people": [], "selected": [], "ended": None}
+    walk = {"people": [], "selected": [], "dropped": [], "scores": [], "ended": None,
+            "bar": bar}
 
     pasted_url = plan.get("pasted_url")
     if pasted_url:
