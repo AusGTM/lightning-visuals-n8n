@@ -93,6 +93,24 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    D-68-07 told them to do, and is owed the specific reason and the specific next
    step, not just the fact of a refusal.
 
+   Once the role and the cap are set above, this round's default posture for the spend
+   itself is set by the `spend_no_write` level of autonomy
+   (`config_gate.autonomy_enabled`): when it is on, this round proceeds without asking
+   again before spending provider credit. An admin turns it off by setting
+   `autonomy.spend_no_write` to `false` in `operator.local.json`. The level authorises
+   nothing on its own — `allow_write_grants` still gates this interactive path and
+   `ALLOW_N8N_ARM` still gates the scheduled and cron paths, unchanged (D-67-02); it
+   changes nothing about the role ask above, which stays genuine at every level
+   (D-68-02).
+
+   ```python
+   proceed_without_asking = config_gate.autonomy_enabled(config, "spend_no_write")
+   ```
+
+   When `proceed_without_asking` is false, do not take the stated path below — ask for
+   an explicit go-ahead before opening the grant, and wait for it; nothing else about
+   the round changes.
+
    **With no grant open, price one now over exactly this batch's eligible companies** —
    the same implicit open every other batch skill makes by default (D-68-01, D-68-03),
    landing here rather than at step 4 because `agreed_cap` has nothing to check the cap
@@ -120,7 +138,11 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    **If `plan_grant` refuses** — `allow_write_grants` is not set, the eligible set is
    empty, or the ceiling verdict is `"over"` — relay `proposal["detail"]` exactly as it
    reads and STOP. Never fall through to `write_grant.authorize_ungranted_send`:
-   proceeding unless interrupted is never proceeding past a refusal (D-68-06).
+   proceeding unless interrupted is never proceeding past a refusal (D-68-06). An
+   `"over"` verdict refuses the whole batch before anything starts, so there is no run
+   and no end-of-run report for that refusal to appear in — the relayed detail and the
+   stop are the whole account — and trimming the batch down to an affordable subset is
+   not built (a stated limitation, D-67-13, RUN-05, not a defect).
 
    ```python
    priced_cap = suggest_contacts.agreed_cap(2, proposal["envelope"])
@@ -150,7 +172,15 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    renderer. When `proposal["ceiling"]["verdict"]` is `"unknown"`, that block already
    renders `Execution ceiling: **unconfirmed**` — add one sentence: this batch is not
    bounded by the monthly ceiling this run, and proceeding anyway is how this backend
-   already operates on the explicit grant path (D-57-02, D-68-10).
+   already operates on the explicit grant path (D-57-02, D-68-10). No Phase-68-only
+   fence sits on top of that, and Phase 67 adds none either (D-67-09) — an autonomous
+   round discloses an unknown state and proceeds exactly as this attended path already
+   does; the bounds that remain are an `"over"` ceiling verdict and `CapRefused`. Three
+   unknowns can reach this line, each disclosed by its own cause rather than as one
+   blur: an unsampled or unreadable monthly ceiling; a provider balance the backend
+   could not read, which the same envelope block already prints `unconfirmed` for and
+   which is never read as headroom; and an unconfigured `n8n_monthly_execution_allowance`
+   key, which is one of the causes of the first rather than a separate fourth check.
 
    **Want a grant that spans more than this batch?** `backend-control/SKILL.md`'s
    "Opening a write grant" action is the direct route to it — a phrase inside this
