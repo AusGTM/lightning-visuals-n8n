@@ -72,6 +72,27 @@ PER_RECORD_HEADROOM_SECONDS = 45.0
 BACKOFF_SCHEDULE_SECONDS = (5, 5, 10, 15, 30, 60)
 
 
+# =====================================================================================
+# The pre-spend pause (D-68-05, Phase 68 plan 01) — the once-per-round window between
+# the operator reading the stated line and the first credit-spending call, so an
+# interrupt lands before anything is spent. Lives here, and only here: `watch.py` is
+# the ONE file `test_report_sufficiency.py`'s `_POLL_LOOP_ALLOWED` exempts from the
+# no-sleep/no-while/no-time-import ratchet every other plugin script is held to.
+# =====================================================================================
+
+PRE_SPEND_PAUSE_SECONDS = 7  # within D-68-05's 5-10s band; exact value is discretionary
+
+
+def pre_spend_pause(seconds=PRE_SPEND_PAUSE_SECONDS, *, sleep=None):
+    """A real, once-per-round wall-clock pause (D-68-05) immediately before the first
+    credit-spending call of a batch, so the window between the operator reading the
+    stated line and reacting is a window that actually exists. `sleep` is injected —
+    production supplies `time.sleep`, a test supplies a fake — mirroring
+    `poll_until_settled`'s `now=`/`sleep=` DI pattern above, so no test ever waits.
+    """
+    (sleep or time.sleep)(seconds)
+
+
 def resolve_bound_seconds(config, record_count=None):
     """The bound this watch enforces. Config's own ``watch_bound_seconds`` wins when
     present and positive; the measured default otherwise — an admin raising it for a

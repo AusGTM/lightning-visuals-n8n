@@ -91,6 +91,14 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    what it will do. An affirmative answering that question — "yes", "go ahead", "do it" —
    arms this run and nothing else; anything ambiguous is not consent.
 
+   Before the first page fetch, the round pauses for a few seconds so an interrupt lands
+   before anything is spent — once for the whole batch, never per company (D-68-11):
+
+   ```python
+   import watch
+   watch.pre_spend_pause()
+   ```
+
 5. **Stage 1 — read the company's own pages.** For each eligible company in turn: the
    operator supplies or approves the starting page URL, and
    `suggest_contacts.discovery_plan(company_row)` builds the ladder — the same sitemap
