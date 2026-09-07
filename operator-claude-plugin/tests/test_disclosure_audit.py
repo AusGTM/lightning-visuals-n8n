@@ -1,0 +1,161 @@
+"""The disclosure audit (FLOW-04 / D-68-09) -- a per-skill verdict table, ratcheted.
+
+D-68-09's test, applied per line: a statement of fact the operator cannot act on
+differently is not a decision point, and each one costs a round trip. This module is
+the TRACKED artifact recording that audit's outcome -- not a second copy of
+68-RESEARCH.md's "Skill-by-Skill Audit" table (a doc copy would be a second place for
+the two to drift), but the thing that keeps the verdict true as Phase 67 edits this
+same prose next. Every reclassification recorded below names the operator action the
+halt was asking for, so a future reclassification made without one is visibly
+incomplete against this file's own pattern.
+
+Row order is `sorted()` over the skill directory name, matching
+`test_skill_sequence_coverage.py`'s own `SKILL_PATHS = sorted(glob(...))` idiom, so two
+skills sharing a verdict keep a stable, reproducible order run to run.
+
+| Skill               | Verdict                                  | Reason |
+|----------------------|-------------------------------------------|--------|
+| backend-control      | decision-point-preserved                  | Every structural mutation (workflow on/off, schedule change, live-write enable, grant open, grant revoke) still gates on step 3's explicit-yes confirm-and-wait rule; D-68-01's implicit-approval posture is scoped to batch spend, never to this skill's own mutations. The FLOW-05 interrupt/revoke restatement (68-03 Task 2) sits beside "Revoking a grant", never replacing the confirm rule. |
+| backend-status       | swept-no-findings                         | Read-only, no write/spend path. Already states the posture Phase 68 wants elsewhere ("Re-check only when the operator asks... does not watch the backend; it answers a question when asked"). |
+| backend-sweep        | swept-no-findings                         | Read-only sweep report; no write/spend path. |
+| contact-upload       | converted (decision-point-preserved: per-header confirmation, step 2b) | Step 4/5's no-grant ask converted to state-pause-open (Plan 68-02); FLOW-05's interrupt/revoke half added (68-03 Task 2). The one-confirmation-per-header rule -- a header like `Ph.` could be phone or photo -- stays a genuine, un-batchable ask. |
+| enrich-before-ingest | converted (decision-point-preserved: held-row review vocabulary, end-of-run) | The two-phase ask at steps 5 and 7 converted (Plan 68-02); FLOW-05's interrupt/revoke half added (68-03 Task 2). A row the table cannot confirm is still HELD and still routed through the end-of-run `approve`/`deny`/`pick`/`email:` vocabulary -- an ambiguous or low-confidence case the system cannot resolve for the operator. |
+| enrich-records       | converted (decision-point-preserved: company-domain confirmation, step 2) | Steps 5-6's ask converted (Plan 68-02); FLOW-05's interrupt/revoke half added (68-03 Task 2). The company-domain confirmation table stays a genuine ask -- an undecided row stops the whole batch rather than defaulting either way. |
+| initialize           | swept-no-findings                         | Read-only setup/check skill; its own explicit "never guess a value" refusal is a config-gate STOP, not a question awaiting an answer. |
+| loss-reason-report   | swept-no-findings                         | Read-only report; no write/spend path. |
+| review-triage        | decision-point-preserved (verified non-change) | Unmodified by this phase -- its own prose already states the exemption: "This per-record ritual is unchanged by the grant... what changed underneath it is only the authority, never the act." Recorded here as a VERIFIED non-change, not an oversight. |
+| suggest-contacts     | converted + decision-point-preserved (split, step 3) | Step 3 is SPLIT, never collapsed into one verdict: role selection stays a genuine ask ("no default to state instead of asking it", D-68-02); the per-company cap default of 2 is a converted statement (D-68-02, D-62-12). `CapRefused` fences anything above the grant's priced cap either way (D-68-06). |
+
+Read-only skills (`backend-status`, `backend-sweep`, `initialize`,
+`loss-reason-report`) are pinned by SYMBOL absence, not prose-phrase absence -- a
+benign rewording of their text must never fail this suite for the wrong reason.
+`pre_spend_pause` and `open_grant` are the two symbols a write/spend path would need;
+neither name appears in any of the four.
+
+`review-triage/SKILL.md` is pinned POSITIVELY, never by content hash and never by
+prose absence: its per-record ritual sentence is present; its `open_grant` fence
+(`skills/review-triage/SKILL.md:120` at last read) passes the `confirmation` variable,
+and the round-supplied `"yes"` literal never appears as that call's argument; the
+symbol `pre_spend_pause` does not appear anywhere in the file. A content hash would rot
+the moment Phase 67 touches any *other* skill in the same commit as an unrelated
+refactor of this test file's own imports -- these three facts are what actually matter
+and are what stay checked.
+"""
+import re
+from pathlib import Path
+
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+SKILL_PATHS = sorted(PLUGIN_ROOT.glob("skills/*/SKILL.md"))
+
+# The single source of truth for the classification below -- the markdown table in
+# this module's own docstring above is ITS rendering, kept in sync by hand the same
+# way `test_enrich_before_ingest_skill_contract.py`'s pinned-literal dicts are (that
+# file's own precedent for "a Python constant IS the checked artifact; the prose
+# around it documents, it does not re-derive"). Deliberately not sourced from
+# 68-RESEARCH.md -- RESEARCH.md is a planning document, and a second copy of the same
+# table there would be a second place for the two to drift.
+AUDIT = {
+    "backend-control": "decision-point-preserved",
+    "backend-status": "swept-no-findings",
+    "backend-sweep": "swept-no-findings",
+    "contact-upload": "converted",
+    "enrich-before-ingest": "converted",
+    "enrich-records": "converted",
+    "initialize": "swept-no-findings",
+    # RECORDED EDIT -- 68-03 Task 3 RED seed. "loss-reason-report" is deliberately
+    # omitted here to take RED on the completeness assertion (this repo already
+    # satisfies every other assertion below, so an honest RED needs a seeded gap
+    # rather than an inverted assertion). Restored for GREEN in the next commit.
+    "review-triage": "decision-point-preserved",
+    "suggest-contacts": "converted",
+}
+
+READ_ONLY_SKILLS = ("backend-status", "backend-sweep", "initialize", "loss-reason-report")
+
+# Each preserved decision point, pinned by its own literal (normalized substring).
+PRESERVED_LITERALS = {
+    "review-triage": "this per-record ritual is unchanged by the grant",
+    "backend-control": "confirm. ask, and wait. only an explicit yes proceeds.",
+    "suggest-contacts": "relay a caprefused to the operator exactly as it reads",
+    "enrich-records": "an undecided row stops the whole batch rather than defaulting either way",
+    "contact-upload": "one confirmation per header, each answered before the next is asked",
+    # backticks are stripped by _normalized() too, so this reads as plain words.
+    "enrich-before-ingest": "approve / deny / pick <sub-label> / email: <address>",
+}
+
+# suggest-contacts step 3 is split -- both halves pinned separately (never collapsed).
+SUGGEST_CONTACTS_ROLE_ASK = (
+    "this choice is genuine; there is no default to state instead of asking it"
+)
+SUGGEST_CONTACTS_CAP_STATED = "state the per-company cap default of 2"
+
+
+def _text(skill_dir):
+    return (PLUGIN_ROOT / "skills" / skill_dir / "SKILL.md").read_text(encoding="utf-8")
+
+
+def _normalized(text):
+    """Same idiom as `test_interrupt_semantics.py`'s `_normalized()`: collapse
+    whitespace, strip blockquote markers, and strip both `*` and `` ` `` markers so a
+    reflow or a bold/code-span tweak cannot fail a wording assertion (and cannot hide
+    one either). Every assertion below is a SYMBOL check or a semantic-phrase check --
+    never a check for the absence of ordinary prose."""
+    stripped = re.sub(r"^\s*>\s?", "", text, flags=re.MULTILINE)
+    stripped = stripped.replace("*", "").replace("`", "")
+    return re.sub(r"\s+", " ", stripped).strip().lower()
+
+
+def test_audit_table_covers_every_skill_on_disk():
+    on_disk = {p.parent.name for p in SKILL_PATHS}
+    in_table = set(AUDIT)
+    assert in_table == on_disk, (
+        f"AUDIT table and on-disk skills/*/SKILL.md diverge -- "
+        f"missing from table: {on_disk - in_table}; "
+        f"stale in table: {in_table - on_disk}"
+    )
+
+
+def test_audit_rows_are_sorted_by_skill_directory_name():
+    assert list(AUDIT) == sorted(AUDIT)
+
+
+def test_at_least_four_skills_are_swept_no_findings():
+    assert sum(1 for v in AUDIT.values() if v == "swept-no-findings") >= 4
+
+
+def test_read_only_skills_have_no_pre_spend_pause_or_open_grant_symbol():
+    for skill in READ_ONLY_SKILLS:
+        assert AUDIT[skill] == "swept-no-findings"
+        text = _text(skill)
+        assert "pre_spend_pause" not in text, f"{skill} names pre_spend_pause"
+        assert "open_grant" not in text, f"{skill} names open_grant"
+
+
+def test_every_preserved_decision_point_literal_is_present():
+    for skill, literal in PRESERVED_LITERALS.items():
+        normalized = _normalized(_text(skill))
+        assert literal in normalized, f"{skill} is missing its preserved-decision-point literal"
+
+
+def test_suggest_contacts_step_3_is_split_not_collapsed():
+    normalized = _normalized(_text("suggest-contacts"))
+    assert SUGGEST_CONTACTS_ROLE_ASK in normalized, "role selection ask literal missing"
+    assert SUGGEST_CONTACTS_CAP_STATED in normalized, "cap-default-stated literal missing"
+
+
+def test_review_triage_per_record_ritual_sentence_is_present():
+    normalized = _normalized(_text("review-triage"))
+    assert PRESERVED_LITERALS["review-triage"] in normalized
+
+
+def test_review_triage_open_grant_fence_passes_confirmation_not_a_yes_literal():
+    text = _text("review-triage")
+    open_grant_lines = [line for line in text.splitlines() if "open_grant(" in line]
+    assert open_grant_lines, "review-triage has no open_grant( call to pin"
+    for line in open_grant_lines:
+        assert '"yes"' not in line, f"open_grant call passes a literal yes: {line!r}"
+        assert "confirmation" in line, f"open_grant call does not pass confirmation: {line!r}"
+
+
+def test_review_triage_never_names_pre_spend_pause():
+    assert "pre_spend_pause" not in _text("review-triage")
