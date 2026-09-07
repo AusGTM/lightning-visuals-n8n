@@ -7,11 +7,16 @@ alias lookup — read-only).
 """
 import csv
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import confidence
 import extraction
+import held_queue
 import preingest
+import remainder_queue
+import suggest_contacts
 from dispatch import NotArmedError
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -398,6 +403,197 @@ def test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv(tmp_path)
     assert "row_id" not in header
     assert len(written_rows) == 1
     assert written_rows[0][header.index("email")] == "amy@example.com"
+
+
+# =====================================================================================
+# Phase 65 Plan 02 Task 2 (RICH-04): trace every merge_enriched caller's downstream
+# path and pin the edges the widening moves.
+# =====================================================================================
+
+def test_without_the_new_strip_the_step_7_chain_raises_non_canonical_key_in_row(tmp_path):
+    # The negative half of the extended step-7 sequence test above -- proves
+    # `strip_enrichment_extras` is load-bearing, not decorative: the SAME chain with
+    # only `strip_row_id` (no `strip_enrichment_extras`) must still raise.
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {"email": "amy@example.com", "seniority": "Director"})]
+
+    merge_report = preingest.merge_enriched(rows, responses)
+    sendable, held = extraction.hold_emailless(merge_report.rows)
+    sendable = extraction.strip_row_id(sendable)  # no strip_enrichment_extras call
+
+    with pytest.raises(extraction.ExtractionError) as exc_info:
+        extraction.write_dispatch_csv(sendable, tmp_path / "dispatch.csv")
+    assert exc_info.value.code == "non_canonical_key_in_row"
+
+
+def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
+    # Caller B (suggest-contacts): merged rows -> rejoin_enriched -> partition_for_
+    # dispatch -> extraction.validate -- a widened key must be ACCEPTED (never
+    # rejected), reported in dropped_keys, because that path reaches no CSV of its own
+    # (SKILL.md step 7's dispatch block is the one strip site both callers share).
+    rows = preingest.build_rows_spec(
+        [{"firstname": "Amy", "lastname": "Smith", "company": "Acme"}]
+    )["rows"]
+    records = [{"row": rows[0], "provenance": {"input": "test", "locator": "test"}}]
+
+    merge_report = preingest.merge_enriched(
+        rows, [_response(rows[0]["row_id"], {
+            "email": "amy@acme.com", "seniority": "Director",
+        })],
+    )
+    records = suggest_contacts.rejoin_enriched(records, merge_report.rows)
+
+    sendable_rows, held = suggest_contacts.partition_for_dispatch(
+        [r["row"] for r in records], {"Acme": "acme.com"},
+    )
+    assert len(sendable_rows) == 1, "the email domain matches the company's own domain"
+
+    result = extraction.validate(suggest_contacts.round_artifact(records))
+
+    assert len(result.accepted) == 1
+    assert {"index": 0, "key": "seniority"} in result.dropped_keys
+    assert result.accepted[0]["row"]["email"] == "amy@acme.com"
+    assert "seniority" not in result.accepted[0]["row"]
+
+
+def test_a_rerequest_response_carrying_a_widened_key_keeps_it_on_the_row(
+        fake_config, stub_module_transport_factory):
+    # Caller C: preingest.rerequest_unanswered re-enters merge_enriched, so it
+    # inherits the union with no separate change.
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    assert len(merge_report.unanswered) == 1
+
+    transport = stub_module_transport_factory(responses=[
+        [_response(rows[0]["row_id"], {"email": "amy@example.com", "seniority": "Director"})],
+    ])
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True,
+        {**fake_config, "max_records_per_chunk": 10}, transport=transport,
+    )
+
+    merged = {r["row_id"]: r for r in result.rows}
+    assert merged[rows[0]["row_id"]]["seniority"] == "Director"
+
+
+def test_promotable_contact_props_is_empty_when_no_policy_resolves(tmp_path):
+    assert preingest.promotable_contact_props(
+        policy_path=tmp_path / "nonexistent-field-policy.yaml"
+    ) == []
+
+
+def test_promotable_contact_props_is_empty_when_the_policy_has_no_contacts_section(tmp_path):
+    policy_path = tmp_path / "field_policy.yaml"
+    policy_path.write_text("companies:\n  domain:\n    class: manual_protected\n")
+
+    assert preingest.promotable_contact_props(policy_path=policy_path) == []
+
+
+def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unreadable(
+        monkeypatch, tmp_path):
+    # Points BOTH resolution steps at nonexistent paths so resolve_policy_path(None)
+    # (what merge_enriched calls internally) returns None -- the fallback path a real
+    # unresolvable-policy install would hit, not just the explicit-argument path.
+    monkeypatch.setattr(preingest, "PLUGIN_POLICY_PATH", tmp_path / "no-plugin-copy.yaml")
+    monkeypatch.setattr(preingest, "REPO_POLICY_PATH", tmp_path / "no-repo-copy.yaml")
+
+    assert preingest.promotable_contact_props() == []
+
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {
+        "email": "a@x.com", "phone": "555", "seniority": "Director",
+    })]
+    result = preingest.merge_enriched(rows, responses)
+
+    allowed = set(extraction.canonical_props()) | {"row_id"}
+    for row in result.rows:
+        assert set(row) <= allowed
+    assert {"row_id": rows[0]["row_id"], "key": "seniority"} in result.dropped_property_keys
+
+
+def test_the_allowlist_is_a_union_and_a_shared_key_behaves_as_before():
+    # RICH-04 adjacency: email/phone/jobtitle are in BOTH sets -- they must appear
+    # once in the union (never a second pass) and behave byte-identically to today.
+    shared = set(extraction.canonical_props()) & set(preingest.promotable_contact_props())
+    assert shared == {"email", "phone", "jobtitle"}
+
+    rows = _rows(1)
+    rows[0]["jobtitle"] = "Director"
+    responses = [_response(rows[0]["row_id"], {"jobtitle": "Analyst"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert result.rows[0]["jobtitle"] == "Director"
+    assert result.conflicts == (
+        {"row_id": rows[0]["row_id"], "field": "jobtitle",
+         "kept": "Director", "provider_value": "Analyst"},
+    )
+
+
+def test_response_property_order_does_not_change_the_merged_row():
+    rows = _rows(1)
+    forward = _response(rows[0]["row_id"], {"email": "a@x.com", "seniority": "Director"})
+    reordered = _response(rows[0]["row_id"], {"seniority": "Director", "email": "a@x.com"})
+    assert list(forward["properties"].keys()) != list(reordered["properties"].keys())
+
+    result_forward = preingest.merge_enriched(rows, [forward])
+    result_reordered = preingest.merge_enriched(rows, [reordered])
+
+    assert result_forward.rows[0] == result_reordered.rows[0]
+
+
+def test_merging_the_same_responses_twice_changes_no_value():
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {"email": "a@x.com", "seniority": "Director"})]
+
+    first = preingest.merge_enriched(rows, responses)
+    second = preingest.merge_enriched(list(first.rows), responses)
+
+    assert second.rows[0] == first.rows[0]
+    assert second.conflicts == (), "an identical incoming value is never a conflict"
+
+
+def test_a_merged_row_with_a_widened_key_builds_a_remainder_queue_entry_untouched():
+    # Destination D (remainder queue half): remainder_queue.build_entry stores its
+    # spec verbatim (only a forbidden-name scan, never a key-set filter), so a
+    # widened key survives onto the stored entry -- this IS the point of the
+    # widening for this path (Finding 8).
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(
+        rows, [_response(rows[0]["row_id"], {"email": "a@x.com", "seniority": "Director"})],
+    )
+
+    entry = remainder_queue.build_entry(
+        {"rows": list(merge_report.rows), "object_type": "contacts"},
+        remainder_queue.REASON_CEILING_BREACH, note="test",
+    )
+
+    assert entry["spec"]["rows"][0]["seniority"] == "Director"
+
+
+def test_a_merged_row_with_a_widened_key_builds_a_held_queue_entry_without_raising():
+    # Destination D (held-queue half) -- CORRECTS Finding 8's grep-based claim: unlike
+    # remainder_queue, held_queue.build_entry does NOT carry an arbitrary row key
+    # through untouched. `held_queue.ROW_FIELD_ALLOWLIST` (row_id + enrichment.
+    # MATCH_LOOKUP_KEYS) is a DELIBERATE allowlist (module docstring, REVIEW-A7:
+    # "only the identity keys and the columns the envelope projects, never whatever
+    # else happened to be in the operator's spreadsheet") that predates this phase and
+    # is out of scope to widen here. The call must not raise; the widened key is
+    # correctly absent from the stored row.
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(
+        rows, [_response(rows[0]["row_id"], {"email": "a@x.com", "seniority": "Director"})],
+    )
+    row = merge_report.rows[0]
+    outcome = SimpleNamespace(match_tier=None, candidate_count=None)
+
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "test reason", outcome)
+
+    assert entry["row"].get("email") == "a@x.com"
+    assert "seniority" not in entry["row"], (
+        "held_queue's ROW_FIELD_ALLOWLIST is a pre-existing, deliberate allowlist -- "
+        "not something this phase widens or is in scope to change"
+    )
 
 
 # =====================================================================================
