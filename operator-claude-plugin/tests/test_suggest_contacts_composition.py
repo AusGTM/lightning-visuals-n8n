@@ -745,3 +745,93 @@ def test_config_gate_style_modules_used_in_the_documented_block_are_real_scripts
     assert callable(suggest_contacts.partition_for_dispatch)
     assert callable(extraction.validate)
     assert callable(suggest_contacts.round_artifact)
+
+
+def test_the_documented_round_pipeline_never_crashes_when_every_company_finds_nobody():
+    """Code review CR-01 (Phase 65): the round's own worst case -- every company's
+    ladder finds nobody AND the search fallback is ineligible for every one (a
+    `refused` disposition closes the fallback path, D-5sd-04) -- must still reach the
+    report step instead of crashing.
+
+    Before the fix, the documented pipeline called `suggest_contacts.mint_row_ids([])`
+    unconditionally on the whole batch's accumulated `records`, and `build_rows_spec`
+    refuses an empty rows list by raising `preingest.RowSpecError` -- an uncaught crash
+    in exactly the scenario `round_outcome` exists to name. The fix has two halves,
+    both driven here: (1) `rounds.append(...)` now carries the ROUTING call's own
+    outcome from the start, so a company's cause survives even if the terminal
+    classify loop is never reached, and (2) the whole mint/dispatch/terminal-classify
+    block is now guarded on `if records:`, so an empty batch never reaches
+    `mint_row_ids` at all.
+    """
+    company_a = _company_row("nobody-a", num_associated_contacts=0)
+    company_b = _company_row("nobody-b", num_associated_contacts=0)
+    eligible = [company_a, company_b]
+
+    vocabulary = role_classify.load_families()
+    family_list = vocabulary["families"]
+    chosen_families = [FAMILY_LABEL]
+    figures = {"suggestion_allowance": {"priced_cap": 5}}
+    per_company_cap = suggest_contacts.agreed_cap(5, figures)
+    bar = suggest_contacts.walk_bar(chosen_families, per_company_cap)
+
+    # A `refused` disposition anywhere closes the search-fallback path (D-5sd-04) --
+    # every company's ladder is refused, so nothing can rescue an empty walk.
+    attempts_by_row_id = {
+        "nobody-a": [_attempt("https://example-club.example/sitemap.xml", "refused")],
+        "nobody-b": [_attempt("https://example-club.example/sitemap.xml", "refused")],
+    }
+
+    records = []
+    rounds = []
+    for company_row in eligible:
+        plan = suggest_contacts.discovery_plan(company_row)
+        attempts = attempts_by_row_id[company_row["row_id"]]
+        candidates = suggest_contacts.next_candidates(company_row, attempts, sitemap_urls=[])
+        walk = suggest_contacts.walk_pages(
+            [], candidates, bar, family_list, chosen_families, known_contacts=[])
+        assert walk["people"] == []
+
+        # The routing call (SKILL.md ~line 424) -- this company's walk found nobody,
+        # so it names CAUSE_NO_PEOPLE_FOUND and routes to the search fallback.
+        outcome = suggest_contacts.round_outcome(walk)
+        assert outcome["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
+        assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
+        verdict = search_fallback.eligible_after_ladder(attempts)
+        assert verdict["eligible"] is False, "a refused disposition must close the fallback"
+        # Nothing rescues this company -- `selected` stays the walk's own (empty)
+        # selection, the fallback branch never runs.
+        selected = walk["selected"]
+        fallback_selection = None
+
+        company_records = suggest_contacts.synthesise_rows(
+            company_row, selected, plan.get("pasted_url"), per_company_cap, None)
+        assert company_records == []
+
+        # Fix half 1: this entry carries the routing call's OWN outcome from the
+        # start.
+        rounds.append({
+            "company": company_row, "walk": walk, "fallback": fallback_selection,
+            "start": len(records), "count": len(company_records),
+            "outcome": outcome,
+        })
+        records.extend(company_records)
+
+    assert records == []
+
+    # Fix half 2: an empty batch never reaches `mint_row_ids` at all --
+    # `build_rows_spec([])` raises `RowSpecError` by design (proven separately by
+    # `test_mint_row_ids_propagates_row_spec_error_for_a_row_that_already_has_one`'s
+    # sibling case), and this guard is what keeps that refusal from ever firing on the
+    # empty-round case -- the whole point of this test.
+    if records:
+        suggest_contacts.mint_row_ids(records)  # pragma: no cover -- unreachable here
+        raise AssertionError("unreachable: records is empty for this fixture")
+
+    # Every company's line still names its cause -- no RowSpecError, no crash, and
+    # the routing call's own outcome survives untouched since the terminal classify
+    # loop was never reached.
+    assert len(rounds) == 2
+    for entry in rounds:
+        assert entry["outcome"]["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
+        assert entry["outcome"]["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK

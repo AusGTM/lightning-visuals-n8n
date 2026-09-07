@@ -451,47 +451,67 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        rounds.append({
            "company": eligible_company, "walk": walk, "fallback": fallback_selection,
            "start": len(records), "count": len(company_records),
+           # Code review CR-01 (Phase 65): the routing call's OWN outcome, kept as
+           # this entry's outcome from the start -- overwritten by the terminal
+           # classify below when that loop is reached, but left standing if it is
+           # not (every company's walk finding nobody means `records` never grows,
+           # so `mint_row_ids([])` is never called at all -- see the `if records:`
+           # guard below). Without this, a crash or early exit before the terminal
+           # loop would report an entry with no cause at all, in exactly the
+           # scenario `round_outcome` exists to name.
+           "outcome": outcome,
        })
        records.extend(company_records)
 
-   # The mint -- ONCE, over the whole accumulated batch, never per company.
-   minted = suggest_contacts.mint_row_ids(records)
-   plan = chunking.plan_chunks(minted["spec"], chunking.chunk_ceiling(cfg))
-   # Stage 2 -- hand `plan` and `minted["spec"]["rows"]` to `enrich-before-ingest/
-   # SKILL.md` step 5's dispatch block verbatim: `enrichment.resolve_providers`,
-   # `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
-   # `watch.recover_async_dispatch`, `preingest.merge_enriched` -- no second dispatch
-   # path here. `merge_report` below is that block's own `preingest.merge_enriched`
-   # result.
-   records = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
-   # company_domains is REQUIRED (no default) -- the email-domain-relatedness rule
-   # (operator ruling, 2026-09-04) applies to every sendable row. The value may be one
-   # domain or several; alternates are OPERATOR-STATED only, never harvested.
-   alternates = {}  # e.g. {"The Roma Turf Club": ["romaturfclub.org.au"]} -- operator-stated only
-   company_domains = {c.get("name"): [d for d in [c.get("website") or c.get("domain"),
-                                                  *alternates.get(c.get("name"), [])] if d]
-                      for c in eligible_companies}
-   sendable, held = suggest_contacts.partition_for_dispatch(
-       [record["row"] for record in records], company_domains)
-   # The SECOND, records-level gate (D-5sd-01 + D-5sd-05): a search-sourced person is
-   # sendable only from the company's own host or LinkedIn. A rank-3 row is held however
-   # confidently the waterfall validated it. Independent of the pass above; both hold.
-   sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
-   # The terminal classify (Phase 65 Task 2): each company's OWN cause and breakdown,
-   # read off the batch-wide sendable/held filtered to this company's own rows. A
-   # terminal call (carrying rows/sendable/held/fallback) always returns
-   # reentry: "none" -- a second pass can never route a third time (D-65-08, D-65-12).
-   for entry in rounds:
-       company_rows = [
-           record["row"] for record in records[entry["start"]:entry["start"] + entry["count"]]
-       ]
-       entry["outcome"] = suggest_contacts.round_outcome(
-           entry["walk"], rows=company_rows, sendable=sendable, held=held,
-           fallback=entry["fallback"])
-   for record in records:
-       if record["row"] not in sendable:
-           continue  # a held row never reaches extraction.validate()
-       result = extraction.validate(suggest_contacts.round_artifact([record]))
+   # Code review CR-01 (Phase 65): guard the whole mint/dispatch/terminal-classify
+   # block on there being anything to mint at all. Every company's walk finding
+   # nobody (and the search fallback never rescuing any of them) leaves `records`
+   # empty; `mint_row_ids([])` -> `preingest.build_rows_spec([])` raises
+   # `RowSpecError` on an empty batch by design (never caught, per its own
+   # docstring), so the mint must never be attempted over an empty batch. When
+   # `records` is empty, every `rounds[]` entry already carries its routing-call
+   # `outcome` (set above), and step 9 reports off that -- no cause causes a stop.
+   if records:
+       # The mint -- ONCE, over the whole accumulated batch, never per company.
+       minted = suggest_contacts.mint_row_ids(records)
+       plan = chunking.plan_chunks(minted["spec"], chunking.chunk_ceiling(cfg))
+       # Stage 2 -- hand `plan` and `minted["spec"]["rows"]` to `enrich-before-ingest/
+       # SKILL.md` step 5's dispatch block verbatim: `enrichment.resolve_providers`,
+       # `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
+       # `watch.recover_async_dispatch`, `preingest.merge_enriched` -- no second
+       # dispatch path here. `merge_report` below is that block's own
+       # `preingest.merge_enriched` result.
+       records = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+       # company_domains is REQUIRED (no default) -- the email-domain-relatedness rule
+       # (operator ruling, 2026-09-04) applies to every sendable row. The value may be
+       # one domain or several; alternates are OPERATOR-STATED only, never harvested.
+       alternates = {}  # e.g. {"The Roma Turf Club": ["romaturfclub.org.au"]} -- operator-stated only
+       company_domains = {c.get("name"): [d for d in [c.get("website") or c.get("domain"),
+                                                      *alternates.get(c.get("name"), [])] if d]
+                          for c in eligible_companies}
+       sendable, held = suggest_contacts.partition_for_dispatch(
+           [record["row"] for record in records], company_domains)
+       # The SECOND, records-level gate (D-5sd-01 + D-5sd-05): a search-sourced person
+       # is sendable only from the company's own host or LinkedIn. A rank-3 row is
+       # held however confidently the waterfall validated it. Independent of the pass
+       # above; both hold.
+       sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
+       # The terminal classify (Phase 65 Task 2): each company's OWN cause and
+       # breakdown, read off the batch-wide sendable/held filtered to this company's
+       # own rows. A terminal call (carrying rows/sendable/held/fallback) always
+       # returns reentry: "none" -- a second pass can never route a third time
+       # (D-65-08, D-65-12).
+       for entry in rounds:
+           company_rows = [
+               record["row"] for record in records[entry["start"]:entry["start"] + entry["count"]]
+           ]
+           entry["outcome"] = suggest_contacts.round_outcome(
+               entry["walk"], rows=company_rows, sendable=sendable, held=held,
+               fallback=entry["fallback"])
+       for record in records:
+           if record["row"] not in sendable:
+               continue  # a held row never reaches extraction.validate()
+           result = extraction.validate(suggest_contacts.round_artifact([record]))
    ```
 
 9. **Report.** Per company: eligible / skipped / unknown, people named, people already
