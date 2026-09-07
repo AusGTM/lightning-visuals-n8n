@@ -16,8 +16,24 @@ copied from `test_autonomy_switch_prose.py`'s own idiom (itself copied from
 reason for staying separate: independent evolution, no risk of colliding with work in
 flight in the file it mirrors.
 
-`review-triage` and `backend-control` are excluded from TABLE (Task 3 finalizes this
-docstring with the full reason).
+**Scope, on the record (D-67-11).** The mandatory report is required at exactly the
+four batch skills that spend or write under a grant: `enrich-before-ingest` and
+`enrich-records` already called it before this plan; `contact-upload` and
+`suggest-contacts` are made call sites here. `review-triage` and `backend-control` are
+excluded BY NAME, not by omission — `test_review_triage_and_backend_control_carry_no_
+report_call` below checks it rather than assuming it. Neither has a batch run scope in
+the `run_manifest`/`run_state` sense this report is built over: `review-triage` runs a
+per-record ritual with no grant-scoped batch dispatch of its own (D-67-11), and
+`backend-control`'s arm/deploy/structural mutations are confirm-and-wait genuine
+decision points, in no autonomy level at all (D-67-12) — extending the run-scope
+machinery to either was not taken this phase.
+
+The two behavioural tests below (Task 3) drive `run_report.build_run_report` directly,
+not through a skill, with a synthetic `run_id` under the autouse `no_durable_writes`
+fixture: idempotence (calling it twice for the same run returns two equal blocks,
+neither call raising) and gap-honesty (every store unreadable still returns a block
+naming the gap, never raising) — the two properties that make a MANDATORY report safe
+to make mandatory.
 """
 import ast
 import re
@@ -26,7 +42,13 @@ from pathlib import Path
 
 import pytest
 
+import durable_paths
+import held_queue
+import remainder_queue
+import run_manifest
 import run_report
+import run_state
+import written_records
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = PLUGIN_ROOT / "skills"
@@ -414,3 +436,60 @@ def test_review_triage_and_backend_control_carry_no_report_call():
         assert "run_report.record_audit(" not in text, (
             f"{skill} must carry no record_audit call"
         )
+
+
+# =====================================================================================
+# Behavioural properties (Task 3) — proved directly against
+# `run_report.build_run_report`, never through a skill, under the autouse
+# `no_durable_writes` fixture. These are the two properties that make a MANDATORY
+# report safe to make mandatory.
+# =====================================================================================
+
+
+def _patch_durable_dir(monkeypatch, tmp_path):
+    """Mirrors `test_run_report.py`'s own idiom: one shared tmp directory every
+    no-path store and every per-run path function resolves into."""
+    monkeypatch.setattr(
+        durable_paths, "resolve_state_path",
+        lambda *a, **k: tmp_path / "dashboard_artifact.json",
+    )
+
+
+def test_build_run_report_is_idempotent_for_the_same_run_id(tmp_path, monkeypatch):
+    """Calling build_run_report twice for the same run_id with the same inputs returns
+    two equal blocks, and neither call raises — the idempotence AUTO-06 relies on when
+    an operator asks for the account again."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    written_records.append_chunk("run-idem", 0, {
+        "action": "update", "hs_object_id": "1", "object_type": "contacts",
+        "row_id": "r1",
+    })
+    report_one = run_report.build_run_report("run-idem", {})
+    report_two = run_report.build_run_report("run-idem", {})
+    assert report_one["block"] == report_two["block"]
+    assert report_one["gaps"] == report_two["gaps"]
+
+
+def test_build_run_report_never_raises_when_every_store_is_unreadable(tmp_path, monkeypatch):
+    """Every one of the five durable stores plus the audit record made ANOMALOUS
+    (present but unparseable) — build_run_report still returns a block, still names a
+    gap, and never raises. This is the property that makes a mandatory report safe to
+    make mandatory."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    run_id = "run-unreadable"
+    malformed = "{not valid json"
+    for path in [
+        written_records.written_records_path(run_id),
+        run_manifest.run_manifest_path(run_id),
+        run_state.run_state_path(run_id),
+        held_queue.queue_path(),
+        remainder_queue.remainder_path(run_id),
+        run_report.run_audit_path(run_id),
+    ]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(malformed, encoding="utf-8")
+
+    report = run_report.build_run_report(run_id, {})  # must never raise
+
+    assert report["gaps"], "an entirely-unreadable run must still name at least one gap"
+    assert isinstance(report["block"], str) and report["block"]
