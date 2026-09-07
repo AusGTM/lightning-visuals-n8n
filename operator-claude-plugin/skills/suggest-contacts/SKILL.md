@@ -541,11 +541,15 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # routing call (no rows/sendable/held/fallback given) is the ONLY place this
        # decides whether the round re-enters, and it routes to the search fallback for
        # exactly one cause (D-65-01, D-65-04, D-65-09).
-       outcome = suggest_contacts.round_outcome(walk)
-       if outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK:
+       # WR-02 (67-REVIEW): named `company_outcome`, not the bare `outcome` step 9's
+       # mandatory-report fence later binds to the Stage 2 DISPATCH outcome (reused
+       # verbatim from `enrich-before-ingest/SKILL.md` step 5) -- two different types,
+       # kept apart by name now rather than only by execution order.
+       company_outcome = suggest_contacts.round_outcome(walk)
+       if company_outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK:
            # Only a ladder that found NOBODY asks this question at all.
            verdict = search_fallback.eligible_after_ladder(attempts)
-       if outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK and verdict["eligible"]:
+       if company_outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK and verdict["eligible"]:
            # Absence of information, not a fence (D-5sd-04, D-5sd-06). `results` is what
            # your own web search returned, written to a scratch file and read back; the
            # ranker reads the URL host ONLY, so a snippet is never a source for a field.
@@ -579,7 +583,7 @@ and what `enrich-before-ingest/SKILL.md` already calls.
            # guard below). Without this, a crash or early exit before the terminal
            # loop would report an entry with no cause at all, in exactly the
            # scenario `round_outcome` exists to name.
-           "outcome": outcome,
+           "outcome": company_outcome,
        })
        records.extend(company_records)
 
