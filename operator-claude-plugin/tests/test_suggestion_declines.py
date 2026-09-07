@@ -380,6 +380,27 @@ def test_a_refused_save_leaves_the_previous_file_byte_identical(tmp_path):
 
 
 # =====================================================================================
+# CR-01: save() must refuse to overwrite an anomalous pre-existing file
+# =====================================================================================
+
+
+def test_save_refuses_to_overwrite_a_preexisting_anomalous_file(tmp_path):
+    """A single unreadable store file must never be silently clobbered by one round's
+    entries (CR-01) -- the exact loss D-69-03's reversibility note calls one-way."""
+    target = tmp_path / "suggestion_declines.json"
+    target.write_bytes(b"garbage, not json at all")
+    before = target.read_bytes()
+
+    entry = suggestion_declines.build_entry(
+        {"firstname": "Pat", "lastname": "Lee"}, "no_email", "x", "run-1", "123")
+
+    with pytest.raises(suggestion_declines.SuggestionDeclineError):
+        suggestion_declines.save({"123::pat|lee": entry}, path=target)
+
+    assert target.read_bytes() == before, "the pre-existing backlog must survive untouched"
+
+
+# =====================================================================================
 # Allowlist non-drift
 # =====================================================================================
 

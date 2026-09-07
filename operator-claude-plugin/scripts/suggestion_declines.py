@@ -210,13 +210,28 @@ def save(entries, path=None) -> None:
     stamp. Serialised with `sort_keys=True, ensure_ascii=False` so identical content
     always serialises to identical bytes -- re-saving the same map twice, or draining
     nothing, must not perturb the file.
+
+    CR-01: refuses outright, before validating a single entry, when a file already
+    exists at `target` and reads back `ANOMALOUS` -- this document ACCUMULATES
+    (D-69-03), so overwriting it with only whatever the caller happened to read
+    before the file went bad would silently discard every earlier run's backlog.
+    Every caller (this module's own `load()`-then-`save()` callers included) gets
+    this guard for free; nothing here relies on a caller remembering to
+    `classify_read()` first.
     """
+    target = Path(path) if path is not None else queue_path()
+    if target.exists() and classify_read(path=target) == ANOMALOUS:
+        raise SuggestionDeclineError(
+            f"{target} exists but could not be read cleanly -- refusing to overwrite "
+            "it and destroy whatever it currently holds. Report this to the operator "
+            "instead of saving; nothing was written."
+        )
+
     for key, entry in entries.items():
         refusal = first_refusal(key, entry)
         if refusal is not None:
             raise SuggestionDeclineError(refusal)
 
-    target = Path(path) if path is not None else queue_path()
     document = {ENTRIES_FIELD: dict(entries)}
     durable_paths._atomic_write_0600(
         target, json.dumps(document, sort_keys=True, ensure_ascii=False)

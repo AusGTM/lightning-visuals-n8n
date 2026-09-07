@@ -677,8 +677,12 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        declines[key] = candidate
        added += 1
 
+   save_refused = None
    if added:
-       suggestion_declines.save(declines)
+       try:
+           suggestion_declines.save(declines)
+       except suggestion_declines.SuggestionDeclineError as exc:
+           save_refused = str(exc)
    batch = suggestion_declines.partition_by_run(declines, run_id)
    ```
 
@@ -687,6 +691,16 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    `unstorable` decline is named individually in step 9's report below and is never
    silently dropped. And `save` merges into what `load()` returned, rather than
    overwriting it, so an earlier run's deferred entries survive this round (D-69-03).
+
+   **`save_refused` (CR-01).** `save()` itself now refuses — raising
+   `SuggestionDeclineError` — rather than overwriting a pre-existing file that reads
+   back `anomalous`; that refusal is caught here, never let through as a traceback,
+   and named individually in step 9's report below exactly like an `unstorable`
+   entry. This round's newly-held people are still in `declines` and still rendered
+   in `batch` below for the operator to see, but — because the save itself was
+   refused — they are **not** actually on disk; say that plainly rather than
+   implying they were persisted. No cause here halts the round (Phase 68's standing
+   rule): a report is not a halt.
 
 9. **Report.** Per company: eligible / skipped / unknown, people named, people already
    known and dropped before the cap, fetches spent against the per-company bound, and
@@ -745,9 +759,13 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    (`entry["run_id"]`). Then the two exception lists step 8 built: `unkeyable`, named
    individually with the sentence "this one could not be stored — the round had no
    HubSpot company id for it", and `unstorable`, named individually with the sentence
-   `first_refusal` returned. State plainly, in the operator's own words, that this is
-   one end-of-run batch and not a per-company halt, that no answer is required here,
-   and that the round is over either way (D-69-05, Phase 68's standing rule).
+   `first_refusal` returned. If step 8's `save_refused` is not `None` (CR-01), say so
+   as its own line — the store file exists but could not be read cleanly, so this
+   round's newly-held people are shown above but were **not** written to disk, quoting
+   `save_refused`'s own sentence rather than a traceback. State plainly, in the
+   operator's own words, that this is one end-of-run batch and not a per-company halt,
+   that no answer is required here, and that the round is over either way (D-69-05,
+   Phase 68's standing rule).
 
    **The standalone drain, named as a pointer (D-69-08, surface 1).** Tell the
    operator they can work this list right now, in this same conversation, or leave it

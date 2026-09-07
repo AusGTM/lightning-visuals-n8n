@@ -1096,6 +1096,48 @@ def test_step_8_held_routing_never_calls_held_queue():
     assert "confidence.assess" not in text
 
 
+def test_a_save_refused_by_an_anomalous_preexisting_file_is_caught_not_raised(tmp_path):
+    """CR-01: step 8's fence wraps `save()` in try/except and stores the caught
+    message in `save_refused` -- the round must never crash on this, and the
+    pre-existing anomalous file must survive untouched, exactly as `save()` itself
+    already guarantees."""
+    company_a = _company_row("held-refused", 0, id="2101")
+    records = [
+        {"row": {"firstname": "Pat", "lastname": "Alpha", "company": company_a["name"],
+                 "jobtitle": "Vice President"},
+         "provenance": {"input": "suggest_contacts_ladder", "locator": company_a["website"]}},
+    ]
+    rounds = [{"company": company_a, "start": 0, "count": 1}]
+    company_domains = {company_a["name"]: company_a["website"]}
+
+    _, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records], company_domains)
+    assert len(held) == 1
+
+    store_path = tmp_path / "suggestion_declines.json"
+    store_path.write_bytes(b"garbage, not json at all")
+    before = store_path.read_bytes()
+
+    run_id = "run-held-refused"
+    declines = {}  # load() would also read {} here -- classify_read is what matters
+    unkeyable, unstorable, added = _held_routing(held, records, rounds, run_id, declines)
+    assert added == 1
+
+    save_refused = None
+    if added:
+        try:
+            suggestion_declines.save(declines, path=store_path)
+        except suggestion_declines.SuggestionDeclineError as exc:
+            save_refused = str(exc)
+    batch = suggestion_declines.partition_by_run(declines, run_id)
+
+    assert save_refused is not None, "the anomalous pre-existing file must be refused"
+    assert store_path.read_bytes() == before, "the pre-existing file must survive untouched"
+    # the round is never halted -- batch still renders what was HELD this round, even
+    # though it was not persisted (step 9's prose says so plainly)
+    assert len(batch["this_run"]) == 1
+
+
 # =====================================================================================
 # Phase 69 Plan 02 Task 2 (HELD-01, D-69-05): step 9's decline surface -- this run's
 # declines beside the deferred backlog, including the round that dispatched nothing.
