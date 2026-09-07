@@ -110,6 +110,11 @@ it. Do not tell the operator to set a shell environment variable: `ALLOW_N8N_ARM
 gates the scheduled and cron paths, and it is not something an operator in this
 conversation can set.
 
+Implicit approval (D-68-01) is a posture of this conversation only. The scheduled and
+cron paths are unchanged by this phase and stay gated by `ALLOW_N8N_ARM` exactly as
+before; the unattended gate itself — the autonomy levels and their fail-closed
+conditions — is Phase 67's to open (D-68-04).
+
 **Revoking a grant** — `write_grant.revoke_grant(grant)`, and it is idempotent. Say
 plainly when it bites: it **refuses the next SEND**, and it **does not stop a dispatch
 already running**. At the two-record chunk ceiling a forty-record send is twenty chunks,
