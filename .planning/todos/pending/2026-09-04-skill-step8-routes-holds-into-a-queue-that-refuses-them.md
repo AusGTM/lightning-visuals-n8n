@@ -4,6 +4,7 @@ updated: 2026-09-04
 title: suggest-contacts step 8 routes partition holds into held_queue, which deliberately refuses those codes
 area: operator-plugin
 severity: major
+resolves_phase: 69
 files:
 
   - operator-claude-plugin/skills/suggest-contacts/SKILL.md
@@ -72,3 +73,23 @@ defect is durability, not disclosure.
 Offline. Assert that `partition_for_dispatch`'s reason codes are disjoint from
 `confidence.ALL_HOLD_CODES` (pinning the separation as deliberate rather than accidental), and
 that whichever path step 8 ends up naming actually accepts them.
+
+## Resolution (Phase 69)
+
+Fix **(2)** was taken — suggestion-round declines get their own durable store,
+`operator-claude-plugin/scripts/suggestion_declines.py` (plan 01), keyed by
+`company_id` + normalised name and accumulating across runs. `suggest-contacts/SKILL.md`
+step 8 now routes every partition-declined row into it (plan 02, Task 1); step 9 reports
+this run's declines beside the deferred backlog in one end-of-run batch (plan 02, Task 2).
+
+Fix **(1)** — report-only, no durable home — was rejected: the operator's Roma Turf Club
+round showed the holds may need to survive the round (two real committee members,
+correctly held, with no record left once the round closed), and (1) would have left that
+gap open.
+
+Fix **(3)** — mapping a partition code onto a match-gate code at the boundary before
+`held_queue.build_entry` — is implemented nowhere. It was explicitly rejected in the
+plan's own prohibitions (69-02-PLAN.md): "No partition reason code is translated,
+aliased, or mapped onto a member of `confidence.ALL_HOLD_CODES` at the step-8 boundary."
+The two vocabularies stay disjoint by construction, pinned by test
+(`test_suggestion_declines.py::test_partition_reason_codes_disjoint_from_all_hold_codes`).

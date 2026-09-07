@@ -433,6 +433,16 @@ COVERED = {
             "suggestion_declines.partition_by_run",
         ),
     ): "test_suggest_contacts_composition.py::test_the_documented_step_8_held_routing_persists_a_declined_person",
+    # Phase 69 Plan 02 Task 2 (HELD-01, D-69-05): a second NEW fence -- step 9's
+    # empty-records path. A round with no `run_id` (every company found nobody)
+    # still reads the deferred backlog straight from the store, with no run to
+    # compare against, rather than hiding it behind a round that dispatched
+    # nothing. Two calls, one result flowing into the next -- a real sequence, not
+    # a contrived split.
+    (
+        "suggest-contacts",
+        ("suggestion_declines.load", "suggestion_declines.partition_by_run"),
+    ): "test_suggest_contacts_composition.py::test_the_documented_empty_records_path_still_reads_the_backlog",
 }
 
 NOT_A_PIPELINE = {

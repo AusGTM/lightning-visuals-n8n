@@ -728,6 +728,27 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    specifically, so the operator can judge a third-party claim themselves rather than
    taking the hold on trust.
 
+   **What was held, and what is still waiting (HELD-01, D-69-05).** Before rendering
+   `batch` (bound by step 8's held-routing fence above), check what the store itself
+   looked like: `suggestion_declines.classify_read()` returns one of `absent` (no
+   file — no one has ever been held), `parseable` (read cleanly), or `anomalous` (the
+   file exists and could not be read). On `anomalous`, say so plainly — the store
+   exists and could not be read — rather than reporting an empty backlog; an empty
+   report over an unreadable file tells the operator there was nothing to look at
+   when there may be plenty.
+
+   Otherwise render `batch` in two parts. Under "held this round", one line per entry
+   in `batch["this_run"]` — the person's name, the company, the `reason_code` in the
+   operator's own words using this step's existing five-code vocabulary above, and
+   the entry's own prose `reason`. Under "still waiting from earlier rounds", the
+   same, per entry in `batch["backlog"]`, each also naming the run it was declined in
+   (`entry["run_id"]`). Then the two exception lists step 8 built: `unkeyable`, named
+   individually with the sentence "this one could not be stored — the round had no
+   HubSpot company id for it", and `unstorable`, named individually with the sentence
+   `first_refusal` returned. State plainly, in the operator's own words, that this is
+   one end-of-run batch and not a per-company halt, that no answer is required here,
+   and that the round is over either way (D-69-05, Phase 68's standing rule).
+
    **Then build the mandatory end-of-run account (AUTO-06, D-67-06).** `run_id`,
    `outcome`, and `disarm` all come from step 8's REUSED `enrich-before-ingest/SKILL.md`
    step-5 dispatch block — the same block, the same run, never a second dispatch path
@@ -751,6 +772,20 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    step 8's dispatch block at all — this step's own per-company lines above, including
    each company's cause, are the whole account for a round that never dispatched. Do
    not invent a run handle for a round that never dispatched.
+
+   **The deferred backlog is still shown (HELD-01, D-69-05).** A round with no run
+   handle still reads the store — straight, with no run to compare against — so an
+   earlier run's still-waiting entries are never hidden behind a round that happened
+   to find nobody this time:
+
+   ```python
+   declines = suggestion_declines.load()
+   batch = suggestion_declines.partition_by_run(declines, None)
+   ```
+
+   Render `batch["backlog"]` exactly as "What was held, and what is still waiting"
+   above describes it. `batch["this_run"]` is always empty here, since there is no
+   `run_id` to compare it against.
 
    **The revocation bound (D-67-07).** Revoking refuses the NEXT send while a dispatch
    already running finishes its remaining chunks — the free interrupt window before
