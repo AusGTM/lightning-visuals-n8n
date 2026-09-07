@@ -462,3 +462,14 @@ phase. No blockers for phase verification.
 ---
 *Phase: 69-held-rows-survive-the-round*
 *Completed: 2026-09-08*
+
+## Self-Check: PASSED
+
+- FOUND: `operator-claude-plugin/skills/suggestion-declines/SKILL.md`
+- FOUND: `operator-claude-plugin/tests/test_suggestion_declines_skill.py`
+- FOUND: `operator-claude-plugin/scripts/suggestion_declines.py`
+- FOUND: `operator-claude-plugin/skills/suggest-contacts/SKILL.md`
+- FOUND: `operator-claude-plugin/tests/test_disclosure_audit.py`
+- FOUND: `operator-claude-plugin/tests/test_skill_sequence_coverage.py`
+- FOUND commits: `954288e`, `2a810fc`, `6df3fb1`, `4335414`, `e9bb503`, `ea05671`,
+  `d9f9c7e`
