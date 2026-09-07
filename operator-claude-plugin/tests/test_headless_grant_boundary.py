@@ -37,7 +37,6 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 SCHEDULED_ARM = SCRIPTS_DIR / "scheduled_arm.py"
 N8N_ARMING = SCRIPTS_DIR / "n8n_arming.py"
-CONFIG_GATE = SCRIPTS_DIR / "config_gate.py"  # RED-phase mis-scope target only, see below
 
 # The four symbol names a settings key could use to reach either arming script. Checked
 # as literal substrings of each file's own source (67-01 Task 3, D-67-02) -- if a
@@ -100,10 +99,8 @@ def test_only_write_grant_module_calls_grant_opening_functions():
 
 def test_scheduled_arm_source_never_names_an_autonomy_symbol():
     """D-67-02: naming the autonomy levels adds no authority. A settings key cannot
-    reach the cron path even by string -- RED-first mis-scoped at config_gate.py
-    (which does define these symbols), quoted in the commit message, then corrected to
-    scheduled_arm.py for GREEN."""
-    source = CONFIG_GATE.read_text()
+    reach the cron path even by string."""
+    source = SCHEDULED_ARM.read_text()
     for symbol in _AUTONOMY_SYMBOLS:
         assert symbol not in source
 
@@ -118,6 +115,6 @@ def test_n8n_arming_source_never_names_an_autonomy_symbol():
     `DISPATCH_FLAGS`/`REVIEW_FLAGS` separation, where arming one deliberately never
     grants the other. `_arm_gate` keeps exactly its two branches (a grant; or
     `ALLOW_N8N_ARM`) and gains no autonomy-aware third."""
-    source = CONFIG_GATE.read_text()
+    source = N8N_ARMING.read_text()
     for symbol in _AUTONOMY_SYMBOLS:
         assert symbol not in source
