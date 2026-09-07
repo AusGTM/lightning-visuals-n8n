@@ -6,6 +6,43 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-07
+
+### Added
+- **Rich enrichment, not minimum enrichment (Phase 66, 2026-09-04).** Both enrichment gates
+  now chase the full policy-promotable set instead of a two-field minimum (D-66-01): the
+  contacts gate's `REQUIRED` equals all twelve `config/field_policy.yaml` `contacts` keys, and
+  the companies gate widens from `lv_org_type`/`lv_produces_content` to thirteen fields. The
+  landline (`phone`) is chased end to end — `decideAction`'s CREATE branch was the root cause
+  that dropped it. `lv_linkedin_url` gains its first producer (Apollo contacts, host-guarded to
+  `linkedin.com` and subdomains). `Build Response` stamps per-row `contactability`
+  (`complete` / `email_only` / `none`, `null` on a companies row) and the plugin's
+  `report_enrichment.py` surfaces it per row and as a batch tally.
+- **Field producer/consumer matrix** (`tests/n8n/fieldProducerMatrix.test.mjs`, rendered in
+  `.planning/phases/66-.../66-COVERAGE.md`): derived at test time from the YAML and the three
+  `normalizeProviders.js` provider functions, both lanes, so a producer-less field is a test
+  failure rather than a silent blank.
+
+### Fixed
+- **Every gate's `REQUIRED` is now fetched by every search node that feeds it** (66 review
+  WR-01/WR-02/WR-03). `HubSpot Search` and `HubSpot Fetch By Id` now fetch `lv_linkedin_url`
+  and `lv_persona_group`; `ENRICH_COMPANY_SEARCH_PROPERTIES_CSV` gains
+  `lv_revenue_band`/`lv_employee_band`; the local-live replica's search bodies match the
+  cloud lists; SJ-2's monthly stale-refresh keeps its own narrower two-field `REQUIRED`,
+  pinned by a snapshot test, because its job is staleness not completeness. A generic
+  assertion now enumerates every `n8n/wf_*.json` gate node and fails on any fetch/gate gap.
+
+### Notes
+- **Regenerated and committed, not deployed.** `n8n/wf_enrichment_cloud.json`,
+  `n8n/wf_enrichment_local_live.json` and `n8n/wf_scheduled_maintenance_cloud.json` changed
+  via `scripts/build_cloud_workflows.py`; node count unchanged at 123. The running n8n Cloud
+  instance is behind the committed JSON since 2026-09-02 (CLAUDE.md §13.0.2). Nothing armed.
+- **Client at `operator-claude-plugin` 0.41.0** (Phases 65, 67, 68 — round re-entry keyed on
+  the cause, autonomy levels defaulting ON, implicit approval with a seven-second interrupt
+  window). See `operator-claude-plugin/CHANGELOG.md`.
+- Thresholds and drop paths are untouched (D-66-08); `phone` carries no `stale_after_days`
+  (D-66-09); a phone-less row is flagged partial, never held (D-66-05).
+
 ## [0.20.1] - 2026-09-04
 
 ### Fixed

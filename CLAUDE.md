@@ -2483,6 +2483,17 @@ start) and AFTER-03 (full end-of-run report).
 > create-seed provenance stamp and the additive `lv_enrichment_provenance` write (pav).
 > **Node count is still 123** — both rounds edited existing nodes only, verified by
 > counting the committed file. Nothing deployed, nothing armed.
+>
+> **Extended 2026-09-04 (Phase 66, backend `0.21.0`).** A fourth regenerate-and-commit
+> round: both gates' `REQUIRED` widened to the full policy-promotable set (contacts 12,
+> companies 13 — D-66-01), `phone` chased end to end, `lv_linkedin_url` given an Apollo
+> producer, `Build Response` stamping per-row `contactability`, and every feeding search
+> node's fetch list widened to match its gate (66 review WR-01/02/03; SJ-2 in
+> `wf_scheduled_maintenance_cloud.json` keeps its own narrower two-field `REQUIRED`). Files:
+> `wf_enrichment_cloud.json`, `wf_enrichment_local_live.json`,
+> `wf_scheduled_maintenance_cloud.json`. **Node count still 123**, re-counted 2026-09-07.
+> Phases 65, 67 and 68 (2026-09-05..07) are plugin-only — `operator-claude-plugin` `0.41.0`,
+> autonomy levels defaulting ON — and touched no n8n JSON. Nothing deployed, nothing armed.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 

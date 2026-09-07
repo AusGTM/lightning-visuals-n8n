@@ -11,7 +11,7 @@
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50 (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) — shipped 2026-08-19
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52. Phase 51 complete; **Phase 52 deferred INDEFINITELY** (2026-08-25, reaffirmed 2026-08-30 after its gates were satisfied). Not abandoned — deferred by decision.
 - ✅ **v1.1 Unattended Session Runs** — Phases 53–63 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`, `milestones/v1.1-phases/`) — shipped 2026-09-04
-- 📋 **v1.2 Yield and Friction** — Phases 64–69 (`milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`) — **ACTIVE, not started**
+- 📋 **v1.2 Yield and Friction** — Phases 64–69 (`milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`) — **ACTIVE — Phases 64–68 complete, Phase 69 open (2026-09-07)**
 
 ## Standing facts
 

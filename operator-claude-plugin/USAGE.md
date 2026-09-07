@@ -38,9 +38,12 @@ Give Claude a CSV or XLSX (drag it into the chat or name the path). You get:
 
 1. **A preview first, always.** How many rows, how the columns mapped, what looks wrong
    (bad emails, duplicates, unmapped headers). Nothing is sent yet.
-2. **Your yes to the send itself.** Approving the preview sends nothing by itself; Claude
-   then asks for the send, naming what it will do, and a plain "yes" arms **that send
-   only** — not the next one, and nothing in another lane.
+2. **The send itself.** Approving the preview sends nothing by itself. By default
+   (autonomy ON, since 0.41.0) Claude states the price, waits seven seconds so you can say
+   stop, then arms **that send only** — not the next one, and nothing in another lane — and
+   proceeds. If your admin turned the `write` level off, Claude asks instead, and a plain
+   "yes" arms the send the same way. A refusal (over the monthly ceiling, over the per-round
+   cap, no write grant allowed) is a refusal on both paths; nothing proceeds past one.
 3. **A per-record outcome report.** Created / updated / refused, each with a reason, and a
    safe retry path for transport failures. (A row with no email address is called out
    separately — it cannot resolve on retry and needs an email or manual handling in HubSpot.)
@@ -220,8 +223,11 @@ more of them does not protect you from a batch you already said yes to.
 
 ## What keeps you safe
 
-- **Nothing writes without a preview and your approval.** Uploads, enrichment writes, review
-  decisions, control actions — all show you the exact change first.
+- **Nothing writes without a preview.** Uploads, enrichment writes, review decisions,
+  control actions — all show you the exact change first. Since 0.41.0 a batch round proceeds
+  after stating its price and pausing seven seconds unless you interrupt; your admin can turn
+  that off per level (`autonomy.write`, `autonomy.spend_no_write`) so it asks again. Control
+  actions always ask.
 - **Writes are disarmed at rest.** Turning a workflow on does not enable writes; those need
   their own explicit, bounded arming, scoped to the specific records of that send.
 - **One deliberate exception, and it can only delete work, not create it:** when the write

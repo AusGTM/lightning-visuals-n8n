@@ -75,14 +75,16 @@ flowchart LR
 | Suggest the contacts nobody named (companies with no people on them) | ✅ **v1.1 Phase 62, 2026-09-02** — after a company batch, the client crawls each company's own site from its sitemap, proposes people, and holds anything it cannot stand behind. A row whose email domain is unrelated to the company's recorded domain is HELD, not sent |
 | Search fallback when the crawl finds nobody | ✅ quick 260904-5sd, 2026-09-04 — a ladder that ends **clean-but-empty** (or exhausts our own fetch budget) may fall back to client-side web search; a ladder containing any **refusal** may not. Results are ranked on the URL host alone — own host, then LinkedIn, then a curated industry allowlist that is **always held** with its source URL shown, and a host on no rank is rejected rather than ranked last |
 | Provenance-aware `manual_protected` | ⚠️ quick 260904-pav, 2026-09-04 — built, tested, and **inert**. A domain the system itself seeded can now be corrected by the system's own better answer (four fail-closed conjuncts; a human-curated value still refuses). Nothing in the pipeline currently proposes a company `domain`, so no record is corrected yet — `.planning/todos/pending/2026-09-04-company-domain-has-no-candidate-source.md` |
-| Committed `n8n/*.json` vs the running n8n Cloud instance | ⚠️ **committed ahead of deployed since 2026-09-02.** Phases 62 and quick 260904-5a8/260904-pav regenerated the workflow JSON and committed it **without deploying** (CLAUDE.md §13.0.2). Do not read an in-repo node as proof of what n8n is running |
+| Rich enrichment (full policy-promotable set chased, landline end to end, `lv_linkedin_url` producer, per-row `contactability` marker) | ✅ **v1.2 Phase 66, 2026-09-04** — both gates widened from a two-field minimum (D-66-01); every gate `REQUIRED` fetched by every feeding search node, pinned by a generic gate/fetch test; thresholds untouched (D-66-08). Backend `0.21.0`, regenerated JSON committed **without deploying** |
+| Autonomy defaults ON with an interrupt window (round re-entry keyed on the cause · implicit approval · seven-second pre-spend pause · unknown bounds disclosed, not refused · end-of-run report from all four batch skills) | ✅ **v1.2 Phases 65, 67, 68, 2026-09-05..07** — client `0.41.0` (committed, marketplace clone not yet refreshed). `allow_write_grants` and `ALLOW_N8N_ARM` unchanged; `read_only` level declared but reserved. **The first live unattended, credit-spending batch still has NOT run** |
+| Committed `n8n/*.json` vs the running n8n Cloud instance | ⚠️ **committed ahead of deployed since 2026-09-02.** Phases 62 and 66 and quick 260904-5a8/260904-pav regenerated the workflow JSON and committed it **without deploying** (CLAUDE.md §13.0.2). Do not read an in-repo node as proof of what n8n is running |
 
 **"Operator" means two different people in this repo.** Everything above is administered from this
 repository by a technical operator/admin (scripts, deploys, armed windows, runbooks in `docs/`). The
 v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
 terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
-Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current (2026-09-04): **4187 pytest / 894 node**, plus **2430** in `operator-claude-plugin/tests/` (root pytest collection includes those).
+Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current (2026-09-07): **4508 pytest / 940 node**, plus **2750** in `operator-claude-plugin/tests/` (root pytest collection includes those).
 
 ## Repository layout
 

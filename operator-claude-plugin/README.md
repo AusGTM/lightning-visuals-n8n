@@ -164,9 +164,22 @@ goes, so a dropped connection or a stopped run does not re-spend provider credit
 already settled. A run that cannot trust its own previous state re-runs everything and says so
 in those words, rather than presenting a partial trust as a fresh start.
 
-**Still gated:** the first live *unattended*, credit-spending batch run is held behind Phase 57's
-per-run ceilings, refusal-before-start, and post-run allowlist proof. The backend is deployed and
-has been exercised by disarmed runs. Nothing here has yet run unattended against real credit.
+**Since 0.41.0 (2026-09-07) a batch also does not wait for a "yes".** Autonomy is three named
+levels in `operator.local.json` — `read_only`, `spend_no_write` and `write` under an `autonomy`
+object — and all three default to ON, including on an install that has no `autonomy` key. A
+round at an ON level states its price, waits seven seconds so an interrupt can land, opens the
+grant and proceeds. An interrupt inside that window stops the round before anything is spent;
+after it, an interrupt refuses the next send while the one in flight finishes. An unknown bound —
+an unsampled monthly ceiling, a provider balance the backend could not read, a missing
+allowance key — is disclosed and the round continues; an over-ceiling verdict still refuses.
+Set a level to `false` to restore asking for rounds at that level. `read_only` is declared but
+reserved: nothing consults it yet. The levels authorise nothing on their own — `allow_write_grants`
+still gates the interactive path and `ALLOW_N8N_ARM` the scheduled one, and `backend-control`
+belongs to no level and always asks.
+
+**Still outstanding:** the first live *unattended*, credit-spending batch run has not happened.
+Phase 57 (per-run ceilings, refusal-before-start, post-run proof) completed 2026-09-01 and is
+no longer the gate; the backend has been exercised only by disarmed runs.
 
 ## Cost posture
 

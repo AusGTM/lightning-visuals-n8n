@@ -49,6 +49,17 @@ over the same n8n system, so its version says nothing about backend capability.
   already had it. With nobody watching an autonomous round, this report is the only
   account of what happened.
 
+- **`read_only` is declared and reserved, not enforced.** No skill consults it yet; the
+  level exists so a future read-only round has a switch already named. `spend_no_write` and
+  `write` are the two that change behaviour in this release.
+
+### Fixed
+
+- **An explicit `"autonomy": null` in `operator.local.json` now reads every level as OFF.**
+  It was read as "key absent" and therefore ON. Key-absent stays ON; key-present-but-null,
+  a string such as `"false"`, or any other near-miss reads OFF for every level
+  (`config_gate.autonomy_enabled`, regression in `tests/test_autonomy_levels.py`).
+
 **Two steps remain for the operator to make this reach an installed copy:** push to
 `master`, then refresh the marketplace clone — it never fetches on its own, so a bumped
 version stays invisible until it does.
