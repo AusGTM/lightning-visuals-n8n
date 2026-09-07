@@ -86,7 +86,7 @@ alternate-domain set) are quick tasks, not phases in this milestone.
   original "fails closed" text; the reversal is recorded, not silent.*
 - [ ] **AUTO-04**: The phase puts the D-61-08 reversal to the operator explicitly, as a
   reversal of the 57-05 Task 4 option-a decision — and records the answer.
-- [ ] **AUTO-05**: It does not replace `ALLOW_N8N_ARM` for the headless/cron path.
+- [x] **AUTO-05**: It does not replace `ALLOW_N8N_ARM` for the headless/cron path.
 - [ ] **AUTO-06**: The end-of-run report becomes mandatory when autonomy is on — with nobody
   watching, it is the only account of what happened.
 

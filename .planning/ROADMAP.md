@@ -198,12 +198,12 @@ per tier.
   and `CapRefused` remain the bounds.** Does not replace `ALLOW_N8N_ARM` for the headless path.
 - "All functions" is three tiers — read-only, spend-no-write, write — not one boolean.
 
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 67-01-PLAN.md — the AUTO-04 reversal put to the operator first, then three named autonomy
+- [x] 67-01-PLAN.md — the AUTO-04 reversal put to the operator first, then three named autonomy
   levels as default-setter settings keys, pinned unreachable from the headless arm path (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
