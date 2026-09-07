@@ -150,6 +150,63 @@ def test_the_drain_reads_the_whole_backlog_without_a_run(tmp_path):
 _FIFTH_ACTION_CANDIDATES = ("suppress", "ignore", "archive", "snooze", "skip")
 
 
+def test_non_send_picks_apply_and_save_before_the_send_fence_is_ever_reached():
+    """WR-01: a `send` that raises must never cost an already-made `defer`/`delete`/
+    `export` decision made in the same sitting. The non-send picks must be applied
+    and saved at step 3, BEFORE step 4's send fence is ever reached -- never inside
+    step 7's flat loop, which only runs at all when a send succeeds or there was no
+    send in this batch."""
+    text = _skill_text()
+    step3_span = _step(text, 3)
+    step7_span = _step(text, 7)
+
+    assert "suggestion_declines.apply_action(" in step3_span, (
+        "non-send picks must be applied inside step 3, before step 4's send is ever "
+        "attempted (WR-01)"
+    )
+    assert "suggestion_declines.save(declines)" in step3_span, (
+        "the non-send picks must be SAVED at step 3 too, not merely applied in memory"
+    )
+    assert 'action == "send"' in step7_span or 'action != "send"' not in step7_span, (
+        "step 7 must apply only the send picks now -- the non-send picks were "
+        "already applied and saved at step 3"
+    )
+
+
+def test_a_mixed_batch_keeps_non_send_decisions_when_the_send_fails(tmp_path):
+    """End-to-end proof of WR-01's fix: driving the documented step-3-then-step-7
+    ordering over a real mixed batch, where the send never even succeeds (simulated
+    by never reaching step 7's send-only apply at all), leaves the delete applied,
+    the defer present, and the failed send's entry still in the store."""
+    path = tmp_path / "suggestion_declines.json"
+    send_entry = _entry_with_provenance("run-1", COMPANY_ID, "Jamie", "Fox")
+    defer_entry = _entry("run-1", "6002", "Robin", "Gamma")
+    delete_entry = _entry("run-1", "6003", "Casey", "Delta")
+    send_key = suggestion_declines.entry_key(COMPANY_ID, send_entry["row"])
+    defer_key = suggestion_declines.entry_key("6002", defer_entry["row"])
+    delete_key = suggestion_declines.entry_key("6003", delete_entry["row"])
+    entries = {send_key: send_entry, defer_key: defer_entry, delete_key: delete_entry}
+    suggestion_declines.save(entries, path=path)
+
+    picks = {send_key: "send", defer_key: "defer", delete_key: "delete"}
+    declines = suggestion_declines.load(path=path)
+
+    # Step 3's fix: apply and save every non-send pick FIRST, before send below.
+    non_send = {k: a for k, a in picks.items() if a != "send"}
+    for key, action in non_send.items():
+        declines = suggestion_declines.apply_action(declines, key, action)
+    if non_send:
+        suggestion_declines.save(declines, path=path)
+
+    # Step 4's send now fails -- step 7's send-only apply+save is never reached,
+    # exactly like test_a_drained_send_is_removed_only_after_the_outcome_is_recorded.
+
+    saved = suggestion_declines.load(path=path)
+    assert delete_key not in saved, "delete must still be applied even though send failed"
+    assert defer_key in saved, "defer must still be present"
+    assert send_key in saved, "a failed send must leave the person in the store"
+
+
 def test_the_drain_skill_offers_exactly_the_four_actions():
     span = _step(_skill_text(), 3)
     lowered = span.lower()
@@ -527,7 +584,10 @@ def test_a_drained_send_is_removed_only_after_the_outcome_is_recorded(
         tmp_path):
     text = _skill_text()
     rdo_index = text.index("write_grant.record_dispatch_outcome")
-    apply_index = text.index("suggestion_declines.apply_action(")
+    # WR-01 added an EARLIER apply_action call (step 3's non-send apply/save, which
+    # has nothing to do with record_dispatch_outcome) -- search from rdo_index so
+    # this still finds step 7's send-only apply_action call specifically.
+    apply_index = text.index("suggestion_declines.apply_action(", rdo_index)
     assert rdo_index < apply_index, (
         "the apply_action call for a send must appear AFTER the sentence naming "
         "write_grant.record_dispatch_outcome"

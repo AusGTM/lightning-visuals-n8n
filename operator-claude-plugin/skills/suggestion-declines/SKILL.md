@@ -78,6 +78,19 @@ step 9 points here at the end of every round rather than reimplementing any of t
    This per-entry choice is genuine, and there is no default to state instead of asking
    it: the operator answers per entry, by number, and every entry gets its own answer.
 
+   **Apply and save every non-send pick now, before send is attempted below (WR-01).**
+   A `send` that raises at step 4 must never cost an already-made `defer`/`delete`/
+   `export` decision from this same sitting — those are recorded here, immediately,
+   independent of whatever happens to any `send`:
+
+   ```python
+   non_send = {key: action for key, action in picks.items() if action != "send"}
+   for key, action in non_send.items():
+       declines = suggestion_declines.apply_action(declines, key, action)
+   if non_send:
+       suggestion_declines.save(declines)
+   ```
+
 4. **Send.** Nothing here opens a grant or dispatches on its own. Everything that does
    either lives in `enrich-before-ingest/SKILL.md`'s own steps 5 and 7, re-entered
    verbatim below — this skill deliberately keeps no copy of those fences, so there is
@@ -169,14 +182,17 @@ step 9 points here at the end of every round rather than reimplementing any of t
    appears in the next batch unless the operator says otherwise. `contact-upload` is
    the way back in — name it.
 
-7. **Apply and save.** For a `send`, the entry for that person is applied here only
-   after `write_grant.record_dispatch_outcome` has already been called for it at the
-   send step above — a refused or failed send leaves the person in the store, unchanged,
-   for the next drain to offer again. `defer`, `delete` and `export` are never gated on
-   anything beyond the operator's own choice.
+7. **Apply and save any sends.** For a `send`, the entry for that person is applied
+   here only after `write_grant.record_dispatch_outcome` has already been called for
+   it at the send step above — a refused or failed send leaves the person in the
+   store, unchanged, for the next drain to offer again. Every `defer`, `delete` and
+   `export` pick was already applied and saved at step 3, before send was ever
+   attempted (WR-01) — nothing here repeats that work, and a failed send below never
+   touches those already-recorded decisions:
 
    ```python
    for key, action in picks.items():
-       declines = suggestion_declines.apply_action(declines, key, action)
+       if action == "send":
+           declines = suggestion_declines.apply_action(declines, key, action)
    suggestion_declines.save(declines)
    ```
