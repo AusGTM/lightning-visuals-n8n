@@ -411,6 +411,21 @@ def test_row_field_allowlist_matches_canonical_props_and_excludes_row_id():
 
 
 # =====================================================================================
+# IN-02: export_rows raises SuggestionDeclineError, not a bare KeyError
+# =====================================================================================
+
+
+def test_export_rows_raises_suggestion_decline_error_on_an_unknown_key(tmp_path):
+    entry = suggestion_declines.build_entry(
+        {"firstname": "Pat", "lastname": "Lee"}, "no_email", "x", "run-1", "123")
+    entries = {"123::pat|lee": entry}
+    out_path = tmp_path / "export.csv"
+
+    with pytest.raises(suggestion_declines.SuggestionDeclineError):
+        suggestion_declines.export_rows(entries, ["999::nope|nope"], out_path)
+
+
+# =====================================================================================
 # The inherited false-positive is refused, not silently dropped
 # =====================================================================================
 

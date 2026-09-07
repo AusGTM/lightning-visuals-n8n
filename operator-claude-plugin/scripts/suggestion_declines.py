@@ -240,7 +240,7 @@ def save(entries, path=None) -> None:
 
 def _validated_entries(document):
     """`entries`, or `None` when `document` fails the usability check -- shared by
-    `load()` and `classify_read()``classify_read()` so both agree on what "usable" means."""
+    `load()` and `classify_read()` so both agree on what "usable" means."""
     if not isinstance(document, dict):
         return None
     entries = document.get(ENTRIES_FIELD)
@@ -367,6 +367,10 @@ def export_rows(entries, keys, out_path) -> list[str]:
     header = extraction.canonical_props()
     rows = []
     for key in keys:
+        if key not in entries:
+            raise SuggestionDeclineError(
+                f"key {key!r} is not in the entries map. Nothing was written."
+            )
         entry = entries[key]
         row = dict(entry.get("row") or {})
         row["company_id"] = entry.get("company_id")
