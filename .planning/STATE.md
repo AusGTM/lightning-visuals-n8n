@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 67
-current_phase_name: an-autonomy-flag-with-sensible-defaults
-status: verifying
-stopped_at: Completed 67-04-PLAN.md
-last_updated: "2026-09-07T08:35:10.521Z"
+current_phase: 68
+current_phase_name: State the price and keep moving
+status: planning
+stopped_at: Phase 67 complete, ready to plan Phase 68
+last_updated: "2026-09-07T08:56:04.232Z"
 last_activity: 2026-09-07
-last_activity_desc: Phase 67 execution started
-state_head: e6c9898d9543eecb76034a49e7226545b6582e41
+last_activity_desc: Phase 67 complete, transitioned to Phase 68
+state_head: 9fa27921ef548ba71bc12fb9e8e66432138d2226
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
   completed_plans: 13
-  percent: 33
+  percent: 50
 ---
 
 # Project State
@@ -357,10 +357,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 67 (an-autonomy-flag-with-sensible-defaults) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-09-07 — Phase 67 execution started
+Phase: 68 — State the price and keep moving
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-07 — Phase 67 complete, transitioned to Phase 68
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████░░░░░] 50% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,7 +501,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-07T08:35:10.339Z
-**Stopped at:** Completed 67-04-PLAN.md
+**Stopped at:** Phase 67 complete, ready to plan Phase 68
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
