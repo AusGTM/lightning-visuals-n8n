@@ -645,6 +645,92 @@ def test_two_interleaved_companies_each_get_their_own_cause_and_breakdown():
     assert rounds[1]["outcome"]["breakdown"]["sendable"] == 1
 
 
+# =====================================================================================
+# Phase 65 Task 3 — SAFE-02 and SAFE-03, driven end to end offline.
+# =====================================================================================
+
+def test_a_refused_ladder_is_routed_by_cause_and_still_refused_at_the_gate():
+    """SAFE-02 (D-65-10): round_outcome performs no refusal check of its own -- it
+    routes an empty walk to the search fallback regardless of what the ladder's
+    attempts carry. A refused attempt closes the path at eligible_after_ladder, the
+    SAME fail-closed gate the classifier routes THROUGH, never around; its own
+    reason string is quoted character for character, never re-worded."""
+    walk = {
+        "people": [], "selected": [], "dropped": [], "scores": [],
+        "ended": suggest_contacts.WALK_REFUSED, "bar": 1,
+    }
+    attempts = [
+        {"url": "https://example-club.example/wp-sitemap.xml", "outcome": "empty",
+         "disposition": "empty"},
+        {"url": "https://example-club.example/board", "outcome": "refused",
+         "disposition": "refused"},
+    ]
+
+    outcome = suggest_contacts.round_outcome(walk)
+    assert outcome["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
+    assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
+    verdict = search_fallback.eligible_after_ladder(attempts)
+    assert verdict["eligible"] is False
+    assert verdict["reason"] == (
+        "https://example-club.example/board was refused. A refusal is terminal -- "
+        "escalating past it turns a fence into a suggestion (D-5sd-04)."
+    )
+    # The documented block only reaches rank_results when BOTH the routing call
+    # routed here AND the gate agreed -- the gate did not, so this guard is False and
+    # rank_results is never called.
+    assert not (
+        outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+        and verdict["eligible"]
+    )
+
+
+def test_the_second_pass_spends_from_the_same_company_budget():
+    """SAFE-03 (D-65-11, D-65-12): the routing call, the fallback branch, and the
+    terminal call all thread the SAME attempts list -- round_outcome takes no
+    attempts parameter at all and mutates nothing it is handed, so
+    company_budget(attempts) never decreases across the second pass and
+    next_candidates' own reported remaining budget never increases."""
+    attempts = [
+        {"url": "https://example-club.example/wp-sitemap.xml", "outcome": "empty",
+         "disposition": "empty"},
+        {"url": "https://example-club.example/sitemap.xml", "outcome": "empty",
+         "disposition": "empty"},
+    ]
+    company_row = {"row_id": "c1", "website": "https://example-club.example"}
+    budget_before = suggest_contacts.company_budget(attempts)
+    remaining_before = suggest_contacts.next_candidates(
+        company_row, attempts, sitemap_urls=[])["budget_remaining"]
+
+    walk = {
+        "people": [], "selected": [], "dropped": [], "scores": [],
+        "ended": suggest_contacts.WALK_LADDER_EXHAUSTED, "bar": 1,
+    }
+    outcome = suggest_contacts.round_outcome(walk)  # the routing call
+    assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
+    verdict = search_fallback.eligible_after_ladder(attempts)
+    assert verdict["eligible"] is True
+    # The fallback branch spends its OWN, separate budget (already_searched,
+    # MAX_FALLBACK_SEARCHES) -- it never touches this company's ladder `attempts`.
+    ranked = search_fallback.rank_results(
+        [{"url": "https://www.linkedin.com/in/jamie-fox"}],
+        "https://example-club.example", already_searched=0,
+    )
+    assert ranked["accepted"]
+
+    fallback = {"selected": [{"firstname": "Jamie", "lastname": "Fox"}], "dropped": []}
+    terminal = suggest_contacts.round_outcome(
+        walk, rows=[], sendable=[], held=[], fallback=fallback)
+    assert terminal["reentry"] == suggest_contacts.REENTRY_NONE
+
+    budget_after = suggest_contacts.company_budget(attempts)
+    remaining_after = suggest_contacts.next_candidates(
+        company_row, attempts, sitemap_urls=[])["budget_remaining"]
+    assert budget_after == budget_before  # never decreases, never resets either
+    assert remaining_after <= remaining_before  # never increases
+
+
 def test_config_gate_style_modules_used_in_the_documented_block_are_real_scripts_modules():
     """A cheap guard against the census's own module-name derivation silently going
     stale: `scripts_modules()` derives its allowlist from `scripts/*.py` at runtime, so a

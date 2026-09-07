@@ -1503,3 +1503,213 @@ def test_round_outcome_rows_filter_fails_closed_when_a_held_entrys_row_is_missin
     outcome = suggest_contacts.round_outcome(
         walk, rows=[{"row_id": "row-1"}], sendable=[], held=held)
     assert outcome["cause"] == suggest_contacts.CAUSE_UNKNOWN
+
+
+# =====================================================================================
+# Phase 65 Task 3 — pin the invariants: precedence, no second route (SAFE-02
+# structural), cap_exhausted never a trigger (D-65-12), purity/idempotency, and the
+# held-code literal round_outcome restates verbatim.
+# =====================================================================================
+
+def test_round_outcome_precedence_is_fixed_when_causes_mix():
+    """D-65-02: a round mixing several failure conditions at once resolves to the
+    FIRST match in the fixed precedence order, while the breakdown still names every
+    contributor with its own count."""
+    walk = {
+        "people": [
+            {"firstname": "A", "lastname": "One"}, {"firstname": "B", "lastname": "Two"},
+            {"firstname": "C", "lastname": "Three"}, {"firstname": "D", "lastname": "Four"},
+            {"firstname": "E", "lastname": "Five"},
+        ],
+        "selected": [
+            {"firstname": "C", "lastname": "Three"}, {"firstname": "D", "lastname": "Four"},
+            {"firstname": "E", "lastname": "Five"},
+        ],
+        "dropped": [
+            {"person": {"firstname": "A"}, "reason": "role_not_selected"},
+            {"person": {"firstname": "B"}, "reason": "already_associated"},
+        ],
+        "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 5,
+    }
+    held = [
+        {"index": 0, "row": {"row_id": "r1"}, "reason": "x", "reason_code": "no_email"},
+        {"index": 1, "row": {"row_id": "r2"}, "reason": "y",
+         "reason_code": "email_domain_mismatch"},
+    ]
+
+    outcome = suggest_contacts.round_outcome(walk, sendable=[], held=held)
+    # Both all_held_on_email's (zero sendable, >=1 held) and people_thin's (selected
+    # 3 < bar 5) conditions hold; all_held_on_email sits earlier in the fixed
+    # precedence and wins.
+    assert outcome["cause"] == suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL
+    assert outcome["breakdown"]["dropped"] == {
+        "role_not_selected": 1, "already_associated": 1,
+    }
+    assert outcome["breakdown"]["held"] == {
+        "no_email": 1, "email_domain_mismatch": 1,
+    }
+    assert outcome["breakdown"]["selected"] == 3
+
+
+def test_round_outcome_held_reason_code_pins_to_search_fallbacks_hold_code():
+    """Mirrors test_walk_ending_vocabulary_pins_to_search_fallbacks_disposition_
+    constants: round_outcome reads a held entry's reason_code verbatim and hardcodes
+    none of the five codes itself; the fifth one the breakdown may see is
+    search_fallback's own SOURCE_TIER_HOLD_CODE, pinned equal here by importing that
+    module IN THE TEST only -- suggest_contacts.py gains no import of it."""
+    held = [{"index": 0, "row": {"row_id": "r1"}, "reason": "x",
+             "reason_code": search_fallback.SOURCE_TIER_HOLD_CODE}]
+    walk = {
+        "people": [{"firstname": "A", "lastname": "B"}],
+        "selected": [{"firstname": "A", "lastname": "B"}],
+        "dropped": [], "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+    }
+    outcome = suggest_contacts.round_outcome(walk, sendable=[], held=held)
+    assert outcome["breakdown"]["held"] == {search_fallback.SOURCE_TIER_HOLD_CODE: 1}
+    assert search_fallback.SOURCE_TIER_HOLD_CODE == "search_source_not_strong"
+
+
+def test_round_outcome_cap_exhausted_ending_with_people_never_routes():
+    """D-65-12: cap_exhausted is a terminal, ELIGIBLE ending -- never a trigger to
+    fetch or search again. A walk that found people and ended cap_exhausted must not
+    route, on the routing call OR the terminal call shape."""
+    walk = {
+        "people": [{"firstname": "A", "lastname": "B"}],
+        "selected": [{"firstname": "A", "lastname": "B"}],
+        "dropped": [], "scores": [], "ended": suggest_contacts.WALK_CAP_EXHAUSTED, "bar": 1,
+    }
+    routing = suggest_contacts.round_outcome(walk)
+    assert routing["reentry"] == suggest_contacts.REENTRY_NONE
+
+    terminal = suggest_contacts.round_outcome(walk, rows=[], sendable=[], held=[])
+    assert terminal["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+def _walk_for_cause(cause):
+    """A walk (and any extra kwargs) that reaches `cause` under the ROUTING call (no
+    terminal markers). Used only to prove that ANY terminal marker collapses
+    reentry to none regardless of which cause the walk would otherwise reach."""
+    if cause == suggest_contacts.CAUSE_UNKNOWN:
+        return None, {}
+    if cause == suggest_contacts.CAUSE_NO_PEOPLE_FOUND:
+        return _empty_walk(bar=1), {}
+    if cause == suggest_contacts.CAUSE_NONE_CLASSIFIED:
+        walk = {
+            "people": [{"firstname": "A", "lastname": "B"}], "selected": [],
+            "dropped": [{"person": {"firstname": "A"}, "reason": "role_not_selected"}],
+            "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+        }
+        return walk, {}
+    if cause == suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL:
+        walk = {
+            "people": [{"firstname": "A", "lastname": "B"}],
+            "selected": [{"firstname": "A", "lastname": "B"}],
+            "dropped": [], "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+        }
+        return walk, {
+            "sendable": [],
+            "held": [{"index": 0, "row": {"row_id": "r1"}, "reason": "x",
+                      "reason_code": "no_email"}],
+        }
+    if cause == suggest_contacts.CAUSE_PEOPLE_THIN:
+        walk = {
+            "people": [{"firstname": "A", "lastname": "B"}],
+            "selected": [{"firstname": "A", "lastname": "B"}],
+            "dropped": [], "scores": [], "ended": suggest_contacts.WALK_LADDER_EXHAUSTED,
+            "bar": 5,
+        }
+        return walk, {}
+    if cause == suggest_contacts.CAUSE_PROPOSED:
+        walk = {
+            "people": [{"firstname": "A", "lastname": "B"}],
+            "selected": [{"firstname": "A", "lastname": "B"}],
+            "dropped": [], "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+        }
+        return walk, {}
+    raise ValueError(cause)
+
+
+@pytest.mark.parametrize("terminal_kwarg", ["rows", "sendable", "held", "fallback"])
+@pytest.mark.parametrize("cause", suggest_contacts.ROUND_CAUSES)
+def test_round_outcome_terminal_call_never_returns_a_reentry(cause, terminal_kwarg):
+    """SAFE-02/D-65-08/D-65-12: for every cause in the closed vocabulary, a call
+    carrying any ONE of rows/sendable/held/fallback is a terminal call by
+    construction and returns reentry: none -- parametrised over the four markers so
+    a future one added without the guard fails."""
+    walk, base_kwargs = _walk_for_cause(cause)
+    kwargs = dict(base_kwargs)
+    if terminal_kwarg == "rows":
+        kwargs.setdefault("rows", [{"row_id": "r1"}])
+    elif terminal_kwarg == "sendable":
+        kwargs.setdefault("sendable", [])
+    elif terminal_kwarg == "held":
+        kwargs.setdefault("held", [])
+    elif terminal_kwarg == "fallback":
+        kwargs.setdefault("fallback", {"selected": [], "dropped": []})
+
+    outcome = suggest_contacts.round_outcome(walk, **kwargs)
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+    assert outcome["cause"] == cause
+
+
+def test_round_outcome_source_contains_no_while_loop():
+    import ast
+    import inspect
+    source = inspect.getsource(suggest_contacts.round_outcome)
+    tree = ast.parse(source)
+    assert not any(isinstance(node, ast.While) for node in ast.walk(tree))
+
+
+def test_round_outcome_source_names_no_cap_constant():
+    """The BODY, not the docstring -- mirrors
+    test_walk_pages_source_never_references_max_followup_fetches. round_outcome
+    never asks for a fetch or a search itself, so its body must never reference
+    either module's cap constant."""
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(suggest_contacts.round_outcome))
+    body = tree.body[0].body
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]  # drop the docstring statement
+    names = {
+        node.id
+        for stmt in body
+        for node in ast.walk(stmt)
+        if isinstance(node, ast.Name)
+    }
+    assert "MAX_FOLLOWUP_FETCHES" not in names
+    assert "MAX_FALLBACK_SEARCHES" not in names
+
+
+def test_round_outcome_is_idempotent_and_mutates_no_input():
+    import copy
+    walk = {
+        "people": [{"firstname": "A", "lastname": "B"}],
+        "selected": [{"firstname": "A", "lastname": "B"}],
+        "dropped": [{"person": {"firstname": "C"}, "reason": "role_not_selected"}],
+        "scores": [], "ended": suggest_contacts.WALK_GOOD_ENOUGH, "bar": 1,
+    }
+    rows = [{"row_id": "row-1"}]
+    sendable = [{"row_id": "row-1"}]
+    held = [{"index": 0, "row": {"row_id": "row-2"}, "reason": "x", "reason_code": "no_email"}]
+    fallback = {
+        "selected": [{"firstname": "D", "lastname": "E"}],
+        "dropped": [{"person": {"firstname": "F"}, "reason": "role_not_selected"}],
+    }
+
+    walk_before, rows_before, sendable_before, held_before, fallback_before = (
+        copy.deepcopy(walk), copy.deepcopy(rows), copy.deepcopy(sendable),
+        copy.deepcopy(held), copy.deepcopy(fallback),
+    )
+
+    first = suggest_contacts.round_outcome(
+        walk, rows=rows, sendable=sendable, held=held, fallback=fallback)
+    second = suggest_contacts.round_outcome(
+        walk, rows=rows, sendable=sendable, held=held, fallback=fallback)
+
+    assert first == second
+    assert walk == walk_before
+    assert rows == rows_before
+    assert sendable == sendable_before
+    assert held == held_before
+    assert fallback == fallback_before
