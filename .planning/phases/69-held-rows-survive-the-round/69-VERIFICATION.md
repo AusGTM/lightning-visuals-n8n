@@ -14,7 +14,7 @@ covered_files:
   - .planning/phases/69-held-rows-survive-the-round/69-CONTEXT.md
   - .planning/phases/69-held-rows-survive-the-round/69-REVIEW-FIX.md
   - .planning/phases/69-held-rows-survive-the-round/69-REVIEW.md
-  - .planning/todos/pending/2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md
+  - .planning/todos/completed/2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md
   - operator-claude-plugin/scripts/suggest_contacts.py
   - operator-claude-plugin/scripts/suggestion_declines.py
   - operator-claude-plugin/skills/suggest-contacts/SKILL.md
@@ -24,7 +24,7 @@ covered_files:
   - operator-claude-plugin/tests/test_suggest_contacts_composition.py
   - operator-claude-plugin/tests/test_suggestion_declines.py
   - operator-claude-plugin/tests/test_suggestion_declines_skill.py
-covered_digest: 
+covered_digest: "v1:sha256:9bc58a108da5ccb7aee628063086e2ccfd10a0093d7156b0863a095b315c3f2f"
 overrides_applied: 0
 behavior_unverified: 0
 ---
