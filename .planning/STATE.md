@@ -1,21 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 67
 current_phase_name: an-autonomy-flag-with-sensible-defaults
 status: executing
-stopped_at: Completed 67-01-PLAN.md
-last_updated: "2026-09-07T07:24:51.101Z"
+stopped_at: Completed 67-02-PLAN.md
+last_updated: "2026-09-07T08:01:31.149Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 67 execution started
-state_head: 246be239dada30720c4d46fc46c144186af69619
+state_head: 86016e60790b7a275c394f81fba0f18dd515faa4
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 2
   total_plans: 13
-  completed_plans: 10
-  percent: 67
+  completed_plans: 11
+  percent: 33
 ---
 
 # Project State
@@ -358,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 67 (an-autonomy-flag-with-sensible-defaults) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 67 execution started
 
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███████░░░] 67% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-07T07:24:17.219Z
-**Stopped at:** Completed 67-01-PLAN.md
+**Last session:** 2026-09-07T08:01:30.972Z
+**Stopped at:** Completed 67-02-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -638,6 +638,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 68 P02 | ~50min | 3 tasks | 5 files |
 | Phase 68 P03 | 15min | 3 tasks | 6 files |
 | Phase 67 P01 | 25min | 3 tasks | 5 files |
+| Phase 67 P02 | 25min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -764,6 +765,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 68]: Sharpened the D-59-06/FLOW-05 interrupt/revoke statement at all four sites (contact-upload, enrich-before-ingest, enrich-records, backend-control) with one canonical sentence reused near-verbatim, pinned by a declared four-entry SITES tuple.
 - [Phase 68]: Shipped the FLOW-04/D-68-09 disclosure audit as a tested ratchet: a per-skill verdict table in test_disclosure_audit.py's docstring backed by a machine-checked AUDIT dict, covering all 10 shipped skills with every genuine decision point pinned present by its own literal.
 - [Phase 67]: 67-01: operator reversed 57-05 Task 4 option-a — autonomy defaults ON for all three levels (read_only/spend_no_write/write); config_gate.autonomy_enabled reads absence as ON and every near-miss/malformed-parent as OFF; ALLOW_N8N_ARM and allow_write_grants remain the only authorities, pinned by symbol-absence tests against scheduled_arm.py/n8n_arming.py. — Recorded per AUTO-04/SAFE-05 requirement that the D-61-08 unattended-gate reversal be put to the operator explicitly, verbatim, before any default is written to disk.
+- [Phase 67]: 67-02 Task 1: D-67-09 rendering confirmed as-proposed (all four items: the sentence, three unknowns by cause, reportless pre-start refusal, off-path settings-key line).
+- [Phase 67]: 67-02: backend-control/SKILL.md excluded by name from the 'Phase 67's to' structural absence check — its own forward reference is D-68-04's, a different decision retired by 67-04, and this plan's prohibitions forbid editing it.
 
 ### Roadmap Evolution
 
