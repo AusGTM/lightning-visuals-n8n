@@ -749,6 +749,13 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    one end-of-run batch and not a per-company halt, that no answer is required here,
    and that the round is over either way (D-69-05, Phase 68's standing rule).
 
+   **The standalone drain, named as a pointer (D-69-08, surface 1).** Tell the
+   operator they can work this list right now, in this same conversation, or leave it
+   and come back to it later — either way, the `suggestion-declines` skill is how:
+   it is reachable any time, with no round in progress, and shows the whole backlog
+   this step just rendered plus every earlier run's still-waiting entries together.
+   Nothing about that skill is reimplemented here.
+
    **Then build the mandatory end-of-run account (AUTO-06, D-67-06).** `run_id`,
    `outcome`, and `disarm` all come from step 8's REUSED `enrich-before-ingest/SKILL.md`
    step-5 dispatch block — the same block, the same run, never a second dispatch path

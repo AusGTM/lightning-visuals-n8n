@@ -78,9 +78,64 @@ step 9 points here at the end of every round rather than reimplementing any of t
    This per-entry choice is genuine, and there is no default to state instead of asking
    it: the operator answers per entry, by number, and every entry gets its own answer.
 
-4. **Send.** *(This step is filled by a later task of this plan — it re-enters
-   `enrich-before-ingest/SKILL.md`'s own steps for the write, adding no fences of its
-   own.)*
+4. **Send.** Nothing here opens a grant or dispatches on its own. Everything that does
+   either lives in `enrich-before-ingest/SKILL.md`'s own steps 5 and 7, re-entered
+   verbatim below — this skill deliberately keeps no copy of those fences, so there is
+   only ever one place those gates live.
+
+   **(a) Build and validate the records here, because nothing downstream will.**
+   `enrich-before-ingest/SKILL.md` step 5 is grant/autonomy/pause only, and its step 7
+   starts from rows its own step 2 already validated — a drained row that is not
+   validated in this fence is never validated at all. One record per chosen entry,
+   the operator-supplied field(s) merged onto the stored row, the entry's own
+   `company_id` carried through onto the row — it is what makes the ingest lane
+   re-associate the contact (CLAUDE.md 13.0.1's manual override), and it survives both
+   `preingest.strip_enrichment_extras` and `extraction.write_dispatch_csv`'s STRUCT-01
+   guard because it is a member of `extraction.canonical_props()`:
+
+   ```python
+   records = [
+       {"record_type": "contacts",
+        "row": {**entry["row"], **supplied.get(key, {}), "company_id": entry["company_id"]},
+        "provenance": entry["provenance"]}
+       for key, entry in chosen.items()
+   ]
+   extraction.validate(suggest_contacts.round_artifact(records))
+   rows = [record["row"] for record in records]
+
+   send_ids = sorted({entry["company_id"] for entry in chosen.values()})
+   send_domains = [record["row"]["email"].rpartition("@")[2] for record in records]
+   allow_create = True
+   ```
+
+   `extraction.validate()` is the gate on whatever the operator typed, exactly as it is
+   for a spreadsheet-typed address; step 7's own `extraction.hold_emailless` is the
+   backstop if the field is still missing after this fence, so a still-emailless row is
+   held there rather than written blank. `send_ids` names the company records the
+   armed window is scoped to — the person does not exist in HubSpot yet, so there is no
+   contact id to name. `send_domains` is one domain per chosen row, the figure
+   `plan_grant`'s `suggestion_companies=` prices. `allow_create = True` — a decline is a
+   person not yet in HubSpot; the ingest lane's own dedupe still decides
+   create-vs-update. `config` is already bound at step 1, read again here unchanged. A
+   stored row never carries a `row_id`, so there is nothing to strip on the way in.
+
+   **(b) Hand `rows` to `enrich-before-ingest/SKILL.md` step 5's grant block, then its
+   step 7 dispatch block, VERBATIM and unchanged.** Step 5 is where the `write`
+   autonomy level is read, the grant is planned, and the pre-spend pause happens. Step
+   7 is where the CSV is built (`preingest.strip_enrichment_extras` before
+   `extraction.strip_row_id`, in that order), the send is authorized, the armed window
+   opens, the dispatch runs, and the outcome is recorded. A list of one row is not a
+   special case — the block is written over a list.
+
+   **(c) Then run `enrich-before-ingest/SKILL.md` step 9's mandatory end-of-run account
+   over this same run and the same run id — never a second report.**
+
+   **(d) Removal ordering.** Only after `write_grant.record_dispatch_outcome` has been
+   called does step 7 of this skill apply `send` to the map, below. A refused or failed
+   send leaves the person in the store, where the next drain will offer them again.
+
+   **(e) A drained send is a normal send.** It is not exempt from the grant, the
+   per-run ceiling, or any gate a spreadsheet upload clears.
 
 5. **Defer or delete — no write, no HubSpot call.** Neither action leaves this machine
    and neither needs anything beyond what the apply step below already does. `defer` is

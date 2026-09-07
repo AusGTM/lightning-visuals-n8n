@@ -457,6 +457,17 @@ COVERED = {
         "suggestion-declines",
         ("suggestion_declines.apply_action", "suggestion_declines.save"),
     ): "test_suggestion_declines_skill.py::test_the_documented_drain_spine_deletes_one_entry_and_leaves_the_rest",
+    # Phase 69 Plan 03 Task 3: the drain's own send fence (step 4(a)) -- builds one
+    # record per chosen entry and validates the batch here, because nothing
+    # downstream will (enrich-before-ingest step 5 is grant/autonomy/pause only, and
+    # its step 7 starts from rows its own step 2 already validated). `send_ids`/
+    # `send_domains`/`allow_create` bind by name in the SAME fence, per the plan's
+    # own instruction, but neither is a scripts-module call, so the extracted
+    # identity is just the two-call validate/round_artifact pair.
+    (
+        "suggestion-declines",
+        ("extraction.validate", "suggest_contacts.round_artifact"),
+    ): "test_suggestion_declines_skill.py::test_a_drained_send_clears_the_same_gates_a_normal_send_clears",
 }
 
 NOT_A_PIPELINE = {
