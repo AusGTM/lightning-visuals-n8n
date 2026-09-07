@@ -16,6 +16,53 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-09-08
+
+### Added
+
+- **A person a suggestion round declined to send now survives the round.** Before this
+  release the only record of a correctly-held person — one with no email, or whose found
+  email belonged to someone else's domain — was the chat message that named them; closing
+  the session lost them. They now land in a durable store on your machine,
+  `suggestion_declines.json`, beside the review queue's own file. The store accumulates
+  across rounds: a later round merges into it and never overwrites it, and the same person
+  re-found later updates one entry rather than adding a second.
+
+- **New skill `suggestion-declines` — review and work that backlog any time.** "Work the
+  suggestion declines", "who is still waiting from the last round", or
+  `/operator-claude-plugin:suggestion-declines`. One batch, four actions per person:
+  **send** (you supply what was missing; the send then goes through every gate a spreadsheet
+  upload goes through — the grant, the per-round ceiling, validation, the armed window — and
+  the person leaves the store only once the outcome is recorded), **defer** (stays, comes
+  back next batch), **delete** (removed; a later round that finds them again re-queues them —
+  there is no do-not-suggest list), **export** (a spreadsheet with the same columns
+  `contact-upload` reads, `company_id` included so the contact re-attaches to the right
+  company on the way back in). The end of a suggestion round now names this backlog and
+  points here; it never stops the round to ask.
+
+### Fixed
+
+- **`suggest-contacts` step 8 no longer routes declines into the review queue, which refused
+  them.** The review queue's vocabulary is "could not identify"; a suggestion decline means
+  "identified fine, declined to send". The queue's refusal was correct and is unchanged; the
+  skill now sends declines to their own store. A test pins the two vocabularies as disjoint.
+- A malformed decline store is never overwritten by one round's entries; the round reports
+  the refusal and continues.
+- Draining a person who still has no email is held, not crashed on.
+- Decisions on other people in the same sitting are saved before a send is attempted, so a
+  failed send cannot discard them.
+
+### Known
+
+- Two inherited forbidden-name markers refuse real club data: jobtitle "Secretary" trips
+  `secret`, "Armidale" trips `arm`. One such person is reported as unstorable and lost from
+  the store; the batch continues. Tracked for a fix across all three durable stores.
+- An entry's composite key uses a separator that a name could in theory contain; documented,
+  not guarded.
+
+**Two steps remain for the operator to make this reach an installed copy:** push to
+`master`, then refresh the marketplace clone.
+
 ## [0.41.0] - 2026-09-07
 
 ### Changed

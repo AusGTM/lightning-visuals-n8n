@@ -181,6 +181,18 @@ else looked, with the address quoted in the reason. Those sites can name the rig
 and still be years out of date about whether they still hold the role — your call, not the
 client's. Only people from the company's own site or LinkedIn come through ready to send.
 
+## People a round declined to send
+
+> "Work the suggestion declines" · "Who is still waiting from the last round?"
+
+A person the round found but would not send — no email, or an email that belongs to
+someone else's company — is kept, not lost. They collect in a file on your machine that
+survives the session and builds up across rounds. Open the backlog any time, no new round
+needed. For each person: **send** once you have supplied what was missing (it goes through
+every gate a spreadsheet upload does), **defer** to the next batch, **delete** (a later round
+that finds them again will offer them again), or **export** a spreadsheet you fix by hand
+and load back in through the normal upload.
+
 ## Why are we losing deals?
 
 > "Why are deals being lost?" · "Loss reasons against ICP tier"

@@ -637,6 +637,14 @@ credit. The existing limit on how many people you can add per company is unchang
 
 ## Working the review queue
 
+**A person the round declined to send is kept, not lost (since 0.42.0).** No email, or an
+email on someone else's domain, holds a person rather than sending them — and that hold now
+lands in a durable store on your machine that accumulates across rounds. Ask "work the
+suggestion declines" or invoke `/operator-claude-plugin:suggestion-declines` to see the whole
+backlog and, per person, **send** (after you supply what was missing — through every gate a
+normal send clears), **defer**, **delete**, or **export** a spreadsheet `contact-upload` reads
+back. The end of a round names the backlog and points here; it never stops to ask.
+
 The enrichment pipeline holds a decision back whenever it isn't sure enough to write it.
 Ask "what needs review?", "what's waiting on me?", or "work the review queue" — or invoke
 `/operator-claude-plugin:review-triage`.
@@ -725,6 +733,7 @@ operator-claude-plugin/
     backend-status/        # plain-language read of what the backend is doing, text or dashboard artifact
     backend-control/       # run-now / on-off / cadence over the allowlisted mutations, confirmed and read-back verified
     review-triage/         # the review queue: render conflicts, adjudicate one record, gated writeback
+    suggestion-declines/   # the backlog of people a suggestion round declined to send: send / defer / delete / export, any time
     suggest-contacts/      # after a company batch: find and propose people at companies with nobody named, crawling each company's OWN site first and falling back to web search only when that ladder ends cleanly
     backend-sweep/
       SKILL.md             # the sweep's conversational entry point (on-demand)
