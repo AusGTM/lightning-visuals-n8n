@@ -198,6 +198,29 @@ per tier.
   and `CapRefused` remain the bounds.** Does not replace `ALLOW_N8N_ARM` for the headless path.
 - "All functions" is three tiers — read-only, spend-no-write, write — not one boolean.
 
+**Plans:** 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 67-01-PLAN.md — the AUTO-04 reversal put to the operator first, then three named autonomy
+  levels as default-setter settings keys, pinned unreachable from the headless arm path (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 67-02-PLAN.md — each batch skill reads its own level at the one ask-or-proceed site Phase 68
+  left, and the three unknown bounds are disclosed and passed rather than refused (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 67-03-PLAN.md — the end-of-run report becomes mandatory at `contact-upload` and
+  `suggest-contacts`, and the two paragraphs that forbade one of them are corrected (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 67-04-PLAN.md — the reversal recorded where the arming posture is read, and release 0.41.0
+  stating the changed write posture plainly (wave 4)
+
 ### Phase 68: State the price and keep moving
 
 **Goal:** the round stops halting on statements the operator cannot act on differently.
