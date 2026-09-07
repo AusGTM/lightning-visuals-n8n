@@ -5,7 +5,7 @@ inside it (D-69-01): it follows every convention `held_queue.py` established --
 resolved under `durable_paths.resolve_state_path().parent`, written with
 `durable_paths._atomic_write_0600`, whole-document overwrite, validate-every-entry
 before anything is written, the secret/grant-name refusal (`_looks_forbidden`), and a
-`classify_read`-style reader (added Task 3).
+`classify_read`-style reader.
 
 **Why this store exists and `held_queue` does not widen to cover it (D-69-02).**
 `confidence.ALL_HOLD_CODES` is the match-gate vocabulary -- "could not identify this
@@ -24,7 +24,7 @@ overwrites and `classify_read` reports `another_run` as a rejection. A deferred 
 has to survive a run boundary, so run scope moves from the document to the entry --
 this document carries NO run id and NO timestamp of its own. A new run's declines
 MERGE into the document; they never overwrite it. There is consequently no
-"another run" state at the document level -- `classify_read` (Task 3) returns one of
+"another run" state at the document level -- `classify_read` returns one of
 three answers, not `held_queue`'s four.
 
 **The forbidden-name refusal is REIMPLEMENTED, not imported**, per `held_queue.py`'s
@@ -67,10 +67,10 @@ _FORBIDDEN_NAME_MARKERS = (
     "grant", "permission", "webhook",
 )
 
-# The read-classification vocabulary (Task 3's `classify_read`). No ANOTHER_RUN:
+# The read-classification vocabulary (`classify_read`, below). No ANOTHER_RUN:
 # D-69-03 makes the whole document multi-run by design, so there is no "wrong run" to
 # detect at the document level -- an individual entry's own `run_id` is still
-# informative and is what `partition_by_run` (Task 3) reads.
+# informative and is what `partition_by_run`, below, reads.
 ABSENT = "absent"
 PARSEABLE = "parseable"
 ANOMALOUS = "anomalous"
@@ -223,7 +223,7 @@ def save(entries, path=None) -> None:
 
 def _validated_entries(document):
     """`entries`, or `None` when `document` fails the usability check -- shared by
-    `load()` and `classify_read()` (Task 3) so both agree on what "usable" means."""
+    `load()` and `classify_read()``classify_read()` so both agree on what "usable" means."""
     if not isinstance(document, dict):
         return None
     entries = document.get(ENTRIES_FIELD)
@@ -251,3 +251,73 @@ def load(path=None) -> dict:
         return {}
     entries = _validated_entries(document)
     return dict(entries) if entries is not None else {}
+
+
+def classify_read(path=None) -> str:
+    """What a review pass says it saw, from a fresh probe over the file -- `load()`'s
+    return value cannot carry this by design. One of `ABSENT`, `PARSEABLE`,
+    `ANOMALOUS`. Never raises. D-69-03 makes the document inherently multi-run, so a
+    "wrong run" is not a document-level fact here (contrast `held_queue.classify_read`'s
+    `ANOTHER_RUN`) -- an individual entry's own `run_id` is still informative and is
+    what `partition_by_run` reads."""
+    target = Path(path) if path is not None else queue_path()
+    if not target.exists():
+        return ABSENT
+    try:
+        document = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ANOMALOUS
+    entries = _validated_entries(document)
+    if entries is None:
+        return ANOMALOUS
+    return PARSEABLE
+
+
+def partition_by_run(entries, run_id):
+    """`{"this_run": {...}, "backlog": {...}}`, splitting on each entry's own
+    `run_id` -- pure, no I/O. The two halves are disjoint and together equal
+    `entries`. `run_id=None` puts everything in `backlog` -- the end-of-round surface
+    for a round that never dispatched has no run handle to compare against and must
+    not invent one."""
+    this_run = {}
+    backlog = {}
+    for key, entry in entries.items():
+        if (
+            run_id is not None
+            and isinstance(entry, dict)
+            and entry.get("run_id") == run_id
+        ):
+            this_run[key] = entry
+        else:
+            backlog[key] = entry
+    return {"this_run": this_run, "backlog": backlog}
+
+
+# The four drain actions (D-69-06). `send`/`delete` remove the entry; `defer`/`export`
+# leave it untouched.
+DRAIN_ACTIONS = ("send", "defer", "delete", "export")
+
+
+def apply_action(entries, key, action):
+    """A NEW dict reflecting one drain decision. `"delete"` and `"send"` remove the
+    key; `"defer"` and `"export"` return an equal copy. Raises `SuggestionDeclineError`
+    on an action outside `DRAIN_ACTIONS` or a key absent from `entries`.
+
+    Two ceilings, stated plainly: `"send"` is the CALLER's promise that the dispatch
+    already succeeded -- this function cannot see a transport and performs no write of
+    its own. `"delete"` writes nothing in the entry's place -- no tombstone, no
+    suppression key (D-69-07) -- so a later round that rediscovers the same person
+    re-queues them.
+    """
+    if action not in DRAIN_ACTIONS:
+        raise SuggestionDeclineError(
+            f"action {action!r} is not one of {DRAIN_ACTIONS}. Nothing was changed."
+        )
+    if key not in entries:
+        raise SuggestionDeclineError(
+            f"key {key!r} is not in the entries map. Nothing was changed."
+        )
+    result = dict(entries)
+    if action in ("send", "delete"):
+        del result[key]
+    return result
