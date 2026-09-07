@@ -101,6 +101,21 @@ SUGGEST_CONTACTS_ROLE_ASK = (
 )
 SUGGEST_CONTACTS_CAP_STATED = "state the per-company cap default of 2"
 
+# 67-04 (D-67-04, AUTO-04): the D-61-08 reversal, recorded beside the ALLOW_N8N_ARM
+# paragraph in backend-control/SKILL.md. Pinned as its own constant rather than added
+# to PRESERVED_LITERALS -- 67-04-PLAN.md's own instruction is "do not change
+# PRESERVED_LITERALS' existing entries", and a new key would still be a change to that
+# dict's shape even though no existing entry moves.
+BACKEND_CONTROL_REVERSAL_LITERAL = (
+    "allow_write_grants and allow_n8n_arm remain the only authorities"
+)
+
+# The retired forward reference (67-02-SUMMARY.md's known exclusion of
+# backend-control/SKILL.md from test_autonomy_switch_prose.py's equivalent check --
+# that exclusion is a by-name skip, not a requirement that the phrase be present, so it
+# stays harmless and does not need tightening once this string is gone here too).
+RETIRED_FORWARD_REFERENCE = "is Phase 67's to open"
+
 
 def _text(skill_dir):
     return (PLUGIN_ROOT / "skills" / skill_dir / "SKILL.md").read_text(encoding="utf-8")
@@ -175,3 +190,29 @@ def test_review_triage_open_grant_fence_passes_confirmation_not_a_yes_literal():
 
 def test_review_triage_never_names_pre_spend_pause():
     assert "pre_spend_pause" not in _text("review-triage")
+
+
+def test_backend_control_reversal_record_is_present():
+    """67-04 (D-67-04, AUTO-04): the operator's verbatim reversal answer, quoted into
+    backend-control/SKILL.md beside the ALLOW_N8N_ARM paragraph."""
+    normalized = _normalized(_text("backend-control"))
+    assert BACKEND_CONTROL_REVERSAL_LITERAL in normalized, (
+        "backend-control/SKILL.md is missing the D-61-08 reversal record"
+    )
+
+
+def test_retired_forward_reference_appears_in_no_skill_body():
+    """67-04 retires the stale "is Phase 67's to open" forward reference at
+    backend-control/SKILL.md -- the one skill `test_autonomy_switch_prose.py` (67-02)
+    was prohibited from editing and therefore excluded by name from its own equivalent
+    check. That exclusion permits either presence or absence; this test asserts the
+    string is now gone everywhere, unconditionally, over every skill on disk."""
+    offenders = [
+        path.parent.name
+        for path in SKILL_PATHS
+        if RETIRED_FORWARD_REFERENCE in path.read_text(encoding="utf-8")
+    ]
+    assert not offenders, (
+        f"the retired forward reference \"{RETIRED_FORWARD_REFERENCE}\" is still "
+        f"present in: {offenders}"
+    )
