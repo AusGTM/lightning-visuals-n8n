@@ -258,6 +258,13 @@ Plans:
 
 **Brief:** `.planning/todos/pending/2026-09-04-skill-step8-routes-holds-into-a-queue-that-refuses-them.md`.
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 69-01-PLAN.md — the decline store and its own reason-code vocabulary (wave 1)
+- [ ] 69-02-PLAN.md — step 8 routes declines into it; step 9 reports this round and the backlog (wave 2)
+- [ ] 69-03-PLAN.md — the standalone drain skill: send / defer / delete / export (wave 3)
+
 - `SKILL.md` step 8 routes partition holds through `held_queue.build_entry`; `held_queue.save`
   raises `HeldQueueError` on `no_email` / `email_domain_mismatch`. Hit live on the Roma round.
 - **The code is right and the skill is wrong.** `ALL_HOLD_CODES` is the match-gate vocabulary
