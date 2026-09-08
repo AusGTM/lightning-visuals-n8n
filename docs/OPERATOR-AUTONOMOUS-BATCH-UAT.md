@@ -27,7 +27,7 @@ writes; every command that could is yours to run.
 | `max_records_per_chunk` | `2` | `operator.local.json` |
 | Live enrichment `950HPb7a1GgSAIyZ` | active; `ALLOW_HUBSPOT_RECORD_WRITES`/`ALLOW_HUBSPOT_CREATE` both `"false"`; last execution `12123` (2026-09-03) | `status.describe_workflow` |
 | Live contact ingest `AwbBeShdPgV48eiY` | active; both flags `"false"`; last execution `12121` | same |
-| Committed vs live JSON | Phase 62 deployed 2026-09-02 (`63-DEPLOY-RECORD.md`). **Phase 66 and quick 260904-5a8/-pav (all 2026-09-04) are committed, NOT deployed** — live `updatedAt` 2026-09-03 | git + n8n API |
+| Committed vs live JSON | **Level as of 2026-09-09** — the operator deployed Phase 66 + quick 260904-5a8/-pav disarmed and bounced all five (see 1c); live `updatedAt` 2026-09-08T23:16Z | git + n8n API |
 | Provider balances | not readable from this session (`.env` is permission-blocked) | — |
 
 Guardrail A (dirty-backend refusal) will pass: both flags read `"false"` at rest.
@@ -77,6 +77,14 @@ field only Phase 66's backend stamps.
 
   Then bounce all five (deactivate → activate) and re-read the two write flags — they must
   still be `"false"`. Ask the assistant to re-read them; that is read-only.
+
+  **Done 2026-09-09 (operator ran both):** five PUTs at 200; bounce table all active,
+  live nodes 17/29/123/26/39 equal committed, write flags `['false']` on the four that carry
+  them, `OK`. Independent read-back via the plugin key: `Build Response` carries
+  `contactability`, `Company Gate` carries `lv_revenue_band`, `Enrichment Gate` carries
+  `lv_linkedin_url`, `HubSpot Company Search` carries `num_associated_contacts`,
+  `Merge Contacts` carries `sourceByField`, `SJ-2 Search (stale refresh)` keeps its narrow
+  `REQUIRED`. Backend A is what the UAT runs against.
 
 - **B — test against the 2026-09-03 backend.** Valid, but expect every row's
   `contactability` in the step-9 report to read `unknown`, the companies gate to chase only

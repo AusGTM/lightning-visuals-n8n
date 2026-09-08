@@ -156,7 +156,8 @@ dropped it, levers 1 and 3 are untouched, so the phase did not resolve it.
 anything. Phase 52 stays v1.0's and stays deferred indefinitely.
 
 **Standing safety fact, unchanged:** the first live UNATTENDED, credit-spending batch has **NOT**
-run. Nothing is armed. **Update 2026-09-02 (63-05):** Phase 62's n8n workflow JSONs (regenerated
+run. Nothing is armed. **2026-09-09:** Phase 66 + quick 5a8/pav deployed disarmed and bounced by
+the operator; committed and live JSON are level (`docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md` §1c). **Update 2026-09-02 (63-05):** Phase 62's n8n workflow JSONs (regenerated
 2026-09-02 but left undeployed) are now deployed, bounced, and proven live by disarmed execution
 `12070` — the committed-vs-live divergence noted below is CLOSED, not open. `num_associated_contacts`
 and `sourceByField` are confirmed present on the running instance. Full record:
