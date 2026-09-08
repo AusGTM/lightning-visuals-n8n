@@ -2484,6 +2484,11 @@ start) and AFTER-03 (full end-of-run report).
 > **Node count is still 123** — both rounds edited existing nodes only, verified by
 > counting the committed file. Nothing deployed, nothing armed.
 >
+> **Corrected 2026-09-09:** Phase 62's round above WAS deployed and bounced on 2026-09-02
+> by Phase 63 plan 05 (`63-DEPLOY-RECORD.md`, five PUTs at 200, disarmed execution `12070`).
+> The undeployed delta is therefore Phase 66 plus the two 2026-09-04 quick tasks only; the
+> live `updatedAt` of `950HPb7a1GgSAIyZ` is 2026-09-03T23:10Z.
+>
 > **Extended 2026-09-04 (Phase 66, backend `0.21.0`).** A fourth regenerate-and-commit
 > round: both gates' `REQUIRED` widened to the full policy-promotable set (contacts 12,
 > companies 13 — D-66-01), `phone` chased end to end, `lv_linkedin_url` given an Apollo
