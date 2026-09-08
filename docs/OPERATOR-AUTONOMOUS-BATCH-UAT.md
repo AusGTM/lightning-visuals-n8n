@@ -54,9 +54,14 @@ If it reports `0.40.0` anywhere, the update did not land — refresh the clone a
 ```
 
 Expected: Lusha and ZoomInfo print a number; **Apollo prints `credits: None`** (the key is
-not a master key, HTTP 403 — a standing fact). The round will later say that balance is
-`unconfirmed` and proceed; that line is itself a UAT check (test 5 below). The deploy
-dry-run should name the five `wf_*_cloud.json` for update, zero create, no `REFUSED` line.
+not a master key, so the balance is unreadable — a standing fact). The round will later say
+that balance is `unconfirmed` and proceed; that line is itself a UAT check (test 5 below).
+The deploy dry-run should name the five `wf_*_cloud.json` for update, zero create, no
+`REFUSED` line.
+
+**Read 2026-09-09 (operator ran it):** `lusha: credits=3866 status=200`,
+`apollo: credits=None status=200`, `zoominfo: credits=9371 status=200`. Dry-run named all
+five for update, zero to create, no `REFUSED` line.
 
 ### 1c. Decide the backend version
 
