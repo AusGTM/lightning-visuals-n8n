@@ -86,18 +86,43 @@ function run(events, stubOverrides) {
 // Structural: Merge count matches classify_convergence's own verdict, never a magic number.
 // =============================================================================================
 
-test("the enrichment workflow's Merge node count equals the number of fan_in convergences", () => {
+test("the enrichment workflow's D-70-01 fan_in convergence Merges are exactly the six this plan fixed", () => {
   const wf = load();
   const merges = wf.nodes.filter((n) => n.type === "n8n-nodes-base.merge");
-  // The six D-70-01 fan_in convergences this plan fixes. Every OTHER multi-inbound node
-  // in this graph is either "Parse HubSpot Event" (class "entry_points", refused below)
-  // or one of the provider-gate bypass pairs (class (b), deliberately left unmerged —
-  // see the plan's own action text and this test file's final section for the record).
+  // The six D-70-01 fan_in convergences this plan fixes (mode: "append"). Every OTHER
+  // multi-inbound node in this graph is either "Parse HubSpot Event" (class
+  // "entry_points", refused below) or one of the provider-gate bypass pairs (class (b),
+  // deliberately left unmerged — see the plan's own action text and this test file's
+  // final section for the record). Phase 70 Plan 04 (D-70-04) added a SECOND category
+  // of Merge (mode: "combine", the per-HTTP-hop carry merges) — filtered out here by
+  // mode, asserted by count in the next test, so this test keeps testing exactly what
+  // it always tested.
+  const convergenceMerges = merges.filter((m) => m.parameters.mode === "append");
   const expectedNames = [
     "Build Response Merge", "Enrichment Gate Merge", "Company Gate Merge",
     "Merge Winners Fan-In", "Merge Company Fan-In", "Decide Company Action Merge",
   ];
-  assert.deepEqual(merges.map((m) => m.name).sort(), expectedNames.sort());
+  assert.deepEqual(convergenceMerges.map((m) => m.name).sort(), expectedNames.sort());
+});
+
+test("the enrichment workflow's D-70-04 carry merges (mode: combine) are exactly the ones this plan wires", () => {
+  const wf = load();
+  const carryMerges = wf.nodes.filter(
+    (n) => n.type === "n8n-nodes-base.merge" && n.parameters.mode === "combine");
+  const expectedNames = [
+    "HubSpot Fetch By Id Carry Merge", "HubSpot Search Carry Merge",
+    "HubSpot Linkedin Search Carry Merge", "HubSpot Name Search Carry Merge",
+    "HubSpot Name Search Fallback Carry Merge",
+    "Lusha Result Carry Merge", "Apollo Result Carry Merge", "ZoomInfo Mint Carry Merge",
+    "Research Carry Merge", "Judge Carry Merge",
+    "Contact Research Carry Merge", "Contact Judge Carry Merge",
+    "HubSpot Company Fetch By Id Carry Merge", "HubSpot Company Search Carry Merge",
+    "HubSpot Company Name Search Carry Merge",
+    "Lusha Company Result Carry Merge", "Apollo Org Result Carry Merge",
+    "ZoomInfo Mint Company Carry Merge",
+    "ZoomInfo Usage Mint Carry Merge",
+  ];
+  assert.deepEqual(carryMerges.map((m) => m.name).sort(), expectedNames.sort());
 });
 
 test('"Parse HubSpot Event" has NO Merge in front of it and still carries its original inbound edges', () => {

@@ -22,16 +22,29 @@ const node = (name) => {
 };
 
 // runNode(nodeName, buildIdentityRows, extraOutputs) — evaluates the named Code node's
-// OWN committed jsCode. `extraOutputs` supplies whatever other node this Code node reads
-// by name (HubSpot search envelopes, the name lane's fallback search, etc).
+// OWN committed jsCode. Phase 70 Plan 04 (D-70-04): each Adapt* node's carry merge
+// re-attaches the pre-hop row onto its search's raw response, row-fields-last — never
+// a by-name lookup — so this constructs that SAME combined $input directly.
+// `buildIdentityRows` must already be exactly the rows THIS lane's routing IF forwards
+// (the real topology filters by lane before the search node ever runs); `extraOutputs`
+// supplies the search response(s), position-aligned with `buildIdentityRows`.
 function runNode(nodeName, buildIdentityRows, extraOutputs) {
-  const outputs = { "Build Identity": buildIdentityRows, ...(extraOutputs || {}) };
-  const $ = (name) => {
-    if (!(name in outputs)) throw new Error(`no node named ${name}`);
-    return { all: () => outputs[name].map((j) => ({ json: j })) };
-  };
-  const fn = new Function("$", `"use strict";\n${node(nodeName).parameters.jsCode}`);
-  return (fn($) || []).map((it) => (it && it.json !== undefined ? it.json : it));
+  const rows = buildIdentityRows;
+  let merged;
+  if (nodeName === "Adapt Name Search") {
+    const primary = extraOutputs["HubSpot Name Search"] || [];
+    const fallback = extraOutputs["HubSpot Name Search Fallback"] || [];
+    merged = rows.map((row, i) => ({
+      ...(fallback[i] || {}), ...row, _name_primary_search: primary[i] || {},
+    }));
+  } else {
+    const searchKey = nodeName === "Adapt Linkedin Search" ? "HubSpot Linkedin Search" : "HubSpot Search";
+    const search = extraOutputs[searchKey] || [];
+    merged = rows.map((row, i) => ({ ...(search[i] || {}), ...row }));
+  }
+  const $input = { all: () => merged.map((j) => ({ json: j })) };
+  const fn = new Function("$input", `"use strict";\n${node(nodeName).parameters.jsCode}`);
+  return (fn($input) || []).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
 const envelope = (hits) => ({ total: hits.length, results: hits });
@@ -52,15 +65,21 @@ function runBuildIdentity(row) {
 
 test("the linkedin lane sits between IF Has Email and IF Name Searchable, and its adapter feeds Enrichment Gate", () => {
   const edge = (from, i = 0) => (wf.connections[from]?.main?.[i] || []).map((c) => c.node);
-  assert.deepEqual(edge("IF Has Email", 0), ["HubSpot Search"]);
+  // Phase 70 Plan 04 (D-70-04): "IF Has Email"/"IF Linkedin Searchable" are each also
+  // their own hop's carry_source — a SECOND fan-out edge, not a re-point.
+  assert.deepEqual(edge("IF Has Email", 0), ["HubSpot Search", "HubSpot Search Carry Merge"]);
   assert.deepEqual(edge("IF Has Email", 1), ["IF Linkedin Searchable"]);
-  assert.deepEqual(edge("IF Linkedin Searchable", 0), ["HubSpot Linkedin Search"]);
+  assert.deepEqual(edge("IF Linkedin Searchable", 0),
+    ["HubSpot Linkedin Search", "HubSpot Linkedin Search Carry Merge"]);
   assert.deepEqual(edge("IF Linkedin Searchable", 1), ["IF Name Searchable"]);
-  assert.deepEqual(edge("HubSpot Linkedin Search"), ["Adapt Linkedin Search"]);
+  // Phase 70 Plan 04 (D-70-04): a carry merge now sits between the search and its
+  // adapter, re-attaching the row.
+  assert.deepEqual(edge("HubSpot Linkedin Search"), ["HubSpot Linkedin Search Carry Merge"]);
   // Phase 70 Plan 03 (D-70-01): "Enrichment Gate" now sits behind a real Merge.
   assert.deepEqual(edge("Adapt Linkedin Search"), ["Enrichment Gate Merge"]);
   // "IF Name Searchable"'s own true/false targets are unchanged by this splice.
-  assert.deepEqual(edge("IF Name Searchable", 0), ["HubSpot Name Search"]);
+  assert.deepEqual(edge("IF Name Searchable", 0),
+    ["HubSpot Name Search", "HubSpot Name Search Carry Merge"]);
   assert.deepEqual(edge("IF Name Searchable", 1), ["Enrichment Gate Merge"]);
 });
 
@@ -133,17 +152,23 @@ test("mixed batch: an email row, a linkedin-only row and a name-only row each pr
     { row_id: "row-name", identity_keys: { lastName: "Doe", companyName: "Gold Coast Turf Club" }, lane: "name" },
   ];
 
-  const emailOut = runNode("Adapt Search", rows, {
+  // The real topology routes each row to exactly one lane's search node BEFORE it ever
+  // runs (an IF gate, never the adapter itself) — filter here to match.
+  const emailRows = rows.filter((r) => r.lane === "email");
+  const linkedinRows = rows.filter((r) => r.lane === "linkedin");
+  const nameRows = rows.filter((r) => r.lane === "name");
+
+  const emailOut = runNode("Adapt Search", emailRows, {
     "HubSpot Search": [envelope([{ id: "100", properties: { email: "jane@example.com" } }])],
   });
-  const linkedinOut = runNode("Adapt Linkedin Search", rows, {
+  const linkedinOut = runNode("Adapt Linkedin Search", linkedinRows, {
     "HubSpot Linkedin Search": [envelope([{ id: "9001", properties: { lv_linkedin_url: WALK_FAILURE_URL } }])],
   });
-  const nameOut = runNode("Adapt Name Search", rows, {
+  const nameOut = runNode("Adapt Name Search", nameRows, {
     "HubSpot Name Search": [envelope([
       { id: "300", properties: { lastname: "Doe", company: "Gold Coast Turf Club" } },
     ])],
-    "HubSpot Name Search Fallback": [],
+    "HubSpot Name Search Fallback": [{}],
   });
 
   // 36-CONTEXT.md Finding A: each adapter filters to ITS OWN lane before index-aligning —

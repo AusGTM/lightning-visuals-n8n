@@ -173,22 +173,22 @@ function gateRow() {
 // harness models exactly ONE run of everything, so $runIndex is always 0; the
 // mock .all() below ignores the (branch, run) args it is now called with,
 // same single-run behaviour as before.
+// Phase 70 Plan 04 (D-70-04): "Normalize + Score" now reads $input.all() directly —
+// each row already carries lusha_result/apollo_result/zoominfo_result, stamped by the
+// carry merges ("Wrap * Result" + splice_carry_merge_after) and by "ZoomInfo Enrich"'s
+// own return shape — never a by-name lookup.
 function runNormalizeAndScore(jsCode, providerResponses) {
-  const outputs = {
-    "Enrichment Gate": [gateRow()],
-    "Lusha Enrich": providerResponses.lusha !== undefined ? [providerResponses.lusha] : [],
-    "Apollo Match": providerResponses.apollo !== undefined ? [providerResponses.apollo] : [],
-    "ZoomInfo Enrich": providerResponses.zoominfo !== undefined ? [providerResponses.zoominfo] : [],
+  const row = {
+    ...gateRow(),
+    ...(providerResponses.lusha !== undefined ? { lusha_result: providerResponses.lusha } : {}),
+    ...(providerResponses.apollo !== undefined ? { apollo_result: providerResponses.apollo } : {}),
+    ...(providerResponses.zoominfo !== undefined ? { zoominfo_result: providerResponses.zoominfo } : {}),
   };
-  const $ = (name) => ({
-    all: () => (outputs[name] || []).map((j) => ({ json: j })),
-    get item() { return { json: (outputs[name] || [])[0] }; },
-  });
-  const $input = { all: () => [], get item() { return { json: undefined }; } };
+  const $input = { all: () => [{ json: row }], get item() { return { json: row }; } };
   const $now = new Date("2026-09-05T00:00:00Z");
-  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today", "$runIndex",
+  const fn = new Function("$input", "$json", "$node", "$now", "$today", "$runIndex",
     `"use strict";\n${jsCode}`);
-  const out = fn($, $input, undefined, {}, $now, $now, 0) || [];
+  const out = fn($input, row, {}, $now, $now, 0) || [];
   return out.map((it) => (it && it.json !== undefined ? it.json : it));
 }
 

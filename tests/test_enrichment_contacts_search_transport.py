@@ -53,21 +53,21 @@ NODES = {
         "properties_csv": ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
         "filter_tokens": [
             'propertyName: "hs_object_id"', 'operator: "EQ"',
-            "$('Build Identity').item.json.object_id",
+            # Phase 70 Plan 04 (D-70-04): bare $json — "IF Bare Event" is a routing IF,
+            # never an HTTP node, so $json here IS "Build Identity"'s own row.
+            "$json.object_id",
         ],
     },
     # F1 (2026-08-25): the weaker fallback search — lastname EQ only, no company clause
     # at all (dropped entirely rather than loosened; see test_hubspot_name_search_
-    # fallback_carries_no_company_filter below). Its own predecessor is "HubSpot Name
-    # Search", an HTTP node that has already replaced $json with its own response by the
-    # time this node's expressions evaluate — so its filter value reads "Build Identity"
-    # BY NODE NAME, never bare $json (the bd682a2 idiom "HubSpot Fetch By Id" already
-    # follows, mirrored here for the same reason).
+    # fallback_carries_no_company_filter below). Phase 70 Plan 04 (D-70-04): "HubSpot
+    # Name Search Carry Merge" + "Stash Name Primary Search" re-attach the row BEFORE
+    # this node runs, so its filter value reads bare $json, never a by-name lookup.
     "HubSpot Name Search Fallback": {
         "properties_csv": ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
         "filter_tokens": [
             'propertyName: "lastname"', 'operator: "EQ"',
-            "$('Build Identity').item.json.identity_keys.lastName",
+            "$json.identity_keys.lastName",
         ],
     },
 }
@@ -239,8 +239,14 @@ def test_the_fallback_sits_sequentially_between_the_primary_search_and_its_adapt
     1:1 by row."""
     doc = _load()
     conns = doc["connections"]
-    assert conns["HubSpot Name Search"]["main"][0][0]["node"] == "HubSpot Name Search Fallback"
-    assert conns["HubSpot Name Search Fallback"]["main"][0][0]["node"] == "Adapt Name Search"
+    # Phase 70 Plan 04 (D-70-04): "HubSpot Name Search Carry Merge" + "Stash Name
+    # Primary Search" sit between the primary search and the fallback; "HubSpot Name
+    # Search Fallback Carry Merge" sits between the fallback and the adapter.
+    assert conns["HubSpot Name Search"]["main"][0][0]["node"] == "HubSpot Name Search Carry Merge"
+    assert conns["HubSpot Name Search Carry Merge"]["main"][0][0]["node"] == "Stash Name Primary Search"
+    assert conns["Stash Name Primary Search"]["main"][0][0]["node"] == "HubSpot Name Search Fallback"
+    assert conns["HubSpot Name Search Fallback"]["main"][0][0]["node"] == "HubSpot Name Search Fallback Carry Merge"
+    assert conns["HubSpot Name Search Fallback Carry Merge"]["main"][0][0]["node"] == "Adapt Name Search"
 
 
 def test_no_native_hubspot_node_remains_in_enrichment_contacts_lane():

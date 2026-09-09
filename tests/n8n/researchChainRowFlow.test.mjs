@@ -93,7 +93,14 @@ function runChain(wfPath) {
   for (const step of CHAIN) {
     const node = byName[step.name];
     assert.ok(node, `node present: ${step.name}`);
-    if (step.http) { items = [resp[step.name] || {}]; outputs[step.name] = items; continue; }
+    if (step.http) {
+      // Phase 70 Plan 04 (D-70-04): a real carry merge now sits immediately after
+      // this HTTP node, re-attaching the pre-hop row, row-fields-last (merge_node's
+      // own "preferLast" contract) — never a by-name lookup.
+      items = [{ ...(resp[step.name] || {}), ...items[0] }];
+      outputs[step.name] = items;
+      continue;
+    }
     const { $, $input, $json } = makeCtx(items);
     const $now = new Date("2026-07-24T00:00:00Z");
     const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",

@@ -24,14 +24,15 @@ const node = (name) => {
   return n;
 };
 
+// Phase 70 Plan 04 (D-70-04): "HubSpot Company Name Search Carry Merge" re-attaches the
+// row (from "Adapt Company Search") onto the name search's raw response, row-fields-
+// last — $input at "Adapt Company Name Search" is that combined item, never a by-name
+// lookup of either node.
 function runAdapter(rows, searchItems) {
-  const outputs = { "Adapt Company Search": rows, "HubSpot Company Name Search": searchItems };
-  const $ = (name) => {
-    if (!(name in outputs)) throw new Error(`no node named ${name}`);
-    return { all: () => outputs[name].map((j) => ({ json: j })) };
-  };
-  const fn = new Function("$", `"use strict";\n${node("Adapt Company Name Search").parameters.jsCode}`);
-  return (fn($) || []).map((it) => (it && it.json !== undefined ? it.json : it));
+  const merged = rows.map((row, i) => ({ ...(searchItems[i] || {}), ...row }));
+  const $input = { all: () => merged.map((j) => ({ json: j })) };
+  const fn = new Function("$input", `"use strict";\n${node("Adapt Company Name Search").parameters.jsCode}`);
+  return (fn($input) || []).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
 const envelope = (companies) => ({
@@ -41,8 +42,12 @@ const envelope = (companies) => ({
 
 test("the name search sits between the domain adapter and the gate, on the search branch only", () => {
   const edge = (from) => (wf.connections[from]?.main?.[0] || []).map((c) => c.node);
-  assert.deepEqual(edge("Adapt Company Search"), ["HubSpot Company Name Search"]);
-  assert.deepEqual(edge("HubSpot Company Name Search"), ["Adapt Company Name Search"]);
+  // Phase 70 Plan 04 (D-70-04): "Adapt Company Search" gained a SECOND fan-out edge —
+  // it is also "HubSpot Company Name Search Carry Merge"'s carry_source (the row that
+  // hop re-attaches onto the name search's raw response).
+  assert.deepEqual(edge("Adapt Company Search"),
+    ["HubSpot Company Name Search", "HubSpot Company Name Search Carry Merge"]);
+  assert.deepEqual(edge("HubSpot Company Name Search"), ["HubSpot Company Name Search Carry Merge"]);
   // Phase 70 Plan 03 (D-70-01): both lanes now converge on "Company Gate Merge" first —
   // a real Merge in front of "Company Gate", not the bare 2-inbound-edge Code node this
   // pinned before.

@@ -116,31 +116,28 @@ test("the 'HubSpot Company Search' node's body requests num_associated_contacts 
   assert.match(body, /num_associated_contacts/);
 });
 
+// Phase 70 Plan 04 (D-70-04): "HubSpot Company Search Carry Merge" re-attaches the row
+// (from "IF Company Bare Event" FALSE lane) onto the search's raw response, row-fields-
+// last — $input here is ALREADY that combined item, never a by-name lookup.
 test("Adapt Company Search: a search hit reporting 0 carries the row-level num_associated_contacts as the number 0, distinguishable from null", () => {
   const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
-  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
-    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
-    "HubSpot Company Search": [{ results: [{ id: "1", properties: { num_associated_contacts: "0" } }] }],
-  });
+  const merged = { results: [{ id: "1", properties: { num_associated_contacts: "0" } }], identity_keys: { domain: "acme.example" } };
+  const [out] = runCode(js, [merged], {});
   assert.equal(out.num_associated_contacts, 0);
   assert.notEqual(out.num_associated_contacts, null);
 });
 
 test("Adapt Company Search: a real nonzero count coerces the HubSpot string property to a number", () => {
   const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
-  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
-    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
-    "HubSpot Company Search": [{ results: [{ id: "1", properties: { num_associated_contacts: "3" } }] }],
-  });
+  const merged = { results: [{ id: "1", properties: { num_associated_contacts: "3" } }], identity_keys: { domain: "acme.example" } };
+  const [out] = runCode(js, [merged], {});
   assert.equal(out.num_associated_contacts, 3);
 });
 
 test("Adapt Company Search: a lookup_failed row carries num_associated_contacts as explicit null, never a missing key", () => {
   const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
-  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
-    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
-    "HubSpot Company Search": [{ error: "timeout" }],
-  });
+  const merged = { error: "timeout", identity_keys: { domain: "acme.example" } };
+  const [out] = runCode(js, [merged], {});
   assert.equal(out.lookup_failed, true);
   assert.ok("num_associated_contacts" in out, "the key is present even on a failed lookup");
   assert.equal(out.num_associated_contacts, null);

@@ -83,15 +83,33 @@ def test_each_contacts_gates_false_lane_rejoins_the_same_stage_as_its_true_lane(
         false_targets = [e["node"] for e in conns[1]]
         assert false_targets == [next_stage], f"{gate} false lane does not bypass to {next_stage}"
 
-    # And the provider's own exit reaches the SAME next stage.
+    # And the provider's own exit reaches the SAME next stage — Phase 70 Plan 04
+    # (D-70-04): Lusha/Apollo now route through a "Wrap * Result" node and a carry
+    # merge first (re-attaching the row before the SAME next stage runs); ZoomInfo
+    # Enrich (a Code node with full control of its own return shape) still lands
+    # directly on "Normalize + Score".
     exit_next_stage = {
-        "Lusha Enrich": "IF Apollo Enabled",
-        "Apollo Match": "IF ZoomInfo Enabled",
+        "Lusha Enrich": "Wrap Lusha Result",
+        "Apollo Match": "Wrap Apollo Result",
         "ZoomInfo Enrich": "Normalize + Score",
     }
     for exit_node, next_stage in exit_next_stage.items():
         targets = [e["node"] for b in doc["connections"][exit_node]["main"] for e in b]
         assert targets == [next_stage], f"{exit_node} does not rejoin at {next_stage}"
+    wrap_next_stage = {
+        "Wrap Lusha Result": "Lusha Result Carry Merge",
+        "Wrap Apollo Result": "Apollo Result Carry Merge",
+    }
+    for wrap_node, merge_name in wrap_next_stage.items():
+        targets = [e["node"] for b in doc["connections"][wrap_node]["main"] for e in b]
+        assert targets == [merge_name], f"{wrap_node} does not feed {merge_name}"
+    merge_next_stage = {
+        "Lusha Result Carry Merge": "IF Apollo Enabled",
+        "Apollo Result Carry Merge": "IF ZoomInfo Enabled",
+    }
+    for merge_name, next_stage in merge_next_stage.items():
+        targets = [e["node"] for b in doc["connections"][merge_name]["main"] for e in b]
+        assert targets == [next_stage], f"{merge_name} does not rejoin at {next_stage}"
 
 
 def test_empty_enabled_set_bypass_only_path_reaches_normalize_and_decide_action():
@@ -110,16 +128,17 @@ def test_empty_enabled_set_bypass_only_path_reaches_normalize_and_decide_action(
     assert "Decide Action" in reachable
 
 
-def test_contacts_provider_request_bodies_read_identity_by_node_name_not_bare_json():
-    """Closes the latent identity-loss bug: a provider positioned after another
-    provider's HTTP node would see that provider's RESPONSE as $json, not the row."""
+def test_contacts_provider_request_bodies_read_identity_off_bare_json():
+    """Phase 70 Plan 04 (D-70-04) closes the latent identity-loss bug differently: a
+    carry merge now re-attaches the row BEFORE each provider's HTTP node runs, so
+    $json IS the row directly — never a by-name lookup of 'Enrichment Gate'."""
     doc = _load()
     lusha_body = _node(doc, "Lusha Enrich")["parameters"]["jsonBody"]
     apollo_body = _node(doc, "Apollo Match")["parameters"]["jsonBody"]
-    assert "$('Enrichment Gate').item.json.identity_keys" in lusha_body
-    assert "$('Enrichment Gate').item.json.identity_keys" in apollo_body
-    assert "$json.identity_keys" not in lusha_body
-    assert "$json.identity_keys" not in apollo_body
+    assert "$json.identity_keys" in lusha_body
+    assert "$json.identity_keys" in apollo_body
+    assert "$('Enrichment Gate')" not in lusha_body
+    assert "$('Enrichment Gate')" not in apollo_body
 
 
 def test_provider_gates_read_provider_enabled_by_node_name_not_bare_json():
@@ -285,14 +304,30 @@ def test_each_company_gates_false_lane_rejoins_the_same_stage_as_its_true_lane()
         false_targets = [e["node"] for e in conns[1]]
         assert false_targets == [next_stage], f"{gate} false lane does not bypass to {next_stage}"
 
+    # Phase 70 Plan 04 (D-70-04): Lusha/Apollo route through a "Wrap * Result" node and
+    # a carry merge first; ZoomInfo Company still lands directly.
     exit_next_stage = {
-        "Lusha Company": "IF Apollo Org Enabled",
-        "Apollo Org": "IF ZoomInfo Company Enabled",
+        "Lusha Company": "Wrap Lusha Company Result",
+        "Apollo Org": "Wrap Apollo Org Result",
         "ZoomInfo Company": "Normalize + Score Company",
     }
     for exit_node, next_stage in exit_next_stage.items():
         targets = [e["node"] for b in doc["connections"][exit_node]["main"] for e in b]
         assert targets == [next_stage], f"{exit_node} does not rejoin at {next_stage}"
+    wrap_next_stage = {
+        "Wrap Lusha Company Result": "Lusha Company Result Carry Merge",
+        "Wrap Apollo Org Result": "Apollo Org Result Carry Merge",
+    }
+    for wrap_node, merge_name in wrap_next_stage.items():
+        targets = [e["node"] for b in doc["connections"][wrap_node]["main"] for e in b]
+        assert targets == [merge_name], f"{wrap_node} does not feed {merge_name}"
+    merge_next_stage = {
+        "Lusha Company Result Carry Merge": "IF Apollo Org Enabled",
+        "Apollo Org Result Carry Merge": "IF ZoomInfo Company Enabled",
+    }
+    for merge_name, next_stage in merge_next_stage.items():
+        targets = [e["node"] for b in doc["connections"][merge_name]["main"] for e in b]
+        assert targets == [next_stage], f"{merge_name} does not rejoin at {next_stage}"
 
 
 def test_company_empty_enabled_set_bypass_only_path_reaches_normalize_and_decide_company_action():
@@ -308,18 +343,16 @@ def test_company_empty_enabled_set_bypass_only_path_reaches_normalize_and_decide
     assert "Decide Company Action" in reachable
 
 
-def test_company_provider_requests_read_identity_by_node_name_not_bare_json():
-    """Phase 16.1's invariant: a provider node positioned after another provider's HTTP
-    node sees THAT provider's response as $json, so identity must be addressed by node
-    name. The invariant is about the identity EXPRESSION, not about which parameter
-    carries it — since BUG 17, Lusha Company is a GET whose identity rides in the URL
-    (`lusha_company_url`, itself built from identity_keys) rather than in a body."""
+def test_company_provider_requests_read_identity_off_bare_json():
+    """Phase 70 Plan 04 (D-70-04): a carry merge now re-attaches the row BEFORE each
+    provider's HTTP node runs, so $json IS the row directly — never a by-name lookup
+    of 'Build Company Requests'."""
     doc = _load()
     for name in ("Lusha Company", "Apollo Org"):
         p = _node(doc, name)["parameters"]
         expr = p.get("jsonBody") or p["url"]
-        assert "$('Build Company Requests').item.json." in expr, (name, expr)
-        assert "$json.identity_keys" not in expr, (name, expr)
+        assert "$json.identity_keys" in expr or "$json.lusha_company_body" in expr, (name, expr)
+        assert "$('Build Company Requests')" not in expr, (name, expr)
 
 
 def test_company_provider_gates_read_provider_enabled_by_node_name_not_bare_json():
@@ -345,11 +378,18 @@ def test_contacts_and_companies_gate_chains_are_isomorphic_modulo_provider_set_a
     target), modulo the provider-specific node names themselves."""
     doc = _load()
     assert len(CONTACTS_GATES) == len(COMPANY_GATES)
-    for contacts_gate, company_gate in zip(CONTACTS_GATES, COMPANY_GATES):
+    # Phase 70 Plan 04 (D-70-04): the Lusha/Apollo gates are ALSO their own hop's
+    # carry_source — a second true-lane fan-out edge into "* Result Carry Merge",
+    # never a re-point. The ZoomInfo gate (last in each list) has no such treatment
+    # (ZoomInfo Enrich/Company are Code nodes with full control of their own return
+    # shape, no Wrap+Merge needed) and keeps exactly one true target.
+    for i, (contacts_gate, company_gate) in enumerate(zip(CONTACTS_GATES, COMPANY_GATES)):
         c_conns = doc["connections"][contacts_gate]["main"]
         co_conns = doc["connections"][company_gate]["main"]
         assert len(c_conns) == len(co_conns) == 2
-        assert len(c_conns[0]) == len(co_conns[0]) == 1  # exactly one true target each
+        expected_true_targets = 1 if contacts_gate.startswith("IF ZoomInfo") else 2
+        assert len(c_conns[0]) == len(co_conns[0]) == expected_true_targets, (
+            contacts_gate, company_gate, c_conns[0], co_conns[0])
         assert len(c_conns[1]) == len(co_conns[1]) == 1  # exactly one false/bypass target each
         # Both gates test a provider_enabled boolean read from the SAME root node
         # (Parse HubSpot Event), by-node-name, never bare $json.

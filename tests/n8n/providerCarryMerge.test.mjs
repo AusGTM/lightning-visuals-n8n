@@ -62,13 +62,21 @@ function soleConsumer(wf, nodeName) {
   return targets;
 }
 
-test("every carried HTTP hop's sole consumer is a Merge node", () => {
+test("every carried HTTP hop's sole consumer is a Merge node (or a Wrap node feeding one)", () => {
   const wf = loadWf();
   const byName = new Map(wf.nodes.map((n) => [n.name, n]));
   const failures = [];
   for (const hop of CARRIED_HTTP_HOPS) {
     assert.ok(byName.has(hop), `fixture assumption: node ${hop} exists`);
-    const targets = soleConsumer(wf, hop);
+    let targets = soleConsumer(wf, hop);
+    // A provider hop whose raw response must survive further HTTP hops downstream
+    // (the rest of the waterfall) is nested under a distinct key by a "Wrap * Result"
+    // Code node BEFORE the carry merge — _wrap_provider_result_js's own precedent
+    // (mirrors "Stash Name Primary Search" / 70-02's "Stash Domain Search"). Follow
+    // that one hop before requiring a Merge.
+    if (targets.length === 1 && /^Wrap .* Result$/.test(targets[0])) {
+      targets = soleConsumer(wf, targets[0]);
+    }
     if (targets.length !== 1 || byName.get(targets[0])?.type !== "n8n-nodes-base.merge") {
       failures.push(`${hop} -> [${targets.join(", ")}]`);
     }

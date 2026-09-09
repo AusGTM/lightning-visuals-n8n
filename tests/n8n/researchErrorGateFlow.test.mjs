@@ -135,13 +135,13 @@ test("Build Research Failure Response recovers the pre-HTTP row and states the e
   const { byName } = loadWorkflow();
   const node = byName["Build Research Failure Response"];
   assert.ok(node, "Build Research Failure Response node present in the built workflow");
-  assert.ok(node.parameters.jsCode.includes("catch"), "recovery is try/catch guarded");
-  assert.ok(
-    node.parameters.jsCode.includes("Build Research Request"),
-    "recovers the row by name from Build Research Request");
+  // Phase 70 Plan 04 (D-70-04): "Research Carry Merge" re-attaches the row (from
+  // "Build Research Request") onto the raw response, row-fields-last — $input here is
+  // ALREADY that combined item, never a by-name lookup.
+  assert.ok(!node.parameters.jsCode.includes("$("), "no by-name node lookup survives");
 
-  const outputs = { "Build Research Request": [PRE_HTTP_ROW] };
-  const out = runCode(node, [LIVE_ERROR_PAYLOAD], outputs);
+  const merged = { ...LIVE_ERROR_PAYLOAD, ...PRE_HTTP_ROW };
+  const out = runCode(node, [merged], {});
 
   assert.equal(out.length, 1);
   assert.equal(out[0].action, "research_failed");
@@ -150,12 +150,12 @@ test("Build Research Failure Response recovers the pre-HTTP row and states the e
   assert.equal(out[0].identity_keys.domain, "racingnsw.example");
 });
 
-test("Build Research Failure Response fails closed when $('Build Research Request') throws", () => {
+test("Build Research Failure Response fails closed when the merged item carries no row at all", () => {
   const { byName } = loadWorkflow();
   const node = byName["Build Research Failure Response"];
 
-  // No "Build Research Request" key in outputs -> makeCtx's $() returns an empty rows()
-  // array, exactly mirroring the real try/catch's [] fallback when the node lookup throws.
+  // No row ever merged in (a genuinely bare error item) -> still reports the failure,
+  // just with nothing to recover.
   const out = runCode(node, [LIVE_ERROR_PAYLOAD], {});
 
   assert.equal(out.length, 1);
@@ -168,7 +168,10 @@ test("Build Research Failure Response fails closed when $('Build Research Reques
 test("the wiring routes true->failure terminal, false->Validate Research Output, unchanged", () => {
   const { wf } = loadWorkflow();
 
-  assert.deepEqual(targetsOf(wf, "Claude Web Research", 0), ["IF Research Errored"]);
+  // Phase 70 Plan 04 (D-70-04): "Research Carry Merge" now sits between "Claude Web
+  // Research" and "IF Research Errored", re-attaching the row.
+  assert.deepEqual(targetsOf(wf, "Claude Web Research", 0), ["Research Carry Merge"]);
+  assert.deepEqual(targetsOf(wf, "Research Carry Merge", 0), ["IF Research Errored"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 0), ["Build Research Failure Response"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 1), ["Validate Research Output"]);
   // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge.

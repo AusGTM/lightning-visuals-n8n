@@ -84,7 +84,13 @@ function runChain(wf, chainSpec, seedBody, httpMocks) {
     const node = byName[step.name];
     assert.ok(node, `node present in built workflow: ${step.name}`);
     if (step.http) {
-      items = [httpMocks[step.name] || {}];
+      // Phase 70 Plan 04 (D-70-04): a real carry merge now sits immediately after
+      // every HTTP node, re-attaching the pre-hop row, row-fields-last. `wrapKey`
+      // mirrors "Wrap * Result" for a provider hop whose response must survive
+      // later hops (bareEventChainFlow.test.mjs's identical idiom).
+      const mock = httpMocks[step.name] || {};
+      const priorRow = items[0] || {};
+      items = [step.wrapKey ? { ...priorRow, [step.wrapKey]: mock } : { ...mock, ...priorRow }];
       outputs[step.name] = items;
       continue;
     }

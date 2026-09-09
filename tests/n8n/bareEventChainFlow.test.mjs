@@ -49,7 +49,15 @@ function runChain(wfPath, chainSpec, seedBody, httpMocks) {
     const node = byName[step.name];
     assert.ok(node, `node present in built workflow: ${step.name}`);
     if (step.http) {
-      items = [httpMocks[step.name] || {}];
+      // Phase 70 Plan 04 (D-70-04): a real carry merge now sits immediately after
+      // every HTTP node, re-attaching the pre-hop row, row-fields-last (merge_node's
+      // own "preferLast" contract). `wrapKey` mirrors "Wrap * Result" for a provider
+      // hop whose response must survive later hops (nested under a distinct key);
+      // omitted for a hop whose sole consumer extracts what it needs immediately
+      // (a flat combine, per splice_carry_merge_after's default shape).
+      const mock = httpMocks[step.name] || {};
+      const priorRow = items[0] || {};
+      items = [step.wrapKey ? { ...priorRow, [step.wrapKey]: mock } : { ...mock, ...priorRow }];
       outputs[step.name] = items;
       continue;
     }
@@ -88,8 +96,8 @@ const CONTACT_CHAIN = [
   { name: "HubSpot Fetch By Id", http: true },
   { name: "Adapt Fetch By Id", http: false },
   { name: "Enrichment Gate", http: false },
-  { name: "Lusha Enrich", http: true },
-  { name: "Apollo Match", http: true },
+  { name: "Lusha Enrich", http: true, wrapKey: "lusha_result" },
+  { name: "Apollo Match", http: true, wrapKey: "apollo_result" },
   { name: "Normalize + Score", http: false },
   { name: "Merge Winners", http: false },
   { name: "Decide Action", http: false },
@@ -174,8 +182,8 @@ const COMPANY_CHAIN = [
   { name: "Adapt Company Fetch By Id", http: false },
   { name: "Company Gate", http: false },
   { name: "Build Company Requests", http: false },
-  { name: "Lusha Company", http: true },
-  { name: "Apollo Org", http: true },
+  { name: "Lusha Company", http: true, wrapKey: "lusha_result" },
+  { name: "Apollo Org", http: true, wrapKey: "apollo_result" },
   { name: "Normalize + Score Company", http: false },
   { name: "Merge Company", http: false },
   { name: "Decide Company Action", http: false },

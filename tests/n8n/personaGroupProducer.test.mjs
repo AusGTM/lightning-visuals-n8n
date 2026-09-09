@@ -106,13 +106,10 @@ test("(d) EDGE: recorded shapes with no department field at all emit no persona 
 // chained through the OUTPUT row Normalize + Score actually produces.
 // ---------------------------------------------------------------------------
 
-// The CLOUD "Normalize + Score" node does NOT read $input directly — it recovers its row
-// by NAME from "Enrichment Gate" (never bare $json, since the upstream provider HTTP
-// nodes replace $json with their own response) and pulls each provider's response by
-// name from "Lusha Enrich"/"Apollo Match"/"ZoomInfo Enrich" (mirrors
-// ENRICH_NORMALIZE_SCORE_CLOUD, scripts/build_cloud_workflows.py:1239-1266, and the same
-// node-name-lookup idiom tests/n8n/bareEventChainFlow.test.mjs already drives this exact
-// node through).
+// Phase 70 Plan 04 (D-70-04): the CLOUD "Normalize + Score" node reads $input.all()
+// directly — each row already carries lusha_result/apollo_result/zoominfo_result,
+// stamped by the carry merges ("Wrap * Result" + splice_carry_merge_after) and by
+// "ZoomInfo Enrich"'s own return shape, never a by-name lookup.
 function gateRow() {
   return {
     action: "enrich",
@@ -136,21 +133,17 @@ function gateRow() {
 // mock .all() below ignores the (branch, run) args it is now called with,
 // same single-run behaviour as before.
 function runNormalizeAndScore(jsCode, providerResponses) {
-  const outputs = {
-    "Enrichment Gate": [gateRow()],
-    "Lusha Enrich": providerResponses.lusha !== undefined ? [providerResponses.lusha] : [],
-    "Apollo Match": providerResponses.apollo !== undefined ? [providerResponses.apollo] : [],
-    "ZoomInfo Enrich": providerResponses.zoominfo !== undefined ? [providerResponses.zoominfo] : [],
+  const row = {
+    ...gateRow(),
+    ...(providerResponses.lusha !== undefined ? { lusha_result: providerResponses.lusha } : {}),
+    ...(providerResponses.apollo !== undefined ? { apollo_result: providerResponses.apollo } : {}),
+    ...(providerResponses.zoominfo !== undefined ? { zoominfo_result: providerResponses.zoominfo } : {}),
   };
-  const $ = (name) => ({
-    all: () => (outputs[name] || []).map((j) => ({ json: j })),
-    get item() { return { json: (outputs[name] || [])[0] }; },
-  });
-  const $input = { all: () => [], get item() { return { json: undefined }; } };
+  const $input = { all: () => [{ json: row }], get item() { return { json: row }; } };
   const $now = new Date("2026-07-29T00:00:00Z");
-  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today", "$runIndex",
+  const fn = new Function("$input", "$json", "$node", "$now", "$today", "$runIndex",
     `"use strict";\n${jsCode}`);
-  const out = fn($, $input, undefined, {}, $now, $now, 0) || [];
+  const out = fn($input, row, {}, $now, $now, 0) || [];
   return out.map((it) => (it && it.json !== undefined ? it.json : it));
 }
 

@@ -489,20 +489,17 @@ test("degradation (judge HTTP error): the judge runs but the HTTP call errors ->
   assert.ok(built.judge_request_body, "vacuity: a real request body was built");
 
   // Judge Call HTTP node errors under onError:continueRegularOutput, replacing $json with
-  // the error item -- Apply Judge Verdict recovers the REAL row by paired index from
-  // "Build Judge Request", exactly as researchChainRowFlow.test.mjs's row-recovery
-  // pattern proves for the research hop. $() must therefore actually resolve that node
-  // name, unlike runCodeNode's plain stub above.
+  // the error item -- "Judge Carry Merge" (Phase 70 Plan 04, D-70-04) re-attaches the
+  // real row from "Build Judge Request", row-fields-last (merge_node's own
+  // "preferLast" contract), so $input here is the COMBINED item, never a bare by-name
+  // lookup.
   const httpErrorItem = { error: "ETIMEDOUT: connect ETIMEDOUT" };
-  const $ = (name) => ({
-    all: () => (name === "Build Judge Request" ? [{ json: built }] : []),
-    get item() { return { json: undefined }; },
-  });
-  const $input = { all: () => [{ json: httpErrorItem }], get item() { return { json: httpErrorItem }; } };
+  const merged = { ...httpErrorItem, ...built };
+  const $input = { all: () => [{ json: merged }], get item() { return { json: merged }; } };
   const $now = new Date();
-  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+  const fn = new Function("$input", "$json", "$node", "$now", "$today",
     `"use strict";\n${APPLY_JUDGE_VERDICT_BODY}`);
-  const out2 = fn($, $input, httpErrorItem, {}, $now, $now) || [];
+  const out2 = fn($input, merged, {}, $now, $now) || [];
   const applied = (out2[0] && out2[0].json) || {};
 
   assert.equal(applied.judge_verdict.decision, "needs_review", "vacuity: the error really produced a needs_review verdict");

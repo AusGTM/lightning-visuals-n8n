@@ -56,6 +56,46 @@ def test_detector_finds_todays_violations(builder_name):
         assert REQUIRED_KEYS.issubset(v.keys()), v
 
 
+# --- Plan 70-04 Task 1: a strict upper bound below the 70-01 baseline ---------------
+#
+# Task 1 retires every provider/HubSpot/research/judge HTTP-hop by-name read in
+# build_enrichment_cloud() (119 -> 36) via splice_carry_merge_after carry merges. The
+# remaining 36 are exclusively: (a) the two matchProposal.js comment lines describing
+# "IF Bare Event"'s condition, inlined verbatim into several nodes' jsCode as
+# documentation (never live code — a false positive the detector correctly flags
+# textually but which names no real by-name lookup); and (b) the single-run
+# request-parsing/config-node reads (provider-enabled flags, recompute, list
+# expansion) Task 2 retires. build_review_decision_cloud() is untouched by this task
+# (still 12, Task 2's job per the plan's read_first).
+ENRICHMENT_BASELINE_70_01 = 119
+ENRICHMENT_UPPER_BOUND_70_04_TASK1 = 40  # measured 36; a little headroom, never the ceiling
+
+
+def test_enrichment_cloud_by_name_reads_dropped_below_70_01_baseline():
+    violations = bcw.detect_by_name_reads(bcw.build_enrichment_cloud())
+    assert 0 < len(violations) < ENRICHMENT_UPPER_BOUND_70_04_TASK1, (
+        f"build_enrichment_cloud() has {len(violations)} violations — expected strictly "
+        f"between 0 and {ENRICHMENT_UPPER_BOUND_70_04_TASK1} after Task 1's carry merges "
+        f"(was {ENRICHMENT_BASELINE_70_01} at 70-01 baseline)"
+    )
+
+
+def test_no_violation_is_a_research_or_judge_request_builder():
+    """D-70-04's key_link: 'the build-time assertion ... must catch ... reads
+    embedded in node parameters expressions, or a partially-migrated state passes
+    vacuously' — named explicitly here for the research/judge request BUILDERS (the
+    nodes that assemble the outgoing HTTP body), as distinct from the post-HTTP
+    recovery nodes Pitfall 4 actually targets (Validate Research Output/Apply Judge
+    Verdict and their contact-branch twins), which Task 1 also cleared."""
+    request_builders = {
+        "Build Research Request", "Build Judge Request",
+        "Build Contact Research Request", "Build Contact Judge Request",
+    }
+    violations = bcw.detect_by_name_reads(bcw.build_enrichment_cloud())
+    offending = [v for v in violations if v["node"] in request_builders]
+    assert offending == [], offending
+
+
 def test_detector_sees_parameter_expressions():
     """An IF condition string carries a quoted node lookup, with NO jsCode key anywhere
     in the workflow — a jsCode-only scan would find nothing here (research Pitfall 2)."""

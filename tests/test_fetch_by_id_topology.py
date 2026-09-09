@@ -194,9 +194,15 @@ def test_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id(bra
     body = params["jsonBody"]
     assert 'propertyName: "hs_object_id"' in body
     assert 'operator: "EQ"' in body
-    assert cfg["identity_builder"] in body, (
-        f"{cfg['fetch_node']}'s jsonBody must name its own branch's identity builder "
-        f"({cfg['identity_builder']!r}) by node name"
+    # Phase 70 Plan 04 (D-70-04): bare $json — the routing IF between the identity
+    # builder and this fetch node is never an HTTP node, so $json here IS the identity
+    # builder's own row, never a by-name lookup.
+    assert "$json.object_id" in body, (
+        f"{cfg['fetch_node']}'s jsonBody must read $json.object_id directly (D-70-03)"
+    )
+    assert cfg["identity_builder"] not in body, (
+        f"{cfg['fetch_node']}'s jsonBody must never name {cfg['identity_builder']!r} by "
+        "node name (D-70-03) — Phase 70 Plan 04 retired the by-name lookup"
     )
 
 
@@ -302,24 +308,22 @@ def test_no_native_hubspot_node_remains_in_the_workflow():
 # --- node-name row recovery (bd682a2 guard), stated structurally -----------------------
 
 @pytest.mark.parametrize("branch", ["contacts", "companies"])
-def test_adapter_jscode_reads_its_identity_builder_and_fetch_node_by_name_and_never_the_bare_current_item(branch):
+def test_adapter_jscode_reads_carried_input_and_never_a_by_name_lookup(branch):
+    """Phase 70 Plan 04 (D-70-04): a carry merge (splice_carry_merge_after) now sits
+    immediately after the fetch node, re-attaching the pre-hop row onto the raw
+    response, row-fields-last — $input here is ALREADY that combined item, so the
+    adapter reads $input.all() directly and must never look either node up by name
+    (the bd682a2 idiom this test used to require is exactly what D-70-03 retires)."""
     cfg = BRANCHES[branch]
     doc = _load()
     code = _strip_comments(_node(doc, cfg["adapter"])["parameters"]["jsCode"])
-    assert f"$('{cfg['identity_builder']}')" in code, (
-        f"{cfg['adapter']} must recover the pre-hop row from {cfg['identity_builder']!r} by node name"
+    assert f"$('{cfg['identity_builder']}')" not in code, (
+        f"{cfg['adapter']} must never recover the row from {cfg['identity_builder']!r} by node name"
     )
-    assert f"$('{cfg['fetch_node']}')" in code, (
-        f"{cfg['adapter']} must read the fetch response from {cfg['fetch_node']!r} by node name"
+    assert f"$('{cfg['fetch_node']}')" not in code, (
+        f"{cfg['adapter']} must never read the fetch response from {cfg['fetch_node']!r} by node name"
     )
-    bare_json = re.findall(r"\$json\b", code)
-    bare_input = re.findall(r"\$input\b", code)
-    assert not bare_json and not bare_input, (
-        f"{cfg['adapter']} reads the bare current item ($json/$input) — this is the "
-        "bd682a2 bug class: an HTTP node has already REPLACED the current item with its "
-        "own response by the time this Code node runs, so the row must be recovered BY "
-        f"NODE NAME only (found: $json x{len(bare_json)}, $input x{len(bare_input)})"
-    )
+    assert "$input" in code, f"{cfg['adapter']} must read its carried row from $input"
 
 
 # --- belt-and-braces: Route By Object Type's exact edges, duplicated from -----------------

@@ -37,21 +37,19 @@ function loadNode(name) {
 }
 
 // Strips the n8n "={{ <js expression> }}" wrapper and evaluates the inner expression
-// with a mock $() node-accessor, mirroring how n8n itself evaluates it at runtime. Serves
-// identity_keys, gate.missingFields, AND existingRecord (Plan 04 Task 2b's stored-id
-// branch) off the "Enrichment Gate" node, matching what the real committed expression reads.
+// against a bare $json — Phase 70 Plan 04 (D-70-04): "Lusha Result Carry Merge"'s
+// carry_source ("IF Lusha Enabled") already re-attaches the row (never a by-name
+// lookup of "Enrichment Gate"), so $json here IS identity_keys/gate/existingRecord
+// directly, matching what the real committed expression reads.
 function evalExpr(rawExpr, identityKeys, missingFields, existingRecord) {
   const m = /^=\{\{([\s\S]*)\}\}$/.exec(rawExpr.trim());
   assert.ok(m, `expression must be a single {{ }} n8n expression, got: ${rawExpr}`);
-  const $ = (name) => {
-    assert.equal(name, "Enrichment Gate", `unexpected $() call: ${name}`);
-    return { item: { json: {
-      identity_keys: identityKeys, gate: { missingFields: missingFields || [] },
-      existingRecord: existingRecord || {},
-    } } };
+  const $json = {
+    identity_keys: identityKeys, gate: { missingFields: missingFields || [] },
+    existingRecord: existingRecord || {},
   };
-  const fn = new Function("$", `"use strict"; return (${m[1]});`);
-  return fn($);
+  const fn = new Function("$json", `"use strict"; return (${m[1]});`);
+  return fn($json);
 }
 
 function buildBody(identityKeys, missingFields, existingRecord) {
@@ -137,15 +135,15 @@ test("Lusha Enrich body: name+company+domain identity with no email/linkedin now
   });
 });
 
-test("Lusha Enrich body: still reads identity by node name (Enrichment Gate), never bare $json", () => {
+test("Lusha Enrich body: reads identity off bare $json — Phase 70 Plan 04 (D-70-04), never a by-name lookup", () => {
   const node = loadNode("Lusha Enrich");
-  assert.ok(node.parameters.jsonBody.includes("$('Enrichment Gate').item.json.identity_keys"));
-  assert.ok(!node.parameters.jsonBody.includes("$json.identity_keys"));
+  assert.ok(node.parameters.jsonBody.includes("$json.identity_keys"));
+  assert.ok(!node.parameters.jsonBody.includes("$('Enrichment Gate')"));
 });
 
-test("Lusha Enrich body: also reads missingFields by node name (Enrichment Gate), never bare $json", () => {
+test("Lusha Enrich body: also reads missingFields off bare $json, never a by-name lookup", () => {
   const node = loadNode("Lusha Enrich");
-  assert.ok(node.parameters.jsonBody.includes("$('Enrichment Gate').item.json.gate"));
+  assert.ok(node.parameters.jsonBody.includes("$json.gate"));
   assert.ok(node.parameters.jsonBody.includes("missingFields"));
 });
 
@@ -199,10 +197,10 @@ test("Lusha Enrich body: CLOUD expression output deep-equals lushaContactBody() 
 
 // --- Plan 04 Task 2b: stored-id reuse branch (§8.1 confirmed-free path) -------------
 
-test("Lusha Enrich body: still reads existingRecord by node name (Enrichment Gate), never bare $json", () => {
+test("Lusha Enrich body: reads existingRecord off bare $json too, never a by-name lookup", () => {
   const node = loadNode("Lusha Enrich");
-  assert.ok(node.parameters.jsonBody.includes("$('Enrichment Gate').item.json.existingRecord"));
-  assert.ok(node.parameters.url.includes("$('Enrichment Gate').item.json.existingRecord"));
+  assert.ok(node.parameters.jsonBody.includes("$json.existingRecord"));
+  assert.ok(node.parameters.url.includes("$json.existingRecord"));
 });
 
 test("Lusha Enrich URL: switches to /contacts/enrich only when existingRecord.lusha_contact_id is present", () => {

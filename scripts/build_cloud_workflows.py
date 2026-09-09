@@ -1812,38 +1812,36 @@ return $input.all().map((it) => {
 ENRICH_ADAPT_SEARCH = inline("matchProposal.js") + r"""
 
 // Adapt Search -> existingRecord — CLOUD variant.
-// Maps the real HubSpot search node output (per row, same order) into the
-// existingRecord shape enrichmentGate expects. 0 results => {} => CREATE.
-// Phase 36 (Finding A): filtered to the "email" lane BEFORE index-aligning against
-// "HubSpot Search" — a mixed-lane batch would otherwise emit every OTHER lane's rows
-// here too, duplicating provider calls and responses (36-CONTEXT.md §5A).
-const rows = $('Build Identity').all().filter((it) => it.json.lane === "email");
-const search = $('HubSpot Search').all();
-return rows.map((it, i) => {
-  const row = it.json;
-  const item = search[i];
-  const failed = !item || item.error || (item.json && item.json.error);
+// Phase 70 Plan 04 (D-70-04): "HubSpot Search Carry Merge" (splice_carry_merge_after)
+// sits immediately upstream, re-attaching the pre-hop row (from "IF Has Email"'s TRUE
+// lane — the SAME delivery that fed "HubSpot Search") onto the raw search response,
+// row-fields-last (merge_node's own "preferLast" contract). $input here is therefore
+// ALREADY the "email"-lane row alone (IF Has Email only forwards that lane), combined
+// with its own search result — no by-name recovery of "Build Identity" or "HubSpot
+// Search" is needed or possible (D-70-01/D-70-03).
+return $input.all().map((it) => {
+  const merged = it.json;
+  const failed = !!merged.error;
   if (failed) {
     // Phase 36 Plan 02: every lane stamps a `match` verdict, even on a lookup failure —
     // the response's `match.tier` must be honest about "could not look" (unknown), not
     // silently absent.
     const match = summarizeMatch({ lane: "email", lookupFailed: true });
-    return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
+    return { json: { ...merged, existingRecord: {}, lookup_failed: true, match } };
   }
-  const res = item.json || {};
   let existingRecord = {};
-  if (Array.isArray(res.results)) {                                     // search list
-    if (res.results.length) {
-      const first = res.results[0];
+  if (Array.isArray(merged.results)) {                                  // search list
+    if (merged.results.length) {
+      const first = merged.results[0];
       existingRecord = { ...(first.properties || {}), hs_object_id: first.id };
     }
-  } else if (res.properties) {                                          // single object
-    existingRecord = { ...res.properties, hs_object_id: res.id };
-  } else if (res.id) {
-    existingRecord = res;
+  } else if (merged.properties) {                                       // single object
+    existingRecord = { ...merged.properties, hs_object_id: merged.id };
+  } else if (merged.id) {
+    existingRecord = merged;
   }
   const match = summarizeMatch({ lane: "email", existingRecord, lookupFailed: false });
-  return { json: { ...row, existingRecord, lookup_failed: false, match } };
+  return { json: { ...merged, existingRecord, lookup_failed: false, match } };
 });
 """
 
@@ -2101,36 +2099,24 @@ return $input.all().map((it) => {
 # CLOUD: NORMALIZE+SCORE reads the 3 provider HTTP nodes by name and re-attaches
 # the carried identity/gate context from the Gate node (HTTP nodes replace $json).
 ENRICH_NORMALIZE_SCORE_CLOUD = inline(
-    "nodeRunRecovery.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js",
-    "scoreEnrichment.js"
+    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
 ) + r"""
 
-// --- n8n wrapper (CLOUD): pull provider responses by node name, score best-per-field ---
-// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md):
-// "Enrichment Gate" can run more than once per execution (one run per firing inbound
-// lane — email/linkedin/name/fetch-by-id/unmatchable); a bare
-// $('Enrichment Gate').all() collapsed to its LAST run only, silently dropping every
-// row from every earlier lane. recoverConvergedRun (nodeRunRecovery.js) scans for the
-// $runIndex-th SURVIVING (non-skip) run — immune to an all-skip lane consuming a run
-// index in between (a bare .all(0, $runIndex) is not: see nodeRunRecovery.js header).
-// Lusha/Apollo/ZoomInfo sit entirely downstream of the one drop point (IF Provider
-// Processing Needed) on a single-file chain, so their OWN run counts stay 1:1 with
-// this node's — $(name).all(0, $runIndex) is sufficient for them.
-function nodeAll(name) { try { return $(name).all(0, $runIndex); } catch (e) { return []; } }
-const rows = recoverConvergedRun(
-  (name, b, r) => $(name).all(b, r), 'Enrichment Gate', $runIndex,
-  (it) => it.json.action !== "skip"
-);
-const lusha = nodeAll('Lusha Enrich');
-const apollo = nodeAll('Apollo Match');
-const zoominfo = nodeAll('ZoomInfo Enrich');
-return rows.map((it, i) => {
+// --- n8n wrapper (CLOUD): score best-per-field from the row's own carried results ---
+// Phase 70 Plan 04 (D-70-04): "Lusha Result Carry Merge"/"Apollo Result Carry Merge"
+// (each fed by a "Wrap * Result" node nesting the raw response, splice_carry_merge_
+// after re-attaching the row) stamp `lusha_result`/`apollo_result` onto the row; the
+// "ZoomInfo Enrich" Code node stamps its own `zoominfo_result` directly (it controls
+// its own return shape, no merge needed). $input here is therefore ALREADY one item
+// per row, carrying all three — no by-name recovery of "Enrichment Gate"/"Lusha
+// Enrich"/"Apollo Match"/"ZoomInfo Enrich" (D-70-01/D-70-03).
+return $input.all().map((it) => {
   const row = it.json;
   const ot = row.object_type || "contacts";
   const p = {
-    lusha: lusha[i] && lusha[i].json,
-    apollo: apollo[i] && apollo[i].json,
-    zoominfo: zoominfo[i] && zoominfo[i].json,
+    lusha: row.lusha_result,
+    apollo: row.apollo_result,
+    zoominfo: row.zoominfo_result,
   };
   const cands = [
     ...toCandidates("lusha", p.lusha, ot),
@@ -2142,7 +2128,8 @@ return rows.map((it, i) => {
   // Plan 04: sibling row field, never a candidate — see the LOCAL variant's identical comment.
   const lushaId = lushaRecordId(p.lusha, ot);
   const lusha_ids = lushaId ? { lusha_contact_id: lushaId } : null;
-  return { json: { ...row, providers: p, scored: { best, winners }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
+  const { lusha_result, apollo_result, zoominfo_result, ...cleanRow } = row;
+  return { json: { ...cleanRow, providers: p, scored: { best, winners }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
 
@@ -2153,7 +2140,10 @@ return rows.map((it, i) => {
 # GTM enrich URL so the contacts and companies nodes share ONE token-cache implementation
 # (same $getWorkflowStaticData key -> one mint serves both branches).
 def _zoom_preamble(enrich_url):
-    return inline("nodeRunRecovery.js", "zoominfoToken.js") + ZOOM_PREAMBLE_JS.replace("__ENRICH_URL__", enrich_url)
+    # Phase 70 Plan 04 (D-70-04): no longer inlines nodeRunRecovery.js — this was the
+    # LAST call site (the split gate/cache functions were fixed earlier in this same
+    # plan); the module itself is deleted in Task 3, once every call site is gone.
+    return inline("zoominfoToken.js") + ZOOM_PREAMBLE_JS.replace("__ENRICH_URL__", enrich_url)
 
 
 ZOOM_PREAMBLE_JS = r"""
@@ -2227,27 +2217,22 @@ function hasZoomKey(m) {
   return !!(m.emailAddress || (m.firstName && m.lastName && m.companyName));
 }
 
-// identity_keys lives on the Enrichment Gate rows; $input here is the Apollo HTTP
-// response (which has replaced $json), so pull identity by paired index from the Gate.
-// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md): a bare
-// by-name .all() collapses to Enrichment Gate's LAST run only when it fires more than
-// once per execution (one run per firing inbound lane) — recoverConvergedRun
-// (nodeRunRecovery.js, pulled in via _zoom_preamble) is immune to that.
-const gateRows = recoverConvergedRun(
-  (name, b, r) => $(name).all(b, r), 'Enrichment Gate', $runIndex,
-  (it) => it.json.action !== "skip"
-);
+// Phase 70 Plan 04 (D-70-04): fed by "Apollo Match Carry Merge" (or a bypassed
+// provider's own row, unmodified) — $input here IS the row directly, no by-name
+// recovery of "Enrichment Gate" (D-70-01/D-70-03). A Code node controls its own
+// return shape, so `...row` + `zoominfo_result` (never a bare `res` overwrite) is
+// what lets "Normalize + Score" read $input.all() directly too.
 const items = $input.all();
 const out = [];
 for (let i = 0; i < items.length; i++) {
-  const item = items[i];
-  const id = (gateRows[i] && gateRows[i].json && gateRows[i].json.identity_keys) || item.json.identity_keys || {};
+  const row = items[i].json;
+  const id = row.identity_keys || {};
   const person = toMatchPersonInput(id);
   // No usable match key -> skip the call (empty/keyless matchPersonInput is itself a 400).
   const payload = hasZoomKey(person)
     ? { data: { type: "ContactEnrich", attributes: { matchPersonInput: [person], outputFields: ZOOM_OUTPUT_FIELDS } } }
     : null;
-  if (!payload) { out.push({ json: { skipped: "no zoominfo match key" } }); continue; }
+  if (!payload) { out.push({ json: { ...row, zoominfo_result: { skipped: "no zoominfo match key" } } }); continue; }
   let token = await getToken.call(this);
   let res;
   try {
@@ -2262,7 +2247,7 @@ for (let i = 0; i < items.length; i++) {
       res = { error: String((e && e.message) || e) };  // non-auth error -> continue
     }
   }
-  out.push({ json: res });
+  out.push({ json: { ...row, zoominfo_result: res } });
 }
 return out;
 """
@@ -2458,27 +2443,19 @@ function toMatchCompanyInput(id) {
 // A domain OR a company name is enough; a keyless matchCompanyInput is itself a 400.
 function hasZoomCoKey(m) { return !!(m.companyWebsite || m.companyName); }
 
-// identity_keys lives on the Company Gate rows; $input here is the Apollo Org HTTP
-// response (which has replaced $json), so pull identity by paired index from the Gate.
-// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md): a bare
-// by-name .all() collapses to Company Gate's LAST run only when it fires more than
-// once per execution (one run per firing inbound lane: fetch-by-id vs domain/name
-// search) — recoverConvergedRun (nodeRunRecovery.js, pulled in via _zoom_preamble)
-// is immune to that.
-const gateRows = recoverConvergedRun(
-  (name, b, r) => $(name).all(b, r), 'Company Gate', $runIndex,
-  (it) => it.json.action !== "skip"
-);
+// Phase 70 Plan 04 (D-70-04): fed by "Apollo Org Result Carry Merge" (or a bypassed
+// provider's own row, unmodified) — $input here IS the row directly, no by-name
+// recovery of "Company Gate" (D-70-01/D-70-03).
 const items = $input.all();
 const out = [];
 for (let i = 0; i < items.length; i++) {
-  const item = items[i];
-  const id = (gateRows[i] && gateRows[i].json && gateRows[i].json.identity_keys) || item.json.identity_keys || {};
+  const row = items[i].json;
+  const id = row.identity_keys || {};
   const co = toMatchCompanyInput(id);
   const payload = hasZoomCoKey(co)
     ? { data: { type: "CompanyEnrich", attributes: { matchCompanyInput: [co], outputFields: ZOOM_CO_OUTPUT_FIELDS } } }
     : null;
-  if (!payload) { out.push({ json: { skipped: "no zoominfo company match key" } }); continue; }
+  if (!payload) { out.push({ json: { ...row, zoominfo_result: { skipped: "no zoominfo company match key" } } }); continue; }
   let token = await getToken.call(this);
   let res;
   try {
@@ -2493,7 +2470,7 @@ for (let i = 0; i < items.length; i++) {
       res = { error: String((e && e.message) || e) };  // non-auth error -> continue
     }
   }
-  out.push({ json: res });
+  out.push({ json: { ...row, zoominfo_result: res } });
 }
 return out;
 """
@@ -2590,26 +2567,27 @@ function _numAssociatedContacts(existingRecord) {
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
-const rows = $('Build Company Identity').all();
-const search = $('HubSpot Company Search').all();
-return rows.map((it, i) => {
-  const row = it.json;
-  const item = search[i];
-  const failed = !item || item.error || (item.json && item.json.error);
+// Phase 70 Plan 04 (D-70-04): "HubSpot Company Search Carry Merge" (splice_carry_merge_
+// after, carry_source "IF Company Bare Event" FALSE lane — source_out_idx=1) re-attaches
+// the pre-hop row onto the raw search response, row-fields-last. $input here is ALREADY
+// that combined item — no by-name recovery of "Build Company Identity"/"HubSpot Company
+// Search" (D-70-01/D-70-03).
+return $input.all().map((it) => {
+  const merged = it.json;
+  const failed = !!merged.error;
   if (failed) {
-    return { json: { ...row, existingRecord: {}, lookup_failed: true, num_associated_contacts: null } };
+    return { json: { ...merged, existingRecord: {}, lookup_failed: true, num_associated_contacts: null } };
   }
-  const res = item.json || {};
   let existingRecord = {};
-  if (Array.isArray(res.results)) {
-    if (res.results.length) {
-      const first = res.results[0];
+  if (Array.isArray(merged.results)) {
+    if (merged.results.length) {
+      const first = merged.results[0];
       existingRecord = { ...(first.properties || {}), hs_object_id: first.id };  // search envelope
     }
-  } else if (res.properties) {
-    existingRecord = { ...res.properties, hs_object_id: res.id };                // single object
+  } else if (merged.properties) {
+    existingRecord = { ...merged.properties, hs_object_id: merged.id };          // single object
   }
-  return { json: { ...row, existingRecord, lookup_failed: false,
+  return { json: { ...merged, existingRecord, lookup_failed: false,
     num_associated_contacts: _numAssociatedContacts(existingRecord) } };
 });
 """
@@ -2628,7 +2606,11 @@ HS_CO_NAME_SEARCH_FILTERS = [[{
     # `.invalid` sentinel, the Phase 36 Finding B idiom: an `undefined` filter value makes
     # HubSpot reject the whole search, which onError:continueRegularOutput would then
     # swallow into an item; a sentinel returns a clean 200 with zero hits.
-    "value": ("={{ $('Build Company Identity').item.json.identity_keys.companyName "
+    # Phase 70 Plan 04 (D-70-04): bare $json — this node is fed by "Adapt Company
+    # Search", whose own carry merge (splice_carry_merge_after) already re-attaches
+    # "Build Company Identity"'s row onto the domain search's response, so $json IS
+    # that carried row here (never a by-name lookup).
+    "value": ("={{ $json.identity_keys.companyName "
               "|| 'no company name .invalid' }}"),
 }]]
 
@@ -2636,19 +2618,21 @@ ENRICH_ADAPT_CO_NAME_SEARCH = r"""// Adapt Company Name Search — the domain mi
 // Only rows whose domain search found NOTHING are eligible: a domain hit is the stronger
 // key and is never overridden by a name. A failed domain lookup (lookup_failed) is left
 // exactly as it is — fail-closed, an unknown is not an absence.
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const rows = $('Adapt Company Search').all();
-const search = nodeAll('HubSpot Company Name Search');
-return rows.map((it, i) => {
-  const row = it.json;
+//
+// Phase 70 Plan 04 (D-70-04): "HubSpot Company Name Search Carry Merge" (splice_carry_
+// merge_after, carry_source "Adapt Company Search") re-attaches the row (which already
+// carries the domain search's own existingRecord/lookup_failed) onto the name search's
+// raw response, row-fields-last. $input here is ALREADY that combined item — no by-name
+// recovery of "Adapt Company Search"/"HubSpot Company Name Search" (D-70-01/D-70-03).
+return $input.all().map((it) => {
+  const merged = it.json;
+  const { results, error, ...row } = merged; // strip the name search's OWN response fields
   const existing = row.existingRecord || {};
   if (row.lookup_failed === true || existing.hs_object_id) return { json: row };
   const wanted = String((row.identity_keys && row.identity_keys.companyName) || "").trim().toLowerCase();
   if (!wanted) return { json: row };
-  const item = search[i];
-  const res = (item && item.json) || {};
-  if (item && (item.error || res.error)) return { json: row };
-  const hits = (Array.isArray(res.results) ? res.results : []).filter(
+  if (error) return { json: row };
+  const hits = (Array.isArray(results) ? results : []).filter(
     (r) => r && r.id &&
       String((r.properties || {}).name || "").trim().toLowerCase() === wanted
   );
@@ -2852,37 +2836,23 @@ return $input.all().map((it) => {
 """
 
 ENRICH_NORMALIZE_SCORE_CO = inline(
-    "nodeRunRecovery.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js",
-    "scoreEnrichment.js"
+    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
 ) + r"""
 
-// --- n8n wrapper (companies): score best-per-field from the company provider responses ---
+// --- n8n wrapper (companies): score best-per-field from the row's own carried results ---
 // object_type is pinned to "companies" so toCandidates takes its companies branch — the
 // one that emits lv_revenue_band / lv_employee_band / lv_country_region_normalized.
-function nodeAll(name) { try { return $(name).all(0, $runIndex); } catch (e) { return []; } }
-// Phase 47.5: RETAINED as defence in depth for the ORIGINAL reason (paired-index
-// alignment) — `IF Company Skip` terminates skipped rows before Build Company
-// Requests, so a skipped row can no longer reach this node. F5 fix (2026-09-09,
-// .planning/debug/uat-batch-review-row-reads-failed.md) — `action !== "skip"` is now
-// ALSO the `keep` predicate recoverConvergedRun uses to find which of "Company
-// Gate"'s own runs (it fires once per firing inbound lane: fetch-by-id vs
-// domain/name search) actually reached this node, since a bare $('Company
-// Gate').all() collapses to its LAST run only. Lusha/Apollo/ZoomInfo sit downstream
-// of the one drop point (IF Company Skip) on a single-file chain, so their own run
-// counts stay 1:1 with this node's — $(name).all(0, $runIndex) is sufficient for them.
-const rows = recoverConvergedRun(
-  (name, b, r) => $(name).all(b, r), 'Company Gate', $runIndex,
-  (it) => it.json.action !== "skip"
-);
-const lusha = nodeAll('Lusha Company');
-const apollo = nodeAll('Apollo Org');
-const zoominfo = nodeAll('ZoomInfo Company');
-return rows.map((it, i) => {
+// Phase 70 Plan 04 (D-70-04): "Lusha Result Carry Merge"/"Apollo Result Carry Merge"
+// stamp `lusha_result`/`apollo_result` onto the row; "ZoomInfo Company" stamps its own
+// `zoominfo_result` directly. $input here is ALREADY one item per row carrying all
+// three — no by-name recovery of "Company Gate"/"Lusha Company"/"Apollo Org"/"ZoomInfo
+// Company" (D-70-01/D-70-03).
+return $input.all().map((it) => {
   const row = it.json;
   const p = {
-    lusha: lusha[i] && lusha[i].json,
-    apollo: apollo[i] && apollo[i].json,
-    zoominfo: zoominfo[i] && zoominfo[i].json,
+    lusha: row.lusha_result,
+    apollo: row.apollo_result,
+    zoominfo: row.zoominfo_result,
   };
   const cands = [
     ...toCandidates("lusha", p.lusha, "companies"),
@@ -2901,7 +2871,8 @@ return rows.map((it, i) => {
   // Plan 04: sibling row field, never a candidate — see ENRICH_NORMALIZE_SCORE's comment.
   const lushaId = lushaRecordId(p.lusha, "companies");
   const lusha_ids = lushaId ? { lusha_company_id: lushaId } : null;
-  return { json: { ...row, providers: p, scored: { best, winners, sourcesByField }, gap_flag,
+  const { lusha_result, apollo_result, zoominfo_result, ...cleanRow } = row;
+  return { json: { ...cleanRow, providers: p, scored: { best, winners, sourcesByField }, gap_flag,
     ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
@@ -3344,13 +3315,18 @@ def _enrich_validate_research_js(target=None):
     return inline(*t.validate_inline_modules) + r"""
 
 // --- n8n wrapper (""" + t.label + r"""): Validate Research Output ---
-""" + t.validate_row_recovery_comment_js + r"""
-const preHttp = (function () {
-  try { return """ + f"$({json.dumps(t.research_pre_http_node)})" + r""".all(); } catch (e) { return []; }
-})();
-return $input.all().map((it, i) => {
+// Phase 70 Plan 04 (D-70-04): a carry merge sits immediately after the research HTTP
+// node (input 0 its raw response, input 1 the row carried from `""" + t.research_pre_http_node + r"""`),
+// re-attaching the row onto the response, row-fields-last. $input here is ALREADY that
+// combined item — no by-name recovery (D-70-01/D-70-03). The raw response's OWN
+// top-level fields are stripped after extraction (never spread forward): a row can
+// cross ANOTHER HTTP hop later (the judge call) whose own raw response reuses the
+// SAME field names (id/type/content/model/usage) — leaving them on the row would let
+// this hop's stale response silently win a later merge's clash instead of the fresher
+// one, corrupting the SUBSEQUENT hop's own recovery.
+return $input.all().map((it) => {
   const research_candidate = """ + t.validate_call_fn + r"""(it.json);
-  const row = (preHttp[i] && preHttp[i].json) || it.json;
+  const { id, type, role, content, model, usage, stop_reason, stop_sequence, error, ...row } = it.json;
   return { json: { ...row, research_candidate } };
 });
 """
@@ -3429,13 +3405,15 @@ def _enrich_apply_judge_verdict_js(target=None):
     return inline(*t.apply_verdict_inline_modules) + r"""
 
 // --- n8n wrapper (""" + t.label + r"""): Apply Judge Verdict ---
-""" + t.apply_verdict_row_recovery_comment_js + r"""
-const preHttp = (function () {
-  try { return """ + f"$({json.dumps(t.judge_pre_http_node)})" + r""".all(); } catch (e) { return []; }
-})();
-return $input.all().map((it, i) => {
+// Phase 70 Plan 04 (D-70-04): a carry merge sits immediately after the judge HTTP node
+// (input 0 its raw response, input 1 the row carried from `""" + t.judge_pre_http_node + r"""`),
+// re-attaching the row onto the response, row-fields-last. $input here is ALREADY that
+// combined item — no by-name recovery (D-70-01/D-70-03). The raw response's OWN
+// top-level fields are stripped after extraction (never spread forward onto the row
+// this node returns — the SAME leak-prevention _enrich_validate_research_js applies).
+return $input.all().map((it) => {
   const judge_verdict = judgeVerdictFromHttpItem(it.json);
-  const row = (preHttp[i] && preHttp[i].json) || it.json;
+  const { id, type, role, content, model, usage, stop_reason, stop_sequence, error, ...row } = it.json;
   """ + t.apply_verdict_call_js + r"""
 
 """ + t.judge_confidence_carry_comment_js + r"""
@@ -4277,19 +4255,23 @@ def build_enrichment_local_live():
         # Plan 04 Task 2b: the body's own shape says which endpoint to call — an `ids`
         # key means lushaContactEnrichByIdBody() built the stored-id-reuse body (the
         # CONFIRMED-FREE path, §8.1), otherwise it's the unchanged search-and-enrich body.
-        "={{ $('Build Requests').item.json.lusha_body.ids ? "
+        "={{ $json.lusha_body.ids ? "
         "'https://api.lusha.com/v3/contacts/enrich' : "
         "'https://api.lusha.com/v3/contacts/search-and-enrich' }}",
         [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")},
          {"name": "Content-Type", "value": "application/json"}],
-        json_body="={{ JSON.stringify($('Build Requests').item.json.lusha_body) }}"))
+        json_body="={{ JSON.stringify($json.lusha_body) }}"))
+    x += 230
+    nodes.append(code_node("Wrap Lusha Result", _wrap_provider_result_js("lusha_result"), x, y - 40))
     x += 230
     nodes.append(_live_http(
         "Apollo Match", x, y, "POST", "https://api.apollo.io/v1/people/match",
         [{"name": "X-Api-Key", "value": "=" + _env_secret_expr("APOLLO_API_KEY")},
          {"name": "Content-Type", "value": "application/json"},
          {"name": "Cache-Control", "value": "no-cache"}],
-        json_body="={{ JSON.stringify($('Build Requests').item.json.apollo_body) }}"))
+        json_body="={{ JSON.stringify($json.apollo_body) }}"))
+    x += 230
+    nodes.append(code_node("Wrap Apollo Result", _wrap_provider_result_js("apollo_result"), x, y - 40))
     x += 230
     nodes.append(code_node("ZoomInfo Enrich", ENRICH_ZOOMINFO_CACHED, x, y))
     x += 230
@@ -4381,14 +4363,18 @@ def build_enrichment_local_live():
         "https://api.lusha.com/v3/companies/search-and-enrich",
         [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")},
          {"name": "Content-Type", "value": "application/json"}],
-        json_body="={{ JSON.stringify($('Build Company Requests').item.json.lusha_company_body) }}"))
+        json_body="={{ JSON.stringify($json.lusha_company_body) }}"))
+    cx += 230
+    nodes.append(code_node("Wrap Lusha Company Result", _wrap_provider_result_js("lusha_result"), cx, cy - 40))
     cx += 230
     nodes.append(_live_http(
         "Apollo Org", cx, cy, "POST",
-        "={{ $('Build Company Requests').item.json.apollo_org_url }}",
+        "={{ $json.apollo_org_url }}",
         [{"name": "X-Api-Key", "value": "=" + _env_secret_expr("APOLLO_API_KEY")},
          {"name": "Content-Type", "value": "application/json"},
          {"name": "Cache-Control", "value": "no-cache"}]))
+    cx += 230
+    nodes.append(code_node("Wrap Apollo Org Result", _wrap_provider_result_js("apollo_result"), cx, cy - 40))
     cx += 230
     nodes.append(code_node("ZoomInfo Company", ENRICH_ZOOMINFO_CO_CACHED, cx, cy))
     cx += 230
@@ -4519,6 +4505,44 @@ def build_enrichment_local_live():
     }
 
     conns = {**fan(chain(order), chain(co_order)), **research_conns, **contact_conns}
+
+    # Phase 70 Plan 04 (D-70-04): the SAME carry-merge treatment build_enrichment_cloud()
+    # applies, mirrored here — a straight-line chain (no lane branching, no IF gates), so
+    # every carry_source is simply each hop's own direct predecessor in `order`/`co_order`.
+    splice_carry_merge_after(nodes, conns, "HubSpot Search", "Build Identity",
+                              merge_name="HubSpot Search Carry Merge")
+    _lusha_old_target = conns["Lusha Enrich"]["main"][0][0]["node"]
+    conns["Lusha Enrich"] = {"main": [[{"node": "Wrap Lusha Result", "type": "main", "index": 0}]]}
+    conns["Wrap Lusha Result"] = {"main": [[{"node": _lusha_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Lusha Result", "Build Requests",
+                              merge_name="Lusha Result Carry Merge")
+    _apollo_old_target = conns["Apollo Match"]["main"][0][0]["node"]
+    conns["Apollo Match"] = {"main": [[{"node": "Wrap Apollo Result", "type": "main", "index": 0}]]}
+    conns["Wrap Apollo Result"] = {"main": [[{"node": _apollo_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Apollo Result", "Lusha Result Carry Merge",
+                              merge_name="Apollo Result Carry Merge")
+
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Search", "Build Company Identity",
+                              merge_name="HubSpot Company Search Carry Merge")
+    _lusha_co_old_target = conns["Lusha Company"]["main"][0][0]["node"]
+    conns["Lusha Company"] = {"main": [[{"node": "Wrap Lusha Company Result", "type": "main", "index": 0}]]}
+    conns["Wrap Lusha Company Result"] = {"main": [[{"node": _lusha_co_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Lusha Company Result", "Build Company Requests",
+                              merge_name="Lusha Company Result Carry Merge")
+    _apollo_org_old_target = conns["Apollo Org"]["main"][0][0]["node"]
+    conns["Apollo Org"] = {"main": [[{"node": "Wrap Apollo Org Result", "type": "main", "index": 0}]]}
+    conns["Wrap Apollo Org Result"] = {"main": [[{"node": _apollo_org_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Apollo Org Result", "Lusha Company Result Carry Merge",
+                              merge_name="Apollo Org Result Carry Merge")
+
+    splice_carry_merge_after(nodes, conns, "Claude Web Research", "Build Research Request",
+                              merge_name="Research Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Judge Call", "Build Judge Request",
+                              merge_name="Judge Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Contact Web Research", "Build Contact Research Request",
+                              merge_name="Contact Research Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Contact Judge Call", "Build Contact Judge Request",
+                              merge_name="Contact Judge Carry Merge")
 
     # Phase 70 Plan 03 (D-70-01): the SAME "Merge Winners"/"Merge Company" fan_in
     # convergences build_enrichment_cloud() fixes, mirrored here — this standalone
@@ -4675,63 +4699,66 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
 # Tradeoff vs the single-node LOCAL-LIVE body: a 401 during Enrich clears the cache so the
 # NEXT run re-mints, but this run does not retry inline — an inline retry would require
 # the client secret, which the Enrich node deliberately never touches (see 16-01-SUMMARY.md).
+
+
+def _wrap_provider_result_js(key):
+    """Phase 70 Plan 04 (D-70-04): sits between a native provider HTTP node and its
+    carry merge, nesting the raw response under `key` — the SAME "Stash" pattern
+    ENRICH_STASH_NAME_PRIMARY_SEARCH and 70-02's "Stash Domain Search" use, and for the
+    same reason: this row travels through MORE HTTP hops after this one (the next
+    provider in the waterfall), so a flat merge would let this provider's response
+    fields collide with the next provider's own response fields once both are combined
+    onto the same item. Nesting under a distinct key means every later carry merge
+    combines cleanly no matter how many more hops the row crosses."""
+    return f"return $input.all().map((it) => ({{ json: {{ {key!r}: it.json }} }}));\n"
+
+
 def _zoom_split_gate_js(gate_source_node):
-    """Secret-free. $input here is the prior HTTP node's response (Apollo/Apollo Org),
-    which replaced $json — the row is recovered from `gate_source_node` via
-    recoverConvergedRun (nodeRunRecovery.js), not a bare by-name .all(): that node can
-    run more than once per execution (one run per firing inbound lane) and a plain
-    .all() silently collapses to its LAST run (F5, 2026-09-09,
-    .planning/debug/uat-batch-review-row-reads-failed.md)."""
-    return inline("nodeRunRecovery.js", "zoominfoToken.js") + f"""
+    """Secret-free. Phase 70 Plan 04 (D-70-04): `gate_source_node` is unused — this node
+    is now fed directly by the carried row (a carry merge upstream, or straight from the
+    row-producing gate node when no provider ran before it), so $input here is ALREADY
+    the row, never a prior provider's raw HTTP response — no by-name recovery."""
+    del gate_source_node
+    return inline("zoominfoToken.js") + r"""
 
 // --- n8n wrapper: ZoomInfo token cache gate (CLOUD split-code-node, secret-free) ---
 // Never reads client_id/client_secret — only the credential-bound "ZoomInfo Mint" HTTP
 // node touches those (Task 2 decision).
 const sd = $getWorkflowStaticData("global");
-const gateRows = recoverConvergedRun(
-  (name, b, r) => $(name).all(b, r), '{gate_source_node}', $runIndex,
-  (it) => it.json.action !== "skip"
-);
-const items = $input.all();
-return items.map((item, i) => {{
-  const row = (gateRows[i] && gateRows[i].json) || item.json || {{}};
+return $input.all().map((item) => {
+  const row = item.json || {};
   const cached = sd.zoominfo;
   const needs_mint = needsMint(cached, Date.now());
-  return {{ json: {{ ...row, zoom_needs_mint: needs_mint,
-                   zoom_token: needs_mint ? null : cached.access_token }} }};
-}});
+  return { json: { ...row, zoom_needs_mint: needs_mint,
+                   zoom_token: needs_mint ? null : cached.access_token } };
+});
 """
 
 
 def _zoom_split_cache_js(token_gate_name):
     """Secret-free. Parses the Mint HTTP node's token response (never client_id/secret),
-    caches it in workflow static data, and re-attaches the original row recovered from
-    the Token Gate node via recoverConvergedRun (nodeRunRecovery.js). This node only
-    runs for waves that needed a mint — a SUBSET of the Token Gate's own runs — so its
-    own $runIndex is paired against the Token Gate's `runIndex`-th run that ALSO
-    needed a mint, never its raw run count (same F5 class as gateRows in
-    _zoom_split_gate_js, .planning/debug/uat-batch-review-row-reads-failed.md)."""
-    return inline("nodeRunRecovery.js", "zoominfoToken.js") + f"""
+    caches it in workflow static data, and re-attaches the original row. Phase 70
+    Plan 04 (D-70-04): `token_gate_name` is unused — fed by a carry merge (input 0 the
+    Mint HTTP response, input 1 the row carried from the Token Gate), so $input here is
+    ALREADY the combined {row, mint response} — no by-name recovery."""
+    del token_gate_name
+    return inline("zoominfoToken.js") + r"""
 
 // --- n8n wrapper: cache the freshly-minted ZoomInfo token (CLOUD split-code-node) ---
 const sd = $getWorkflowStaticData("global");
-const gateRows = recoverConvergedRun(
-  (name, b, r) => $(name).all(b, r), '{token_gate_name}', $runIndex,
-  (it) => it.json.zoom_needs_mint === true
-);
-const items = $input.all();
-return items.map((item, i) => {{
-  const row = (gateRows[i] && gateRows[i].json) || {{}};
+return $input.all().map((item) => {
+  const merged = item.json || {};
+  const { access_token: _a, expires_in: _e, token_type: _t, ...row } = merged;
   let zoom_token = null;
-  try {{
-    const parsed = parseTokenResponse(item.json, Date.now());
+  try {
+    const parsed = parseTokenResponse(merged, Date.now());
     sd.zoominfo = parsed;
     zoom_token = parsed.access_token;
-  }} catch (e) {{
+  } catch (e) {
     zoom_token = null;   // mint response malformed -> Enrich below sees no usable token
-  }}
-  return {{ json: {{ ...row, zoom_token }} }};
-}});
+  }
+  return { json: { ...row, zoom_token } };
+});
 """
 
 
@@ -4761,15 +4788,18 @@ function toMatchPersonInput(id) {
 }
 function hasZoomKey(m) { return !!(m.emailAddress || (m.firstName && m.lastName && m.companyName)); }
 
+// Phase 70 Plan 04 (D-70-04): a Code node, unlike a native httpRequest node, controls
+// its own return shape — spreads `...row` plus `zoominfo_result` so "Normalize + Score"
+// can read $input.all() directly, never a by-name lookup of this node's raw response.
 const items = $input.all();
 const out = [];
 for (const item of items) {
   const row = item.json;
   const id = row.identity_keys || {};
   const person = toMatchPersonInput(id);
-  if (!hasZoomKey(person)) { out.push({ json: { skipped: "no zoominfo match key" } }); continue; }
+  if (!hasZoomKey(person)) { out.push({ json: { ...row, zoominfo_result: { skipped: "no zoominfo match key" } } }); continue; }
   const token = row.zoom_token;
-  if (!token) { out.push({ json: { error: "no zoominfo token available (mint failed or missing)" } }); continue; }
+  if (!token) { out.push({ json: { ...row, zoominfo_result: { error: "no zoominfo token available (mint failed or missing)" } } }); continue; }
   const payload = { data: { type: "ContactEnrich",
     attributes: { matchPersonInput: [person], outputFields: ZOOM_OUTPUT_FIELDS } } };
   let res;
@@ -4786,7 +4816,7 @@ for (const item of items) {
     }
     res = { error: String((e && e.message) || e) };
   }
-  out.push({ json: res });
+  out.push({ json: { ...row, zoominfo_result: res } });
 }
 return out;
 """
@@ -4812,15 +4842,18 @@ function toMatchCompanyInput(id) {
 }
 function hasZoomCoKey(m) { return !!(m.companyWebsite || m.companyName); }
 
+// Phase 70 Plan 04 (D-70-04): a Code node controls its own return shape — spreads
+// `...row` plus `zoominfo_result` so "Normalize + Score Company" can read
+// $input.all() directly, never a by-name lookup of this node's raw response.
 const items = $input.all();
 const out = [];
 for (const item of items) {
   const row = item.json;
   const id = row.identity_keys || {};
   const co = toMatchCompanyInput(id);
-  if (!hasZoomCoKey(co)) { out.push({ json: { skipped: "no zoominfo company match key" } }); continue; }
+  if (!hasZoomCoKey(co)) { out.push({ json: { ...row, zoominfo_result: { skipped: "no zoominfo company match key" } } }); continue; }
   const token = row.zoom_token;
-  if (!token) { out.push({ json: { error: "no zoominfo token available (mint failed or missing)" } }); continue; }
+  if (!token) { out.push({ json: { ...row, zoominfo_result: { error: "no zoominfo token available (mint failed or missing)" } } }); continue; }
   const payload = { data: { type: "CompanyEnrich",
     attributes: { matchCompanyInput: [co], outputFields: ZOOM_CO_OUTPUT_FIELDS } } };
   let res;
@@ -4837,7 +4870,7 @@ for (const item of items) {
     }
     res = { error: String((e && e.message) || e) };
   }
-  out.push({ json: res });
+  out.push({ json: { ...row, zoominfo_result: res } });
 }
 return out;
 """
@@ -5632,24 +5665,19 @@ ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = (
 ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js", "matchProposal.js") + r"""
 
 // --- n8n wrapper: adapt "HubSpot Fetch By Id" -> existingRecord + backfilled identity_keys ---
-// Mirrors ENRICH_ADAPT_SEARCH's row-recovery idiom EXACTLY (bd682a2 bug class, review
-// gpt #9): the native HubSpot node is an HTTP node under the hood and has already
-// REPLACED the current item with its own response by the time this Code node runs — the
-// pre-hop row is recovered BY NODE NAME, never the current item ($json/$input are never
-// read here).
-// Phase 36 (Finding A): filtered to the "fetch_by_id" lane BEFORE index-aligning against
-// "HubSpot Fetch By Id" — the mixed-lane duplication sibling of ENRICH_ADAPT_SEARCH's fix
-// (36-CONTEXT.md §5A).
-const rows = $('Build Identity').all().filter((it) => it.json.lane === "fetch_by_id");
-const fetched = $('HubSpot Fetch By Id').all();
-return rows.map((it, i) => {
-  const row = it.json;
-  const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult(fetched[i]);
-  const identity_keys = backfillIdentityKeys(row.object_type || "contacts", existingRecord, row.identity_keys);
+// Phase 70 Plan 04 (D-70-04): "HubSpot Fetch By Id Carry Merge" (splice_carry_merge_after)
+// re-attaches the pre-hop row (from "IF Bare Event"'s TRUE lane — the SAME delivery that
+// fed "HubSpot Fetch By Id") onto the raw fetch response, row-fields-last. $input here is
+// ALREADY the "fetch_by_id"-lane row alone, combined with its own fetch result — no
+// by-name recovery of "Build Identity" or "HubSpot Fetch By Id" (D-70-01/D-70-03).
+return $input.all().map((it) => {
+  const merged = it.json;
+  const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult({ json: merged });
+  const identity_keys = backfillIdentityKeys(merged.object_type || "contacts", existingRecord, merged.identity_keys);
   // Phase 36 Plan 02: every lane stamps a `match` verdict, so a tier reaches the
   // response for every lane including this one.
   const match = summarizeMatch({ lane: "fetch_by_id", existingRecord, lookupFailed: lookup_failed });
-  return { json: { ...row, existingRecord, lookup_failed, fetch_diagnostic, identity_keys, match } };
+  return { json: { ...merged, existingRecord, lookup_failed, fetch_diagnostic, identity_keys, match } };
 });
 """
 
@@ -5685,21 +5713,24 @@ ENRICH_ADAPT_NAME_SEARCH = inline("matchProposal.js") + r"""
 // blank by construction is no longer filtered out. The result is still `tier: "medium"`
 // / `auto: false` either way — a weaker search key surfaces MORE candidates for the
 // caller to judge, never an auto-match (matchProposal.js summarizeMatch's own contract).
-const rows = $('Build Identity').all().filter((it) => it.json.lane === "name");
-const primary = $('HubSpot Name Search').all();
-const fallback = $('HubSpot Name Search Fallback').all();
-
-function candidatesFrom(item, identityKeys, opts) {
-  const failed = !item || item.error || (item.json && item.json.error);
-  if (failed) return null;                       // null = "could not look", not "found none"
-  const res = item.json || {};
-  const results = Array.isArray(res.results) ? res.results : [];
+//
+// Phase 70 Plan 04 (D-70-04): "HubSpot Name Search Carry Merge" + "Stash Name Primary
+// Search" + "HubSpot Name Search Fallback Carry Merge" (mirrors 70-02's "Stash Domain
+// Search" pattern) re-attach the row and stash the primary search's own response BEFORE
+// the fallback HTTP hop replaces $json a second time. $input here is therefore ALREADY
+// one item per "name"-lane row, carrying the primary search under `_name_primary_search`
+// and the fallback search's own {results,error} flat — no by-name recovery of "Build
+// Identity"/"HubSpot Name Search"/"HubSpot Name Search Fallback" (D-70-01/D-70-03).
+function candidatesFrom(resLike, identityKeys, opts) {
+  if (!resLike || resLike.error) return null;    // null = "could not look", not "found none"
+  const results = Array.isArray(resLike.results) ? resLike.results : [];
   return mediumCandidates(results, identityKeys, opts);
 }
 
-return rows.map((it, i) => {
-  const row = it.json;
-  const primaryCandidates = candidatesFrom(primary[i], row.identity_keys, undefined);
+return $input.all().map((it) => {
+  const merged = it.json;
+  const row = merged;
+  const primaryCandidates = candidatesFrom(merged._name_primary_search, row.identity_keys, undefined);
   if (primaryCandidates === null) {
     const match = summarizeMatch({ lane: "name", lookupFailed: true });
     return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
@@ -5710,12 +5741,25 @@ return rows.map((it, i) => {
   // key.
   let candidates = primaryCandidates;
   if (candidates.length === 0) {
-    const fallbackCandidates = candidatesFrom(fallback[i], row.identity_keys, { requireCompanyToken: false });
+    const fallbackCandidates = candidatesFrom(merged, row.identity_keys, { requireCompanyToken: false });
     if (fallbackCandidates !== null) candidates = fallbackCandidates;
   }
 
   const match = summarizeMatch({ lane: "name", existingRecord: {}, lookupFailed: false, candidates });
   return { json: { ...row, existingRecord: {}, lookup_failed: false, match } };
+});
+"""
+
+# Stash Name Primary Search — Phase 70 Plan 04 (D-70-04). Sits between "HubSpot Name
+# Search Carry Merge" and "HubSpot Name Search Fallback": nests the primary search's own
+# {results,total,error} under `_name_primary_search` so the SECOND carry merge (after
+# the fallback HTTP hop, which replaces $json a second time) can re-attach this stash
+# flat alongside the fallback's own {results,error} without either search's response
+# fields colliding with the other's. Mirrors 70-02's "Stash Domain Search" exactly.
+ENRICH_STASH_NAME_PRIMARY_SEARCH = r"""// Stash Name Primary Search — see ENRICH_ADAPT_NAME_SEARCH's own comment.
+return $input.all().map((it) => {
+  const { results, total, error, ...row } = it.json;
+  return { json: { ...row, _name_primary_search: { results, total, error } } };
 });
 """
 
@@ -5736,21 +5780,20 @@ return rows.map((it, i) => {
 ENRICH_ADAPT_LINKEDIN_SEARCH = inline("resolveIdentity.js", "matchProposal.js") + r"""
 
 // --- n8n wrapper: adapt "HubSpot Linkedin Search" -> match proposal ---
-// Phase 36 (Finding A) discipline: filtered to the "linkedin" lane BEFORE index-aligning
-// against its own search node — a mixed-lane batch would otherwise duplicate/misalign.
-const rows = $('Build Identity').all().filter((it) => it.json.lane === "linkedin");
-const search = $('HubSpot Linkedin Search').all();
-return rows.map((it, i) => {
-  const row = it.json;
-  const item = search[i];
-  const failed = !item || item.error || (item.json && item.json.error);
+// Phase 70 Plan 04 (D-70-04): "HubSpot Linkedin Search Carry Merge"
+// (splice_carry_merge_after) re-attaches the pre-hop row (from "IF Linkedin
+// Searchable"'s TRUE lane — the SAME delivery that fed "HubSpot Linkedin Search") onto
+// the raw search response, row-fields-last. $input here is ALREADY the "linkedin"-lane
+// row alone, combined with its own search result — no by-name recovery (D-70-01/D-70-03).
+return $input.all().map((it) => {
+  const merged = it.json;
+  const failed = !!merged.error;
   if (failed) {
     const match = summarizeMatch({ lane: "linkedin", lookupFailed: true });
-    return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
+    return { json: { ...merged, existingRecord: {}, lookup_failed: true, match } };
   }
-  const res = item.json || {};
-  const results = Array.isArray(res.results) ? res.results : [];
-  const rawLinkedinUrl = (row.identity_keys && row.identity_keys.linkedin_url) || null;
+  const results = Array.isArray(merged.results) ? merged.results : [];
+  const rawLinkedinUrl = (merged.identity_keys && merged.identity_keys.linkedin_url) || null;
   const verified = verifiedLinkedinHits(results, rawLinkedinUrl);
   // existingRecord is built from the verified hit ONLY on a single verified match — never
   // on 0 or >1, mirroring every other lane's "auto only means exactly one confirmed
@@ -5761,7 +5804,7 @@ return rows.map((it, i) => {
   }
   const candidates = verified.map(toCandidateShape);
   const match = summarizeMatch({ lane: "linkedin", candidates, lookupFailed: false });
-  return { json: { ...row, existingRecord, lookup_failed: false, match } };
+  return { json: { ...merged, existingRecord, lookup_failed: false, match } };
 });
 """
 
@@ -5833,15 +5876,16 @@ ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
 ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""
 
 // --- n8n wrapper: adapt "HubSpot Company Fetch By Id" -> existingRecord + backfilled identity_keys ---
-// Same node-name-only recovery discipline as the contacts sibling — no bare current-item
-// read.
-const rows = $('Build Company Identity').all();
-const fetched = $('HubSpot Company Fetch By Id').all();
-return rows.map((it, i) => {
-  const row = it.json;
-  const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult(fetched[i]);
-  const identity_keys = backfillIdentityKeys("companies", existingRecord, row.identity_keys);
-  return { json: { ...row, existingRecord, lookup_failed, fetch_diagnostic, identity_keys } };
+// Phase 70 Plan 04 (D-70-04): "HubSpot Company Fetch By Id Carry Merge" (splice_carry_
+// merge_after, carry_source "IF Company Bare Event" TRUE lane) re-attaches the pre-hop
+// row onto the raw fetch response, row-fields-last. $input here is ALREADY that combined
+// item — no by-name recovery of "Build Company Identity"/"HubSpot Company Fetch By Id"
+// (D-70-01/D-70-03).
+return $input.all().map((it) => {
+  const merged = it.json;
+  const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult({ json: merged });
+  const identity_keys = backfillIdentityKeys("companies", existingRecord, merged.identity_keys);
+  return { json: { ...merged, existingRecord, lookup_failed, fetch_diagnostic, identity_keys } };
 });
 """
 
@@ -6068,8 +6112,10 @@ def build_enrichment_cloud():
     # response to arrive as an item to classify it as lookup_failed).
     hs_fetch_by_id = _hs_http_search_node(
         "HubSpot Fetch By Id", "contact", hs_search_x, fby,
+        # Phase 70 Plan 04 (D-70-04): bare $json — "IF Bare Event" is a routing IF, never
+        # an HTTP node, so $json here IS "Build Identity"'s own row untouched.
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
-                          "value": "={{ $('Build Identity').item.json.object_id }}"}]],
+                          "value": "={{ $json.object_id }}"}]],
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
     # POSTs directly to CRM v3 /crm/v3/objects/contacts/search — never the node's
@@ -6127,6 +6173,10 @@ def build_enrichment_cloud():
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
     nodes.append(hs_name_search)
+    # Phase 70 Plan 04 (D-70-04): sits between "HubSpot Name Search Carry Merge" (below)
+    # and "HubSpot Name Search Fallback" — see ENRICH_STASH_NAME_PRIMARY_SEARCH's comment.
+    nodes.append(code_node(
+        "Stash Name Primary Search", ENRICH_STASH_NAME_PRIMARY_SEARCH, hs_search_x + 55, mby - 50))
 
     # F1 (2026-08-25, debug/walk-write-path-defects.md): runs UNCONDITIONALLY for every
     # "name"-lane row, SEQUENTIALLY after "HubSpot Name Search" — never a parallel
@@ -6135,16 +6185,15 @@ def build_enrichment_cloud():
     # company CONTAINS_TOKEN clause entirely (lastname EQ only): the weaker key the debug
     # file's fix direction names, re-verified in ENRICH_ADAPT_NAME_SEARCH by
     # mediumCandidates({requireCompanyToken:false}) rather than loosened at the HubSpot
-    # filter itself. Its filter value reads "Build Identity" BY NODE NAME, never bare
-    # $json (the bd682a2 idiom every other post-HTTP-node adapter/filter in this lane
-    # already follows) — its own predecessor, "HubSpot Name Search", is an HTTP node and
-    # has already REPLACED $json with its own response by the time this node's
-    # expressions evaluate.
+    # filter itself. Phase 70 Plan 04 (D-70-04): its filter value reads bare $json
+    # directly — "HubSpot Name Search Carry Merge" + "Stash Name Primary Search" (below)
+    # re-attach the pre-hop row before this node ever runs, so $json IS that row (never a
+    # by-name lookup of "Build Identity").
     hs_name_search_fallback = _hs_http_search_node(
         "HubSpot Name Search Fallback", "contact", hs_search_x + 110, mby - 100,
         filter_groups=[[
             {"propertyName": "lastname", "operator": "EQ",
-             "value": "={{ $('Build Identity').item.json.identity_keys.lastName }}"},
+             "value": "={{ $json.identity_keys.lastName }}"},
         ]],
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
@@ -6280,16 +6329,16 @@ def build_enrichment_cloud():
     # storedId check so they can never disagree about which lane a given row takes.
     lusha = _http_node(
         "Lusha Enrich",
-        "={{ $('Enrichment Gate').item.json.existingRecord && "
-        "$('Enrichment Gate').item.json.existingRecord.lusha_contact_id ? "
+        "={{ $json.existingRecord && "
+        "$json.existingRecord.lusha_contact_id ? "
         "'https://api.lusha.com/v3/contacts/enrich' : "
         "'https://api.lusha.com/v3/contacts/search-and-enrich' }}",
         px, y - 80,
         auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
         json_body=(
             "={{ (() => { "
-            "const id = $('Enrichment Gate').item.json.identity_keys || {}; "
-            "const gate = $('Enrichment Gate').item.json.gate || {}; "
+            "const id = $json.identity_keys || {}; "
+            "const gate = $json.gate || {}; "
             "const missing = gate.missingFields || []; "
             # D-66-01/RICH-01: landline `phone` added, mapping to the SAME reveal value
             # `mobilephone` maps to (mirrors n8n/code/lushaRequest.js's LUSHA_REVEAL_BY_FIELD —
@@ -6309,7 +6358,7 @@ def build_enrichment_cloud():
             # Set (never a prototype lookup) so a duplicate can never reach the provider body.
             "const revealed = [...new Set(missing.filter((f) => REVEAL_MAP[f] !== undefined).map((f) => REVEAL_MAP[f]))].sort(); "
             "const reveal = revealed.length ? revealed : ['emails']; "
-            "const existingRecord = $('Enrichment Gate').item.json.existingRecord || {}; "
+            "const existingRecord = $json.existingRecord || {}; "
             "const storedId = existingRecord.lusha_contact_id; "
             "if (storedId) { return JSON.stringify({ ids: [storedId], reveal }); } "
             "const c = {}; "
@@ -6324,6 +6373,10 @@ def build_enrichment_cloud():
             "})() }}"
         ))
     nodes.append(lusha)
+    # Phase 70 Plan 04 (D-70-04): nests Lusha's raw response under `lusha_result` before
+    # the carry merge re-attaches the row — see _wrap_provider_result_js's docstring.
+    nodes.append(code_node("Wrap Lusha Result", _wrap_provider_result_js("lusha_result"),
+                           px + 55, y - 40))
     # RICH-06 cost verification (D-66-01, structural — no live call needed): chasing the
     # landline changes NO provider's per-call cost.
     #   - Lusha: bills flat per contact regardless of reveal-field count
@@ -6340,14 +6393,22 @@ def build_enrichment_cloud():
     # webhook_url and arrives via callback — wired separately, not in this synchronous node.
     apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80,
                         auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
+                        # Phase 70 Plan 04 (D-70-04): fed by "IF Apollo Enabled"'s TRUE
+                        # lane, which now carries the row (via "Lusha Enrich Carry
+                        # Merge" when Lusha ran, or straight from "Enrichment Gate"'s
+                        # own row when it didn't) — bare $json, never a by-name lookup.
                         json_body=("={{ JSON.stringify({ "
-                                   "email: $('Enrichment Gate').item.json.identity_keys.email, "
-                                   "domain: $('Enrichment Gate').item.json.identity_keys.domain, "
-                                   "first_name: $('Enrichment Gate').item.json.identity_keys.firstName, "
-                                   "last_name: $('Enrichment Gate').item.json.identity_keys.lastName, "
-                                   "organization_name: $('Enrichment Gate').item.json.identity_keys.companyName, "
+                                   "email: $json.identity_keys.email, "
+                                   "domain: $json.identity_keys.domain, "
+                                   "first_name: $json.identity_keys.firstName, "
+                                   "last_name: $json.identity_keys.lastName, "
+                                   "organization_name: $json.identity_keys.companyName, "
                                    "reveal_personal_emails: true }) }}"))
     nodes.append(apollo)
+    # Phase 70 Plan 04 (D-70-04): nests Apollo's raw response under `apollo_result`
+    # before its carry merge re-attaches the row.
+    nodes.append(code_node("Wrap Apollo Result", _wrap_provider_result_js("apollo_result"),
+                           px + 275, y - 40))
     # ZoomInfo: split-code-node (Task 2 decision), now sitting BEHIND its own
     # IF ZoomInfo Enabled gate (Phase 16.1). The credential-bound "ZoomInfo Mint" HTTP
     # node is the ONLY place client_id/client_secret are read; the Token Gate/Cache
@@ -6529,8 +6590,10 @@ def build_enrichment_cloud():
     # docstring; the native node has no `operation: "search"` for resource:company.
     hs_co_fetch_by_id = _hs_http_search_node(
         "HubSpot Company Fetch By Id", "company", hs_co_search_x, cfby,
+        # Phase 70 Plan 04 (D-70-04): bare $json — "IF Company Bare Event" is a routing
+        # IF, never an HTTP node, so $json here IS "Build Company Identity"'s own row.
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
-                          "value": "={{ $('Build Company Identity').item.json.object_id }}"}]],
+                          "value": "={{ $json.object_id }}"}]],
         properties_csv=ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
     )
     nodes.append(hs_co_fetch_by_id)
@@ -6585,13 +6648,25 @@ def build_enrichment_cloud():
                           "https://api.lusha.com/v3/companies/search-and-enrich",
                           cpx, cy - 80,
                           auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
-                          json_body="={{ JSON.stringify($('Build Company Requests').item.json.lusha_company_body) }}")
+                          # Phase 70 Plan 04 (D-70-04): fed by "IF Lusha Company
+                          # Enabled"'s TRUE lane — bare $json is "Build Company
+                          # Requests"'s own row, never a by-name lookup.
+                          json_body="={{ JSON.stringify($json.lusha_company_body) }}")
     nodes.append(lusha_co)
+    # Phase 70 Plan 04 (D-70-04): nests Lusha's raw response under `lusha_result`.
+    nodes.append(code_node("Wrap Lusha Company Result", _wrap_provider_result_js("lusha_result"),
+                           cpx + 55, cy - 40))
     apollo_org = _http_node(
         "Apollo Org", "https://api.apollo.io/v1/organizations/enrich", cpx + 220, cy - 80,
         auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
-        json_body="={{ JSON.stringify({ domain: $('Build Company Requests').item.json.identity_keys.domain }) }}")
+        # Phase 70 Plan 04 (D-70-04): fed by "IF Apollo Org Enabled"'s TRUE lane, which
+        # now carries the row (via "Lusha Company Carry Merge" when Lusha ran, or
+        # straight from "Build Company Requests" when it didn't).
+        json_body="={{ JSON.stringify({ domain: $json.identity_keys.domain }) }}")
     nodes.append(apollo_org)
+    # Phase 70 Plan 04 (D-70-04): nests Apollo's raw response under `apollo_result`.
+    nodes.append(code_node("Wrap Apollo Org Result", _wrap_provider_result_js("apollo_result"),
+                           cpx + 275, cy - 40))
     # ZoomInfo Company: split-code-node, same credential-bound-Mint shape as contacts, now
     # sitting BEHIND its own IF ZoomInfo Company Enabled gate (Phase 16.1 Task 2).
     zoom_co_nodes, zoom_co_conns, zoom_co_entry, zoom_co_exit = _zoom_split_company_subgraph(
@@ -6659,12 +6734,14 @@ def build_enrichment_cloud():
     # (_enrich_validate_research_js, :2360-2362), so the row reaching Build Response carries
     # the same action/gate shape every other terminal produces.
     nodes.append(code_node("Build Research Failure Response", r"""
-const preHttp = (function () {
-  try { return $('Build Research Request').all(); } catch (e) { return []; }
-})();
-return $input.all().map((it, i) => {
-  const row = (preHttp[i] && preHttp[i].json) || {};
-  const message = (it.json && it.json.error && it.json.error.message) || 'research call failed';
+// Phase 70 Plan 04 (D-70-04): "Research Carry Merge" (immediately after "Claude Web
+// Research", input 1 the row carried from "Build Research Request") feeds BOTH this
+// node and "Validate Research Output" via "IF Research Errored" — $input here is
+// ALREADY the combined {row, raw response/error} item, no by-name recovery.
+return $input.all().map((it) => {
+  const merged = it.json || {};
+  const message = (merged.error && merged.error.message) || 'research call failed';
+  const { id, type, role, content, model, usage, stop_reason, stop_sequence, error, ...row } = merged;
   return { json: { ...row, action: "research_failed", gate: { reason: message } } };
 });
 """, csx, cy - 260))
@@ -6911,10 +6988,13 @@ return $input.all().map((it, i) => {
     ]}
     # F1 (2026-08-25): the fallback search sits SEQUENTIALLY between the primary search
     # and its adapter — never a parallel fan-out from "IF Name Searchable" — so
-    # "Adapt Name Search" can read both by name with 1:1 item alignment guaranteed.
+    # "Adapt Name Search" can read both with 1:1 item alignment guaranteed. Phase 70
+    # Plan 04 (D-70-04): "Stash Name Primary Search" sits between the primary search and
+    # the fallback — see its own comment; the two carry merges are spliced in below,
+    # after this chain is built.
     conns.update(chain([
-        "HubSpot Name Search", "HubSpot Name Search Fallback", "Adapt Name Search",
-        "Enrichment Gate",
+        "HubSpot Name Search", "Stash Name Primary Search", "HubSpot Name Search Fallback",
+        "Adapt Name Search", "Enrichment Gate",
     ]))
     conns.update(chain(["HubSpot Search", "Adapt Search",
                         "Enrichment Gate", "IF Provider Processing Needed"]))
@@ -7198,6 +7278,82 @@ return $input.all().map((it, i) => {
             "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
             "position": [n["x"], n["y"]],
         })
+
+    # =========================================================================
+    # Phase 70 Plan 04 (D-70-04): a carry merge immediately after every provider,
+    # HubSpot identity-search, and research/judge HTTP node on the enrichment lane —
+    # re-attaching the pre-hop row (which the HTTP node's own response otherwise
+    # replaces) onto the response, row-fields-last. Every downstream consumer this
+    # unblocks is rewritten to read $input directly (see each JS constant's own
+    # Phase 70 Plan 04 comment) — this is purely the WIRING half of that fix.
+    #
+    # --- CONTACTS identity-lane searches ---
+    splice_carry_merge_after(nodes, conns, "HubSpot Fetch By Id", "IF Bare Event",
+                              merge_name="HubSpot Fetch By Id Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Search", "IF Has Email",
+                              merge_name="HubSpot Search Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Linkedin Search", "IF Linkedin Searchable",
+                              merge_name="HubSpot Linkedin Search Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Name Search", "IF Name Searchable",
+                              merge_name="HubSpot Name Search Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Name Search Fallback", "Stash Name Primary Search",
+                              merge_name="HubSpot Name Search Fallback Carry Merge")
+
+    # --- CONTACTS provider waterfall: Wrap <provider> Result (nests the raw response)
+    # then a carry merge re-attaches the row, re-pointed to the SAME downstream target
+    # the HTTP node fed before this rewire (never hand-invented). ---
+    _lusha_old_target = conns["Lusha Enrich"]["main"][0][0]["node"]
+    conns["Lusha Enrich"] = {"main": [[{"node": "Wrap Lusha Result", "type": "main", "index": 0}]]}
+    conns["Wrap Lusha Result"] = {"main": [[{"node": _lusha_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Lusha Result", "IF Lusha Enabled",
+                              merge_name="Lusha Result Carry Merge")
+
+    _apollo_old_target = conns["Apollo Match"]["main"][0][0]["node"]
+    conns["Apollo Match"] = {"main": [[{"node": "Wrap Apollo Result", "type": "main", "index": 0}]]}
+    conns["Wrap Apollo Result"] = {"main": [[{"node": _apollo_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Apollo Result", "IF Apollo Enabled",
+                              merge_name="Apollo Result Carry Merge")
+
+    splice_carry_merge_after(nodes, conns, "ZoomInfo Mint", "IF ZoomInfo Needs Mint",
+                              merge_name="ZoomInfo Mint Carry Merge")
+
+    # --- CONTACTS research/judge ---
+    splice_carry_merge_after(nodes, conns, "Claude Web Research", "Build Research Request",
+                              merge_name="Research Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Judge Call", "Build Judge Request",
+                              merge_name="Judge Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Contact Web Research", "Build Contact Research Request",
+                              merge_name="Contact Research Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Contact Judge Call", "Build Contact Judge Request",
+                              merge_name="Contact Judge Carry Merge")
+
+    # --- COMPANIES identity-lane searches ---
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Fetch By Id", "IF Company Bare Event",
+                              merge_name="HubSpot Company Fetch By Id Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Search", "IF Company Bare Event",
+                              merge_name="HubSpot Company Search Carry Merge", source_out_idx=1)
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Name Search", "Adapt Company Search",
+                              merge_name="HubSpot Company Name Search Carry Merge")
+
+    # --- COMPANIES provider waterfall ---
+    _lusha_co_old_target = conns["Lusha Company"]["main"][0][0]["node"]
+    conns["Lusha Company"] = {"main": [[{"node": "Wrap Lusha Company Result", "type": "main", "index": 0}]]}
+    conns["Wrap Lusha Company Result"] = {"main": [[{"node": _lusha_co_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Lusha Company Result", "IF Lusha Company Enabled",
+                              merge_name="Lusha Company Result Carry Merge")
+
+    _apollo_org_old_target = conns["Apollo Org"]["main"][0][0]["node"]
+    conns["Apollo Org"] = {"main": [[{"node": "Wrap Apollo Org Result", "type": "main", "index": 0}]]}
+    conns["Wrap Apollo Org Result"] = {"main": [[{"node": _apollo_org_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap Apollo Org Result", "IF Apollo Org Enabled",
+                              merge_name="Apollo Org Result Carry Merge")
+
+    splice_carry_merge_after(nodes, conns, "ZoomInfo Mint Company", "IF ZoomInfo Company Needs Mint",
+                              merge_name="ZoomInfo Mint Company Carry Merge")
+
+    # --- Shared credit-check lane (contacts + companies) ---
+    splice_carry_merge_after(nodes, conns, "ZoomInfo Usage Mint", "IF ZoomInfo Usage Needs Mint",
+                              merge_name="ZoomInfo Usage Mint Carry Merge")
 
     # =========================================================================
     # Phase 70 Plan 03 (D-70-01): a real Merge in front of every "fan_in"
@@ -8734,7 +8890,8 @@ def set_always_output_data(nodes, names):
 
 
 def splice_carry_merge_after(nodes, conns, http_name, carry_source, *,
-                              merge_name=None, combine_by="combineByPosition"):
+                              merge_name=None, combine_by="combineByPosition",
+                              source_out_idx=0):
     """D-70-04's carry mechanism, generalised: inserts a `mode="combine"` Merge
     immediately after `http_name` — input 0 is `http_name`'s own existing output edge
     (re-pointed, unchanged destination), input 1 is a NEW literal fan-out edge from
@@ -8746,6 +8903,15 @@ def splice_carry_merge_after(nodes, conns, http_name, carry_source, *,
     otherwise untouched (this is Task 2's hand-wired "Associate Carry Merge" pattern,
     generalised into one reusable mechanism rather than left as a one-off — Phase 70
     Plan 02 Task 3).
+
+    `source_out_idx` (Phase 70 Plan 04, D-70-04): which of `carry_source`'s OWN output
+    branches already feeds `http_name` — 0 (default) for a single-output node or an
+    IF/waterfall gate's TRUE branch, 1 for an IF's FALSE branch (e.g. "IF Company Bare
+    Event"'s false lane feeds "HubSpot Company Search", never its true lane) — mirrors
+    `_add_starved_lane_sentinel`'s own `source_out_idx` parameter exactly, so a carry
+    fanned from the wrong branch cannot silently starve the Merge on every real request
+    (T-70-13's mis-pairing risk, generalised to "never fires at all" rather than
+    "fires with the wrong row").
 
     `combine_by` defaults to "combineByPosition" (pairs item i of each input into one
     shallow-merged object, carried-row-last winning any key clash per `merge_node`'s own
@@ -8768,7 +8934,9 @@ def splice_carry_merge_after(nodes, conns, http_name, carry_source, *,
     conns[http_name] = {"main": [[{"node": name, "type": "main", "index": 0}]]}
     conns[name] = {"main": [old_first_output]}
     conns.setdefault(carry_source, {"main": [[]]})
-    conns[carry_source]["main"][0].append({"node": name, "type": "main", "index": 1})
+    while len(conns[carry_source]["main"]) <= source_out_idx:
+        conns[carry_source]["main"].append([])
+    conns[carry_source]["main"][source_out_idx].append({"node": name, "type": "main", "index": 1})
     return name
 
 

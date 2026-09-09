@@ -57,7 +57,10 @@ NODES = {
         "properties_csv": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
         "body_tokens": [
             'propertyName: "hs_object_id"', 'operator: "EQ"',
-            "$('Build Company Identity').item.json.object_id",
+            # Phase 70 Plan 04 (D-70-04): bare $json — "IF Company Bare Event" is a
+            # routing IF, never an HTTP node, so $json here IS "Build Company
+            # Identity"'s own row.
+            "$json.object_id",
         ],
     },
     "SJ-3 Search (requested poller)": {

@@ -152,19 +152,13 @@ test("F5 drift case (B), companies: Normalize + Score Company — an all-skip mi
   assert.deepEqual(readerRun1.map((r) => r.row_id), ["co-9"]);
 });
 
-test("ZoomInfo Token Gate: recovers the correct Enrichment Gate run by paired index, not the last one", () => {
+test("ZoomInfo Token Gate: carries the row straight through from $input, never a by-name lookup (Phase 70 Plan 04, D-70-04)", () => {
   const jsCode = jsCodeOf("ZoomInfo Token Gate");
-  const runData = {
-    "Enrichment Gate": [
-      [emailRow("row-1"), emailRow("row-4")],
-      [nameRow("row-2"), nameRow("row-3")],
-    ],
-  };
-  // $input here is the prior Apollo HTTP node's response (replaces $json) — content is
-  // irrelevant to this assertion, only the paired-index recovery of `row` matters.
-  const apolloResponseFor = (n) => Array.from({ length: n }, () => ({ some: "apollo-response" }));
-  const run0 = runOneNodeRun(jsCode, apolloResponseFor(2), runData, 0);
-  const run1 = runOneNodeRun(jsCode, apolloResponseFor(2), runData, 1);
-  assert.deepEqual(run0.map((r) => r.row_id), ["row-1", "row-4"]);
-  assert.deepEqual(run1.map((r) => r.row_id), ["row-2", "row-3"]);
+  // "Apollo Result Carry Merge" (or a bypassed provider's own row, unmodified) already
+  // re-attaches the row before this node runs, so $input here IS the row (optionally
+  // with apollo_result/lusha_result already attached) — no recoverConvergedRun, no
+  // $()/$runIndex dependency at all.
+  const rows = [emailRow("row-1"), emailRow("row-4")];
+  const out = runOneNodeRun(jsCode, rows, {}, 0);
+  assert.deepEqual(out.map((r) => r.row_id), ["row-1", "row-4"]);
 });
