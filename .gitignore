@@ -27,3 +27,6 @@ operator-claude-plugin/config/role_vocabulary.derived.yaml
 # Generated, churns on every command, and has never been committed in this repo — ignoring it
 # so it stops reading as an untracked change on every `git status`.
 .planning/state.json
+
+# operator UAT spreadsheets carry real names and emails — never commit
+uat-batch-*.csv
