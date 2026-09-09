@@ -312,3 +312,43 @@ test("the recompute lane is a single edge into Decide Company Action — zero pr
       `${costly} must not sit on the recompute lane`);
   }
 });
+
+// --- behaviour 6: execution 11858's refusal, now sourced from the gate --------------------
+//
+// CLAUDE.md §13.0: "Execution 11858 ran the whole lane, derived the correct veto, and
+// returned action: write_blocked because the allowlist was empty. Deriving is free;
+// writing still needs a deliberately armed, record-scoped window." That behaviour is
+// unchanged — only its SOURCE moved. Phase 70 Plan 05 Task 2 sub-step 2b (D-70-13) took
+// the write-permission predicate out of "Decide Company Action" and gave the enrichment
+// lane the spliced gate it had never had, so the refusal is now the gate's verdict rather
+// than a value the decision node stamped on itself.
+
+test("execution 11858's refusal survives, now emitted by the spliced gate rather than by Decide Company Action", () => {
+  const { wf, byName } = loadWorkflow();
+  const r = runLane({ existingRecord: completeRecord("US"), recompute: true });
+
+  // The lane still runs end to end and still derives the veto — that is the free half.
+  assert.equal(r.decided.properties.lv_anti_icp_flag, "true");
+  assert.equal(r.decided.action, "enrich",
+    "the decision node now reports WHAT the row is; permission is not its call");
+  assert.equal(r.decided.write_request.hs_object_id, r.decided.hs_object_id,
+    "and it emits the canonical write_request the gate reads (D-70-12)");
+
+  // The paid half: with the allowlist empty, the gate refuses — and EMITS the refusal
+  // (D-70-14) rather than dropping the row, so the caller still gets a report.
+  const gate = byName["HubSpot Company Update Write Gate"];
+  assert.ok(gate, "the enrichment lane's companies-update gate exists (2b)");
+  const gated = runCode(gate, [r.decided], {});
+  assert.equal(gated.length, 1, "a refused row is a row, never a silence");
+  assert.equal(gated[0].write_allowed, false, "empty allowlist denies every write");
+  assert.equal(gated[0].action, "write_blocked",
+    "the exact outcome execution 11858 returned, from its new home");
+  assert.ok(gated[0].write_blocked_reason);
+
+  // And it reaches the response: the gate's false lane has its own Build Response Merge
+  // input, so nothing about this refusal depends on the write node having run.
+  assert.deepEqual(
+    targetsOf(wf, "HubSpot Company Update Write Gate IF", 0), ["HubSpot Company Update"]);
+  assert.deepEqual(
+    targetsOf(wf, "HubSpot Company Update Write Gate IF", 1), ["Build Response Merge"]);
+});
