@@ -11,7 +11,7 @@
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50 (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) — shipped 2026-08-19
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52. Phase 51 complete; **Phase 52 deferred INDEFINITELY** (2026-08-25, reaffirmed 2026-08-30 after its gates were satisfied). Not abandoned — deferred by decision.
 - ✅ **v1.1 Unattended Session Runs** — Phases 53–63 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`, `milestones/v1.1-phases/`) — shipped 2026-09-04
-- 📋 **v1.2 Yield and Friction** — Phases 64–69 (`milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`) — **all six phases complete 2026-09-08; milestone not yet closed (`/gsd-complete-milestone`)**
+- 📋 **v1.2 Yield and Friction** — Phases 64–70 (`milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`) — **all six phases complete 2026-09-08; milestone not yet closed (`/gsd-complete-milestone`)**
 
 ## Standing facts
 
@@ -62,6 +62,7 @@ carrying its live evidence.
 - [x] Phase 67: An autonomy flag with sensible defaults (completed 2026-09-07)
 - [x] Phase 68: State the price and keep moving (completed 2026-09-07)
 - [x] Phase 69: Held rows survive the round (completed 2026-09-08)
+- [ ] Phase 70: One merge, one result channel — n8n runtime truth (added 2026-09-09 from the first live batch UAT)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -275,3 +276,19 @@ Plans:
 - The real question is durability: after Roma, the only record of two correctly-held committee
   members is a chat message. Either give suggestion-round declines their own store, or state
   plainly in the skill that they are report-only.
+
+### Phase 70: One merge, one result channel — n8n runtime truth
+
+**Goal:** a batch with two identity lanes and two actions returns every row once, from the
+write that happened, on one client result channel — and the offline harness would have
+caught every finding the 2026-09-09 UAT found.
+
+**Requirements:** TBD at discussion
+
+**Brief:** `.planning/todos/pending/2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md`
+(seven instances of one idiom, F1/F5/F5b/F10/F11/F12 plus the July research-lane row loss).
+
+- Not a debug continuation: the F1/F5/F10–F12 fixes patch sites; this phase retires the idiom.
+- Depends on the F10–F12 fixes landing and the UAT record closing.
+- Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
+
