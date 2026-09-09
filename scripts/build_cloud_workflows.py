@@ -821,9 +821,17 @@ def build_cloud():
         # "LV Enrichment Webhook" credential: both webhook nodes are named
         # "Webhook Trigger", so the existing NODE_CREDENTIAL_MAP entry binds this one
         # identically with zero deploy-script changes.
+        # F10 (uat-batch-review-row-reads-failed, execution 12181): an unset
+        # `responseData` defaults to `firstEntryJson` under `responseMode: lastNode` —
+        # a multi-row `Build Ingest Response` output (one item per decided row)
+        # collapsed to a single item at the webhook boundary. Live: a 2-row batch
+        # (Greg's update, Barry's review) answered with Greg's item only; Barry's
+        # review row never reached the client at all. `allEntries` is n8n's own
+        # documented value for "return every item, not just the first"
+        # (docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook).
         "parameters": {"httpMethod": "POST", "path": "hubspot/contact-upload",
-                       "responseMode": "lastNode", "authentication": "headerAuth",
-                       "options": {}},
+                       "responseMode": "lastNode", "responseData": "allEntries",
+                       "authentication": "headerAuth", "options": {}},
         "id": nid("w"), "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
     }
