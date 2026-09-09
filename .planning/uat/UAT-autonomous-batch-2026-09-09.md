@@ -85,3 +85,16 @@ all_rows['row-2']]` — row-3 was left out by the driver before `run_state.start
 allowed when required, bookkeeping through the same stores, cleanup at session end) the
 report's row-accounting line is the right guard: it now names any row the batch knew about
 and the run did not.
+
+## Round B rerun after the F5 deploy, 2026-09-09 ~05:20Z — run `c2bf9c3f78b146309efecaf7419098f1` (+ solo `80b44c4f…`)
+
+Driver-scripted again (allowed under the 2026-09-09 ruling). Greg + Barry only.
+- **F5 verified live** (12173, 12179): per-run identity correct at `Normalize + Score`.
+- **F1 proven live** (12184, Barry solo): body carries `action: "review"` + the real reason.
+- **Greg was NOT updated.** Execution 12181: `HubSpot Update Write Gate` emitted 0 items,
+  `HubSpot Update` never ran. The gate reads `identity_keys.domain || domain`; the ingest
+  item carries `company_domain` only (F11). The response still said `update` (F12) and the
+  client recorded `write_attempted`; the operator's Claude reported "Landed — updated". Wrong.
+- 2-row ingest body carried ONE item: webhook `responseData` default `firstEntryJson` (F10).
+- Spend: 2 rows enriched (waterfall), ~4 credits. No HubSpot write landed this round.
+- Barry: review, correct (§13.0.1). Nardine excluded. Natalie untouched.

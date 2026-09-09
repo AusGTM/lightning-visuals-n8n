@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: investigating
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
@@ -861,3 +861,22 @@ files_changed:
 
 ## executionOrder (2026-09-09, read via the plugin key)
 `settings.executionOrder` is absent on both the committed `wf_enrichment_cloud.json`/`wf_contact_ingest_cloud.json` and the live `950HPb7a1GgSAIyZ`/`AwbBeShdPgV48eiY` bodies — n8n therefore runs the legacy `v0` order. Live enrichment `updatedAt` was `2026-09-09T03:04:48Z`, after the 01:33Z bounce and before the F5 deploy; source of that touch unknown (operator-Claude probes ran 02:57–03:00Z).
+
+
+## F5 — VERIFIED LIVE 2026-09-09 (post-deploy, executions 12173 and 12179)
+`Enrichment Gate` run0 = email lane, run1 = name lane; `Normalize + Score` run0/run1 carry the SAME row_ids per run (12173: [row-1,row-4] / [row-2,row-3]; 12179: [row-2] / [row-1]). Identity per run correct; email lane ran first both times. F5 closed. The row_id-pairing fallback stays unimplemented.
+
+## F5b — SUSPECTED (same executions): the SYNC response still carries one lane
+`Respond to Webhook` (respondWith `allIncomingItems`) ran once per lane (12173: run0 [row-1,row-4], run1 [row-2,row-3]; 12179: three runs incl. the async-ack). n8n sends only the first response; later runs are no-ops. So a mixed chunk in SYNC mode (match/propose) still returns one lane's items to the client. The async path is immune — `watch.recover_async_dispatch` reads every `Build Response` run off the settled execution (watch.py:426). Confirm with the client's sync body on a mixed propose chunk; fix candidates: always recover from runData (sync too), or merge lanes before Respond.
+
+## F10 — NEW, CONFIRMED by config: the ingest webhook returns ONE item for a multi-row chunk
+`wf_contact_ingest_cloud.json` `Webhook Trigger` has `responseMode: lastNode` and NO `responseData` → n8n default `firstEntryJson`. Execution `12181` (2 rows, Greg update + Barry review): `Build Ingest Response` ran once with 2 items, the client received a single dict (Greg only). Barry's review row never reached `written_records`. Every prior ingest was 1 row (chunk cap 2, but 12145/12147 were separate sends), which is why this never showed. Fix: `responseData: "allEntries"` in `scripts/build_cloud_workflows.py`'s ingest webhook node; the client's `dispatch.dispatch`/`written_records.append_chunk` must accept a list body (check they do not assume a dict).
+
+## F11 — NEW, CONFIRMED on 12181: the ingest UPDATE write gate can never pass by domain
+`HubSpot Update Write Gate` (and `HubSpot Associate Company Write Gate`) read the domain as `identity_keys.domain || json.domain`; the ingest lane's `Decide Action` item carries `company_domain` (and `email`) only — the CREATE gate has the email-domain fallback, the update gate does not. With `TEST_RECORD_IDS=""` and `TEST_RECORD_DOMAINS` containing `wyongraceclub.com.au`, the gate emitted 0 items and `HubSpot Update` never ran. **Greg Purcell (`35551`) was NOT updated.** The operator's driver armed with `record_ids=[]` (the skill's step 7 passes the matched ids as `send_ids`), so by-id would also have failed here; the domain path failing is the backend defect. Fix: give the update/associate gates the same `company_domain` / email-domain fallback the create gate has, in the builder; test with a `Decide Action`-shaped update item.
+
+## F12 — NEW: `Build Ingest Response` cannot see a gate refusal
+It reconstructs rows from `Decide Action` by name, so Greg's row reported `action: "update", hs_object_id: "35551", reason: "single email match"` although the write gate dropped him and no HubSpot node ran. The client classified `write_attempted` (correct per its vocabulary; the operator's Claude read it as "landed"). The enrichment lane has `write_blocked` for exactly this; the ingest lane needs the same: when the write gate emitted no item for a decided row, the response must say `write_blocked`, never `update`/`create`. Test: gate refuses → response action `write_blocked`.
+
+hypothesis: F10 (config default), F11 (field-name mismatch between the ingest Decide Action item and the shared gate helper), F12 (response built from the decision, not the write). All three in `scripts/build_cloud_workflows.py`; F10/F12 also touch the client's body handling and `written_records` mapping (`write_blocked` → GATED already exists).
+next_action: fix F10, F11, F12 in the builder (RED node-chain tests first, one per finding), regenerate `n8n/wf_contact_ingest_cloud.json` (+ local variants), verify the client accepts a LIST ingest body and maps `write_blocked` → GATED; then decide F5b (recommend: sync path recovers from runData like async, or document sync as single-lane and make the skill use async_ack always). Operator deploys + bounces; live proof = a 2-row ingest (one update with `send_ids` carrying the matched id, one review) returning two items, the update actually landing (HubSpot Update ran), and Barry's review reason in the body.
