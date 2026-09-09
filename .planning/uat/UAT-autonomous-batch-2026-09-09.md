@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: complete
 lane: enrich-before-ingest (supervised first live batch, 57-05 Task 4)
 run_id: 377a913c1c9d49129663c6c8740f436d
 client: 0.42.0
@@ -98,3 +98,25 @@ Driver-scripted again (allowed under the 2026-09-09 ruling). Greg + Barry only.
 - 2-row ingest body carried ONE item: webhook `responseData` default `firstEntryJson` (F10).
 - Spend: 2 rows enriched (waterfall), ~4 credits. No HubSpot write landed this round.
 - Barry: review, correct (§13.0.1). Nardine excluded. Natalie untouched.
+
+## Close-out 2026-09-09
+
+| Finding | Status | Proof |
+|---|---|---|
+| F1 review branch reason lost | fixed `0c42b18`, proven live 12184/12194/12196 | body carries `action: review` + reason |
+| F2 durable dir never prunes | fixed `734826b` | `run_report.prune_durable_state` |
+| F3 report not rendered | fixed `392753a` (persisted `run_report-<run_id>.md`) | rendered on c13cafed |
+| F4 row-3 vanished | not a defect — `drv_enrich.py:11` | row-accounting line added |
+| F5 mixed-lane row loss | fixed `995a689`, proven 12173/12179 | per-run identity correct |
+| F5b sync response one lane | no code change `7524ee7` | client buckets missing rows `unchecked` |
+| F7 preview SEND vs gate HELD | open todo | — |
+| F8 enrichment legs read `failed` | open todo | seen again on c13cafed |
+| F9 zoominfo balance intermittent | observe | readable again on c13cafed |
+| F10 ingest body first entry only | fixed `4d35812`, proven 12194 | list of 2 |
+| F11 update gate never passes by domain | fixed `fa447cc`, proven 12194 | `HubSpot Update` ran, 35551 updated + associated |
+| F12 gate refusal reported as update | fixed `8344b7a`, proven 12196 | `write_blocked` |
+
+Structural follow-up: Phase 70 (`.planning/ROADMAP.md`), brief in
+`.planning/todos/pending/2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md`.
+HubSpot state after UAT: `351336543679` (Natalie, created 2026-09-08), `35551` (Greg, updated
++ associated 2026-09-09). Nothing else written. Operator to review/revert by hand.

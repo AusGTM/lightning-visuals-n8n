@@ -1,9 +1,9 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T06:00:00Z
+updated: 2026-09-09T07:30:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
@@ -974,3 +974,11 @@ fix: one paragraph added to `enrich-before-ingest/SKILL.md`'s match step (right 
 files_changed: operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
 next_action: F10, F11, F12, F5b all done. Update operator_handoff and request the
   CHECKPOINT for human verification before moving this session to resolved/.
+
+
+## LIVE PROOF 2026-09-09 — F10/F11/F12 (operator, post-deploy of fa447cc/4d35812/8344b7a)
+Two direct 2-row ingest sends (Greg Purcell update + Barry Milton review), `record_ids=[]`:
+- Send 1, armed domains `wyongraceclub.com.au,bigpond.net.au` → execution `12194`: body is a LIST of two items (F10); Greg `action: "update"`, `association: "associated"` — `HubSpot Update Write Gate`, `HubSpot Update`, `HubSpot Associate Company Write Gate`, `HubSpot Associate Company` all ran (F11); Barry `action: "review"` with the company reason (F1).
+- Send 2, armed domain `bigpond.net.au` only → execution `12196`: Greg `action: "write_blocked"`, `association: "not_attempted"`, zero write nodes ran (F12); Barry `review` again.
+Both windows disarmed; `written_records_failures: []`. Net HubSpot effect: contact `35551` updated and associated to `10215097384` once.
+F5 verified on 12173/12179 (above). F4 closed on `drv_enrich.py:11`. F5b: no code change (7524ee7). F8 (enrichment legs reported `failed`) remains open as its own todo. Session resolved.
