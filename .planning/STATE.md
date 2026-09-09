@@ -1,21 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: Completed 70-01-PLAN.md
-last_updated: "2026-09-09T12:53:23.342Z"
+stopped_at: Completed 70-02-PLAN.md
+last_updated: "2026-09-09T15:00:56.960Z"
 last_activity: 2026-09-09
 last_activity_desc: Phase 70 execution started
-state_head: 59812becd9770857ec7776797547908d36d025e7
+state_head: e9988b8a5b918a8892250338ce5ba84b897423f8
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 2
   total_plans: 23
-  completed_plans: 17
-  percent: 74
+  completed_plans: 18
+  percent: 29
 ---
 
 # Project State
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-09-09 — Phase 70 execution started
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███████░░░] 74% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [███░░░░░░░] 29% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-09T12:53:22.414Z
-**Stopped at:** Completed 70-01-PLAN.md
+**Last session:** 2026-09-09T15:00:56.755Z
+**Stopped at:** Completed 70-02-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -643,6 +643,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 67 P03 | 35min | 3 tasks | 6 files |
 | Phase 67 P04 | 20min | 3 tasks | 6 files |
 | Phase 70 P01 | 45min | 3 tasks | 5 files |
+| Phase 70 P02 | 2h | 3 tasks | 13 files |
 
 ## Decisions
 
@@ -778,6 +779,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 70]: walkerSmoke.json authored in Task 1 (verify dependency), not deferred to Task 2 as the plan's file listing implied
 - [Phase 70]: n8n-nodes-base.extractFromFile treated as explicit identity-passthrough, not the generic unhandled-type fallback
 - [Phase 70]: Merge nodes fire exactly once per replay (buffer-until-ready then lock) rather than modelling n8n's full multi-wave re-firing
+- [Phase 70]: Operator answer to Task 1 (70-02): "proceed" — publish the ack-only webhook contract (D-70-07) and the runData-only result channel (D-70-05), retiring the two-channel design behind the F1/F5/F5b/F10/F11/F12 defect class.
+- [Phase 70]: 70-02 Task 3: splice_carry_merge_after generalizes the D-70-04 carry mechanism into one reusable helper; every carry merge on the ingest lane uses combineByPosition except the source_by_field broadcast (combineAll); the ingest lane now has zero by-name reads (detect_by_name_reads == 0).
 
 ### Roadmap Evolution
 
@@ -927,6 +930,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - Phase 49 Plan 05 Task 3 (W1 write window): 4 of 66 scored companies (9605273630 Port Macquarie Race Club, 9604738976 Bunbury Turf Club, 17696004613 Pinjarra Park, 19100977027 Newcastle Harness Racing Club) already carried correct new-weight components before W1 opened, so the component-only write was a genuine no-op for them and their lv_icp_tier stayed stale at C (oracle expects B, score 45). Parity sweep FAILs with these 4 real findings. No in-scope W1 mechanism can force WF1 to re-grade them (tier PATCH forbidden, n8n allowlist out of scope for W1). Awaiting operator decision at the checkpoint returned by Plan 05's continuation.
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 - lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
+- Open UAT item: 70-02 Task 2's disarmed Merge-semantics probe (Gate 1, deferred per operator ruling 2026-09-09) must be exercised in the end-of-phase UAT — see .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md.
 
 ### Quick Tasks Completed
 
