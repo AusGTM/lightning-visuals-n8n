@@ -8893,13 +8893,25 @@ def _execute_workflow_node(name, x, y, workflow_id, workflow_name, wait_for_sub=
 # outright, not extended — a row arriving without a `write_request` is refused, not
 # rescued by falling back to whatever identity fields happen to be lying around on it.
 def _write_gate_js(action: str) -> str:
+    """D-70-14 (Phase 70 Plan 05 Task 2): stamps a verdict onto EVERY item — never
+    filters any away. The paired IF node (`f"{write_name} Write Gate IF"`,
+    `splice_write_gates` below) routes on `write_allowed`: true reaches the write node
+    unchanged, false carries `action: "write_blocked"` plus a reason and is available to
+    be wired onward as a real row rather than a silence. This function's OWN item count
+    in must equal its item count out on every call — that invariant is what makes a
+    refused row a row instead of a drop."""
     return WRITE_SAFETY_GATE_JS + (
         "\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n"
         "// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n"
-        "return $input.all().filter((it) => {\n"
+        "// D-70-14: maps every item to a verdict — never filters. Output count == input count.\n"
+        "return $input.all().map((it) => {\n"
         "  var wr = it.json.write_request;\n"
-        "  if (!wr) return false;\n"
-        f"  return _writeSafetyAllows({action!r}, wr.hs_object_id || null, wr.domain || null);\n"
+        f"  var allowed = !!wr && _writeSafetyAllows({action!r}, wr.hs_object_id || null, wr.domain || null);\n"
+        "  if (allowed) return { json: { ...it.json, write_allowed: true } };\n"
+        "  var reason = !wr\n"
+        "    ? 'no write_request emitted for this row'\n"
+        "    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n"
+        "  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n"
         "});\n"
     )
 
@@ -8958,31 +8970,55 @@ def assert_write_request_emitters(nodes, conns, gated):
 
 
 def splice_write_gates(nodes, conns, gated):
-    """Insert a write-safety gate Code node in front of each named write node.
+    """Insert a two-node IF-shaped write-safety gate in front of each named write node
+    (D-70-14, Phase 70 Plan 05 Task 2 — reshaped from Task 1's single filtering Code
+    node).
 
     `gated` maps write-node name -> the action string passed to _writeSafetyAllows
     ("create", "enrich" or "review"). Every inbound connection to the write node is
-    re-pointed at its gate. Pure list/dict mutation over already-built structures — no
-    builder needs to know about it. D-70-12: asserts every gated node's upstream emits
-    the canonical `write_request` shape before returning, so a missed emitter fails
-    generation rather than shipping a gate that silently denies (or, pre-this-plan,
-    silently admits via a stale fallback) every row."""
+    re-pointed at the gate's Code node (`f"{write_name} Write Gate"`), which now STAMPS
+    a `write_allowed` verdict onto every item rather than filtering any away. A paired
+    IF node (`f"{write_name} Write Gate IF"`) then routes true items to the write node
+    unchanged and false items out its own second output, carrying `action:
+    "write_blocked"` and a reason.
+
+    The IF's false output is deliberately left UNWIRED by this function — wiring it
+    onward to a lane's response Merge is Task 2c/3's job, once each lane's own
+    pre-gate refusal routing (the ingest precheck, the review precheck) is either
+    removed or accounted for; wiring it here first would risk a Merge starving on a
+    fully-refused batch before that accounting exists (see 70-05-SUMMARY.md's "Next
+    Phase Readiness"). Until that lands, a refused row still travels no further than it
+    did under Task 1's filter — every lane's existing precheck already diverts refused
+    rows before they ever reach this gate, so behaviour is unchanged; only the shape of
+    what a lane COULD do with the false branch has changed.
+
+    Pure list/dict mutation over already-built structures — no builder needs to know
+    about it. D-70-12: asserts every gated node's upstream emits the canonical
+    `write_request` shape before returning, so a missed emitter fails generation rather
+    than shipping a gate that silently denies (or, pre-this-plan, silently admits via a
+    stale fallback) every row."""
     by_name = {n["name"]: n for n in nodes}
     for write_name, action in gated.items():
         target = by_name.get(write_name)
         if target is None:
             raise ValueError(f"splice_write_gates: no node named {write_name!r} to gate")
         gate_name = f"{write_name} Write Gate"
-        gx, gy = target["position"][0] - 150, target["position"][1]
+        gate_if_name = f"{write_name} Write Gate IF"
+        gx, gy = target["position"][0] - 300, target["position"][1]
         nodes.append(code_node(gate_name, _write_gate_js(action), gx, gy))
+        nodes.append(_if_bool_node(gate_if_name, "write_allowed", gx + 150, gy))
         for src, spec in conns.items():
-            if src == gate_name:
+            if src in (gate_name, gate_if_name):
                 continue
             for outputs in spec.get("main", []):
                 for conn in (outputs or []):
                     if conn["node"] == write_name:
                         conn["node"] = gate_name
-        conns[gate_name] = {"main": [[{"node": write_name, "type": "main", "index": 0}]]}
+        conns[gate_name] = {"main": [[{"node": gate_if_name, "type": "main", "index": 0}]]}
+        conns[gate_if_name] = {"main": [
+            [{"node": write_name, "type": "main", "index": 0}],  # true
+            [],                                                    # false — unwired, see docstring
+        ]}
     assert_write_request_emitters(nodes, conns, gated)
     return nodes, conns
 

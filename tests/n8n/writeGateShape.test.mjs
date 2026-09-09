@@ -66,27 +66,34 @@ for (const [fileName, wf, gateName] of GATES) {
 // --- named case: an empty allowlist denies on all four lanes --------------------------
 //
 // Ingest (create), scheduled-maintenance (enrich), review-decision (review) all go
-// through the new IF-shaped... no: through splice_write_gates' Code-node gate, whose
-// committed constants are all disarmed. The enrichment lane has no spliced gate yet
-// (Task 2) — its OWN inline _writeSafetyAllows call is unchanged by this task, and an
-// empty allowlist denies there too, proved directly against Decide Action's committed
-// jsCode.
+// through splice_write_gates' gate. D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code
+// node now STAMPS a verdict onto every item rather than filtering any away — length
+// stays 1 in every case below; the permit/deny signal is `write_allowed`. The
+// enrichment lane has no spliced gate yet (Task 2's own remaining work) — its OWN
+// inline _writeSafetyAllows call is unchanged by this task, and an empty allowlist
+// denies there too, proved directly against Decide Action's committed jsCode.
 test("ingest: HubSpot Create Write Gate denies a fully-identified row with an empty allowlist", () => {
   const js = jsCodeOf(INGEST, "HubSpot Create Write Gate");
   const row = { action: "create", write_request: { action: "create", hs_object_id: null, domain: "exampleco.example", email: "jo@exampleco.example" } };
-  assert.equal(runCode(js, [row]).length, 0, "committed (disarmed) build must deny — empty allowlist");
+  const out = runCode(js, [row]);
+  assert.equal(out.length, 1, "committed (disarmed) build must still emit the row (D-70-14, no drop)");
+  assert.equal(out[0].write_allowed, false, "committed (disarmed) build must deny — empty allowlist");
 });
 
 test("scheduled-maintenance: SJ-1 Set Requested Write Gate denies a fully-identified row with an empty allowlist", () => {
   const js = jsCodeOf(MAINTENANCE, "SJ-1 Set Requested Write Gate");
   const row = { write_request: { action: "enrich", hs_object_id: "999", domain: "exampleco.example", email: null } };
-  assert.equal(runCode(js, [row]).length, 0, "committed (disarmed) build must deny — empty allowlist");
+  const out = runCode(js, [row]);
+  assert.equal(out.length, 1, "committed (disarmed) build must still emit the row (D-70-14, no drop)");
+  assert.equal(out[0].write_allowed, false, "committed (disarmed) build must deny — empty allowlist");
 });
 
 test("review-decision: Review Decision Update Write Gate denies a fully-identified row with an empty allowlist", () => {
   const js = jsCodeOf(REVIEW, "Review Decision Update Write Gate");
   const row = { write_request: { action: "review", hs_object_id: "999", domain: null, email: null } };
-  assert.equal(runCode(js, [row]).length, 0, "committed (disarmed) build must deny — empty allowlist");
+  const out = runCode(js, [row]);
+  assert.equal(out.length, 1, "committed (disarmed) build must still emit the row (D-70-14, no drop)");
+  assert.equal(out[0].write_allowed, false, "committed (disarmed) build must deny — empty allowlist");
 });
 
 test("enrichment lane (unchanged in this task): Decide Action's own empty-allowlist denial still holds", () => {
@@ -112,15 +119,42 @@ test("review lane: Build Review Decision always emits write_request.domain === n
 
 // --- named case: a fully-refused two-row batch never reduces item count below input ---
 //
-// Task 1 does not yet build the IF-shaped refusal-as-a-row mechanism (that is Task 2) —
-// today's Code-node gate still FILTERS. This test exists to document that fact for this
-// task's scope, and will need to flip once Task 2 lands the IF gate: a fully refused
-// batch through today's gate legitimately produces ZERO rows (the pre-Task-2 shape).
-test("ingest: HubSpot Update Write Gate still filters (pre-Task-2 shape) — documents today's behaviour", () => {
+// D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node stamps a verdict on every
+// item and never filters — a fully refused batch still produces one row per input row
+// at the gate itself, each carrying `action: "write_blocked"` and a reason. (Whether
+// that refusal reaches a lane's response builder is a separate, per-lane routing
+// question — Task 2c/3's job, tracked in 70-05-SUMMARY.md's "Next Phase Readiness".
+// This case only pins the gate's OWN non-dropping contract.)
+test("ingest: HubSpot Update Write Gate stamps both rows write_blocked rather than dropping either", () => {
   const js = jsCodeOf(INGEST, "HubSpot Update Write Gate");
   const rows = [
     { action: "update", write_request: { action: "enrich", hs_object_id: "1", domain: null, email: null } },
     { action: "update", write_request: { action: "enrich", hs_object_id: "2", domain: null, email: null } },
   ];
-  assert.equal(runCode(js, rows).length, 0, "disarmed gate drops both rows (filter, not IF, until Task 2)");
+  const out = runCode(js, rows);
+  assert.equal(out.length, 2, "disarmed gate emits both rows (D-70-14 — no filtering)");
+  assert.ok(out.every((r) => r.write_allowed === false && r.action === "write_blocked" && r.write_blocked_reason));
+});
+
+// --- named case: a gate node's jsCode never reduces output below input count ----------
+test("every spliced write gate's Code node preserves item count on a mixed permit/refuse batch", () => {
+  const gateCases = [
+    [INGEST, "HubSpot Update Write Gate"],
+    [INGEST, "HubSpot Create Write Gate"],
+    [INGEST, "HubSpot Associate Company Write Gate"],
+    [MAINTENANCE, "SJ-1 Set Requested Write Gate"],
+    [MAINTENANCE, "SJ-2 Set Requested Write Gate"],
+    [MAINTENANCE, "Dedupe Set Needs Review Write Gate"],
+    [MAINTENANCE, "Review Apply Update Write Gate"],
+    [REVIEW, "Review Decision Update Write Gate"],
+    [REVIEW, "Review Contact Decision Update Write Gate"],
+  ];
+  for (const [wf, gateName] of gateCases) {
+    const js = jsCodeOf(wf, gateName);
+    const rows = [
+      { write_request: { action: "enrich", hs_object_id: "1", domain: null, email: null } },
+      { write_request: null },
+    ];
+    assert.equal(runCode(js, rows).length, 2, `${gateName}: output count must equal input count`);
+  }
 });

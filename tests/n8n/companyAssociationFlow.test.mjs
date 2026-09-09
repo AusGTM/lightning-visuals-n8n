@@ -130,19 +130,28 @@ test("the association PUT is a gated write node reading only fields its gate emi
     .filter(([, spec]) =>
       (spec.main || []).some((outs) => (outs || []).some((c) => c.node === "HubSpot Associate Company")))
     .map(([src]) => src);
-  assert.deepEqual(feeders, ["HubSpot Associate Company Write Gate"]);
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate is now two nodes — the Code node stamps
+  // a verdict, the paired IF routes. "HubSpot Associate Company" sits behind the IF's
+  // TRUE output now, not the Code node directly.
+  assert.deepEqual(feeders, ["HubSpot Associate Company Write Gate IF"]);
 
   const gateJs = jsCodeOf("HubSpot Associate Company Write Gate");
   assert.match(gateJs, /_writeSafetyAllows/);
   // D-70-12 (Phase 70 Plan 05 Task 1): the gate reads ONLY `write_request` now.
   const row = { action: "enrich", hs_object_id: "12345", domain: "club.example", assoc_url: "u",
     write_request: { action: "enrich", hs_object_id: "12345", domain: "club.example", email: null } };
-  assert.equal(runCode(gateJs, [row]).length, 0, "disarmed: the association is dropped");
+  // D-70-14: the Code node stamps a verdict, never drops — length stays 1 either way.
+  const disarmed = runCode(gateJs, [row]);
+  assert.equal(disarmed.length, 1, "disarmed: still one row (D-70-14, no filtering)");
+  assert.equal(disarmed[0].write_allowed, false, "disarmed: the association is refused");
+  assert.equal(disarmed[0].action, "write_blocked");
   const armed = ARM(gateJs).replace(
     'const TEST_RECORD_DOMAINS = "";',
     'const TEST_RECORD_DOMAINS = "club.example";'
   );
-  assert.equal(runCode(armed, [row]).length, 1, "armed with a matching domain: it passes");
+  const permitted = runCode(armed, [row]);
+  assert.equal(permitted.length, 1, "armed with a matching domain: it passes");
+  assert.equal(permitted[0].write_allowed, true);
 });
 
 test("Build Ingest Response reports every decided row, associated or not", () => {

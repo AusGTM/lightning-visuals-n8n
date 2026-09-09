@@ -114,8 +114,11 @@ test("HubSpot Update Write Gate: still denies when the domain is not on the allo
     ALLOW_HUBSPOT_RECORD_WRITES: "true",
     TEST_RECORD_DOMAINS: "some-other-domain.example",
   });
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node stamps a verdict now — it
+  // never drops. Length stays 1; check the verdict instead.
   const gated = runCode(gateJs, [decided]);
-  assert.equal(gated.length, 0, "an unlisted domain must still be refused");
+  assert.equal(gated.length, 1, "the gate still emits the row (D-70-14, no drop)");
+  assert.equal(gated[0].write_allowed, false, "an unlisted domain must still be refused");
 });
 
 test("HubSpot Update Write Gate: a row with no write_request at all is refused, not rescued (D-70-12)", () => {
@@ -130,6 +133,7 @@ test("HubSpot Update Write Gate: a row with no write_request at all is refused, 
     identity_keys: { domain: "wyongraceclub.com.au" },
   };
   const gated = runCode(gateJs, [legacyShapedRow]);
-  assert.equal(gated.length, 0,
+  assert.equal(gated.length, 1, "the gate still emits the row (D-70-14, no drop)");
+  assert.equal(gated[0].write_allowed, false,
     "a row without write_request must be refused even though every legacy fallback field is present and allowlisted");
 });

@@ -59,8 +59,13 @@ const createRow = {
   write_request: { action: "create", hs_object_id: null, domain: DOMAIN, email: null },
 };
 
-test("committed (disarmed) create gate drops a create row", () => {
-  assert.equal(runCode(gateJs(), [createRow]).length, 0);
+// D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node stamps a verdict now — it
+// never drops. Length stays 1 in every case below; the permit/deny signal moved to
+// `write_allowed` on the output row.
+test("committed (disarmed) create gate refuses a create row", () => {
+  const out = runCode(gateJs(), [createRow]);
+  assert.equal(out.length, 1, "the gate still emits the row (D-70-14, no drop)");
+  assert.equal(out[0].json.write_allowed, false);
 });
 
 test("arming ONLY ALLOW_HUBSPOT_REVIEW_WRITES grants nothing on the dispatch path", () => {
@@ -69,9 +74,11 @@ test("arming ONLY ALLOW_HUBSPOT_REVIEW_WRITES grants nothing on the dispatch pat
   // way to satisfy the dispatch gate and D-02's separation is gone.
   let js = arm(gateJs(), "ALLOW_HUBSPOT_REVIEW_WRITES", "true");
   js = arm(js, "TEST_RECORD_DOMAINS", DOMAIN);
+  const out = runCode(js, [createRow]);
+  assert.equal(out.length, 1);
   assert.equal(
-    runCode(js, [createRow]).length,
-    0,
+    out[0].json.write_allowed,
+    false,
     "review arming must not enable a create/dispatch write"
   );
 });

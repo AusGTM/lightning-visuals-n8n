@@ -504,7 +504,11 @@ test("(b) a real rejection through the COMMITTED (disarmed) gate yields zero ite
     hs_object_id: "789", domain: "exampleracing.example",
     properties: { [P_REVIEW_REASON]: REJECT_BODY.reason },
   };
-  assert.equal(runNode(jsCodeOf(GATE), [wouldHaveReached], {}).length, 0);
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node stamps a verdict now — it
+  // never drops. No write_request on this hand-shaped row either, so it is refused too.
+  const gated = runNode(jsCodeOf(GATE), [wouldHaveReached], {});
+  assert.equal(gated.length, 1, "the gate still emits the row (D-70-14, no drop)");
+  assert.equal(gated[0].write_allowed, false);
 });
 
 test("(c) the SAME row passes with ONLY ALLOW_HUBSPOT_REVIEW_WRITES armed + a matching allowlist", () => {
@@ -529,17 +533,22 @@ test("(c2) the review flag armed with an EMPTY allowlist still denies everything
   // grants nothing. Asserted, not treated as a bug.
   const { built } = drive({ ...REJECT_BODY, dry_run: false });
   const armed = armConstants(jsCodeOf(GATE), { ALLOW_HUBSPOT_REVIEW_WRITES: "true" });
-  assert.equal(runNode(armed, [built], {}).length, 0);
+  // D-70-14: the gate stamps, never drops — length stays 1; check the verdict.
+  const gated = runNode(armed, [built], {});
+  assert.equal(gated.length, 1);
+  assert.equal(gated[0].write_allowed, false);
 });
 
-test("(d) the two DISPATCH constants armed instead, review left disarmed, drops the row", () => {
+test("(d) the two DISPATCH constants armed instead, review left disarmed, refuses the row", () => {
   // (b) and (d) differ from (c) only in WHICH constant is armed, so this pair fails the
   // moment the review gate starts reading a dispatch constant (D-02).
   const { built } = drive({ ...REJECT_BODY, dry_run: false });
   const armed = armConstants(jsCodeOf(GATE), {
     ALLOW_HUBSPOT_RECORD_WRITES: "true", ALLOW_HUBSPOT_CREATE: "true", TEST_RECORD_IDS: "789",
   });
-  assert.equal(runNode(armed, [built], {}).length, 0);
+  const gated = runNode(armed, [built], {});
+  assert.equal(gated.length, 1);
+  assert.equal(gated[0].write_allowed, false);
 });
 
 // --- (e) the caller cannot inject a write (T-30-05, D-05/D-07) -------------------------
@@ -716,11 +725,14 @@ test("(g2) the write branch re-splits on object type, and BOTH PATCHes sit behin
   assert.deepEqual(contactWrite.map((c) => c.node), [CONTACT_GATE],
     "the contacts PATCH is reachable only through a write gate");
   assert.deepEqual(companyWrite.map((c) => c.node), [GATE]);
-  // Phase 70 Plan 04 (D-70-04): the gate's real edge to the PATCH is untouched; a SECOND
-  // fan edge to "Review Contact Decision Update Carry Merge" is additive (carries the
-  // gate's own row across the PATCH hop for the verify-fetch lane downstream).
+  // Phase 70 Plan 04 (D-70-04): a SECOND fan edge to "Review Contact Decision Update
+  // Carry Merge" is additive (carries the gate's own row across the PATCH hop for the
+  // verify-fetch lane downstream). D-70-14 (Phase 70 Plan 05 Task 2): the gate's real
+  // edge to the PATCH now goes through the paired IF node, not straight to the PATCH.
   assert.deepEqual(WF.connections[CONTACT_GATE].main[0].map((c) => c.node),
-    ["Review Contact Decision Update", "Review Contact Decision Update Carry Merge"]);
+    [`${CONTACT_GATE} IF`, "Review Contact Decision Update Carry Merge"]);
+  assert.deepEqual(WF.connections[`${CONTACT_GATE} IF`].main[0].map((c) => c.node),
+    ["Review Contact Decision Update"]);
 
   const patch = WF.nodes.find((n) => n.name === "Review Contact Decision Update");
   assert.match(patch.parameters.url, /objects\/contacts\//);
@@ -742,24 +754,33 @@ test("(g3) a contacts REJECTION works exactly as a company one, and the contacts
   assert.deepEqual(Object.keys(built.would_write), [P_REVIEW_REASON]);
   assert.equal(built.dry_run, false, "non-vacuity: this row does reach the write branch");
 
-  assert.equal(runNode(jsCodeOf(CONTACT_GATE), [built], {}).length, 0,
-    "committed and disarmed");
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node stamps a verdict now — it
+  // never drops. Length stays 1 throughout; the permit/deny signal is `write_allowed`.
+  const disarmedOut = runNode(jsCodeOf(CONTACT_GATE), [built], {});
+  assert.equal(disarmedOut.length, 1, "committed and disarmed still emits the row");
+  assert.equal(disarmedOut[0].write_allowed, false, "committed and disarmed refuses");
   // A contact carries no `domain`, so TEST_RECORD_IDS is the ONLY way to allowlist one.
   assert.equal("domain" in built, false, "non-vacuity for the assertion below");
   const armedByDomain = armConstants(jsCodeOf(CONTACT_GATE), {
     ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_DOMAINS: "example.com",
   });
-  assert.equal(runNode(armedByDomain, [built], {}).length, 0,
+  const byDomainOut = runNode(armedByDomain, [built], {});
+  assert.equal(byDomainOut.length, 1);
+  assert.equal(byDomainOut[0].write_allowed, false,
     "a domain allowlist cannot reach a contact — the operator must use TEST_RECORD_IDS");
   const armedById = armConstants(jsCodeOf(CONTACT_GATE), {
     ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242",
   });
-  assert.equal(runNode(armedById, [built], {}).length, 1);
+  const byIdOut = runNode(armedById, [built], {});
+  assert.equal(byIdOut.length, 1);
+  assert.equal(byIdOut[0].write_allowed, true);
 
   const dispatchArmed = armConstants(jsCodeOf(CONTACT_GATE), {
     ALLOW_HUBSPOT_RECORD_WRITES: "true", ALLOW_HUBSPOT_CREATE: "true", TEST_RECORD_IDS: "4242",
   });
-  assert.equal(runNode(dispatchArmed, [built], {}).length, 0,
+  const dispatchOut = runNode(dispatchArmed, [built], {});
+  assert.equal(dispatchOut.length, 1);
+  assert.equal(dispatchOut[0].write_allowed, false,
     "arming dispatch must never authorise a review write (D-02)");
 });
 
@@ -802,12 +823,17 @@ test("(g4) a contacts APPROVE with no held candidate is now a real write reachin
   assert.equal(built.would_write[P_NEEDS_REVIEW], "false", "an approval clears the queue");
 
   // Mirrors (g5)'s armed case and (g3)'s disarmed one, for the CONTACT gate specifically.
-  assert.equal(runNode(jsCodeOf(CONTACT_GATE), [built], {}).length, 0, "committed and disarmed");
+  // D-70-14: the gate stamps, never drops — length stays 1; check the verdict.
+  const disarmedOut = runNode(jsCodeOf(CONTACT_GATE), [built], {});
+  assert.equal(disarmedOut.length, 1, "committed and disarmed still emits the row");
+  assert.equal(disarmedOut[0].write_allowed, false, "committed and disarmed refuses");
   const armed = armConstants(jsCodeOf(CONTACT_GATE), {
     ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242",
   });
-  assert.equal(runNode(armed, [built], {}).length, 1,
+  const armedOut = runNode(armed, [built], {});
+  assert.equal(armedOut.length, 1,
     "review arming must authorise this contact's real write");
+  assert.equal(armedOut[0].write_allowed, true);
 
   const out = respond(built, built);
   assert.deepEqual(Object.keys(out).sort(), CONTRACT_KEYS);

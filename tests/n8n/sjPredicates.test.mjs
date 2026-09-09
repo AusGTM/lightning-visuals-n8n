@@ -225,6 +225,12 @@ test("SJ-2: terminates in a HubSpot Update that sets lv_enrichment_requested=tru
     "the non-skip branch dispatches to the write-safety gate");
   const gate = findNode(wf, "SJ-2 Set Requested Write Gate");
   assert.match(gate.parameters.jsCode, /_writeSafetyAllows/);
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate is now two nodes — the Code node stamps
+  // a verdict, a paired IF node routes on it. One more hop through the IF's TRUE output
+  // to reach the terminal Update.
   const afterGate = wf.connections[gate.name].main[0].map((c) => c.node);
-  assert.ok(afterGate.includes("SJ-2 Set Requested"), "the gate dispatches to the terminal Update");
+  assert.ok(afterGate.includes("SJ-2 Set Requested Write Gate IF"),
+    "the gate dispatches to its paired IF node");
+  const afterIf = wf.connections["SJ-2 Set Requested Write Gate IF"].main[0].map((c) => c.node);
+  assert.ok(afterIf.includes("SJ-2 Set Requested"), "the IF's true branch dispatches to the terminal Update");
 });

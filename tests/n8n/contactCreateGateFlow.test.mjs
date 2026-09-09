@@ -115,9 +115,13 @@ test("HubSpot Create Write Gate: a create-action row is dropped with an empty al
   const createRow = { action: "create", hs_object_id: null,
     write_request: { action: "create", hs_object_id: null, domain: "exampleco.example", email: null } };
 
-  // Committed (disarmed): both write-safety booleans false, allowlist empty -> dropped.
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node now STAMPS a verdict onto
+  // every item rather than dropping any — length stays 1 in every case below; only the
+  // paired IF node (not exercised by this offline runCode helper) routes on the verdict.
   const disarmed = runCode(gateJs, [createRow]);
-  assert.equal(disarmed.length, 0, "disarmed gate must drop the row (no items pass)");
+  assert.equal(disarmed.length, 1, "disarmed gate must still emit the row (D-70-14, no drop)");
+  assert.equal(disarmed[0].write_allowed, false, "disarmed: refused");
+  assert.equal(disarmed[0].action, "write_blocked");
 
   // Arm ALLOW_HUBSPOT_RECORD_WRITES + ALLOW_HUBSPOT_CREATE, but leave the allowlist
   // empty — the allowlist is a REAL second key, not satisfied by the two booleans alone.
@@ -125,7 +129,8 @@ test("HubSpot Create Write Gate: a create-action row is dropped with an empty al
     .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";', 'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
     .replace('const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
   const stillDropped = runCode(booleansOnlyJs, [createRow]);
-  assert.equal(stillDropped.length, 0, "booleans armed but allowlist empty must still drop the row");
+  assert.equal(stillDropped.length, 1, "booleans armed but allowlist empty must still emit the row");
+  assert.equal(stillDropped[0].write_allowed, false, "booleans armed but allowlist empty must still refuse");
 
   // Now also populate the domain allowlist with a matching value -> the row passes.
   const fullyArmedJs = booleansOnlyJs.replace(
@@ -173,17 +178,22 @@ test("BUG 27: an armed create gate passes Decide Action's verbatim net-new outpu
   assert.equal(through.length, 1, "the canary's exact failure: armed + allowlisted domain must pass");
 });
 
-test("BUG 27 guard still binds: a non-allowlisted domain is dropped even when armed", () => {
+test("BUG 27 guard still binds: a non-allowlisted domain is refused even when armed", () => {
   const wf = loadWorkflow();
   const decided = decideActionOutput(wf, "someone@elsewhere.example");
-  assert.equal(runCode(armedGateCode(wf), decided).length, 0);
+  const out = runCode(armedGateCode(wf), decided);
+  // D-70-14: the gate stamps, never drops — length matches input; check the verdict.
+  assert.equal(out.length, decided.length);
+  assert.ok(out.every((r) => r.write_allowed === false));
 });
 
-test("BUG 27 guard still binds: disarmed drops the allowlisted row too", () => {
+test("BUG 27 guard still binds: disarmed refuses the allowlisted row too", () => {
   const wf = loadWorkflow();
   const decided = decideActionOutput(wf, "canary-23-06-20260731@australiagtm.com");
   const disarmedGate = jsCodeOf(wf, "HubSpot Create Write Gate")
     .replace('const TEST_RECORD_DOMAINS = "";',
              'const TEST_RECORD_DOMAINS = "australiagtm.com";');
-  assert.equal(runCode(disarmedGate, decided).length, 0);
+  const out = runCode(disarmedGate, decided);
+  assert.equal(out.length, decided.length);
+  assert.ok(out.every((r) => r.write_allowed === false));
 });

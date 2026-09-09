@@ -627,11 +627,42 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\nreturn $input.all().filter((it) => {\n  var wr = it.json.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows('review', wr.hs_object_id || null, wr.domain || null);\n});\n"
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('review', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
       "id": "c00390000-0000-4000-8000-000000000000",
       "name": "Review Decision Update Write Gate",
       "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00400000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.write_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00410000-0000-4000-8000-000000000000",
+      "name": "Review Decision Update Write Gate IF",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
         1830,
@@ -641,11 +672,42 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\nreturn $input.all().filter((it) => {\n  var wr = it.json.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows('review', wr.hs_object_id || null, wr.domain || null);\n});\n"
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('review', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00400000-0000-4000-8000-000000000000",
+      "id": "c00420000-0000-4000-8000-000000000000",
       "name": "Review Contact Decision Update Write Gate",
       "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00430000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.write_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00440000-0000-4000-8000-000000000000",
+      "name": "Review Contact Decision Update Write Gate IF",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
         1830,
@@ -665,7 +727,7 @@
           }
         }
       },
-      "id": "m00410000-0000-4000-8000-000000000000",
+      "id": "m00450000-0000-4000-8000-000000000000",
       "name": "Review Decision Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -687,7 +749,7 @@
           }
         }
       },
-      "id": "m00420000-0000-4000-8000-000000000000",
+      "id": "m00460000-0000-4000-8000-000000000000",
       "name": "Review Verify Fetch Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -709,7 +771,7 @@
           }
         }
       },
-      "id": "m00430000-0000-4000-8000-000000000000",
+      "id": "m00470000-0000-4000-8000-000000000000",
       "name": "Review Contact Decision Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -731,7 +793,7 @@
           }
         }
       },
-      "id": "m00440000-0000-4000-8000-000000000000",
+      "id": "m00480000-0000-4000-8000-000000000000",
       "name": "Review Contact Verify Fetch Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -753,7 +815,7 @@
           }
         }
       },
-      "id": "m00450000-0000-4000-8000-000000000000",
+      "id": "m00490000-0000-4000-8000-000000000000",
       "name": "Review Extract Record Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -775,7 +837,7 @@
           }
         }
       },
-      "id": "m00460000-0000-4000-8000-000000000000",
+      "id": "m00500000-0000-4000-8000-000000000000",
       "name": "Review Queue Search Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -797,7 +859,7 @@
           }
         }
       },
-      "id": "m00470000-0000-4000-8000-000000000000",
+      "id": "m00510000-0000-4000-8000-000000000000",
       "name": "Review Queue Contact Search Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -1220,7 +1282,7 @@
       "main": [
         [
           {
-            "node": "Review Decision Update",
+            "node": "Review Decision Update Write Gate IF",
             "type": "main",
             "index": 0
           },
@@ -1232,11 +1294,23 @@
         ]
       ]
     },
+    "Review Decision Update Write Gate IF": {
+      "main": [
+        [
+          {
+            "node": "Review Decision Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
     "Review Contact Decision Update Write Gate": {
       "main": [
         [
           {
-            "node": "Review Contact Decision Update",
+            "node": "Review Contact Decision Update Write Gate IF",
             "type": "main",
             "index": 0
           },
@@ -1246,6 +1320,18 @@
             "index": 1
           }
         ]
+      ]
+    },
+    "Review Contact Decision Update Write Gate IF": {
+      "main": [
+        [
+          {
+            "node": "Review Contact Decision Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Review Decision Update Carry Merge": {

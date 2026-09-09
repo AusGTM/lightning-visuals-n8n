@@ -563,11 +563,42 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\nreturn $input.all().filter((it) => {\n  var wr = it.json.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows('enrich', wr.hs_object_id || null, wr.domain || null);\n});\n"
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('enrich', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
       "id": "c00360000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Write Gate",
       "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4100,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00370000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.write_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00380000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Write Gate IF",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
         4250,
@@ -577,11 +608,42 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\nreturn $input.all().filter((it) => {\n  var wr = it.json.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows('create', wr.hs_object_id || null, wr.domain || null);\n});\n"
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('create', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00370000-0000-4000-8000-000000000000",
+      "id": "c00390000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Write Gate",
       "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00400000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.write_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00410000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Write Gate IF",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
         4470,
@@ -591,11 +653,42 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\nreturn $input.all().filter((it) => {\n  var wr = it.json.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows('enrich', wr.hs_object_id || null, wr.domain || null);\n});\n"
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('enrich', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00380000-0000-4000-8000-000000000000",
+      "id": "c00420000-0000-4000-8000-000000000000",
       "name": "HubSpot Associate Company Write Gate",
       "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4760,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00430000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.write_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00440000-0000-4000-8000-000000000000",
+      "name": "HubSpot Associate Company Write Gate IF",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
         4910,
@@ -615,7 +708,7 @@
           }
         }
       },
-      "id": "m00390000-0000-4000-8000-000000000000",
+      "id": "m00450000-0000-4000-8000-000000000000",
       "name": "Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -637,7 +730,7 @@
           }
         }
       },
-      "id": "m00400000-0000-4000-8000-000000000000",
+      "id": "m00460000-0000-4000-8000-000000000000",
       "name": "Create Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -659,7 +752,7 @@
           }
         }
       },
-      "id": "m00410000-0000-4000-8000-000000000000",
+      "id": "m00470000-0000-4000-8000-000000000000",
       "name": "Associate Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -681,7 +774,7 @@
           }
         }
       },
-      "id": "m00420000-0000-4000-8000-000000000000",
+      "id": "m00480000-0000-4000-8000-000000000000",
       "name": "Verify Email Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -703,7 +796,7 @@
           }
         }
       },
-      "id": "m00430000-0000-4000-8000-000000000000",
+      "id": "m00490000-0000-4000-8000-000000000000",
       "name": "Search By Email Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -725,7 +818,7 @@
           }
         }
       },
-      "id": "m00440000-0000-4000-8000-000000000000",
+      "id": "m00500000-0000-4000-8000-000000000000",
       "name": "Company Domain Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -747,7 +840,7 @@
           }
         }
       },
-      "id": "m00450000-0000-4000-8000-000000000000",
+      "id": "m00510000-0000-4000-8000-000000000000",
       "name": "Company Name Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -769,7 +862,7 @@
           }
         }
       },
-      "id": "m00460000-0000-4000-8000-000000000000",
+      "id": "m00520000-0000-4000-8000-000000000000",
       "name": "Source By Field Broadcast",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -783,7 +876,7 @@
         "mode": "append",
         "numberInputs": 3
       },
-      "id": "m00470000-0000-4000-8000-000000000000",
+      "id": "m00530000-0000-4000-8000-000000000000",
       "name": "Ingest Merge Response",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -1181,7 +1274,7 @@
       "main": [
         [
           {
-            "node": "HubSpot Update",
+            "node": "HubSpot Update Write Gate IF",
             "type": "main",
             "index": 0
           },
@@ -1193,11 +1286,23 @@
         ]
       ]
     },
+    "HubSpot Update Write Gate IF": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
     "HubSpot Create Write Gate": {
       "main": [
         [
           {
-            "node": "HubSpot Create",
+            "node": "HubSpot Create Write Gate IF",
             "type": "main",
             "index": 0
           },
@@ -1209,11 +1314,23 @@
         ]
       ]
     },
+    "HubSpot Create Write Gate IF": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Create",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
     "HubSpot Associate Company Write Gate": {
       "main": [
         [
           {
-            "node": "HubSpot Associate Company",
+            "node": "HubSpot Associate Company Write Gate IF",
             "type": "main",
             "index": 0
           },
@@ -1223,6 +1340,18 @@
             "index": 1
           }
         ]
+      ]
+    },
+    "HubSpot Associate Company Write Gate IF": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Associate Company",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Update Carry Merge": {

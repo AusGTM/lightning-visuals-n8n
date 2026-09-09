@@ -250,7 +250,10 @@ for (const { name, constants } of ARMING_MATRIX) {
     // still carries the hs_object_id/domain the gate itself reads — same shape (b)(c)(c2)(d)
     // already use in reviewDecisionEndpoint.test.mjs.
     const disarmedBuilt = drive({ ...REJECT_BODY, dry_run: false }).built;
-    const gatePermits = runNode(gateJs, [disarmedBuilt], {}).length === 1;
+    // D-70-14 (Phase 70 Plan 05 Task 2): the gate's Code node stamps a verdict now — it
+    // never drops, so length is always 1; the permit/deny signal is `write_allowed`.
+    const gateOut = runNode(gateJs, [disarmedBuilt], {});
+    const gatePermits = gateOut.length === 1 && gateOut[0].write_allowed === true;
 
     assert.equal(precheckPermits, gatePermits,
       `${name}: pre-check said permit=${precheckPermits}, gate said permit=${gatePermits}`);

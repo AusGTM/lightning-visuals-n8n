@@ -51,13 +51,20 @@ test("Dedupe Sweep feeds a downstream HubSpot write node that consumes to_review
     "the sweep must dispatch into a write-safety gate, not straight at the write node");
   const afterGate = wf.connections[gate.name].main[0].map((c) => c.node);
   assert.equal(afterGate.length, 1);
+  // D-70-14 (Phase 70 Plan 05 Task 2): the gate is now two nodes — the Code node stamps
+  // a verdict, a paired IF node routes on it. One more hop through the IF's TRUE output
+  // to reach the actual write node.
+  const gateIf = findNode(wf, afterGate[0]);
+  assert.equal(gateIf.type, "n8n-nodes-base.if", "the gate now dispatches through an IF node");
+  const afterIf = wf.connections[gateIf.name].main[0].map((c) => c.node);
+  assert.equal(afterIf.length, 1);
   // BUG 18: the write node was a native hubspot node with `operation: "update"`, which does
   // not exist for resource:contact (upstream ContactDescription.ts offers upsert, not
   // update) — so it would have fallen through n8n's dispatch chain and returned json:null
   // with status:success, BUG 10's failure mode on the contacts side. It is now the shared
   // credential-bound PATCH, and the flag literal moved into the sweep's row `properties`.
   // The property under test is unchanged: the sweep reaches a write that sets the flag.
-  const downstream = findNode(wf, afterGate[0]);
+  const downstream = findNode(wf, afterIf[0]);
   assert.equal(downstream.type, "n8n-nodes-base.httpRequest");
   assert.equal(downstream.parameters.method, "PATCH");
   assert.match(downstream.parameters.url, /crm\/v3\/objects\/contacts\//);
