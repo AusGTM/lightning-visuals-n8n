@@ -5,7 +5,7 @@
 # accessor form, the dynamic call form `recoverConvergedRun` uses when inlined (research
 # Pitfall 2: an identifier held in a variable, no adjacent quote character for a
 # literal-substring scan to catch), and `n8n/code/nodeRunRecovery.js` being inlined at
-# all — and reports a NON-ZERO count against every committed cloud workflow TODAY.
+# all.
 #
 # This is the detector's own RED proof (mirrors D-70-18's requirement for the walker): a
 # detector that found nothing today would pass plan 70-04's "flip to zero" gate
@@ -18,10 +18,10 @@
 #   build_enrichment_cloud()      -> 119 violations
 #   build_review_decision_cloud() -> 12 violations
 #
-# Plan 70-04's flip-to-zero gate has this baseline to point at. Re-run this module's
-# docstring-adjacent assertion (test_detector_finds_todays_violations) any time the
-# migration progresses — the counts will fall, never silently reset to a stale "0" that
-# would let a real regression hide again.
+# Plan 70-02 Task 3 retires every by-name read on the ingest lane (build_cloud() below is
+# the FIRST of the three to flip). build_enrichment_cloud()/build_review_decision_cloud()
+# are plan 70-04's job — still non-zero here, still RED, so a real regression on those
+# two workflows cannot silently hide behind this file's own edit.
 import sys
 from pathlib import Path
 
@@ -34,9 +34,17 @@ import build_cloud_workflows as bcw  # noqa: E402
 REQUIRED_KEYS = {"workflow", "node", "path", "form", "excerpt"}
 
 
+def test_ingest_lane_has_zero_by_name_reads():
+    """D-70-03 (Phase 70 Plan 02 Task 3): the ingest lane's carry merges retire every
+    by-name read the detector could see — the FIRST of the three cloud workflows to
+    reach zero (build_enrichment_cloud()/build_review_decision_cloud() are plan 70-04)."""
+    violations = bcw.detect_by_name_reads(bcw.build_cloud())
+    assert violations == [], f"build_cloud() still has by-name reads: {violations}"
+
+
 @pytest.mark.parametrize(
     "builder_name",
-    ["build_cloud", "build_enrichment_cloud", "build_review_decision_cloud"],
+    ["build_enrichment_cloud", "build_review_decision_cloud"],
 )
 def test_detector_finds_todays_violations(builder_name):
     """The detector's own RED proof: a detector that found nothing today would pass
