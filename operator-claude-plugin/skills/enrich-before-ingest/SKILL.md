@@ -190,20 +190,22 @@ whatever seven columns happened to be in the source file.
    )
    ```
 
-   **A chunk mixing identity lanes (some rows with an email, some without, some with
-   only a LinkedIn URL) can come back over HTTP carrying fewer items than rows sent —
-   trust `classify_matches`, do not re-split or re-send by hand.** The enrichment
-   webhook's synchronous response only ever reflects ONE lane's worth of items when a
-   chunk fires more than one of its lanes in the same n8n execution (n8n's own
-   `Respond to Webhook` semantics: only the first lane's run is sent back over HTTP,
-   later lanes' runs are computed correctly server-side but never reach the caller —
-   uat-batch-review-row-reads-failed F5b). This is why `classify_matches` above is
-   handed `spec["rows"]` (every row the chunk sent), never `outcome.responses` alone,
-   and why it walks that row list rather than the response body: a row with no
-   matching response item is bucketed `unchecked` (see its own docstring), never
-   silently dropped and never misread as `unmatched`. An `unchecked` row already has
-   a real second chance — the re-request pass, below — so a short-looking sync body
-   here is an expected shape, not a signal to intervene.
+   **The HTTP response carries NO row data at all — it is an ack. Read row outcomes
+   from the execution, never from the wire.** (Rewritten 2026-09-09, Phase 70 D-70-05 /
+   D-70-07; the F5b paragraph this replaces described the synchronous body as a data
+   channel that returned one lane's worth of items, which is no longer how this backend
+   answers.) The enrichment webhook now responds `{run_id, accepted, row_ids}` and
+   nothing else, from a single `Build Ack` node, and every row's real outcome is read
+   from the settled execution's runData by the `run_id` this client minted. There is no
+   longer a short-body shape to reason about, because there is no row-carrying body: a
+   lane that fires late is recovered exactly like one that fires first.
+
+   `classify_matches` above is still handed `spec["rows"]` (every row the chunk sent)
+   and still walks that row list rather than any response body — for the SAME reason,
+   now stated positively: the row list is the client's own record of what it asked for,
+   so a row with no recovered outcome is bucketed `unchecked` (see its own docstring),
+   never silently dropped and never misread as `unmatched`. An `unchecked` row has a
+   real second chance in the re-request pass below.
 
    **This search needs no arming.** It writes nothing to HubSpot and spends no
    provider credit — it is a read wearing a search's clothes, not a step this flow's
@@ -468,13 +470,13 @@ whatever seven columns happened to be in the source file.
    2026-08-31, operator decision "Option B" — see `scripts/watch.py`'s "Async recovery"
    section for the full mechanism).** A `mode: "propose"` row's proposed field values
    never travel by any channel `run_state.py` reads (CLAUDE.md §13.0.2: progress is
-   read by the client, never by n8n) — `async_ack=True` makes the synchronous response
-   an ack only (`Build Async Ack` wins the race against the full chain, deterministically,
-   every time). The values are not lost, though: `Build Response` still runs to
+   read by the client, never by n8n). Since Phase 70 (D-70-07) the synchronous response
+   is an ack ALWAYS — `Build Ack` is the lane's one responder and there is no flag to
+   pass, so nothing here opts in. The values are not lost: `Build Response` still runs to
    completion and its own output — read off the settled execution by the SAME `run_id`
-   this run minted, an exact match, never a timing guess — is byte-identical to what the
-   synchronous body would have carried. `watch.recover_async_dispatch` is the one place
-   that reads it; nothing here re-implements that walk.
+   this run minted, an exact match, never a timing guess — is the row data the wire never
+   carried. `watch.recover_async_dispatch` is the one place that reads it; nothing here
+   re-implements that walk.
 
    `send_ids`/`send_domains`/`allow_create`/`object_type`/`providers_override` are whatever
    the earlier steps resolved for this send — bound to real names here, never left as
@@ -549,7 +551,7 @@ whatever seven columns happened to be in the source file.
        with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
                                     allow_create, cfg, grant=decision["grant"]) as window:
            outcome = chunking.dispatch_plan(
-               plan, providers, True, cfg, run_id=run_id, async_ack=True,
+               plan, providers, True, cfg, run_id=run_id,
                execution_ceiling=remaining_execution_ceiling)
        disarm = window.disarm_result
    except Exception:

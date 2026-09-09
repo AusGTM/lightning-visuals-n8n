@@ -16,6 +16,43 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-09-09
+
+### Changed
+- **The result channel is the execution, not the wire (Phase 70, D-70-05 / D-70-07).** Both
+  row-outcome lanes now answer every request with an ack only — `{run_id, accepted, row_ids}`
+  from a single responder — and every row's real outcome is read from the settled execution's
+  runData, keyed on the `run_id` this client minted. The client had already collapsed to one
+  poll site in 70-06; this release brings the SKILLs into line with it.
+  - `skills/enrich-before-ingest/SKILL.md`: the F5b paragraph, which described the synchronous
+    body as a data channel returning one lane's worth of items, is rewritten. That shape no
+    longer exists — there is no row-carrying body to truncate, so a lane that fires late is
+    recovered exactly like one that fires first. `classify_matches` still walks
+    `spec["rows"]`, now for the positively-stated reason.
+  - `skills/enrich-records/SKILL.md` step 9: the per-record relay rule is unchanged in
+    substance — relay every field the rows carry, invent nothing beyond them — but "the rows"
+    now names the recovered runData rows rather than a response body.
+
+### Removed
+- **The `async_ack` request-level flag, retired (Phase 70, D-70-07).** The ack is
+  unconditional now, so there is nothing left to opt into. Removed from
+  `skills/enrich-before-ingest/SKILL.md`'s step 5 dispatch block and from the two
+  `skills/suggest-contacts/SKILL.md` call sites that quoted it. An operator following the old
+  step would have passed a kwarg that opts into nothing (`dispatch_plan` absorbs it via
+  `**_ignored_legacy_kwargs`). Three request-level flags remain: `recompute`, `scale_up`,
+  `source_by_field`.
+
+### Documentation
+- **README: a new person is never created without your end-of-run approval (D-70-11).** Stated
+  plainly under "Autonomy", as a consequence of the confidence rule rather than a separate
+  policy: a row with no HubSpot match is by definition unconfident, and every create is a
+  no-match row. Unchanged behaviour made legible.
+
+### Backend note
+- This client is level with a backend whose n8n JSON is **committed but NOT deployed**. Phase
+  70's workflows carry native Merge nodes at every convergence point and have never run on n8n
+  Cloud. See `70-DEFERRED-GATES.md` Gate 3.
+
 ## [0.42.0] - 2026-09-08
 
 ### Added

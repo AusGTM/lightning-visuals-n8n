@@ -44,6 +44,15 @@ flowchart LR
 
 ## Status
 
+> **A new person is never created without an operator's end-of-run approval.** A row with no
+> HubSpot match is by definition a row the pipeline is not confident about, so it is held for
+> review — and every create is a no-match row. Autonomy makes a batch finish; it never makes a
+> person. On the enrichment lane the refusal is explicit: a contact `create` is downgraded to
+> `review` because that lane resolves no company and would land an unassociated contact
+> (CLAUDE.md §13.0.1). Stated plainly in Phase 70 (D-70-11) — unchanged behaviour made legible,
+> not a policy change.
+
+
 | Area | State |
 |---|---|
 | ICP scoring engine (Python reference oracle) | ✅ |

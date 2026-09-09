@@ -121,7 +121,9 @@ def test_the_skill_relays_what_the_sync_body_says_never_inventing_beyond_it():
     anyway (see .planning/debug/resolved/walk-write-path-defects.md).
 
     The safety property was never "withhold per-record detail" -- it is "never guess
-    beyond what the body says". The string assertion is REPLACED by the clauses carrying
+    beyond what the rows say" (Phase 70 Plan 07: "the body" became "the result channel"
+    / "the rows" once the wire stopped carrying rows at all -- D-70-05/D-70-07). The
+    string assertion is REPLACED by the clauses carrying
     that property, and by the call into `report_enrichment.build_row_reports` (renamed
     from `build_sync_report` at Phase 70 Plan 06 — the synchronous body carries only an
     ack now, so the rows it shapes are the ones RECOVERED from the settled execution),
@@ -138,8 +140,15 @@ def test_the_skill_relays_what_the_sync_body_says_never_inventing_beyond_it():
         "D-70-08: the ack-reading helper is gone -- a step still naming it would read "
         "a channel that carries no row outcome"
     )
-    assert "never invent what the body does not carry" in body.lower()
+    # Phase 70 Plan 07 Task 2: the property is unchanged, its NOUN moved. "the body"
+    # named a channel that no longer carries rows (D-70-05/07 — the wire answers with an
+    # ack), so the step now says "the result channel". A moved pin, not a weakened one:
+    # both halves of the F3 property are still asserted verbatim.
+    assert "never invent what the result channel does not carry" in body.lower()
     assert "always relay what it does" in body.lower()
+    assert "never guess beyond what the rows say" in body.lower(), (
+        "D-70-05: the rows are the recovered runData rows, not a response body"
+    )
     assert "match_level" in body and "match_reason" in body
 
 

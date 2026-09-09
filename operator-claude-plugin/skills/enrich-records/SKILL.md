@@ -612,13 +612,23 @@ says nothing per record, this lane reports at chunk granularity and says so.
    writes it — never describe it as a dead end, and never let its wording read like a
    `written` row's.
 
-   RECORDED EDIT (F3, 2026-08-25) — never invent what the body does not carry; always
+   RECORDED EDIT (F3, 2026-08-25; **the channel it names was replaced 2026-09-09, Phase
+   70 D-70-05/D-70-07**) — never invent what the result channel does not carry; always
    relay what it does. This step used to carry a blanket rule against stating any
    per-record outcome at all, written to stop the client INVENTING an outcome the
-   result channel never carried. A live walk hit the old rule read too broadly: a body
+   result channel never carried. A live walk hit the old rule read too broadly: a row
    reading `action: "write_blocked"`, `match.reason: "searched, no hit"` was received and
    reported as "no failures, nothing to re-send" anyway. The property was never "withhold
-   per-record detail" — it is "never guess beyond what the body says". When
+   per-record detail" — it is "never guess beyond what the rows say".
+
+   **Where "the rows" now come from.** The HTTP response is an ack
+   (`{run_id, accepted, row_ids}`) and carries no row data at all. Every per-record
+   outcome this step relays is read from the settled execution's runData, keyed on the
+   `run_id` this client minted — an exact match, never a timing guess. That is a
+   STRONGER channel than the body it replaces, not a weaker one: a lane that fires late
+   is recovered exactly like one that fires first, so the truncated-body shapes this
+   rule was written against (F5b, F10) cannot recur. The rule itself is unchanged —
+   relay every field the recovered rows carry, invent nothing beyond them. When
    `build_row_reports` returns a `reason` instead of rows (the recovered rows were not
    shaped like a decision response at all — the `{status_code, text}` fallback, or an
    empty or malformed result), say plainly that this lane reports at chunk granularity for that chunk and point

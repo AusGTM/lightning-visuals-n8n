@@ -346,7 +346,7 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
    Stage 2 itself uses the SAME machinery `enrich-before-ingest/SKILL.md` step 5 already
    calls for its own enrich pass — `enrichment.resolve_providers`,
-   `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
+   `chunking.dispatch_plan(..., execution_ceiling=...)`,
    `watch.recover_async_dispatch`, `preingest.merge_enriched` — and builds no second
    dispatch path; that reuse is load-bearing, not incidental, since this skill hands that
    block a plan rather than re-documenting its grant/arming/ceiling machinery. That
@@ -613,7 +613,7 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        plan = chunking.plan_chunks(minted["spec"], chunking.chunk_ceiling(cfg))
        # Stage 2 -- hand `plan` and `minted["spec"]["rows"]` to `enrich-before-ingest/
        # SKILL.md` step 5's dispatch block verbatim: `enrichment.resolve_providers`,
-       # `chunking.dispatch_plan(..., async_ack=True, execution_ceiling=...)`,
+       # `chunking.dispatch_plan(..., execution_ceiling=...)`,
        # `watch.recover_async_dispatch`, `preingest.merge_enriched` -- no second
        # dispatch path here. `merge_report` below is that block's own
        # `preingest.merge_enriched` result.

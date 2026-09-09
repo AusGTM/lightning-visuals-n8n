@@ -6,6 +6,37 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **One Merge, one result channel (Phase 70, 2026-09-09) — committed, NOT deployed.** Every
+  convergence point and every HTTP hop in the cloud workflows now carries a native n8n `Merge`
+  node instead of a by-name run read, write gates are IF-shaped and EMIT their refusals as
+  rows, and both row-outcome lanes answer with an ack only. Node counts moved as an expected
+  consequence (Merges plus the starved-lane sentinels each Merge input needs):
+  `wf_enrichment_cloud` 123 → **218**, `wf_contact_ingest_cloud` 29 → **50**,
+  `wf_review_decision_cloud` 26 → **45**, `wf_scheduled_maintenance_cloud` 39 → **43**,
+  `wf_backend_status_cloud` 17 → **30**, `wf_enrichment_local_live` 46 → **70**,
+  `wf_contact_ingest_local` 12 → **13**.
+- **Acceptance is a mixed batch per lane (D-70-17).** `tests/n8n/enrichmentMixedBatch.test.mjs`
+  and `tests/n8n/ingestMixedBatch.test.mjs` drive the committed JSON through the 70-01 walker
+  for 2 identity lanes x 2 actions, a single-lane-only batch and a fully-refused batch, and
+  assert a bijection between input rows and returned rows keyed on each row's own identity.
+  `docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md`'s batch shape now matches, and gains the single-lane
+  send.
+
+### Removed
+- **The `async_ack` request-level flag (D-70-07).** The ack is unconditional; three
+  request-level flags remain (`recompute`, `scale_up`, `source_by_field`). CLAUDE.md §13.0.2's
+  table is corrected from four to three.
+
+### Not yet done
+- **NOTHING IS DEPLOYED AND NOTHING IS ARMED.** No committed workflow in this repo has ever had
+  a native Merge node observed on the real engine. The deploy + bounce and the disarmed live
+  proof (D-70-19, plus the `settings.executionOrder` read D-70-02 needs) are the operator's
+  step, deferred to the end-of-phase UAT — Gate 3 in
+  `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`.
+  Until it runs, this repo's Merge-behaviour claims stay `[documented]`, never `[observed
+  live]`.
+
 ## [0.21.0] - 2026-09-07
 
 ### Added

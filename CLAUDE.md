@@ -2304,7 +2304,16 @@ deliberately **not** a `mode` value — `isReturnOnly()` treats any non-`"write"
 return-only, so a mode-borne intent would report success and write nothing. Helper:
 `scripts/remediate_veto_companies.py::post_webhook_event(..., recompute=True)` (300s default
 read timeout). **Amended 2026-08-30:** `recompute` is no longer the only request-level flag —
-Phase 61 added `async_ack` and `scale_up` on the same idiom. See §13.0.2.
+Phase 61 added two more on the same idiom. **Amended 2026-09-09 (Phase 70, D-70-07):** one of
+those two, `async_ack`, is RETIRED — the ack is now unconditional on both row-outcome lanes, so
+there is nothing left to opt into. Three request-level flags remain. See §13.0.2.
+
+**Amended 2026-09-09 (Phase 70, D-70-01/D-70-04):** the recompute lane's node table above still
+names the right two IF nodes, but `IF Company Recompute`'s condition no longer reads
+`$('Parse HubSpot Event')` by name — every by-name read on this lane was retired in favour of a
+Merge that carries the row (D-70-03/04), and `IF Company Skip` now reaches `Build Response`
+through `Build Response Merge` rather than by a direct edge. The routing is unchanged; the
+mechanism underneath it is not.
 
 **What it costs: nothing.** The lane reaches `Decide` with no provider, research, judge, merge
 or normalize node on it — 0 provider credits, 0 Anthropic calls, 1 n8n execution per POST
@@ -2341,9 +2350,10 @@ hand-edited) now carries eight more nodes:
 | `HubSpot Company Search by Name` | companies search, `name` EQ — reads its key from `Build Company Link` by node name (its own `$json` is the prior search's response) |
 | `Adapt Company Link` | `n8n/code/companyLink.js::resolveCompanyLink` -> `company_id` + `company_match` + `company_hold_reason` |
 | `Build Association Request` | joins each write RESPONSE back to its row **by value** (update by `id`, create by `properties.email`) — index alignment is gone downstream of the write IFs |
-| `HubSpot Associate Company Write Gate` | the same spliced write-safety gate every other write node gets |
+| ~~`HubSpot Associate Company Write Gate`~~ | **REMOVED by Phase 70 (D-70-15, 2026-09-09).** The association no longer has a gate of its own: ONE verdict is taken at `HubSpot Update Write Gate` and covers both the update and the association it implies. An `update` is never held for lack of a company. `Associate Lane Sentinel` duplicates that gate's predicate purely for Merge plumbing — `n8n_arming.set_write_safety` rewrites it too, and an arming run that misses it drops associations on a real batch. |
 | `HubSpot Associate Company` | `PUT /crm/v4/objects/contacts/{id}/associations/default/companies/{id}` — idempotent, no body, no `onError` |
 | `Build Ingest Response` | one row-identifying item per decided row: `action`, `contact_id`, `company_id`, `association`, `reason` |
+| `Build Ingest Ack` | **Phase 70 (D-70-07):** the lane's ONE responder — `{run_id, accepted, row_ids}` and nothing else. `Build Ingest Response`'s rows no longer reach the wire; they are read from the settled execution's runData (D-70-05). |
 
 Resolution order: **manual `company_id` column, then exact email-domain match (freemail and
 AU ISP domains resolve nothing), then exact company-name match** (a name matching two
@@ -2383,34 +2393,35 @@ would have created a second, driftable copy of the same rule. Coverage:
 `tests/n8n/pairPipelineAssociationFlow.test.mjs` (resolved / held / update in one batch call,
 with the held case asserted NOT landed).
 
-### 13.0.2 As-built delta — two more request-level flags, `async_ack` and `scale_up` (Phase 61, 2026-08-30)
+### 13.0.2 As-built delta — the request-level flags: THREE, not four (Phase 61 / 62; `async_ack` retired by Phase 70, 2026-09-09)
 
 §13.0 documents `recompute` as **the** request-level boolean. Phase 61 added two more following
-the identical idiom, and **Phase 62 added a fourth (`source_by_field`, 2026-09-02)**, so §13.0's
-"a request-level boolean, deliberately not a `mode` value" reasoning now covers **four** signals,
-not one. Read this before treating §13.3's input schema or §18.2's parser sample as the complete
-request contract — both predate all four.
+the identical idiom, and Phase 62 added a fourth (`source_by_field`, 2026-09-02). **Phase 70
+(D-70-07, 2026-09-09) RETIRED `async_ack`**, so §13.0's "a request-level boolean, deliberately
+not a `mode` value" reasoning now covers **three** signals. Read this before treating §13.3's
+input schema or §18.2's parser sample as the complete request contract — both predate all of
+them.
 
 | Flag | Added by | Default | Does |
 | --- | --- | --- | --- |
 | `recompute` | 47.5 | off | §13.0's veto recompute lane |
-| `async_ack` | 61-05 | off | responds immediately, taking the run off the ~100s synchronous response window |
 | `scale_up` | 61-06 Task 5 | **off** | substrate-3 sub-workflow fan-out via a self-referencing `Execute Workflow` node |
 | `source_by_field` | 62-04 (D-62-17) | off | per-field provenance map for a suggestion round — which source supplied each field |
 
-**The first three are booleans normalized in `Parse HubSpot Event`** after the event spread, from
-the envelope with a per-event fallback (`ENVELOPE_ASYNC_ACK || event.async_ack`), and all three
-normalize **strictly** to `true` — a truthy non-boolean never opts in. They describe the REQUEST,
-not a
-row.
+**`async_ack` was retired by Phase 70 Plan 03 Task 2 (D-70-07) on 2026-09-09** and is listed
+here only to record that retirement: the ack is now UNCONDITIONAL on both row-outcome lanes.
+`Build Ack` (enrichment) and `Build Ingest Ack` (contact ingest) are each their lane's ONE
+responder, each answering `{run_id, accepted, row_ids}` and nothing else, under `responseMode:
+"responseNode"` — there is no longer a row-carrying response body to opt out of, so there is
+nothing left for a flag to switch. Every row's real outcome is read from the settled execution's
+runData (D-70-05). A caller still passing `async_ack` is silently ignored
+(`dispatch_plan`'s `**_ignored_legacy_kwargs`); it opts into nothing. Coverage:
+`tests/n8n/asyncAck.test.mjs`, `tests/n8n/enrichmentBatchRefusal.test.mjs`,
+`tests/n8n/ingestWebhookRespondsAllEntries.test.mjs`.
 
-**`async_ack`.** `Build Async Ack` is a third parallel fan target off `Parse HubSpot Event`;
-its only edge is to `Respond to Webhook`. When the flag is absent it `return []`s and the
-request takes the byte-identical path it took before. When set, it responds
-`{run_id, accepted: true, row_id}` — the `run_id` is the **caller's own client-minted handle,
-echoed back, never generated in-workflow**. Progress is then read by the client, not by n8n
-(D-61-01 Task 4 selected a HubSpot object + a client-side manifest over an executions-API
-store). Coverage: `tests/n8n/asyncAck.test.mjs`.
+**`recompute` and `scale_up` are booleans normalized in `Parse HubSpot Event`** after the event
+spread, from the envelope with a per-event fallback, and both normalize **strictly** to `true` —
+a truthy non-boolean never opts in. They describe the REQUEST, not a row.
 
 **`scale_up`.** OFF by default, and the off path is test-asserted rather than assumed:
 `dispatch_plan()` with `scale_up` omitted emits an envelope carrying no `scale_up` key at all,
@@ -2423,8 +2434,9 @@ were wrong. `Dispatch Self` runs `mode: "each"`, `waitForSubWorkflow: false` (de
 `Build Scale Up Ack` reports what was *dispatched*, never a business outcome.
 
 **Nodes added to `wf_enrichment_cloud` (verified by counting the committed
-`n8n/wf_enrichment_cloud.json`: 123 nodes as of 2026-08-30):** `Build Async Ack`,
-`IF Linkedin Searchable`, `HubSpot Linkedin Search`, `Adapt Linkedin Search`,
+`n8n/wf_enrichment_cloud.json`: 123 nodes as of 2026-08-30; **218 as of 2026-09-09** — see the
+Phase 70 note below):** `Build Async Ack` (renamed `Build Ack` and made unconditional by Phase
+70), `IF Linkedin Searchable`, `HubSpot Linkedin Search`, `Adapt Linkedin Search`,
 `Adapt Company Create`, `IF Scale Up Route`, `Build Scale Up Fan-Out`, `Dispatch Self`,
 `Build Scale Up Ack`. One pre-existing edge was re-pointed: `Parse HubSpot Event`'s first fan
 target is now `IF Scale Up Route`, whose FALSE lane reaches the old target
@@ -2443,8 +2455,8 @@ row keys, so per-row provenance is impossible by construction; request-level is 
 available. `dispatch.py`'s own comment cites this section by number.
 
 **No scheduled path carries any of the four signals.** SJ-3 and every other schedule trigger
-POST no `recompute`, no `async_ack`, no `scale_up` and no `source_by_field`, so §19.1's statement
-stands unchanged and generalizes: all four are on-demand only.
+POST no `recompute`, no `scale_up` and no `source_by_field`, so §19.1's statement stands
+unchanged and generalizes: all three are on-demand only.
 
 **Identity: `linkedin_url` is now a third identity group.** `required_identity.any_of` in
 `config/column_mapping.yaml` is `[email]`, `[firstname, lastname, company]`, `[linkedin_url]`,
@@ -2507,6 +2519,42 @@ start) and AFTER-03 (full end-of-run report).
 > `wf_scheduled_maintenance_cloud.json`. **Node count still 123**, re-counted 2026-09-07.
 > Phases 65, 67 and 68 (2026-09-05..07) are plugin-only — `operator-claude-plugin` `0.41.0`,
 > autonomy levels defaulting ON — and touched no n8n JSON. Nothing deployed, nothing armed.
+>
+> **Extended 2026-09-09 (Phase 70 — one Merge, one result channel).** A fifth
+> regenerate-and-commit-without-deploying round, and by far the largest: native `Merge` nodes
+> at every convergence point and at every HTTP hop, IF-shaped write gates that EMIT their
+> refusals as rows, an ack-only responder on both row-outcome lanes, and every by-name run
+> read retired. **Node counts moved, and the move is an expected consequence of that design,
+> not a regression.** Counted from the committed JSON on 2026-09-09:
+>
+> | Workflow | Before Phase 70 | Committed now |
+> | --- | --- | --- |
+> | `wf_enrichment_cloud.json` | 123 | **218** |
+> | `wf_contact_ingest_cloud.json` | 29 | **50** |
+> | `wf_review_decision_cloud.json` | 26 | **45** |
+> | `wf_scheduled_maintenance_cloud.json` | 39 | **43** |
+> | `wf_backend_status_cloud.json` | 17 | **30** |
+> | `wf_enrichment_local_live.json` | 46 | **70** |
+> | `wf_enrichment_local.json` | 10 | **10** |
+> | `wf_contact_ingest_local.json` | 12 | **13** |
+>
+> The growth is Merges plus their starved-lane sentinels: a Merge only fires when EVERY input
+> has data, so each way a producer can legitimately be silent needs a node that says so.
+>
+> **NOT DEPLOYED. NOTHING ARMED.** The committed JSON is AHEAD of the live instance by the whole
+> of Phase 70 (plus Phase 66 and the two 2026-09-04 quick tasks). The deploy + bounce is the
+> operator's step and is deferred to this phase's end-of-phase UAT — Gate 3 in
+> `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`.
+> Until that gate runs, **no committed workflow in this repo has ever had a native Merge node
+> observed on the real engine**, and this document's Merge-behaviour claims stay `[documented]`
+> under §13.0.3's tagging rule. The `[observed live]` upgrade — together with the live
+> `settings.executionOrder` read (D-70-02) — is Gate 3's job and no earlier.
+>
+> **Carried caveat, `[documented]` only:** `Build Response Merge` on the enrichment lane has
+> **15 inputs**, and n8n's own published documentation describes 2–10 for the Merge node. The
+> committed graph is generated, not hand-wired, and the walker models 15 inputs without
+> complaint; whether the live engine accepts a 15-input Merge is one of the things Gate 3
+> observes first. Flagged, deliberately not resolved offline.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 

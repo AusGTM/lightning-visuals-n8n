@@ -147,6 +147,11 @@ A batch of three hundred contacts must not become three hundred conversations. S
 - **The batch always finishes.** A held row never stops the rows behind it.
 - **Held rows collect into one review queue**, cleared in a single pass at the end, in the same
   approve / deny / pick vocabulary the rest of the flow already uses.
+- **A new person is never created without your end-of-run approval.** This follows from the
+  first two points rather than being a separate rule: a row with no HubSpot match is by
+  definition a row the system is not confident about, so it is held — and every create is a
+  no-match row. Autonomy makes the batch finish; it never makes a person. (Stated plainly here
+  in Phase 70, D-70-11 — this is unchanged behaviour being made legible, not a new policy.)
 
 Confidence here is a deterministic decision table over signals the pipeline already produces —
 how strong the HubSpot match was, whether the providers agreed, and whether a material conflict

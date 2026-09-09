@@ -91,7 +91,30 @@ field only Phase 66's backend stamps.
   `lv_org_type`/`lv_produces_content`, and no `lv_linkedin_url` candidate. Record which
   backend ran in the UAT file either way.
 
-### 1d. Build the spreadsheet — 3 or 4 real rows, chunk cap 2 gives two chunks
+### 1d. Build the spreadsheet — a MIXED batch by default: 4 real rows, 2 identity lanes x 2 actions
+
+**Mixed lanes and mixed actions are the default shape of this batch, not a variation on it**
+(Phase 70, D-70-17). The offline acceptance tests
+(`tests/n8n/enrichmentMixedBatch.test.mjs`, `tests/n8n/ingestMixedBatch.test.mjs`) assert
+exactly this shape, so a UAT batch that is all one lane proves something narrower than what
+was tested. The two identity lanes on the ingest lane are the two company-resolution keys
+CLAUDE.md §13.0.1 names — resolution by email DOMAIN and by exact company NAME — and the two
+actions are update (the contact already exists) and the create path (it does not).
+
+The chunk cap of 2 splits 4 rows into two chunks, which is the point: a mixed batch that
+spans chunks is where a row can be dropped or double-reported, and where the ack-only
+response contract (D-70-07 — the wire carries no rows; outcomes are read from runData) is
+actually exercised.
+
+**Also send ONE single-lane batch, separately.** The 2x2 shape exercises every lane by
+construction and therefore cannot catch a convergence Merge waiting on an input that never
+fires — the common real shape, and the failure mode the whole Phase 70 design rests on not
+happening. Send 2 rows that all take the SAME path (both companies already in HubSpot,
+resolving by domain, both contacts existing → both updates, review path empty). Record
+whether the execution SETTLED or is stuck `running`. A stuck execution is a finding to
+report, never something to work around. This is the same observation Gate 1 and Gate 3 in
+`.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`
+ask for.
 
 Headers are the canonical props `contact-upload` reads. Pick real people with **published**
 addresses, as the pair walk did; never invent an email. Keep `jobtitle` clear of the
@@ -110,7 +133,14 @@ firstname,lastname,company,email,jobtitle,company_id
 | 1 | company resolves by domain/name → contact created **associated** (§13.0.1) | `written`, HubSpot id, associated |
 | 2 | company absent → create is **downgraded to review, never landed** (§13.0.1, Phase 61-06) | `review`, `lv_enrichment_needs_review=true`, not in HubSpot |
 | 3 | name+company identity, no email → provider reveal spends credit; if none found → `hold_emailless` holds it | `written` with revealed email, or `held: no usable email` |
-| 4 (optional) | a contact already in HubSpot → step 3 proposes the match | `approve` at step 3 → update path |
+| 4 | a contact already in HubSpot, its company resolving by exact NAME (not domain) → step 3 proposes the match | `approve` at step 3 → update path, `company_match: "name"` |
+
+Rows 1+3 are the domain lane, rows 2+4 the name lane; rows 1+4 are updates, rows 2+3 the
+create path — 2 identity lanes x 2 actions, which is the D-70-17 shape.
+
+**Every row must come back exactly once, matched by its own identity (its email), never by
+position.** No duplicate, no missing row. That is the single assertion this batch exists to
+make live, and it is the same one the two offline acceptance tests make.
 
 Save as `uat-batch-2026-09-09.csv` somewhere outside the repo. Name the people so you can
 find and hand-delete them in HubSpot afterwards — **HubSpot has no rollback.**
