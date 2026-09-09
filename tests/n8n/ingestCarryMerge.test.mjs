@@ -49,7 +49,13 @@ function loadArmedWorkflow({ testRecordIds = "" } = {}) {
   // allowlist (its D-70-06 precheck is gone) and the association no longer has a gate of
   // its own (D-70-15 — one verdict, taken at the update gate). The update gate is the
   // single arming surface for this whole lane now.
-  const armNames = ["HubSpot Update Write Gate"];
+  // "Associate Lane Sentinel" carries the same baked constants (Phase 70 Plan 05 Task
+  // 2c): it duplicates the gate predicate purely to decide whether its Merge-feeding
+  // marker is needed, and a marker that fires while a real association is in flight
+  // would satisfy the Merge early and drop it. The real arming tool
+  // (n8n_arming.set_write_safety) rewrites EVERY declaring node, so this hand-rolled
+  // helper must too — arming a subset is a test artifact, not a deployable state.
+  const armNames = ["HubSpot Update Write Gate", "Associate Lane Sentinel"];
   for (const name of armNames) {
     const node = wf.nodes.find((n) => n.name === name);
     assert.ok(node, `node present: ${name}`);

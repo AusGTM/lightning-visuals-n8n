@@ -162,8 +162,13 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
 
     ingest_merge = append_merges[0]
     # Task 3: a THIRD input — "Decide Action Snapshot" — alongside "Associate Carry
-    # Merge"'s output and "Set Review".
-    assert ingest_merge["parameters"]["numberInputs"] == 3
+    # Merge"'s output and "Set Review". Phase 70 Plan 05 Task 2 sub-step 2c (D-70-14)
+    # adds a FOURTH and FIFTH: one per write gate's refusal lane. Each gets its OWN input
+    # rather than sharing the association lane's, because on an armed batch with a mixed
+    # verdict the zero-hop refusal would beat the permitted row's multi-hop association
+    # to a shared input and the Merge would fire and lock without it (walker-proven,
+    # tests/n8n/writeGateShape.test.mjs's armed-mixed case).
+    assert ingest_merge["parameters"]["numberInputs"] == 5
 
     combine_merges = {n["name"]: n for n in merges if n["parameters"]["mode"] == "combine"}
     # Every per-item HTTP hop this lane carries a row across — Task 3's full inventory.

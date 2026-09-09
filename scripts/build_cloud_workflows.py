@@ -1247,8 +1247,23 @@ const rows = $input.all().map((it) => it.json);
 // inputs and hang "Ingest Merge Response" forever. This stays a pre-gate check on
 // purpose: a row the GATE refuses is covered by the gate's own false branch, which
 // delivers to the very same "Ingest Merge Response" input this lane feeds.
-const anyAssoc = rows.some((r) => r &&
-  (r.action === "update" || r.action === "create") && r.company_id);
+// The `_writeSafetyAllows` call below is a duplicate of the gates' predicate, and is
+// deliberately NOT a second authorization: it decides only whether this marker is needed
+// to keep a Merge input fed. The real gates remain the sole place a write is permitted.
+// Same pattern, for the same reason, as the review lane's own BUG-30 precheck. It is
+// required because the marker shares "Ingest Merge Response"'s association-lane input
+// with the real association delivery, so the two must be mutually EXCLUSIVE — a marker
+// that fires while a real association is still in flight would satisfy the Merge early
+// and the real arrival would be dropped (wire_gate_refusal_lane's docstring records the
+// walker run that caught exactly that).
+const anyAssoc = rows.some((r) => {
+  if (!r || !r.company_id) return false;
+  if (r.action !== "update" && r.action !== "create") return false;
+  const wr = r.write_request;
+  if (!wr) return false;
+  return _writeSafetyAllows(r.action === "create" ? "create" : "enrich",
+                            wr.hs_object_id || null, wr.domain || null);
+});
 return anyAssoc ? [] : [{}];
 """
     review_sentinel_js = r"""// Review Lane Sentinel — the review-side twin of "Associate Lane Sentinel". Fires
@@ -1258,7 +1273,8 @@ const rows = $input.all().map((it) => it.json);
 const anyNonWrite = rows.some((r) => r && r.action !== "update" && r.action !== "create");
 return anyNonWrite ? [] : [{}];
 """
-    nodes.append(code_node("Associate Lane Sentinel", associate_sentinel_js, x + 220, y - 260))
+    nodes.append(code_node("Associate Lane Sentinel",
+                          WRITE_SAFETY_GATE_JS + associate_sentinel_js, x + 220, y - 260))
     nodes.append(code_node("Review Lane Sentinel", review_sentinel_js, x + 220, y + 320))
 
     conns = chain([
@@ -1389,17 +1405,23 @@ return anyNonWrite ? [] : [{}];
     ingest_merge_response = splice_merge_before(
         nodes, conns, "Build Ingest Response", merge_name="Ingest Merge Response")
 
-    # Phase 70 Plan 05 Task 2 sub-step 2c (D-70-14): each write gate's REFUSAL lane lands
-    # on the SAME "Ingest Merge Response" input the association lane already feeds. Same
-    # reasoning as the enrichment lane's four gates: reusing the existing index means no
-    # NEW merge input is created, so no sentinel needs re-keying, and a refusal and a
-    # success arrive on one channel. With the D-70-06 precheck gone this is the ONLY path
-    # a refused row has to the response — and it is what lets "Build Ingest Response"
-    # report the gate's actual verdict rather than the pre-write intention.
-    _assoc_input = _merge_input_index(conns, "Associate Carry Merge", ingest_merge_response)
-    for _gate_write in ("HubSpot Update", "HubSpot Create"):
-        conns[f"{_gate_write} Write Gate IF"]["main"][1] = [
-            {"node": ingest_merge_response, "type": "main", "index": _assoc_input}]
+    # Phase 70 Plan 05 Task 2 sub-step 2c (D-70-14): each write gate's REFUSAL lane gets
+    # its OWN "Ingest Merge Response" input, never a share of the association lane's —
+    # see wire_gate_refusal_lane's docstring for the armed-mixed-batch drop that ruled
+    # sharing out. With the D-70-06 precheck gone this is the ONLY path a refused row has
+    # to the response, and it is what lets "Build Ingest Response" report the gate's
+    # actual verdict rather than the pre-write intention. No `mirror_index` here: this
+    # merge's write-lane input is fed by "Associate Lane Sentinel" into "Associate Carry
+    # Merge" (a node, not a merge index), so the "gate never ran" question is asked
+    # directly, off the same routing predicate "IF Update"/"IF Create" test.
+    for _gate_write, _routed_action in (("HubSpot Update", "update"),
+                                        ("HubSpot Create", "create")):
+        wire_gate_refusal_lane(
+            nodes, conns, _gate_write, ingest_merge_response, 40, 900,
+            unreached_source="Decide Action",
+            unreached_condition_js=(
+                'if (rows.length > 0 && !rows.some((r) => r.action === '
+                f'"{_routed_action}")) return [{{}}]; return [];'))
 
     # Pre-probe placement (Task 2's human-check settles this live): "Set Review" is a
     # Code node and takes the flag directly per the plan's own literal suggestion; the
@@ -7623,32 +7645,6 @@ return $input.all().map((it) => {
     mc = lambda src, idx=0: (merge_company_merge, _merge_input_index(conns, src, merge_company_merge, source_out_idx=idx))
     dca = lambda src, idx=0: (decide_co_action_merge, _merge_input_index(conns, src, decide_co_action_merge, source_out_idx=idx))
 
-    # --- Phase 70 Plan 05 Task 2 (D-70-14): each write gate's REFUSAL lane ------------
-    # The IF's false output lands on the SAME "Build Response Merge" input index the
-    # write path's own terminal already feeds, so a refusal and a success arrive on one
-    # channel — and, crucially, NO new Merge input is created. That is what keeps the
-    # ~30-entry starved-lane sentinel network below correct without re-keying a single
-    # sentinel: every sentinel is keyed on a ROUTING IF's predicate ("does any row have
-    # action X"), the gate sits strictly DOWNSTREAM of routing, and the gate always
-    # delivers every row it received on exactly one of two outputs that both terminate
-    # here. So "did that lane deliver to this input" remains answerable from the routing
-    # predicate alone, exactly as before this gate existed. Multiple producers on one
-    # merge input is the established idiom on this build (every `br(...)` sentinel target
-    # already shares its index with the real terminal).
-    #
-    # The companies-create refusal targets "Adapt Company Create"'s index: that adapter is
-    # the create path's real terminal into the merge, and a refused row has no create
-    # response to adapt.
-    for _gate_write, _real_producer in [
-        ("HubSpot Create", "HubSpot Create"),
-        ("HubSpot Update", "HubSpot Update"),
-        ("HubSpot Company Update", "HubSpot Company Update"),
-        ("HubSpot Company Create", "Adapt Company Create"),
-    ]:
-        _merge, _idx = br(_real_producer)
-        conns[f"{_gate_write} Write Gate IF"]["main"][1] = [
-            {"node": _merge, "type": "main", "index": _idx}]
-
     sx, sy = 40, 2200  # a dedicated, empty region of the canvas for the sentinel network
 
     # --- Pre-fork sentinels: fed from "IF Scale Up Route" false (index 1) — the single
@@ -8102,6 +8098,24 @@ return $input.all().map((it) => {
     conns["Build Response Merge"] = {
         "main": [[{"node": "Filter Build Response Rows", "type": "main", "index": 0}]]}
     conns["Filter Build Response Rows"] = {"main": [[{"node": _old_brm_target, "type": "main", "index": 0}]]}
+    # --- Phase 70 Plan 05 Task 2 (D-70-14): each write gate's REFUSAL lane ------------
+    # Placed AFTER the whole sentinel network above, because `mirror_index` DERIVES each
+    # refusal input's "the gate never ran" sentinels from the ones already feeding that
+    # write's own terminal — a hand-written list of ~30 sentinel names would go stale the
+    # first time one is added. See wire_gate_refusal_lane's docstring for why the refusal
+    # cannot simply share the terminal's input (an armed MIXED batch drops the permitted
+    # row's real arrival — caught with the offline walker, not reasoned about).
+    for _gate_write, _real_terminal in [
+        ("HubSpot Create", "HubSpot Create"),
+        ("HubSpot Update", "HubSpot Update"),
+        ("HubSpot Company Update", "HubSpot Company Update"),
+        ("HubSpot Company Create", "Adapt Company Create"),
+    ]:
+        wire_gate_refusal_lane(
+            nodes, conns, _gate_write, build_response_merge, sx, sy,
+            mirror_index=_merge_input_index(conns, _real_terminal, build_response_merge))
+        sy += 120
+
     splice_carry_merge_after(nodes, conns, "Filter Build Response Rows", "Build Credits Summary",
                               merge_name="Credits Broadcast", combine_by="combineAll")
 
@@ -9412,6 +9426,77 @@ def _append_merge_input(nodes, conns, merge_name, source_name, *, source_out_idx
     conns[source_name]["main"][source_out_idx].append(
         {"node": merge_name, "type": "main", "index": index})
     return index
+
+
+def wire_gate_refusal_lane(nodes, conns, write_name, merge_name, x, y, *,
+                           mirror_index=None, unreached_source=None,
+                           unreached_condition_js=None):
+    """Give a spliced write gate's REFUSAL lane its own input on `merge_name`, plus the
+    sentinels that keep that input fed (Phase 70 Plan 05 Task 2, D-70-14).
+
+    The obvious wiring — point the gate IF's false output at the SAME merge input the
+    write path's own terminal already feeds — was tried first and is WRONG, for the
+    reason this file already records above "Associate Lane Sentinel"'s call site: a Merge
+    fires on WHICHEVER set of deliveries satisfies it first, so on an armed batch with a
+    MIXED verdict the refusal (zero hops from the gate) beats the permitted row's real
+    multi-hop delivery to that shared input, the Merge fires and locks, and the real
+    arrival is dropped. Caught by driving the committed graph through the offline walker
+    with one row allowed and one refused: the permitted row's association came back
+    "not_confirmed" instead of "associated". A marker may share an input (it carries no
+    data and is filtered out downstream); two REAL producers may not.
+
+    So the refusal gets its own input, and — like every other input on these merges — a
+    sentinel per way it can fail to deliver:
+
+      (a) the gate ran and refused nothing  -> sourced from the gate's OWN Code node,
+          which is the only node that can answer it;
+      (b) the gate never ran at all         -> `unreached_source` + `unreached_condition_js`,
+          the routing predicate that decides whether any row reaches the gate; OR
+          `mirror_index`, which copies the question off the sentinels that ALREADY answer
+          it for the write path's own terminal ("the real lane will not deliver" and "the
+          refusal lane will not deliver" are the same question when the gate never runs).
+
+    `mirror_index` is derived, never hand-listed: on the enrichment lane ~30 sentinels
+    feed "Build Response Merge", several per terminal, and enumerating them by name here
+    would go stale the first time one is added.
+    """
+    idx = _append_merge_input(nodes, conns, merge_name, f"{write_name} Write Gate IF",
+                              source_out_idx=1)
+    if mirror_index is not None:
+        for name, spec in list(conns.items()):
+            if not name.endswith("Sentinel"):
+                continue
+            for outputs in spec.get("main", []):
+                if any(c.get("node") == merge_name and c.get("index") == mirror_index
+                       for c in (outputs or [])):
+                    outputs.append({"node": merge_name, "type": "main", "index": idx})
+                    break
+    if unreached_source is not None:
+        _add_starved_lane_sentinel(
+            nodes, conns, f"{write_name} Gate Unreached Sentinel",
+            unreached_source, unreached_condition_js, [(merge_name, idx)], x, y)
+        y += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, f"{write_name} No Refusal Sentinel", f"{write_name} Write Gate",
+        'if (rows.length > 0 && rows.every((r) => r.write_allowed === true)) '
+        'return [{}]; return [];',
+        [(merge_name, idx)], x, y)
+    y += 120
+    if mirror_index is not None:
+        # The MIRROR IMAGE, and the half that only became necessary once the gate stopped
+        # relabelling refused rows upstream of the routing IFs: the routing sentinels
+        # correctly stay silent when rows ARE heading for this write, but the gate can
+        # still refuse every one of them, and then the write node never runs and its own
+        # terminal's input starves. Sourced from the gate's Code node because that is the
+        # only node that knows the verdict — and mutually exclusive with the real
+        # delivery by construction (it fires only when NO row was allowed), so it can
+        # safely share the terminal's input the way every other marker here does.
+        _add_starved_lane_sentinel(
+            nodes, conns, f"{write_name} All Refused Sentinel", f"{write_name} Write Gate",
+            'if (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) '
+            'return [{}]; return [];',
+            [(merge_name, mirror_index)], x, y)
+    return idx
 
 
 def _add_starved_lane_sentinel(nodes, conns, name, source, condition_js, targets, x, y,

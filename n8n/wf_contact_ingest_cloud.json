@@ -520,7 +520,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Associate Lane Sentinel \u2014 see build_cloud_workflows.py's own comment above this\n// node's call site for why this is a global, single-producer check rather than a\n// per-IF alwaysOutputData flag.\nconst rows = $input.all().map((it) => it.json);\n// Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With\n// the pre-write refusal precheck removed (D-70-06) a row can be action update/create and\n// still never reach \"HubSpot Associate Company\": \"Build Association Request\" drops any\n// row with no resolved company (CLAUDE.md \u00a713.0.1 \u2014 an update is never HELD for lack of\n// a company, it simply has nothing to associate). A batch of updates that all resolve no\n// company would otherwise leave \"Associate Carry Merge\" with zero deliveries on both\n// inputs and hang \"Ingest Merge Response\" forever. This stays a pre-gate check on\n// purpose: a row the GATE refuses is covered by the gate's own false branch, which\n// delivers to the very same \"Ingest Merge Response\" input this lane feeds.\nconst anyAssoc = rows.some((r) => r &&\n  (r.action === \"update\" || r.action === \"create\") && r.company_id);\nreturn anyAssoc ? [] : [{}];\n"
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n// Associate Lane Sentinel \u2014 see build_cloud_workflows.py's own comment above this\n// node's call site for why this is a global, single-producer check rather than a\n// per-IF alwaysOutputData flag.\nconst rows = $input.all().map((it) => it.json);\n// Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With\n// the pre-write refusal precheck removed (D-70-06) a row can be action update/create and\n// still never reach \"HubSpot Associate Company\": \"Build Association Request\" drops any\n// row with no resolved company (CLAUDE.md \u00a713.0.1 \u2014 an update is never HELD for lack of\n// a company, it simply has nothing to associate). A batch of updates that all resolve no\n// company would otherwise leave \"Associate Carry Merge\" with zero deliveries on both\n// inputs and hang \"Ingest Merge Response\" forever. This stays a pre-gate check on\n// purpose: a row the GATE refuses is covered by the gate's own false branch, which\n// delivers to the very same \"Ingest Merge Response\" input this lane feeds.\n// The `_writeSafetyAllows` call below is a duplicate of the gates' predicate, and is\n// deliberately NOT a second authorization: it decides only whether this marker is needed\n// to keep a Merge input fed. The real gates remain the sole place a write is permitted.\n// Same pattern, for the same reason, as the review lane's own BUG-30 precheck. It is\n// required because the marker shares \"Ingest Merge Response\"'s association-lane input\n// with the real association delivery, so the two must be mutually EXCLUSIVE \u2014 a marker\n// that fires while a real association is still in flight would satisfy the Merge early\n// and the real arrival would be dropped (wire_gate_refusal_lane's docstring records the\n// walker run that caught exactly that).\nconst anyAssoc = rows.some((r) => {\n  if (!r || !r.company_id) return false;\n  if (r.action !== \"update\" && r.action !== \"create\") return false;\n  const wr = r.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows(r.action === \"create\" ? \"create\" : \"enrich\",\n                            wr.hs_object_id || null, wr.domain || null);\n});\nreturn anyAssoc ? [] : [{}];\n"
       },
       "id": "c00330000-0000-4000-8000-000000000000",
       "name": "Associate Lane Sentinel",
@@ -829,7 +829,7 @@
     {
       "parameters": {
         "mode": "append",
-        "numberInputs": 3
+        "numberInputs": 5
       },
       "id": "m00500000-0000-4000-8000-000000000000",
       "name": "Ingest Merge Response",
@@ -838,6 +838,62 @@
       "position": [
         5340,
         280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Update Gate Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"update\")) return [{}]; return [];\n"
+      },
+      "id": "c00510000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Gate Unreached Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c00520000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update No Refusal Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Create Gate Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"create\")) return [{}]; return [];\n"
+      },
+      "id": "c00530000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Gate Unreached Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c00540000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create No Refusal Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1020
       ]
     }
   ],
@@ -1081,6 +1137,16 @@
             "node": "Decide Action Snapshot",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "HubSpot Update Gate Unreached Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Create Gate Unreached Sentinel",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1237,6 +1303,11 @@
             "node": "HubSpot Update Write Gate IF",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "HubSpot Update No Refusal Sentinel",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1259,7 +1330,7 @@
           {
             "node": "Ingest Merge Response",
             "type": "main",
-            "index": 2
+            "index": 3
           }
         ]
       ]
@@ -1269,6 +1340,11 @@
         [
           {
             "node": "HubSpot Create Write Gate IF",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Create No Refusal Sentinel",
             "type": "main",
             "index": 0
           }
@@ -1293,7 +1369,7 @@
           {
             "node": "Ingest Merge Response",
             "type": "main",
-            "index": 2
+            "index": 4
           }
         ]
       ]
@@ -1404,6 +1480,50 @@
             "node": "Build Ingest Response",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Gate Unreached Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "HubSpot Update No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Gate Unreached Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "HubSpot Create No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 4
           }
         ]
       ]

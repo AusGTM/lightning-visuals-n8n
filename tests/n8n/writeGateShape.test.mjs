@@ -196,28 +196,45 @@ test("the enrichment lane has a spliced two-node gate in front of each of its fo
   }
 });
 
-test("the enrichment lane's gate IF false branch lands on the SAME Build Response Merge input its write path already feeds — no new starvable input", () => {
-  // The refusal and the success arrive on one channel (D-70-14). Reusing the existing
-  // input index is what keeps the ~30-entry starved-lane sentinel network correct
-  // without re-keying a single sentinel: every sentinel is keyed on the ROUTING IF's
-  // predicate, and the gate sits strictly downstream of routing, always delivering on
-  // exactly one of two outputs that both land here.
+test("the enrichment lane's gate IF false branch has its OWN Build Response Merge input, never a share of the write path's", () => {
+  // Sharing the write terminal's input was tried FIRST and is wrong: on an armed batch
+  // with a MIXED verdict the refusal (zero hops from the gate) beats the permitted row's
+  // real multi-hop delivery to the shared input, the Merge fires and locks, and the real
+  // arrival is dropped. Caught by driving the committed graph through the walker, not by
+  // reasoning — see the armed-mixed case at the end of this file. A marker may share an
+  // input (no data, filtered downstream); two REAL producers may not.
   const merge = "Build Response Merge";
   const indexOf = (src, outIdx) =>
     ((ENRICHMENT.connections[src] || {}).main || [])[outIdx]
       ?.filter((c) => c.node === merge).map((c) => c.index) ?? [];
-  for (const [write, realProducer] of [
-    ["HubSpot Create", "HubSpot Create"],
-    ["HubSpot Update", "HubSpot Update"],
-    ["HubSpot Company Update", "HubSpot Company Update"],
-    ["HubSpot Company Create", "Adapt Company Create"],
-  ]) {
+  const realProducers = {
+    "HubSpot Create": "HubSpot Create",
+    "HubSpot Update": "HubSpot Update",
+    "HubSpot Company Update": "HubSpot Company Update",
+    "HubSpot Company Create": "Adapt Company Create",
+  };
+  const seen = new Set();
+  for (const [write, realProducer] of Object.entries(realProducers)) {
     const real = indexOf(realProducer, 0);
     assert.equal(real.length, 1, `${realProducer} feeds ${merge} on exactly one index`);
-    assert.deepEqual(indexOf(write + " Write Gate IF", 1), real,
-      `${write}'s refusal lane must reuse ${realProducer}'s own ${merge} input index`);
+    const refusal = indexOf(write + " Write Gate IF", 1);
+    assert.equal(refusal.length, 1, `${write}'s refusal feeds ${merge} on exactly one index`);
+    assert.notDeepEqual(refusal, real, `${write}'s refusal must not share the write path's input`);
+    assert.ok(!seen.has(refusal[0]), `${write}'s refusal input is its own`);
+    seen.add(refusal[0]);
+
+    // ...and both inputs are covered on the ways their own producer can fail to deliver.
+    const feeders = (idx) => Object.entries(ENRICHMENT.connections)
+      .filter(([, spec]) => (spec.main || []).some((outs) =>
+        (outs || []).some((c) => c.node === merge && c.index === idx)))
+      .map(([src]) => src);
+    assert.ok(feeders(refusal[0]).includes(`${write} No Refusal Sentinel`),
+      `${write}: the refusal input needs a marker when the gate refused nothing`);
+    assert.ok(feeders(real[0]).includes(`${write} All Refused Sentinel`),
+      `${write}: the write input needs a marker when the gate allowed nothing`);
   }
 });
+
 
 test("neither enrichment Decide node computes write permission any more — one home per lane", () => {
   for (const name of ["Decide Action", "Decide Company Action"]) {
@@ -326,18 +343,31 @@ test("ingest: ONE gate covers both the update and its association (D-70-15)", ()
   assert.deepEqual(inbound, [["Build Association Request", 0]]);
 });
 
-test("ingest: each gate's refusal lane reaches Ingest Merge Response on the association lane's own input", () => {
+test("ingest: each gate's refusal lane has its OWN Ingest Merge Response input, with both its sentinels", () => {
   const merge = "Ingest Merge Response";
   const indexOf = (src, outIdx) =>
     ((INGEST.connections[src] || {}).main || [])[outIdx]
       ?.filter((c) => c.node === merge).map((c) => c.index) ?? [];
   const assocIdx = indexOf("Associate Carry Merge", 0);
   assert.equal(assocIdx.length, 1);
+  const seen = new Set(assocIdx);
   for (const write of ["HubSpot Update", "HubSpot Create"]) {
-    assert.deepEqual(indexOf(write + " Write Gate IF", 1), assocIdx,
-      `${write}'s refusal must reuse the association lane's own ${merge} input`);
+    const refusal = indexOf(write + " Write Gate IF", 1);
+    assert.equal(refusal.length, 1);
+    assert.ok(!seen.has(refusal[0]), `${write}'s refusal input is its own, never shared`);
+    seen.add(refusal[0]);
+    const feeders = Object.entries(INGEST.connections)
+      .filter(([, spec]) => (spec.main || []).some((outs) =>
+        (outs || []).some((c) => c.node === merge && c.index === refusal[0])))
+      .map(([src]) => src).sort();
+    assert.deepEqual(feeders, [
+      `${write} Gate Unreached Sentinel`,
+      `${write} No Refusal Sentinel`,
+      `${write} Write Gate IF`,
+    ].sort(), `${write}: the refusal input is fed on every way its producer can be silent`);
   }
 });
+
 
 test("ingest: Associate Lane Sentinel asks whether the association lane can deliver AT ALL, company_id included", () => {
   // Once the precheck is gone a row can be action update/create and still never reach
@@ -415,4 +445,66 @@ test("ingest: a batch of updates that resolve NO company does not stall — an u
   assert.equal(trace.stalled.filter((s) => s.node === "Ingest Merge Response").length, 0);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].association, "none", "nothing to associate, and nothing held");
+});
+
+// --- walker-driven: an ARMED batch with a MIXED verdict on ONE gate -------------------
+//
+// The case that ruled out sharing the write path's Merge input, and the primary armed use
+// case of an allowlist: two update rows, both with a resolved company, only one on the
+// allowlist. With the refusal sharing the write terminal's input, the refused row's
+// zero-hop delivery satisfied "Ingest Merge Response" first, the Merge fired and locked,
+// and the PERMITTED row's real association arrival was dropped — it came back
+// `association: "not_confirmed"` when HubSpot had in fact associated it. Nothing stalls
+// in that failure mode and every disarmed test stays green, which is exactly why this
+// case is pinned here rather than trusted to reasoning.
+const MIX_A = "allowed@acme-domain.example";
+const MIX_B = "refused@acme-domain.example";
+
+test("ingest, ARMED with a mixed verdict: the permitted row keeps its association and the refused row reports blocked", async () => {
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems } =
+    await import("./lib/walkWorkflow.mjs");
+  const wf = loadWf(path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json"));
+  // Arm EVERY declaring node, the way n8n_arming.set_write_safety does — the gate and
+  // the Merge-feeding sentinel that duplicates its predicate for plumbing.
+  for (const name of ["HubSpot Update Write Gate", "Associate Lane Sentinel"]) {
+    const n = wf.nodes.find((x) => x.name === name);
+    assert.ok(n, `node present: ${name}`);
+    n.parameters.jsCode = n.parameters.jsCode
+      .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+               'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+      .replace('const TEST_RECORD_IDS = "";', 'const TEST_RECORD_IDS = "111";');
+  }
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      { email: MIX_A, firstname: "Al", lastname: "Lowed", company: "Acme Domain Co" },
+      { email: MIX_B, firstname: "Re", lastname: "Fused", company: "Acme Domain Co" },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [
+        { email: MIX_A, status: "VALID" }, { email: MIX_B, status: "VALID" }] }],
+      "HubSpot Search by Email": [
+        { results: [{ id: "111", properties: { email: MIX_A } }] },
+        { results: [{ id: "222", properties: { email: MIX_B } }] },
+      ],
+      "HubSpot Company Search by Domain": [
+        { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
+        { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
+      ],
+      "HubSpot Company Search by Name": [{ results: [] }, { results: [] }],
+      "HubSpot Update": [{ id: "111", properties: { email: MIX_A } }],
+      "HubSpot Associate Company": [{ status: "ok" }],
+    },
+  });
+  assert.deepEqual(trace.stalled, []);
+  assert.equal((runData["Ingest Merge Response"] || []).length, 1,
+    "the response Merge fires exactly once — a second run would double every reported row");
+  const rows = nodeItems(runData, "Build Ingest Response");
+  assert.equal(rows.length, 2);
+  const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));
+  assert.equal(byEmail[MIX_A].action, "update");
+  assert.equal(byEmail[MIX_A].association, "associated",
+    "the permitted row's real association arrival must not be beaten to the Merge by the refusal");
+  assert.equal(byEmail[MIX_B].action, "write_blocked");
+  assert.notEqual(byEmail[MIX_B].association, "associated");
 });

@@ -3498,7 +3498,7 @@
     {
       "parameters": {
         "mode": "append",
-        "numberInputs": 11
+        "numberInputs": 15
       },
       "id": "m02070000-0000-4000-8000-000000000000",
       "name": "Build Response Merge",
@@ -4071,6 +4071,118 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02480000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create No Refusal Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Create All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02490000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02500000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update No Refusal Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Update All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02510000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Company Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02520000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Update No Refusal Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Company Update All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02530000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Update All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6640
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Company Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02540000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create No Refusal Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6640
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Company Create All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02550000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6760
+      ]
+    },
+    {
+      "parameters": {
         "mode": "combine",
         "numberInputs": 2,
         "combineBy": "combineAll",
@@ -4082,7 +4194,7 @@
           }
         }
       },
-      "id": "m02480000-0000-4000-8000-000000000000",
+      "id": "m02560000-0000-4000-8000-000000000000",
       "name": "Credits Broadcast",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -5975,6 +6087,16 @@
             "node": "HubSpot Create Write Gate IF",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "HubSpot Create No Refusal Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Create All Refused Sentinel",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -5992,7 +6114,7 @@
           {
             "node": "Build Response Merge",
             "type": "main",
-            "index": 1
+            "index": 11
           }
         ]
       ]
@@ -6002,6 +6124,16 @@
         [
           {
             "node": "HubSpot Update Write Gate IF",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Update No Refusal Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Update All Refused Sentinel",
             "type": "main",
             "index": 0
           }
@@ -6021,7 +6153,7 @@
           {
             "node": "Build Response Merge",
             "type": "main",
-            "index": 2
+            "index": 12
           }
         ]
       ]
@@ -6031,6 +6163,16 @@
         [
           {
             "node": "HubSpot Company Create Write Gate IF",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Company Create No Refusal Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Company Create All Refused Sentinel",
             "type": "main",
             "index": 0
           }
@@ -6055,7 +6197,7 @@
           {
             "node": "Build Response Merge",
             "type": "main",
-            "index": 7
+            "index": 14
           }
         ]
       ]
@@ -6065,6 +6207,16 @@
         [
           {
             "node": "HubSpot Company Update Write Gate IF",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Company Update No Refusal Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Company Update All Refused Sentinel",
             "type": "main",
             "index": 0
           }
@@ -6084,7 +6236,7 @@
           {
             "node": "Build Response Merge",
             "type": "main",
-            "index": 8
+            "index": 13
           }
         ]
       ]
@@ -6519,6 +6671,16 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 11
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 12
           }
         ]
       ]
@@ -6585,6 +6747,16 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 6
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 13
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 14
           }
         ]
       ]
@@ -6756,6 +6928,16 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 11
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 12
           }
         ]
       ]
@@ -6827,6 +7009,11 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 1
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 11
           }
         ]
       ]
@@ -6843,6 +7030,11 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 12
           }
         ]
       ]
@@ -6854,6 +7046,11 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 2
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 12
           }
         ]
       ]
@@ -6901,6 +7098,16 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 6
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 13
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 14
           }
         ]
       ]
@@ -6977,6 +7184,11 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 7
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 14
           }
         ]
       ]
@@ -6993,6 +7205,11 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 6
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 13
           }
         ]
       ]
@@ -7004,6 +7221,11 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 8
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 13
           }
         ]
       ]
@@ -7087,6 +7309,26 @@
             "node": "Build Response Merge",
             "type": "main",
             "index": 6
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 11
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 12
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 13
+          },
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 14
           }
         ]
       ]
@@ -7109,6 +7351,94 @@
             "node": "Credits Broadcast",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 11
+          }
+        ]
+      ]
+    },
+    "HubSpot Create All Refused Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Update No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 12
+          }
+        ]
+      ]
+    },
+    "HubSpot Update All Refused Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Update No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 13
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Update All Refused Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 8
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Create No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 14
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Create All Refused Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 7
           }
         ]
       ]
