@@ -2,7 +2,8 @@
 """scripts/bounce_n8n_workflows.py — deactivate then activate every deployed cloud workflow
 and read it back. A stored PUT never reloads a running workflow (memory
 `n8n-stored-vs-running-content`), so every deploy needs this. Follows
-`prove_scale_up_runtime._bounce_and_verify`'s shape, over all five workflows, and prints the
+the bounce-and-verify shape the phase-61 scale-up driver used (that driver was deleted
+at Phase 70 Plan 06; this is where the shape now lives), over all five workflows, and prints the
 same table `63-DEPLOY-RECORD.md` recorded by hand.
 
 Reads N8N_URL / N8N_API_KEY from the environment (`set -a; . ./.env; set +a`). Writes nothing

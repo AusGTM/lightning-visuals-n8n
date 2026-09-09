@@ -715,6 +715,37 @@ def _independent_disarm_reread(cfg, workflow_id):
     return {"flags": flags, "active": workflow.get("active")}
 
 
+def _recover_rows(config, run_id, **kwargs):
+    """D-70-08: the cross-package import precedent `scripts/prove_async_recovery.py`
+    establishes -- the plugin's `watch.py` is the ONE bounded poll site in this repo and
+    no driver grows a wait of its own."""
+    import sys
+    from pathlib import Path as _Path
+
+    _root = _Path(__file__).resolve().parent.parent
+    for _p in (str(_root / "scripts"), str(_root / "operator-claude-plugin" / "scripts")):
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
+    import watch  # noqa: E402 -- plugin module; see the docstring above
+
+    return watch.recover_dispatch(config, run_id, expected_chunk_count=1, **kwargs)
+
+
+def summarize_recovery(recovery):
+    """The same shape `summarize_execution` produced, computed off the recovered rows
+    rather than off a whole execution picked by start-time proximity."""
+    if not recovery:
+        return None
+    rows = recovery.get("responses") or []
+    run_data = recovery.get("run_data") or {}
+    return {
+        "recovered": bool(recovery.get("recovered")),
+        "matched_executions": recovery.get("matched_executions"),
+        "nodes_run": sorted(run_data.keys()) if isinstance(run_data, dict) else [],
+        "rows": rows,
+    }
+
+
 def run_coverage_window(
     ids=None,
     armed=False,
@@ -725,7 +756,12 @@ def run_coverage_window(
     patcher=batch_update_companies,
     poster=post_webhook_event,
     lister=executions_client.list_executions,
-    finder=executions_client.find_execution_for_dispatch,
+    # D-70-10 (Phase 70 Plan 06): `executions_client.find_execution_for_dispatch` USED
+    # TO BE INJECTED HERE as `finder`. It is gone, not defaulted differently: it selects
+    # an execution by how close its start time is to the POST, which on a busy instance
+    # attributes a stranger's run to this window. Correlation is now exact-match on the
+    # run id `post_webhook_event` minted, through the plugin's `watch.recover_dispatch`.
+    recoverer=None,
     getter=executions_client.get_execution,
     disarmer=None,
     rereader=_independent_disarm_reread,
@@ -799,19 +835,28 @@ def run_coverage_window(
                 })
 
                 if armed:
-                    dispatched_at = datetime.now(timezone.utc)
+                    run_handle = None
                     try:
-                        poster(company_id, True, cfg, recompute=True)
+                        run_handle = poster(company_id, True, cfg, recompute=True)
                     except requests.exceptions.Timeout:
                         # Trap 2: n8n completes server-side; a client timeout is never
                         # retried. Fall straight through to reading the execution back.
+                        # The run id is lost with the response here, so this record has
+                        # no correlatable handle -- said plainly, never guessed at by
+                        # start time (D-70-10).
                         record["timed_out"] = True
 
-                    candidates = lister(cfg, workflow_id, limit=5)
-                    handle = finder(candidates, dispatched_at)
-                    execution = getter(cfg, handle["execution_id"]) if handle else None
-                    record["execution_handle"] = handle
-                    record["execution"] = summarize_execution(execution)
+                    recovery = (
+                        (recoverer or _recover_rows)(cfg, run_handle["run_id"])
+                        if run_handle else None
+                    )
+                    record["execution_handle"] = (
+                        {"run_id": run_handle["run_id"],
+                         "matched_executions": (recovery or {}).get("matched_executions"),
+                         "recovered": bool((recovery or {}).get("recovered"))}
+                        if run_handle else None
+                    )
+                    record["execution"] = summarize_recovery(recovery)
 
                     try:
                         settle_and_assert(

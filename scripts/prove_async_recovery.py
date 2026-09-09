@@ -32,7 +32,9 @@ Zero HubSpot writes, zero provider calls, zero Anthropic calls, nothing armed â€
 "propose"` and `providers: []` make both structurally true regardless of the workflow's
 own write-safety gate.
 
-TWO GATES, BOTH BEFORE ANY TRANSPORT IS CONSTRUCTED (mirrors prove_scale_up_runtime.py):
+TWO GATES, BOTH BEFORE ANY TRANSPORT IS CONSTRUCTED (the shape the phase-61 probe
+drivers established; those drivers were deleted at Phase 70 Plan 06 once their findings
+were on record, and this file is now the surviving example of the gate pattern):
 1. `ALLOW_ASYNC_RECOVERY_PROOF` must read EXACTLY `true`.
 2. The wrong-instance guard, copied from `deploy_n8n_workflows.py::_instance_ok()`.
 

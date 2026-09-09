@@ -509,7 +509,7 @@ def child_execution_ids(execution) -> list:
     """Every child execution this execution dispatched, in order, de-duplicated.
 
     Structured extraction off the item's own `metadata`, never a raw-text id scan —
-    the same discipline `scripts/prove_scale_up_runtime.py` used against the live
+    the same discipline the phase-61 scale-up probe driver used against the live
     instance. An execution that never fanned out returns `[]`, which is what makes
     `include_children` free for the overwhelming majority of runs.
     """

@@ -165,9 +165,19 @@ def test_execute_reports_write_blocked_plainly(capsys):
         calls.append(("patch", object_type, record_id, properties, dry_run))
         return {"id": record_id, "properties": properties}
 
+    # Phase 70 Plan 06 (D-70-05/D-70-08): the poster returns a HANDLE, not a Response,
+    # and the row outcome comes off the settled execution correlated on the handle's own
+    # run id -- the webhook body is an ack and carries no action.
     def fake_poster(company_id, armed, config, recompute):
         calls.append(("post", company_id, armed, recompute))
-        return _FakeResponse({"action": "write_blocked", "hs_object_id": company_id})
+        return {"run_id": "run-sfv-1", "ack": {"accepted": True}, "status_code": 200}
+
+    def fake_recoverer(config, run_id):
+        calls.append(("recover", run_id))
+        return {"recovered": True,
+                "responses": [{"action": "write_blocked",
+                               "hs_object_id": fix.TARGET_COMPANY_ID}],
+                "run_data": {}}
 
     def fake_settler(company_id):
         calls.append(("settle", company_id))
@@ -183,6 +193,7 @@ def test_execute_reports_write_blocked_plainly(capsys):
         patcher=fake_patcher,
         reader=fake_reader,
         poster=fake_poster,
+        recoverer=fake_recoverer,
         settler=fake_settler,
         has_credentials=lambda: True,
         portal_ok=lambda: True,
@@ -195,8 +206,11 @@ def test_execute_reports_write_blocked_plainly(capsys):
     assert calls[0][3] == fix.build_region_patch()
     assert calls[0][4] is False
     assert calls[1] == ("post", fix.TARGET_COMPANY_ID, True, True)
-    assert calls[2][0] == "settle"
-    assert calls[3][0] == "read"
+    # D-70-05: the recovery sits between the POST and the settle -- the row outcome the
+    # "VETO NOT WRITTEN" line reports came off the settled execution, not the ack.
+    assert calls[2] == ("recover", "run-sfv-1")
+    assert calls[3][0] == "settle"
+    assert calls[4][0] == "read"
 
     out = capsys.readouterr().out
     assert "VETO NOT WRITTEN" in out
@@ -210,7 +224,10 @@ def test_execute_settle_failure_reports_nonzero(capsys):
         return {"dry_run": False}
 
     def fake_poster(*_a, **_kw):
-        return _FakeResponse({"action": "enrich"})
+        return {"run_id": "run-sfv-3", "ack": {"accepted": True}, "status_code": 200}
+
+    def fake_recoverer(*_a, **_kw):
+        return {"recovered": True, "responses": [{"action": "enrich"}], "run_data": {}}
 
     def fake_settler(_company_id):
         raise SettleFailed("did not settle")
@@ -224,6 +241,7 @@ def test_execute_settle_failure_reports_nonzero(capsys):
         patcher=fake_patcher,
         reader=fake_reader,
         poster=fake_poster,
+        recoverer=fake_recoverer,
         settler=fake_settler,
         has_credentials=lambda: True,
         portal_ok=lambda: True,

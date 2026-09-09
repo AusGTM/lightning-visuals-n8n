@@ -136,6 +136,24 @@ def _describe_target(config: dict) -> str:
     return f"{str((config or {}).get('n8n_url') or '').rstrip('/')}/{WEBHOOK_PATH}"
 
 
+# D-70-05/D-70-08 (Phase 70 Plan 06): the webhook answers with an ack, so this driver's
+# rows come from the settled execution's runData, correlated on the run id
+# `post_webhook_event` minted. The cross-package import is the precedent
+# `scripts/prove_async_recovery.py` already establishes -- the plugin's `watch.py` is
+# the ONE bounded poll site in this repo and no driver grows a wait of its own.
+def _recover_rows(config, run_id, **kwargs):
+    import sys
+    from pathlib import Path as _Path
+
+    _root = _Path(__file__).resolve().parent.parent
+    for _p in (str(_root / "scripts"), str(_root / "operator-claude-plugin" / "scripts")):
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
+    import watch  # noqa: E402 -- plugin module; see the comment above
+
+    return watch.recover_dispatch(config, run_id, expected_chunk_count=1, **kwargs)
+
+
 def _action_from_response(response_body):
     """response_body may be a dict or a one-item list (Build Response's row shape) --
     return the `action` string either way, or None if it cannot be found."""
@@ -179,6 +197,7 @@ def main(
     patcher=patch_record,
     reader=get_record,
     poster=post_webhook_event,
+    recoverer=_recover_rows,
     settler=settle_veto,
     has_credentials=_has_credentials,
     portal_ok=_portal_ok,
@@ -240,15 +259,21 @@ def main(
 
     print("\n--- leg 2: recompute POST ---")
     try:
-        response = poster(TARGET_COMPANY_ID, True, config, recompute=True)
+        handle = poster(TARGET_COMPANY_ID, True, config, recompute=True)
     except NotArmedError as exc:
         print(f"REFUSED: {exc}")
         return 1
-    try:
-        response_body = response.json()
-    except Exception:  # noqa: BLE001 -- a non-JSON response body IS the observation here
-        response_body = getattr(response, "text", None)
+    print(json.dumps({"ack": handle["ack"], "run_id": handle["run_id"]},
+                     indent=2, default=str))
+
+    # The ack says only that the request was accepted. What the recompute DECIDED comes
+    # off the settled execution, correlated on this POST's own run id.
+    recovery = recoverer(config, handle["run_id"])
+    response_body = recovery.get("responses") or []
     print(json.dumps(response_body, indent=2, default=str))
+    if not recovery.get("recovered"):
+        print("\nNOT SETTLED inside the watch's bound -- the run may still be going. "
+              f"Read it again with run_id={handle['run_id']!r}; never re-POST.")
 
     action = _action_from_response(response_body)
     if action == "write_blocked":

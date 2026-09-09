@@ -42,6 +42,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -600,7 +601,8 @@ def settle_veto(company_id: str, timeout=900, interval=15, reader=get_record, sl
 # --- the D-18 webhook POST leg (no analog in the repo -- small and local) -----------------
 
 def build_webhook_event(company_id: str, property_name: str = "lv_country_region_normalized",
-                        recompute: bool = False, domain: str = None, mode: str = None):
+                        recompute: bool = False, domain: str = None, mode: str = None,
+                        run_id: str = None):
     """The raw HubSpot-shaped property-change event array D-18 specifies. Proven live in
     Phase 40-03 -- the workflow's `IF Company Bare Event` -> `HubSpot Company Fetch By Id`
     path accepts a bare object-id event with no domain match required.
@@ -626,9 +628,16 @@ def build_webhook_event(company_id: str, property_name: str = "lv_country_region
     _writeSafetyAllows can match a TEST_RECORD_DOMAINS allowlist -- the only allowlist that
     can be armed for a company that does not exist yet.
 
-    ALL THREE keys are added only when set. An always-present `recompute: false` /
-    `domain: null` / `mode: null` would change the event body shape for every existing
-    caller.
+    `run_id` (D-70-05, Phase 70 Plan 06) is the caller's own client-minted correlation
+    handle. The webhook answers with an ack now, so this is the ONLY way a caller can
+    find out what its own POST decided: `Parse HubSpot Event` echoes it onto every
+    event, and `watch.recover_dispatch` claims the settled execution by exact match on
+    it. Never a time-proximity guess -- D-70-10 forbids
+    `executions_client.find_execution_for_dispatch` as a correlation path.
+
+    ALL FOUR keys are added only when set. An always-present `recompute: false` /
+    `domain: null` / `mode: null` / `run_id: null` would change the event body shape for
+    every existing caller.
     """
     event = {
         "objectId": str(company_id),
@@ -643,12 +652,14 @@ def build_webhook_event(company_id: str, property_name: str = "lv_country_region
         event["domain"] = domain
     if mode:
         event["mode"] = mode
+    if run_id:
+        event["run_id"] = run_id
     return [event]
 
 
 def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
                        recompute: bool = False, domain: str = None, mode: str = None,
-                       timeout: float = 300):
+                       timeout: float = 300, run_id: str = None):
     """`armed` has NO default, mirroring operator-claude-plugin/scripts/dispatch.py --
     raises NotArmedError when falsy before any network call. Target is config_gate-
     resolved n8n_url joined with webhook/hubspot/enrichment/event; header
@@ -664,6 +675,15 @@ def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
 
     `mode` is forwarded to build_webhook_event unchanged (Phase 58 Plan 02) -- same
     optional, only-added-when-set treatment as `recompute`/`domain` already get.
+
+    RETURNS A HANDLE, NOT A RESPONSE (D-70-05/D-70-08, Phase 70 Plan 06):
+    `{"run_id", "ack", "status_code"}`. The webhook's body is an ack -- it says the
+    request was accepted, never what the run then decided -- so returning the raw
+    `Response` invited every caller to read a row outcome off a channel that no longer
+    carries one. A caller that wants rows hands `handle["run_id"]` to
+    `watch.recover_dispatch`. `run_id` is minted here when the caller supplies none, so
+    every POST through this seam is correlatable whether or not its caller thought
+    about it.
     """
     if not armed:
         raise NotArmedError(
@@ -671,15 +691,24 @@ def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
             "(ALLOW_VETO_REMEDIATION=true) is an operator-only, per-shell decision, "
             "never made by Claude."
         )
+    if run_id is None:
+        run_id = uuid.uuid4().hex
     url = f"{str((config or {}).get('n8n_url') or '').rstrip('/')}/{WEBHOOK_PATH}"
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
     response = transport.post(
         url, headers=headers,
-        json=build_webhook_event(company_id, recompute=recompute, domain=domain, mode=mode),
+        json=build_webhook_event(company_id, recompute=recompute, domain=domain,
+                                 mode=mode, run_id=run_id),
         timeout=timeout,
     )
     response.raise_for_status()
-    return response
+    try:
+        ack = response.json()
+    except Exception:  # noqa: BLE001 -- an unparseable ack is a fact, not a crash
+        ack = {"status_code": getattr(response, "status_code", None),
+               "text": getattr(response, "text", None)}
+    return {"run_id": run_id, "ack": ack,
+            "status_code": getattr(response, "status_code", None)}
 
 
 # --- cost estimate + budget refusal (D-03/D-20) --------------------------------------------

@@ -36,10 +36,12 @@ Two modes, both offline-safe by default:
         decision is operator-only, per-shell, and this script never sets it itself
         (D-11/D-19 precedent) -- see --help.
 
-After a live send, this script reads back the execution the same way
-scripts/enrich_coverage_companies.py does: an n8n executions-API GET with includeData=true,
-correlated to this dispatch by start time (executions_client.find_execution_for_dispatch) --
-never a stored HubSpot property read-back. It reports, from that execution's own runData:
+After a live send, this script reads back the execution the same way every other caller
+in this repo does since Phase 70 Plan 06: through the plugin's `watch.recover_dispatch`,
+correlated by EXACT match on the run id this POST minted (D-70-05) -- never by start-time
+proximity (D-70-10 forbids `executions_client.find_execution_for_dispatch` as a
+correlation path), and never a stored HubSpot property read-back. It reports, from that
+execution's own runData:
   - whether "Decide Company Action" ran at all
   - what `action` value it produced
   - whether `mode` is visible on the row "Parse HubSpot Event" itself produced
@@ -125,50 +127,69 @@ def _node_output_json(execution: dict, node_name: str):
     return None
 
 
-def observe_execution(
-    config: dict,
-    dispatched_at: datetime,
-    resolver=executions_client.resolve_workflow_id,
-    lister=executions_client.list_executions,
-    getter=executions_client.get_execution,
-    finder=executions_client.find_execution_for_dispatch,
-    sleeper=time.sleep,
-    timeout_s=FIND_EXECUTION_TIMEOUT_S,
-    poll_s=FIND_EXECUTION_POLL_S,
-):
-    """Polls the n8n executions API for the run this probe just dispatched, then extracts
-    the observed answers from THAT execution's own runData -- never from a stored HubSpot
-    property read-back (project memory: n8n-stored-vs-running-content.md proves that reads
-    nothing about what actually ran)."""
-    workflow_id = resolver(config, workflow_name=ENRICHMENT_WORKFLOW_NAME)
-    if workflow_id is None:
-        return {"error": f"no live workflow named {ENRICHMENT_WORKFLOW_NAME!r} was found"}
+def observe_execution(config: dict, run_id: str, recoverer=None):
+    """The rows THIS probe's own POST produced, read off the settled execution's runData
+    -- never from a stored HubSpot property read-back (project memory:
+    n8n-stored-vs-running-content.md proves that reads nothing about what actually ran).
 
-    deadline = time.monotonic() + timeout_s
-    handle = None
-    while True:
-        candidates = lister(config, workflow_id)
-        handle = finder(candidates, dispatched_at)
-        if handle is not None or time.monotonic() >= deadline:
-            break
-        sleeper(poll_s)
-    if handle is None:
-        return {"error": "no matching execution appeared within the poll window"}
+    D-70-05/D-70-10 (Phase 70 Plan 06): correlation is EXACT, on the `run_id` this
+    probe's own POST minted and `Parse HubSpot Event` echoed back. This function used to
+    poll `executions_client.list_executions` in its OWN `while` loop and pick a run with
+    `find_execution_for_dispatch`'s time-proximity guess -- a second poll site AND a
+    correlation that can attribute a stranger's run to this probe. Both are gone: the
+    single bounded poll site in this repo is the plugin's `watch.py`, and this
+    delegates to it.
+    """
+    recovery = (recoverer or _recover_rows)(config, run_id)
+    executions = recovery.get("matched_executions")
+    rows = recovery.get("responses") or []
+    run_data = recovery.get("run_data") or {}
+    decide_output = _first_json(run_data, "Decide Company Action")
+    parse_output = _first_json(run_data, "Parse HubSpot Event")
 
-    execution = getter(config, handle["execution_id"])
-    run_data = ((execution.get("data") or {}).get("resultData") or {}).get("runData")
-    nodes_run = sorted(run_data.keys()) if isinstance(run_data, dict) else []
-    decide_output = _node_output_json(execution, "Decide Company Action")
-    parse_output = _node_output_json(execution, "Parse HubSpot Event")
+    if not recovery.get("recovered"):
+        return {"error": "the run did not settle inside the watch's bound",
+                "run_id": run_id, "recovered": False}
 
     return {
-        "execution_handle": handle,
-        "nodes_run": nodes_run,
-        "decide_company_action_ran": "Decide Company Action" in nodes_run,
+        "run_id": run_id,
+        "recovered": True,
+        "matched_executions": executions,
+        "nodes_run": sorted(run_data.keys()) if isinstance(run_data, dict) else [],
+        "decide_company_action_ran": "Decide Company Action" in (run_data or {}),
         "decide_company_action_output": decide_output,
         "action_value": (decide_output or {}).get("action") if decide_output else None,
         "mode_visible_on_parsed_row": (parse_output or {}).get("mode") if parse_output else None,
+        "response_rows": rows,
     }
+
+
+def _first_json(run_data, node_name):
+    """The first output item's `json` for `node_name` in a merged runData map."""
+    runs = (run_data or {}).get(node_name)
+    if not isinstance(runs, list) or not runs:
+        return None
+    main = (((runs[0] or {}).get("data") or {}).get("main") or [])
+    items = main[0] if main and isinstance(main[0], list) else []
+    first = items[0] if items else None
+    body = first.get("json") if isinstance(first, dict) else None
+    return body if isinstance(body, dict) else None
+
+
+def _recover_rows(config, run_id, **kwargs):
+    """D-70-08: the cross-package import precedent `scripts/prove_async_recovery.py`
+    establishes -- the plugin's `watch.py` is the ONE bounded poll site in this repo and
+    no driver grows a wait of its own."""
+    import sys
+    from pathlib import Path as _Path
+
+    _root = _Path(__file__).resolve().parent.parent
+    for _p in (str(_root / "scripts"), str(_root / "operator-claude-plugin" / "scripts")):
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
+    import watch  # noqa: E402 -- plugin module; see the docstring above
+
+    return watch.recover_dispatch(config, run_id, expected_chunk_count=1, **kwargs)
 
 
 def _describe_target(config: dict) -> str:
@@ -208,7 +229,7 @@ def _print_execute(event: list, response_body, observed: dict) -> None:
     print(f"response body received by the caller: {json.dumps(response_body, indent=2, default=str)}")
     print("\n=== OBSERVED (from the execution's own runData, not a stored read-back) ===")
     print(json.dumps(observed, indent=2, default=str))
-    n8n_executions_used = 1 if observed.get("execution_handle") else 0
+    n8n_executions_used = observed.get("matched_executions") or 0
     print(
         f"\ncost actuals vs cap: {n8n_executions_used} n8n execution(s) used "
         f"(cap {N8N_EXECUTION_CAP}), 0 provider credits (cap {PROVIDER_CREDIT_CAP}), "
@@ -260,22 +281,19 @@ def main(
         return 1
 
     armed = str(env.get("ALLOW_VETO_REMEDIATION", "false")).lower() == "true"
-    dispatched_at = datetime.now(timezone.utc)
     poster_kwargs = {"recompute": True, "mode": "propose"}
     if transport is not None:
         poster_kwargs["transport"] = transport
     try:
-        response = poster(TARGET_COMPANY_ID, armed, config, **poster_kwargs)
+        handle = poster(TARGET_COMPANY_ID, armed, config, **poster_kwargs)
     except NotArmedError as exc:
         print(f"REFUSED: {exc}")
         return 1
 
-    try:
-        response_body = response.json()
-    except Exception:  # noqa: BLE001 -- a non-JSON response body IS the observation here
-        response_body = getattr(response, "text", None)
+    # The ack, kept for the record -- never a row outcome (D-70-07).
+    response_body = handle["ack"]
 
-    observed = observer(config, dispatched_at)
+    observed = observer(config, handle["run_id"])
     _print_execute(event, response_body, observed)
     return 0
 

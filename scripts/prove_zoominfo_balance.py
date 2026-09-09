@@ -19,7 +19,7 @@ parsing fix — which is the entire reason this script tells them apart rather t
 collapsing both into one "ZoomInfo is broken" label.
 
 TWO GATES, BOTH BEFORE ANY TRANSPORT IS CONSTRUCTED (mirrors prove_async_recovery.py and
-prove_scale_up_runtime.py):
+prove_async_recovery.py):
 1. `ALLOW_ZOOMINFO_BALANCE_PROBE` must read EXACTLY `true` (never truthy-coerced — `"True"`,
    `"1"`, `"yes"` all refuse).
 2. The wrong-instance guard, copied from `deploy_n8n_workflows.py::_instance_ok()`.

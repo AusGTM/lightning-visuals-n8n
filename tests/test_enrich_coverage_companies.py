@@ -510,7 +510,9 @@ def test_run_coverage_window_dry_run_builds_every_patch_and_disarms_without_netw
         allowlist_asserter=lambda *_a, **_kw: frozenset(ALL_FIVE_IDS),
         patcher=_fake_patcher,
         lister=_refuse_network,
-        finder=_refuse_network,
+        # D-70-10 (Phase 70 Plan 06): `finder` is gone — correlation is exact-match
+        # on the run id, never start-time proximity.
+        recoverer=_refuse_network,
         getter=_refuse_network,
         disarmer=_fake_disarmer,
         workflow_id="wf-fake",
@@ -648,3 +650,117 @@ def test_research_racing_nsw_calls_research_fn_with_the_enum_constrained_prompt(
     assert captured["record_id"] == RACING_NSW_ID
     assert captured["system_prompt"] is RACING_NSW_ORG_TYPE_SYSTEM
     assert result == {"provider": "claude_web", "matched": True, "data": {}}
+
+
+# =====================================================================================
+# Phase 70 Plan 06 Task 3 (D-70-05/D-70-08/D-70-10) — the one shared webhook poster
+# mints and sends a run id and returns a HANDLE, not a Response. Migrating the seam
+# migrates every one of its callers; none of them grows a recovery of its own.
+# =====================================================================================
+
+class _RecordingPostTransport:
+    def __init__(self, ack=None, status_code=200):
+        self.calls = []
+        self._ack = ack if ack is not None else {"accepted": True}
+        self._status = status_code
+
+    def post(self, url, headers=None, json=None, timeout=None, **kwargs):
+        self.calls.append({"url": url, "json": json, "timeout": timeout})
+        outer = self
+
+        class _Response:
+            status_code = outer._status
+
+            @staticmethod
+            def raise_for_status():
+                return None
+
+            @staticmethod
+            def json():
+                return outer._ack
+
+        return _Response()
+
+
+_POSTER_CONFIG = {"n8n_url": "https://fake.n8n.cloud", "webhook_secret": "fake-secret"}
+
+
+def test_the_shared_poster_returns_a_handle_never_a_response():
+    transport = _RecordingPostTransport()
+
+    handle = m.post_webhook_event(JAM_TV_ID, True, _POSTER_CONFIG, transport=transport,
+                                  recompute=True)
+
+    assert set(handle) == {"run_id", "ack", "status_code"}
+    assert handle["ack"] == {"accepted": True}
+    assert not hasattr(handle, "json"), (
+        "a Response back here is what invited a caller to read a row outcome off a "
+        "channel that carries only an ack"
+    )
+
+
+def test_the_shared_poster_mints_a_run_id_and_sends_it_on_the_event():
+    transport = _RecordingPostTransport()
+
+    handle = m.post_webhook_event(JAM_TV_ID, True, _POSTER_CONFIG, transport=transport)
+
+    sent_event = transport.calls[0]["json"][0]
+    assert sent_event["run_id"] == handle["run_id"]
+    assert handle["run_id"], "an unminted run id leaves this POST uncorrelatable"
+
+
+def test_the_shared_poster_forwards_a_callers_own_run_id_unchanged():
+    transport = _RecordingPostTransport()
+
+    handle = m.post_webhook_event(JAM_TV_ID, True, _POSTER_CONFIG, transport=transport,
+                                  run_id="run-supplied-by-the-caller")
+
+    assert handle["run_id"] == "run-supplied-by-the-caller"
+    assert transport.calls[0]["json"][0]["run_id"] == "run-supplied-by-the-caller"
+
+
+def test_the_event_body_is_byte_identical_when_no_run_id_is_wanted():
+    """`run_id` joins `recompute`/`domain`/`mode` in the only-added-when-set treatment —
+    an always-present key would change the body shape for every existing caller."""
+    event = rvc.build_webhook_event(JAM_TV_ID)[0]
+
+    assert set(event) == {"objectId", "objectType", "subscriptionType",
+                          "propertyName", "occurredAt"}
+    assert "run_id" not in event
+    assert rvc.build_webhook_event(JAM_TV_ID, run_id="r-1")[0]["run_id"] == "r-1"
+
+
+def test_the_arming_refusal_still_fires_before_the_run_id_is_even_minted():
+    """The handle change must not have moved anything ahead of the arming gate."""
+    transport = _RecordingPostTransport()
+
+    with pytest.raises(rvc.NotArmedError):
+        m.post_webhook_event(JAM_TV_ID, False, _POSTER_CONFIG, transport=transport)
+
+    assert transport.calls == []
+
+
+def test_no_surviving_repo_driver_correlates_an_execution_by_start_time():
+    """D-70-10, asserted structurally rather than promised: `find_execution_for_dispatch`
+    picks a run by how close its start time is to the POST, which can attribute a
+    stranger's execution to this run. No driver may name it."""
+    import ast
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in sorted((root / "scripts").glob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name == "find_execution_for_dispatch":
+                offenders.append(path.name)
+    # A CALL, never a mention: several of these files name it in prose precisely to say
+    # it must not be used, and a substring scan would flag exactly the comments that
+    # enforce the rule.
+    assert offenders == [], (
+        f"a repo driver still correlates by start time: {sorted(set(offenders))}"
+    )
