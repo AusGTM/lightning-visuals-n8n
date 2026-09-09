@@ -283,12 +283,15 @@ Plans:
 write that happened, on one client result channel — and the offline harness would have
 caught every finding the 2026-09-09 UAT found.
 
-**Requirements:** TBD at discussion
+**Requirements:** captured at discussion 2026-09-09 as D-70-01..19 in
+`.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md` (no
+milestone requirement IDs; the phase was added after v1.2-REQUIREMENTS.md was cut).
 
 **Brief:** `.planning/todos/pending/2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md`
 (seven instances of one idiom, F1/F5/F5b/F10/F11/F12 plus the July research-lane row loss).
 
 - Not a debug continuation: the F1/F5/F10–F12 fixes patch sites; this phase retires the idiom.
-- Depends on the F10–F12 fixes landing and the UAT record closing.
+- ~~Depends on the F10–F12 fixes landing and the UAT record closing.~~ Both done 2026-09-09
+  (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 

@@ -1,0 +1,401 @@
+# Phase 70: One merge, one result channel — n8n runtime truth - Context
+
+**Gathered:** 2026-09-09
+**Status:** Ready for planning
+
+<domain>
+## Phase Boundary
+
+A batch with two identity lanes and two actions returns every row once, from the write that
+happened, on one client result channel — and the offline harness would have caught every
+finding the 2026-09-09 UAT found.
+
+This phase RETIRES an idiom, it does not patch more sites of it. The idiom: lanes fan out
+(`IF Has Email` / `IF Linkedin Searchable` / `IF Name Searchable` / `IF Update` / `IF Create` /
+`Set Review`) and reconverge on a Code node with no Merge; downstream nodes read upstream rows
+by name (`$('Node').all()`, `.first()`, `.item`) because HTTP nodes replace `$json`; the webhook
+answers with whichever lane fires `Respond` first, or with the first entry only; the client has
+two result channels (sync body, async runData). Seven instances found so far (July research-lane
+row loss, F1, F5, F5b, F10, F11, F12). The per-site fixes of 2026-09-09 (`0c42b18`, `995a689`,
+`4d35812`, `fa447cc`, `8344b7a`, `nodeRunRecovery.js`) stay green until this phase replaces
+them; several are explicitly removed by decisions below.
+
+**In scope:** the n8n builder (`scripts/build_cloud_workflows.py`) and every workflow it
+generates; the client result channel in `operator-claude-plugin` (`dispatch.py`, `watch.py`,
+`chunking.py`, `written_records.py`, `preingest.py`, `report*.py`) and the repo scripts that
+POST to the enrichment webhook; the write-gate contract across all three splice sites; the
+offline harness under `tests/n8n/`; the UAT batch shape; the four folded todos.
+
+**Out of scope:** confidence policy (a new person is held by design, D-61-03 — `ALL_HOLD_CODES`
+and `min_confidence` untouched); named-account scoring; anything in the ICP engines
+(`src/icp_scoring.py`, `Decide Company Action`'s veto block); the review-queue / review-
+decision / backend-status endpoints' response shape (they stay body-responding queries, D-70-08);
+the unattended gate (still shut). **Binding on all six (SAFE-01..05) applies unchanged; nothing
+is armed during the phase.** Never hand-edit `n8n/wf_*.json`; every change goes through the
+builder.
+
+</domain>
+
+<decisions>
+## Implementation Decisions
+
+### Convergence mechanism
+
+- **D-70-01: An explicit Merge node at every convergence point.** Wherever two or more lanes
+  feed one node today (`Enrichment Gate`, `Company Gate`, `Build Response`, `Build Ingest
+  Response`, the write-gate fan-in), a Merge (append, N inputs) sits in front, so the converged
+  node runs ONCE on all rows. `n8n/code/nodeRunRecovery.js` and its seven call sites are
+  deleted, not kept as a fallback. Rejected: per-item `pairedItem` lineage (HTTP hops break it;
+  `.item` is ambiguous across runs — observation 31305); keeping run recovery as a fenced idiom.
+  — **Reversibility:** costly — every converged reader's jsCode changes from by-name to
+  `$input`; undoing means reinstating run recovery at every site.
+
+- **D-70-02: `executionOrder` v1 flip is the RESEARCHER's call, after a doc check.** Both live
+  workflows run legacy v0 (`settings.executionOrder` absent on all five committed cloud
+  JSONs). Merge behaviour when one lane never fires differs between v0 and v1. The researcher
+  verifies from n8n's docs — under the setting the workflow will actually run with — whether a
+  Merge with N inputs runs when some inputs never receive data, and recommends flip-or-design-
+  around with the doc citation. This is a `[documented]`-tag fact per CLAUDE.md §13.0.3 until
+  a disarmed live run observes it (D-70-19 is that observation). If the flip is recommended,
+  the builder sets it on every generated workflow, not per-workflow.
+  — **Reversibility:** one-way in effect — flipping v1 changes node ordering on all five live
+  flows at once; a later revert is a second all-flows behaviour change.
+
+- **D-70-03: Retire EVERY by-name read.** No `$('X')` of any form (`.all()`, `.first()`,
+  `.item`, `.last()`) anywhere in generated jsCode or expressions — including the single-run
+  reads of `Parse HubSpot Event` / `Set Config` (request-level flags are carried on the row).
+  The builder has 23 distinct by-name read targets today. Rejected: retire only converged
+  bare `.all()` and lint the rest; retire only the seven listed instances.
+  — **Reversibility:** costly — touches every provider/HubSpot hop in three workflows.
+
+- **D-70-04: The locked rule is a BUILD-TIME ASSERTION; the researcher picks the carry
+  mechanism.** `scripts/build_cloud_workflows.py` fails generation if any emitted jsCode or
+  expression contains a `$('` read, and a test pins it against the committed JSON. How a row
+  survives an HTTP hop without `$('Prev')` (HTTP Request nodes have no pass-through) is
+  evaluated by the researcher against n8n Cloud limits — candidates named in discussion: Merge
+  combine-by-position per hop (n8n-native, ~15–20 new nodes per workflow, relies on 1:1 item
+  order incl. `continueOnFail`), HTTP inside Code via `this.helpers.httpRequest` (fewest
+  nodes; credential reachability from Code on Cloud is UNVERIFIED), or another the researcher
+  finds. The recommendation must state which candidate and why the others lost.
+
+### Result channel
+
+- **D-70-05: The client result channel is the settled execution's runData, read by the
+  client-minted `run_id`, ALWAYS.** Sync and async, every mode including `propose`. This is
+  `watch.recover_async_dispatch`'s existing mechanism (`Build Response` runs off the settled
+  execution, correlated on `Parse HubSpot Event`'s echoed `run_id` — exact match) promoted to
+  the only path. It REOPENS F5b's debug-scope "no code fix" ruling (`7524ee7`) structurally:
+  the reason F5b was safe (`classify_matches` walks input rows) stays true, but the sync body
+  is no longer a data channel at all. Rejected: sync body made complete by the Merge (two
+  channels survive); split by mode.
+  — **Reversibility:** one-way — a published client contract; callers that parsed the sync
+  body (see D-70-08) are migrated, not shimmed.
+
+- **D-70-06: The row's outcome of record is the WRITE node's actual output.** `Build Response`
+  / `Build Ingest Response` receive, on the row itself, the HubSpot write node's response or the
+  gate's refusal item (D-70-14). `action` reflects what HubSpot returned; `write_blocked` when
+  the gate refused. F12's Decide-side precheck in `DECIDE_CLOUD` (`8344b7a`) is REMOVED, and the
+  folded create-row precheck todo is closed by construction, not implemented. Rejected: keeping
+  the precheck as the source; both.
+
+- **D-70-07: The HTTP body is ALWAYS an ack; the `async_ack` flag is retired.** `Respond to
+  Webhook` fires once, immediately, with `{run_id, accepted, row_ids}` for every request.
+  `Build Async Ack` becomes THE response; no business lane ever feeds `Respond`. Today four
+  nodes feed `Respond to Webhook` on the enrichment lane (`IF List Expanded`, `Build Async Ack`,
+  `Build Scale Up Ack`, `Build Response`); after this phase the refusal paths that today answer
+  a bare 200 with a reason (`IF Object Type Supported` false, `recompute_refused`,
+  `write_blocked`, list-expansion refusals) must land their reason as a ROW in runData that the
+  client reads, because the body no longer carries it. The flag is removed from `Parse HubSpot
+  Event` normalisation and from `chunking.dispatch_plan`; a caller that still passes it is
+  ignored, not rejected. §13.0.2's four-flag table becomes three (`recompute`, `scale_up`,
+  `source_by_field`).
+  — **Reversibility:** one-way — the sync body contract is published to every caller.
+
+- **D-70-08: Ack-only applies to the enrichment and ingest lanes only.**
+  `hubspot/enrichment/event` and `hubspot/contact-upload` return an ack. `hubspot/review/queue`,
+  `hubspot/review/decision` and `hubspot/backend-status` are queries, not row-outcome lanes,
+  and keep responding with a body. EVERY caller of the two lanes migrates to runData: the
+  plugin, `scheduled_arm.py`, and the seven repo scripts that POST to the webhook
+  (`enrich_coverage_companies.py`, `fix_sfv_region.py`, `probe_company_propose_mode.py`,
+  `probe_n8n_async_semantics.py`, `prove_scale_up_runtime.py`, `remediate_veto_companies.py`,
+  `rescore_population.py`) — a script that no longer has a purpose may be deleted instead of
+  migrated. `SJ-3 Dispatch To Enrichment` is an `Execute Workflow` node (`mode: each`) with no
+  HTTP body to read; unaffected. Rejected: a request-level flag returning the merged body to
+  scripts; every webhook ack-only.
+
+- **D-70-08a: `enrich-records` migrates too — its recorded exception is overridden.** Memory
+  `propose-mode-response-body-is-the-data-channel` records that `enrich-records` deliberately
+  did NOT use runData recovery: 3 of its 4 spec forms mint no row ids, nothing writes manifest
+  verdicts (so `run_state.read_progress` — verified: it derives `running` from
+  `run_manifest` verdicts — would report `running` forever), and step 9's F3 per-record report
+  reads the body. Under D-70-05 that exception ends. Correlation is by `run_id` alone
+  (client-minted per dispatch, not per row), so id-less spec forms still correlate; settlement
+  comes from the EXECUTION's status, never from manifest verdicts; the ack's `row_ids` may be
+  empty for those forms; step 9's F3 rule ("never guess beyond what the body says") applies
+  verbatim to the runData rows instead. `scale_up` children are separate executions of the
+  same workflow carrying the same `run_id`; `find_executions_by_run_id` must return them
+  (§13.0.3: the executions API lists child executions), or a fanned-out batch loses its rows
+  on the sole channel.
+
+- **D-70-09: `written_records` records WRITES only — no-write legs are never appended.**
+  `chunking.dispatch_plan` appends a chunk to `written_records` only when the leg's mode can
+  write (write / ingest). Propose / match / enrich-proposal legs never enter the ledger; their
+  rows reach the end-of-run report through the enrichment outcome. The report can never say
+  `failed` for a row that was not sent (folded F8). Rejected: `NO_ACTION` with reason; backend
+  stamping an action on every row.
+
+- **D-70-10: Refuse before start when the executions-API key is absent.** runData-only makes
+  `n8n_api_key` a hard dependency of every enrichment/ingest send. A missing key is a Phase-57-
+  style refusal-before-start alongside Phase 67's fail-closed conditions. NEVER a fallback to
+  `executions_client.find_execution_for_dispatch`'s D-12 time-proximity guess. Rejected:
+  dispatch then report `unread`; time-proximity fallback.
+
+- **D-70-11: `confidence.assess` is the ONLY per-row verdict on the client.**
+  `preingest.render_enriched_preview` calls `confidence.assess` per row and shows
+  `HELD <code> <reason>` or `SEND`; `SEND` only when CONFIDENT. The preview's `send_count`
+  equals dispatch `SENDABLE` by construction, pinned by a test (row with tier `none` and a found
+  email renders `HELD no_match`, never `SEND`). The SKILL and README state the design fact this
+  exposed: under autonomy a NEW person is never created without the operator's end-of-run
+  approval, because a no-match row is by definition unconfident (D-61-03, unchanged). Folded
+  todo `enriched-preview-says-send`. Rejected: two columns; dropping the column.
+
+### Write-gate contract
+
+- **D-70-12: One canonical `write_request` shape, no gate fallbacks.** Every node feeding a
+  gated write emits `write_request: {action, hs_object_id, domain, email}`. `_write_gate_js`
+  reads ONLY that shape — the `identity_keys.domain || domain || company_domain || email-
+  domain` fallback ladder (BUG 27, F11) is deleted. The create-row email-domain derivation
+  moves into the EMITTER, once. The builder asserts at generation time that each gated node's
+  upstream emits `write_request`. Rejected: extend the tolerant gate; canonical-plus-legacy for
+  one phase.
+  — **Reversibility:** costly — one shape across three workflows; re-adding tolerance means
+  re-growing the ladder.
+
+- **D-70-13: Scope — all three splice sites, one shape; the review lane keeps id-only AS
+  DATA.** Enrichment (create/update/company), ingest (create/update/associate) and
+  review-decision (`Review Decision Update` etc.). The review lane's emitter sets
+  `domain: null`, so 30-02's "contacts are `TEST_RECORD_IDS`-only on review writebacks" survives
+  as the emitted value, not as a gate special-case; `reviewDecisionEndpoint.test.mjs` g3 stays
+  green. Rejected: enrichment+ingest only; giving review the domain path.
+
+- **D-70-14: A refused row is EMITTED, never dropped.** The gate becomes IF-shaped: permitted
+  rows go to the write node; refused rows carry `action: "write_blocked"` and a reason on a
+  second output that reaches the Merge before `Build Response` / `Build Ingest Response`. No
+  Code node filters its input to zero on a write path any more, so a 100%-refused batch cannot
+  dead-end (F1's shape) and the response always sees the refusal (F12). Rejected: pass-through
+  with `allowed` flag; keep drop + precheck in every Decide.
+
+- **D-70-15: One gate verdict covers an update AND its association.** Update and the
+  `HubSpot Associate Company` PUT are one `write_request` with ONE allowlist verdict; the
+  second gate copy on the association path is removed. If the verdict refuses, neither node
+  runs (`write_blocked`). If it permits, the update runs, and the association runs only when a
+  `company_id` resolved — otherwise `association: not_attempted`. §13.0.1 is unchanged: an
+  update is NEVER held for lack of a company; company resolution does not gate the update,
+  only the allowlist does. Both facts are reported from the actual nodes. Rejected:
+  independent verdicts.
+
+### Harness depth + UAT shape
+
+- **D-70-16: The offline harness is a GRAPH WALKER over the committed JSON.** One shared helper
+  under `tests/n8n/` executes a workflow from its `connections`: fires each node per inbound
+  edge as n8n does under the workflow's `executionOrder`, runs Code nodes' `jsCode` via
+  `new Function` (the mechanism the 50 existing tests already use), stubs HTTP nodes with
+  fixtures, models Merge, a single `Respond`, `responseData`, and `$runIndex`. A test feeds rows
+  at the trigger and asserts rows at `Build Response`. `enrichmentGateRunRecoveryFlow.test.mjs`'s
+  `makeDollar` run-history model is the seed, then superseded. Rejected: promoting `makeDollar`
+  alone; a hybrid.
+  — **Reversibility:** reversible — additive test infrastructure.
+
+- **D-70-17: Acceptance is one mixed-batch test per lane.** One enrichment test and one ingest
+  test, each 2 identity lanes × 2 actions, asserting every row returns exactly once from the
+  write node's output. Rejected: one RED-first test per historical instance (seven); walker
+  plus live differential as the offline bar.
+
+- **D-70-18: GREEN on the refactored JSON is enough — no historical RED.** The operator chose
+  not to run the two tests against the pre-Phase-70 JSON. The walker's ability to detect the
+  class is asserted by the walker's OWN unit tests (a fixture graph where lanes reconverge
+  without a Merge must yield the F5-style collapse; one where `Respond` fires twice must yield
+  first-run-only). Note for the planner: memory `audit-sweep-anti-patterns` says a guard test
+  must be seen RED; here the RED lives in the walker's unit tests, by operator decision.
+
+- **D-70-19: The phase closes on a DISARMED live mixed batch whose runData matches the
+  walker.** After the operator deploys and bounces (disarmed, both write flags `"false"`), one
+  disarmed 2-lane × 2-action send per lane; the rows recovered from runData must be shape-equal
+  to the walker's predicted rows for the same input (precedent:
+  `.planning/milestones/v1.1-phases/61-autonomous-batch-runs/61-ASYNC-RECOVERY-VERDICT.json`,
+  `shapes_equal: true`). Verdict JSON in the phase dir. Zero writes, zero arming. This is also
+  the `[observed live]` upgrade for D-70-02's Merge/executionOrder fact. Rejected: offline GREEN
+  closes it; adding one armed row.
+
+### Claude's Discretion
+
+- Merge node typeVersion/mode parameters, input count per convergence point, and node layout.
+- The walker's API, fixture format for HTTP stubs, and where it lives under `tests/n8n/`.
+- The ack body's exact field names beyond `run_id`, `accepted`, `row_ids`.
+- Poll bound and cadence for sync-style callers now reading runData (`watch.py`'s measured
+  bounds are the starting point).
+- Migration order across the three workflows and which repo scripts are deleted vs migrated.
+- Node-count pins that move: CLAUDE.md's 123 (enrichment) / 29 (ingest) / 26 (review) /
+  39 (maintenance) / 17 (status); `test_control_flag_parity.py`'s declaration counts; builder
+  idempotency test. Budget the pin updates; do not treat a moved pin as a regression.
+- How the refusal reasons that today ride the sync body (`recompute_refused`, unsupported
+  object type, list-expansion refusals) are shaped as runData rows.
+
+### Folded Todos
+
+- **`2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md`** — IS the phase.
+  Its five-point "what a structural fix looks like" maps to D-70-16 (harness), D-70-01/03/04
+  (backend), D-70-12..15 (gate), D-70-05..08 (client), D-70-17/19 (UAT shape).
+- **`2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md`** — closed by D-70-06 +
+  D-70-14: the precheck pattern is removed rather than extended to create rows; a refused
+  create row is a `write_blocked` item from the gate itself.
+- **`2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md`** (F8) — D-70-09.
+- **`2026-09-09-enriched-preview-says-send-for-rows-the-confidence-gate-holds.md`** — D-70-11.
+
+</decisions>
+
+<canonical_refs>
+## Canonical References
+
+**Downstream agents MUST read these before planning or implementing.**
+
+### The brief and the evidence
+- `.planning/todos/pending/2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md`
+  — the idiom, all seven instances, the five-point fix shape.
+- `.planning/debug/resolved/uat-batch-review-row-reads-failed.md` — F1/F5/F5b/F10/F11/F12 root
+  causes, fixes, and live proof (executions 12163, 12173, 12179, 12181, 12194, 12196). §F5b is
+  the ruling D-70-05 reopens. §executionOrder records that the setting is absent live.
+- `.planning/uat/UAT-autonomous-batch-2026-09-09.md` — the UAT record.
+- `docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md` — the operator's UAT procedure; its batch shape
+  changes to mixed lanes + mixed actions by default.
+- `.planning/ROADMAP.md` § "Phase 70" and § "Binding on all six" (SAFE-01..05).
+- `.planning/milestones/v1.2-REQUIREMENTS.md` — the milestone's requirement vocabulary; Phase
+  70's requirements are "TBD at discussion" and are D-70-01..19 above.
+
+### Platform facts (read before recommending Merge / executionOrder / carry mechanism)
+- `CLAUDE.md` §13.0.3 — `[documented]` vs `[observed live]` tagging rule; Starter plan limits.
+- `CLAUDE.md` §13.0, §13.0.1, §13.0.2 — the request-level flags (`async_ack` retired by
+  D-70-07; `recompute`, `scale_up`, `source_by_field` unchanged), the association rule's
+  single implementation, and the deployment-parity notes.
+- `n8n/code/nodeRunRecovery.js` — header comment is the best in-repo statement of n8n's
+  per-inbound-edge run semantics and the `.all(0, $runIndex)` insufficiency. Deleted by D-70-01;
+  read first.
+- Memory `propose-mode-response-body-is-the-data-channel` (in the auto-memory dir) — why
+  `async_ack` alone was dangerous; the runData recovery design; the differential live-proof
+  method D-70-19 reuses.
+- `.planning/milestones/v1.1-phases/61-autonomous-batch-runs/61-ASYNC-RECOVERY-VERDICT.json`
+  and `scripts/prove_async_recovery.py` — shape-equal proof precedent.
+
+### The code this phase changes
+- `scripts/build_cloud_workflows.py` — the only source of every `n8n/wf_*.json`. Key
+  symbols: `splice_write_gates` (:7641), `_write_gate_js` (:7608), `WRITE_SAFETY_GATE_JS`,
+  `BUILD_INGEST_RESPONSE` (:496), `ENRICH_BUILD_RESPONSE` (:5064), `DECIDE_CLOUD` (F12 precheck
+  to remove), `ENRICH_DECIDE_CLOUD`, `ENRICH_DECIDE_CO_CLOUD`, `Build Async Ack`, `Parse
+  HubSpot Event`, `IF Scale Up Route`. All 23 by-name read targets are in this file.
+- `n8n/wf_enrichment_cloud.json` (123 nodes), `n8n/wf_contact_ingest_cloud.json` (29),
+  `n8n/wf_review_decision_cloud.json` (26), plus `_local` / `_local_live` variants — generated,
+  never hand-edited.
+- `operator-claude-plugin/scripts/watch.py` — `recover_async_dispatch`,
+  `find_executions_by_run_id`, `_build_response_rows`, `poll_until_settled`: the runData path
+  D-70-05 promotes.
+- `operator-claude-plugin/scripts/executions_client.py` — the API key header; the
+  `find_execution_for_dispatch` time-proximity path D-70-10 forbids as a fallback.
+- `operator-claude-plugin/scripts/dispatch.py`, `chunking.py` (`dispatch_plan`),
+  `written_records.py` (`append_chunk`, `classify_item`), `preingest.py`
+  (`render_enriched_preview`, `classify_matches`, `merge_enriched`), `report.py`,
+  `report_enrichment.py`, `run_report.py`, `scheduled_arm.py` — sync-body consumers to migrate.
+- `operator-claude-plugin/scripts/confidence.py` — `assess`; read only, not modified (D-70-11
+  consumes it).
+- `operator-claude-plugin/tests/test_report_sufficiency.py` — permits exactly one poll site
+  (`watch.py`); the migration must keep that invariant or change the test deliberately.
+- `operator-claude-plugin/skills/enrich-before-ingest/SKILL.md` — the F5b paragraph added by
+  `7524ee7` becomes wrong under D-70-05 and must be rewritten; step 5's `async_ack=True` goes.
+- `operator-claude-plugin/skills/enrich-records/SKILL.md` step 9 (F3 recorded edit) and its
+  `dispatch_plan` call (:503) — D-70-08a; the report wording moves from body to runData rows.
+- `operator-claude-plugin/scripts/run_state.py::read_progress` and
+  `run_manifest.load_scoped` — the manifest-verdict settlement D-70-08a replaces with
+  execution status for id-less spec forms.
+
+### The harness
+- `tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs` — `makeDollar` run-history model and the
+  drop-wave case; seed for the walker.
+- `tests/n8n/researchChainRowFlow.test.mjs` — the `new Function` execution note.
+- `tests/n8n/ingestWebhookRespondsAllEntries.test.mjs`,
+  `ingestUpdateWriteBlockedFlow.test.mjs`, `ingestUpdateGateDomainFallback.test.mjs`,
+  `ingestReviewBranchResponds.test.mjs`, `asyncAck.test.mjs`, `nodeRunRecovery.test.mjs` — the
+  per-site regression tests whose subjects this phase removes or reshapes; each is retired or
+  rewritten against the walker, never left asserting a deleted mechanism.
+- Run form: `node --test tests/n8n/*.test.mjs` (directory form broken on node 24);
+  `.venv/bin/python -m pytest` for the plugin suite.
+
+</canonical_refs>
+
+<code_context>
+## Existing Code Insights
+
+### Reusable Assets
+- `watch.recover_async_dispatch` + `find_executions_by_run_id` already implement the runData
+  channel end to end, exact-matched on the client-minted `run_id`; D-70-05 generalises them.
+- `splice_write_gates` already inserts one gate per gated write from a `{write_name: action}`
+  map; D-70-14 changes the gate node's shape (two outputs) and D-70-12 its jsCode, not the
+  splice mechanism.
+- `Build Async Ack` already emits `{run_id, accepted, row_id}` and already wins the race to
+  `Respond`; it becomes the single responder.
+- `makeDollar` (run history keyed by node name and run index) and the `new Function` jsCode
+  runner are the walker's building blocks.
+- `written_records.classify_item` already maps `write_blocked` → GATED.
+
+### Established Patterns
+- Phase 46 parity rule: a shared predicate lands in both engines in one commit — not
+  triggered here (no scoring predicate changes), but the veto block's INPUT wiring must not
+  change.
+- Every builder change: regenerate all variants, count nodes, run the node suite and the
+  plugin suite, commit JSON with the builder in one commit. Deployment is the operator's step;
+  committed JSON runs ahead of live until then.
+- `[documented]` / `[observed live]` tagging for any platform claim (CLAUDE.md §13.0.3).
+- Guardrails are refusals in code, not prose (SAFE-05); D-70-10 follows this.
+
+### Integration Points
+- `Parse HubSpot Event` — request-flag normalisation (drop `async_ack`); `run_id` echo is what
+  the client correlates on.
+- `Respond to Webhook` — four inbound edges today on enrichment; one after.
+- The three `splice_write_gates` call sites (:1086 ingest, :7989 enrichment, :8675 review).
+- `chunking.dispatch_plan` — the one place that decides whether a leg is appended to
+  `written_records` (D-70-09) and that passed `async_ack` (D-70-07).
+- Phase 67's fail-closed conditions list — D-70-10 adds the executions-API key.
+
+</code_context>
+
+<specifics>
+## Specific Ideas
+
+- "Retire every by-name read" was chosen over the recommended narrower option; the operator
+  wants the idiom gone, not fenced. The assertion is the deliverable; the carry mechanism is
+  research.
+- The operator declined historical RED and per-instance tests; two mixed-batch tests plus the
+  walker's own unit tests are the offline bar. Do not expand that scope in planning.
+- Live proof is disarmed only. No armed row is part of this phase's close.
+
+</specifics>
+
+<deferred>
+## Deferred Ideas
+
+### Reviewed Todos (not folded)
+- `2026-08-04-enrichment-throughput-ceiling.md` — judge cost; not the idiom.
+- `2026-09-04-company-domain-has-no-candidate-source.md` — candidate sourcing; not the idiom.
+- `2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present.md` — merge
+  policy under SAFE-01..05; separate.
+- `2026-09-08-forbidden-name-markers-refuse-secretary-and-armidale.md` — validation vocabulary.
+- `2026-09-04-website-less-company-search-fallback.md`,
+  `2026-09-05-fallback-is-keyed-on-ladder-empty-not-round-empty.md`,
+  `2026-09-04-walk-provenance-locator-names-last-page-only.md` — suggestion-round ladder.
+
+None raised during discussion — it stayed within phase scope.
+
+</deferred>
+
+---
+
+*Phase: 70-one-merge-one-result-channel-n8n-runtime-truth*
+*Context gathered: 2026-09-09*
