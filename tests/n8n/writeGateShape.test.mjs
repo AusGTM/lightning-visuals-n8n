@@ -291,3 +291,59 @@ test("enrichment lane: a fully refused two-row batch produces exactly two rows a
   }
   assert.deepEqual(rows.map((r) => r.row_id).sort(), ["row-11", "row-22"]);
 });
+
+// =============================================================================================
+// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06) + Task 3 (D-70-15) — the ingest lane.
+// The pre-write refusal precheck is removed rather than extended to create rows, and an
+// update and its association share ONE write_request and ONE allowlist verdict.
+// =============================================================================================
+
+test("ingest: the pre-write refusal precheck is gone from Decide Action (D-70-06)", () => {
+  const js = jsCodeOf(INGEST, "Decide Action");
+  assert.ok(!js.includes("_writeSafetyAllows("),
+    "the row's outcome of record is the write node's own output — a precheck that " +
+    "PREDICTS the gate's verdict is a second copy of the predicate that can disagree");
+  assert.ok(js.includes("_buildWriteRequest("));
+});
+
+test("ingest: ONE gate covers both the update and its association (D-70-15)", () => {
+  assert.ok(!INGEST.nodes.some((n) => n.name === "HubSpot Associate Company Write Gate"),
+    "the association's second allowlist verdict is removed — it runs only downstream of " +
+    "a write that already passed a gate");
+  const inbound = Object.entries(INGEST.connections).flatMap(([src, spec]) =>
+    (spec.main || []).flatMap((outs, idx) =>
+      (outs || []).filter((c) => c.node === "HubSpot Associate Company").map(() => [src, idx])));
+  assert.deepEqual(inbound, [["Build Association Request", 0]]);
+});
+
+test("ingest: each gate's refusal lane reaches Ingest Merge Response on the association lane's own input", () => {
+  const merge = "Ingest Merge Response";
+  const indexOf = (src, outIdx) =>
+    ((INGEST.connections[src] || {}).main || [])[outIdx]
+      ?.filter((c) => c.node === merge).map((c) => c.index) ?? [];
+  const assocIdx = indexOf("Associate Carry Merge", 0);
+  assert.equal(assocIdx.length, 1);
+  for (const write of ["HubSpot Update", "HubSpot Create"]) {
+    assert.deepEqual(indexOf(write + " Write Gate IF", 1), assocIdx,
+      `${write}'s refusal must reuse the association lane's own ${merge} input`);
+  }
+});
+
+test("ingest: Associate Lane Sentinel asks whether the association lane can deliver AT ALL, company_id included", () => {
+  // Once the precheck is gone a row can be action update/create and still never reach
+  // "HubSpot Associate Company" — "Build Association Request" drops any row with no
+  // resolved company (CLAUDE.md §13.0.1: an update is never HELD for lack of a company,
+  // it simply has nothing to associate). The sentinel is graph plumbing and must ask the
+  // same question the lane actually answers.
+  const js = jsCodeOf(INGEST, "Associate Lane Sentinel");
+  assert.match(js, /company_id/,
+    "a batch of updates with no resolved company would otherwise starve Associate Carry Merge");
+});
+
+test("ingest: Build Ingest Response reports the GATE's verdict, not the pre-write intention (D-70-06)", () => {
+  const js = jsCodeOf(INGEST, "Build Ingest Response");
+  assert.match(js, /write_blocked/,
+    "with the precheck gone, the decided snapshot still says 'update' for a row the gate " +
+    "refused — F11/execution 12181's exact misreport unless the gate's own emitted row " +
+    "overrides it here");
+});
