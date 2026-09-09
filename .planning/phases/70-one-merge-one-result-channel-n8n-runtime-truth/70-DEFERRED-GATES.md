@@ -83,3 +83,125 @@ the real engine before an unattended armed batch is trusted.
    reproduces the dropped-association bug on a real batch.
 
 **Resume signal:** "verified" with the six observations, or a description of what the run showed.
+
+---
+
+## Gate 3 — 70-07 Task 3: D-70-19 disarmed live proof
+
+**Deferred by:** Phase 70 Plan 07 Task 3 (`type="checkpoint:human-verify"`,
+`gate="blocking-human"`, LIVE probe — the operator's standing ruling of 2026-09-09 defers live
+probes to end-of-phase UAT). Nothing is armed today, and nothing has been deployed.
+
+**Reached:** 2026-09-09. The automatable half is DONE and committed:
+`scripts/prove_phase70_runtime.py` (the driver, with its refusal gates, its prediction half and
+its comparison), `tests/test_prove_phase70_runtime.py` (17 offline tests, including a refusal on
+an armed live body and a comparator proven able to FAIL), and
+`70-RUNTIME-VERDICT.json` written in `--predict-only` mode with `shapes_equal: null` and
+`status: "predicted_only_awaiting_gate_3"`. **An offline run never writes
+`shapes_equal: true`** — that field is the live observation and nothing else.
+
+**Risk accepted by deferring:** the same risk Gate 1 carries, now phase-wide. The whole of
+Phase 70's design rests on a native `Merge` node settling when one of its inputs never fires,
+and **no committed workflow in this repo has ever contained a native Merge node before this
+phase**. Every GREEN produced was produced by `tests/n8n/lib/walkWorkflow.mjs`, whose own header
+says its Merge model is a spec, "not n8n's real multi-wave behaviour". Until this gate runs, the
+offline harness is an unvalidated model of a mechanism the repo has never run, and CLAUDE.md's
+Merge claims stay `[documented]` under §13.0.3's tagging rule.
+
+**Carried caveat to observe FIRST:** `Build Response Merge` on the enrichment lane has **15
+inputs**, and n8n's own published documentation describes 2–10 for the Merge node. Flagged in
+70-05's Next Phase Readiness, deliberately not resolved offline. If the live engine refuses a
+15-input Merge, that is a finding and this gate stops there.
+
+### `<how-to-verify>` — verbatim from the executor's checkpoint return
+
+> 1. **Operator deploys and bounces.** Run `scripts/deploy_n8n_workflows.py`, then
+>    `scripts/bounce_n8n_workflows.py`. Both disarmed. Confirm each workflow is active and that its
+>    node count matches the committed JSON. Confirm both write flags read false in each live body. A
+>    stored update alone never reloads a running workflow, so a deploy without a bounce proves
+>    nothing about what ran.
+> 2. **Read `settings.executionOrder` from the LIVE workflow body** and record the value. This is
+>    the observed-live upgrade for the platform fact this phase has only documented evidence for.
+>    Record what it actually is, not what it was expected to be.
+> 3. **Send, disarmed:** one 2-identity-lane by 2-action batch on the enrichment lane, one on the
+>    ingest lane, and one single-lane-only batch on each. Four sends. Zero writes: the allowlist is
+>    empty, so every row is expected to come back blocked, and that is the intended result rather
+>    than a failure.
+> 4. **Recover** each run's rows from runData by its own run id, through the same client path the
+>    plugin uses.
+> 5. **Predict** the same rows offline by subprocessing the walker CLI against the same committed
+>    JSON with the same input rows.
+> 6. **Compare** the recovered rows against the predicted rows and write
+>    `70-RUNTIME-VERDICT.json` in the phase directory with, at minimum: `shapes_equal`, the per-send
+>    row counts recovered and predicted, the live `settings.executionOrder` value, each execution
+>    id, whether any execution failed to settle, and an explicit confirmation that zero writes
+>    occurred.
+>
+> **The pass criteria the operator is judging:**
+> - No execution stayed stuck running — no Merge hung on an input that never fired. This is the
+>   single most important observation in the run, because the Merge design rests on documented
+>   evidence and multiple dated community reports of exactly this failing, and this repo has never
+>   run a native Merge node before.
+> - The recovered rows are shape-equal to the walker's prediction on all four sends. A mismatch
+>   means the offline harness is not a faithful model of the runtime, which would invalidate every
+>   offline GREEN this phase produced — report it as a finding, do not adjust the walker to match
+>   and call it passed.
+> - Every row came back blocked, and HubSpot shows no write.
+>
+> If the run reveals that the Merge hangs on a single-lane batch on this n8n build, STOP and report.
+> That is the one outcome the whole phase's design rests on, and the correct response is a finding,
+> not a workaround improvised at the checkpoint.
+
+### The four sends, and the single-lane send in particular
+
+Steps 3–6 above are already implemented by the committed driver. The **single-lane sends are not
+optional**: the 2×2 shape exercises every lane by construction and therefore cannot catch a Merge
+waiting on an input that never fires — the common real shape, and the exact failure Gate 1 was
+meant to find early on the 29-node ingest lane before 70-03 rewrote 123 nodes. Deferred, the first
+live observation happens with every lane already carrying Merges. The driver's four sends are, in
+order: `enrichment_2x2`, `enrichment_single_lane`, `ingest_2x2`, `ingest_single_lane`.
+
+### The `settings.executionOrder` read (D-70-02)
+
+The driver reads `settings.executionOrder` from **each live workflow body** before it sends
+anything, and records the value per workflow in the verdict's
+`live_settings_execution_order`. Note that the COMMITTED JSON currently sets no
+`settings.executionOrder` at all on any workflow (verified 2026-09-09 by reading all eight
+`n8n/wf_*.json`), so the live value is whatever the n8n instance defaults to — **record what it
+actually is, never what it was expected to be**. This is the `[observed live]` upgrade for the
+platform fact this phase has only documented evidence for.
+
+### Live invocation
+
+```bash
+# 1. operator deploys and bounces, DISARMED — the executor never does either
+.venv/bin/python scripts/deploy_n8n_workflows.py
+.venv/bin/python scripts/bounce_n8n_workflows.py
+
+# 2. the proof, disarmed. It refuses BEFORE constructing any transport if the opt-in is
+#    not exactly "true", if the instance guard fails, if there is no executions API key,
+#    or if ANY write flag in ANY live body reads anything other than "false".
+set -a; source .env; set +a
+ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py
+```
+
+Exit 0 prints `PROVEN: the live rows match the walker's prediction on every send.` Exit 1 means a
+mismatch or an unsettled execution — a FINDING to report, never a prompt to adjust the walker.
+
+### What the verdict must show before this gate is signed off
+
+- `shapes_equal: true`
+- four execution ids, each `settled: true`
+- `live_settings_execution_order` recording the real value per workflow
+- `writes_performed: 0`, and every flag in `write_flags_read_from_live_bodies` reading `"false"`
+- HubSpot shows no write
+
+**Resume signal (original):** "approved" once `70-RUNTIME-VERDICT.json` shows `shapes_equal: true`,
+all four executions settled, and HubSpot shows zero writes — or a description of what the run
+observed instead.
+
+### Follow-on, once this gate passes
+
+Upgrade CLAUDE.md's Merge-behaviour statement from `[documented]` to `[observed live]`, citing
+this verdict file and its execution ids, and add the live `settings.executionOrder` value to
+§13.0.3's platform-facts table with the same tag. Neither edit may be made before the run.

@@ -463,19 +463,31 @@ function parseArgs(argv) {
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.workflow || !opts.rows || !opts.node) {
-    console.error("usage: walkWorkflow.mjs --workflow <path> --rows <fixture.json> --node <nodeName>");
+    console.error("usage: walkWorkflow.mjs --workflow <path> --rows <fixture.json> --node <nodeName> [--trigger <nodeName>]");
     process.exitCode = 1;
     return;
   }
   try {
     const wf = loadWorkflow(opts.workflow);
     const fixture = JSON.parse(fs.readFileSync(opts.rows, "utf8"));
-    const candidates = (wf.nodes || []).filter((n) => TRIGGER_TYPES.has(n.type));
-    if (candidates.length !== 1) {
-      throw new Error(`expected exactly one trigger node in ${opts.workflow}, found ${candidates.length}`);
+    // Phase 70 Plan 07 Task 3 (Rule 3 — blocking issue): the auto-detect below refuses a
+    // workflow with more than one trigger, and wf_enrichment_cloud.json has two
+    // ("Webhook Trigger" and "Execute Workflow Trigger"), so the CLI could not be run
+    // against the very lane scripts/prove_phase70_runtime.py has to predict. `--trigger`
+    // names one explicitly; omitted, the single-trigger auto-detect is byte-identical to
+    // what it always did.
+    let triggerName = opts.trigger;
+    if (!triggerName) {
+      const candidates = (wf.nodes || []).filter((n) => TRIGGER_TYPES.has(n.type));
+      if (candidates.length !== 1) {
+        throw new Error(
+          `expected exactly one trigger node in ${opts.workflow}, found ${candidates.length}` +
+          ` (${candidates.map((n) => n.name).join(", ")}) — pass --trigger <nodeName>`);
+      }
+      triggerName = candidates[0].name;
     }
     const { runData, trace } = walkWorkflow(wf, {
-      triggerNode: candidates[0].name,
+      triggerNode: triggerName,
       triggerItems: fixture.triggerItems || [],
       httpStubs: fixture.httpStubs || {},
     });
