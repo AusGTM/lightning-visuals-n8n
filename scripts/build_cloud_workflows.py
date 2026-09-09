@@ -9320,7 +9320,12 @@ REVIEW_QUEUE_ROWS = r"""// Review Queue Rows — the search envelope becomes ONE
 // `onError: continueRegularOutput`, so a 401 or a 429 arrives here as an item with no
 // `results` array — which, treated as an envelope, would render as "0 flagged records" and
 // tell the operator their backlog was clear when it was never read.
-const item = $input.first();
+// Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge ("Review Queue
+// Search" / "Review Queue Contact Search" — exactly one ever runs per request) with a
+// starved-lane sentinel on whichever side would otherwise never fire; drop an
+// identity-less sentinel marker before reading the one real search envelope.
+const items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);
+const item = items[0];
 const res = (item && item.json) || {};
 const search_ok = Array.isArray(res.results);
 const rows = search_ok ? res.results : (res.properties ? [res] : []);
@@ -9374,7 +9379,13 @@ REVIEW_EXTRACT_RECORD = r"""// Review Extract Record — ENRICH_EXTRACT_SEARCH_R
 // the branch simply ends; here it would mean nothing ever reaches
 // `Respond Review Decision` and the caller waits out a Cloudflare timeout instead of
 // being told the record was not found.
-const item = $input.first();
+// Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge ("Review Fetch
+// By Id" / "Review Contact Fetch By Id" — exactly one ever runs per request) with a
+// starved-lane sentinel on whichever side would otherwise never fire; drop an
+// identity-less sentinel marker (never a genuine zero-hit envelope, which always
+// carries `results`/`properties`) before reading the one real item.
+const items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);
+const item = items[0];
 const res = (item && item.json) || {};
 const rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);
 if (!rows.length) return [{ json: { hs_object_id: null, record_found: false } }];
@@ -9465,6 +9476,14 @@ return [{ json: { ...row,
   outcome: result.outcome,
   message: result.message,
   dry_run: !(parsed.dry_run === false && hasWrite),
+  // Phase 70 Plan 03 Task 3 (D-70-01): additive — the refetched `row` never carries
+  // an object_type (HubSpot records have no such property), so this node's own
+  // output previously had no way to name which lane produced it. Needed by the
+  // starved-lane sentinels feeding "Build Review Response Merge"'s two verify-fetch
+  // inputs, which must pick between the companies/contacts lane using the COMPUTED
+  // dry_run above (not the raw request's), since a refused/not_flagged/no_candidate/
+  // stale outcome forces dry_run=true regardless of what the caller sent.
+  object_type: parsed.object_type,
 }}];
 """
 
@@ -9492,7 +9511,15 @@ let verified_properties = null;
 let verified = null;
 
 if (d.dry_run !== true) {
-  const first = $input.first();
+  // Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge (3 inputs —
+  // "Review IF Dry Run"'s true lane, "Review Verify Fetch", "Review Contact Verify
+  // Fetch" — exactly ONE ever fires per request) with a starved-lane sentinel on
+  // whichever OTHER two would otherwise never fire; `$input.first()` used to grab
+  // WHATEVER happened to land at merge input index 0, which could silently be a
+  // sentinel marker instead of the real verify-fetch envelope depending on splice
+  // order — filter identity-less markers first, then take the one real item.
+  const items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);
+  const first = items[0];
   const env = (first && first.json) || {};
   const rows = Array.isArray(env.results) ? env.results : (env.properties ? [env] : []);
   const props = rows.length ? (rows[0].properties || {}) : null;
@@ -9838,6 +9865,92 @@ def build_review_decision_cloud():
         "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
         "position": [220, qy - 700],
     })
+
+    # =========================================================================
+    # Phase 70 Plan 03 Task 3 (D-70-01): a real Merge in front of this lane's three
+    # convergence points. Each is a genuine "exactly one of N sources ever delivers
+    # per request" shape (a single decision/queue request, never a batch) — the SAME
+    # class of hang risk (T-70-04) the enrichment lane's own convergences carry, fixed
+    # the SAME way: a real Merge plus a starved-lane sentinel on whichever input would
+    # otherwise never fire, sourced from a single-producer node upstream of the split
+    # (never from a routing IF's own branch output, which would deliver the marker
+    # into the OTHER branch's real HTTP/search/write node instead of bypassing it —
+    # the exact class of leak T-70-04 exists to prevent). This lane's response
+    # contract does NOT change (D-70-08): both responders keep their existing wiring
+    # untouched.
+    review_extract_merge = splice_merge_before(
+        nodes, conns, "Review Extract Record", merge_name="Review Extract Record Merge")
+    review_queue_merge = splice_merge_before(
+        nodes, conns, "Review Queue Rows", merge_name="Review Queue Rows Merge")
+    review_response_merge = splice_merge_before(
+        nodes, conns, "Build Review Response", merge_name="Build Review Response Merge")
+
+    rer = lambda src, idx=0: (review_extract_merge, _merge_input_index(conns, src, review_extract_merge, source_out_idx=idx))
+    rqr = lambda src, idx=0: (review_queue_merge, _merge_input_index(conns, src, review_queue_merge, source_out_idx=idx))
+    rbr = lambda src, idx=0: (review_response_merge, _merge_input_index(conns, src, review_response_merge, source_out_idx=idx))
+
+    rsx, rsy = 40, 3000
+
+    # --- Review Extract Record: fed from "Parse Review Decision" (single producer,
+    # always runs once, before "Review IF Contacts" ever splits) — reads the SAME
+    # `object_type` field that IF already routes on.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Companies Fetch Absent Sentinel", "Parse Review Decision",
+        'if (rows.length > 0 && rows[0].object_type === "contacts") return [{}]; return [];',
+        [rer("Review Fetch By Id")], rsx, rsy,
+    )
+    rsy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Contacts Fetch Absent Sentinel", "Parse Review Decision",
+        'if (rows.length > 0 && rows[0].object_type !== "contacts") return [{}]; return [];',
+        [rer("Review Contact Fetch By Id")], rsx, rsy,
+    )
+    rsy += 120
+
+    # --- Review Queue Rows: the identical mirror, fed from "Parse Review Queue
+    # Request" (single producer, always runs once, before "Review Queue IF Contacts").
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Queue Companies Absent Sentinel", "Parse Review Queue Request",
+        'if (rows.length > 0 && rows[0].object_type === "contacts") return [{}]; return [];',
+        [rqr("Review Queue Search")], rsx, rsy,
+    )
+    rsy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Queue Contacts Absent Sentinel", "Parse Review Queue Request",
+        'if (rows.length > 0 && rows[0].object_type !== "contacts") return [{}]; return [];',
+        [rqr("Review Queue Contact Search")], rsx, rsy,
+    )
+    rsy += 120
+
+    # --- Build Review Response: three mutually-exclusive sources (dry-run pass-
+    # through, companies verify-fetch, contacts verify-fetch), fed from "Build Review
+    # Decision" (single producer, always runs once, upstream of "Review IF Dry Run").
+    # `dry_run` here is the COMPUTED routing boolean that node emits (a refused/
+    # not_flagged/no_candidate/stale outcome forces it true regardless of the raw
+    # request), the SAME field "Review IF Dry Run" itself switches on — never the raw
+    # request's own dry_run, which this node's `object_type` addition (this task)
+    # exists alongside precisely so both fields are readable from ONE single-producer
+    # source.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Dry Run Absent Sentinel", "Build Review Decision",
+        'if (rows.length > 0 && rows[0].dry_run !== true) return [{}]; return [];',
+        [rbr("Review IF Dry Run")], rsx, rsy,
+    )
+    rsy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Company Verify Absent Sentinel", "Build Review Decision",
+        'if (rows.length > 0 && (rows[0].dry_run === true || rows[0].object_type === "contacts")) '
+        'return [{}]; return [];',
+        [rbr("Review Verify Fetch")], rsx, rsy,
+    )
+    rsy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Contact Verify Absent Sentinel", "Build Review Decision",
+        'if (rows.length > 0 && (rows[0].dry_run === true || rows[0].object_type !== "contacts")) '
+        'return [{}]; return [];',
+        [rbr("Review Contact Verify Fetch")], rsx, rsy,
+    )
+    rsy += 120
 
     # `review`, the action 30-01 added as a BRANCH inside the shared _writeSafetyAllows —
     # never a second gate function. BOTH write nodes are listed; the list is not hardcoded

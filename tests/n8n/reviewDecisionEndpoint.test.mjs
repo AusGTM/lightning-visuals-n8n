@@ -634,17 +634,24 @@ test("the verify refetch is reachable ONLY from the write branch, and both branc
     .filter(([, spec]) => (spec.main || []).some((o) => (o || []).some((c) => c.node === name)))
     .map(([src]) => src);
 
+  // Phase 70 Plan 03 Task 3 (D-70-01): "Build Review Response" now sits behind a real
+  // Merge — the three original sources (plus two starved-lane sentinels) feed the
+  // Merge, not the Code node directly; checked one level further back below.
   assert.deepEqual(feeders("Review Verify Fetch"), ["Review Decision Update"],
     "a dry run must never pay for the refetch, and the refetch must follow the PATCH");
   assert.deepEqual(feeders("Review Contact Verify Fetch"), ["Review Contact Decision Update"],
     "the contacts lane reads back too — a write with no read-back reports null forever");
-  assert.deepEqual(feeders("Build Review Response").sort(),
+  assert.deepEqual(feeders("Build Review Response"), ["Build Review Response Merge"]);
+  const mergeFeeders = feeders("Build Review Response Merge")
+    .filter((src) => !src.includes("Sentinel")).sort();
+  assert.deepEqual(mergeFeeders,
     ["Review Contact Verify Fetch", "Review IF Dry Run", "Review Verify Fetch"]);
   assert.deepEqual(feeders("Respond Review Decision"), ["Build Review Response"],
     "one node shapes the response body on both branches");
 
   const [dryBranch, writeBranch] = WF.connections["Review IF Dry Run"].main;
-  assert.deepEqual(dryBranch.map((c) => c.node), ["Build Review Response"]);
+  // Phase 70 Plan 03 Task 3 (D-70-01): re-pointed to the Merge by splice_merge_before.
+  assert.deepEqual(dryBranch.map((c) => c.node), ["Build Review Response Merge"]);
   assert.deepEqual(writeBranch.map((c) => c.node), ["Review IF Contact Write"]);
 
   // The verify fetch must read the record independently, not the PATCH's echo.
@@ -676,11 +683,15 @@ test("(g1) object_type routes the fetch: contacts to the contact search, everyth
   }
 
   // Both fetches converge on ONE extract node and ONE decision node.
+  // Phase 70 Plan 03 Task 3 (D-70-01): "Review Extract Record" now sits behind a real
+  // Merge — checked one level further back, excluding the starved-lane sentinels.
   const feeders = (name) => Object.entries(WF.connections)
     .filter(([, spec]) => (spec.main || []).some((o) => (o || []).some((c) => c.node === name)))
     .map(([src]) => src).sort();
-  assert.deepEqual(feeders("Review Extract Record"),
-    ["Review Contact Fetch By Id", "Review Fetch By Id"]);
+  assert.deepEqual(feeders("Review Extract Record"), ["Review Extract Record Merge"]);
+  const mergeFeeders = feeders("Review Extract Record Merge")
+    .filter((src) => !src.includes("Sentinel"));
+  assert.deepEqual(mergeFeeders, ["Review Contact Fetch By Id", "Review Fetch By Id"]);
 });
 
 test("(g2) the write branch re-splits on object type, and BOTH PATCHes sit behind their own gate", () => {
