@@ -648,6 +648,22 @@ return $input.all().map((it) => {
     company_id: row.company_id || null,
     company_match: row.company_match || null,
     company_domain: row.company_domain || null,
+    // F11 (uat-batch-review-row-reads-failed, execution 12181): "HubSpot Update Write
+    // Gate" (spliced in front of "HubSpot Update" by splice_write_gates, action
+    // "enrich") reads a row's domain as `identity_keys.domain || json.domain` — neither
+    // of which this lane ever emitted, so a domain-only TEST_RECORD_DOMAINS allowlist
+    // could never admit an update (Greg Purcell, execution 12181: gate emitted 0 items,
+    // HubSpot Update never ran). Same class of gap as BUG 24 (Review Search omitting
+    // `domain`) — fixed the same way: populate the field the gate already reads, not
+    // the shared gate itself (widening the gate's fallback logic would also reach the
+    // scheduled-maintenance "enrich" call sites, an unreviewed scope change). Scoped to
+    // NON-create actions only: "HubSpot Create Write Gate" already derives its own
+    // allowlist domain from the row's email (BUG 27) when no `domain` is present, and a
+    // create's `company_domain` is the ASSOCIATED company, not necessarily the
+    // contact's own email domain — populating `domain` there too would silently change
+    // which domain the create gate checks (caught live by
+    // contactCreateGateFlow.test.mjs's BUG 27 regression).
+    domain: action !== "create" ? (row.company_domain || null) : null,
     properties
   }};
 });
