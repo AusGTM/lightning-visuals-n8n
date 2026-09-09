@@ -297,7 +297,7 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 2/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
+**Plans:** 3/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
 70-05 ∥ 70-06.
 
 Plans:
@@ -308,7 +308,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 70-03-PLAN.md — Wave 2: a Merge at every enrichment and review convergence point; the enrichment webhook answers with an ack; refusals become rows; the opt-in flag retired
+- [x] 70-03-PLAN.md — Wave 2: a Merge at every enrichment and review convergence point; the enrichment webhook answers with an ack; refusals become rows; the opt-in flag retired
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
