@@ -48,3 +48,28 @@ flag `"false"`. Both workflows' write flags read `"false"` after the run.
 - F1 (major, backend): review branch responds `{"queue":"needs_review"}` only → client reads FAILED, reason lost. Todo filed.
 - F2 (minor, client): durable dir never prunes (362 `run_state` files). Todo filed.
 - F3 (observation): the operator's Claude attributed the hold to the email verifier; the backend's reason was "company absent". Consequence of F1, not a separate defect.
+
+
+## Round B (mixed), 2026-09-09 ~03:00Z — run `2bc3617b094b4c939d57f38ff6704e3f`
+
+Run through a driver script the operator's Claude wrote in its scratchpad, NOT through the
+SKILL.md sequence (second occurrence; see F4). Match split by email presence to work around
+F5. Observed:
+- Natalie auto-matched `351336543679` (tier high), set aside — correct, no duplicate.
+- Waterfall found Greg `gregoryp@wyongraceclub.com.au` + LinkedIn + persona; Barry LinkedIn
+  + state; Nardine seniority only, no email.
+- `confidence.assess` held all three unmatched rows `no_match` (D-61-03: tier `none` is never
+  confident) → `SENDABLE=0`, nothing ingested. By design: a NEW person is created only via the
+  end-of-run approval pass. The operator declined the approve prompt.
+- Preview said SEND for Greg/Barry while the gate held them → todo
+  `2026-09-09-enriched-preview-says-send-for-rows-the-confidence-gate-holds.md` (F7).
+- Report rendered (F3 path works) but `REPORT INCOMPLETE`: per-record `None -> failed` for
+  row-2/row-4 from enrichment legs that wrote nothing → todo
+  `2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md` (F8).
+- Held rows section lists row-1..row-4 `confidence_held` including Natalie: the global
+  `held_queue` backlog from run `377a913c` is not run-attributed (a stated report gap).
+- Balances: lusha readable, apollo unreadable (known), **zoominfo unreadable
+  (`provider_error`)** this run though readable at 23:44Z and at grant time — intermittent,
+  observe (F9).
+- F1 (review branch response) NOT exercised: no ingest send happened. Round A result not yet
+  reported.
