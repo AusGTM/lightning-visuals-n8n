@@ -74,7 +74,13 @@ test("the same armed create lands once a company is resolved", () => {
 });
 
 test("an UPDATE with no resolved company is not held — it simply has nothing to associate", () => {
-  const [updated] = runCode(jsCodeOf("Decide Action"), [
+  // F12: Decide Action now also pre-computes an update's write-safety verdict, so its
+  // id needs to be on the allowlist too, or it reports write_blocked before this
+  // test's own "not held" assertion is even reachable — orthogonal to what this test
+  // checks (the hold rule, not write-safety), so armed here rather than left to collide.
+  const armedJs = ARM(jsCodeOf("Decide Action")).replace(
+    'const TEST_RECORD_IDS = "";', 'const TEST_RECORD_IDS = "555";');
+  const [updated] = runCode(armedJs, [
     { identity: { outcome: "match", contact_id: "555" }, merge: { canonicalPatch: { jobtitle: "CEO" } } },
   ]);
   assert.equal(updated.action, "update");

@@ -66,10 +66,22 @@ function matchedUpdateRow() {
   };
 }
 
+// F12 (uat-batch-review-row-reads-failed): Decide Action now ALSO pre-computes an
+// update's write-safety verdict (scripts/build_cloud_workflows.py), so it must be armed
+// with the SAME allowlist the gate tests below use, or it reports `write_blocked`
+// before the row ever reaches the gate — arming both here proves the gate is still an
+// independent, second check (defense-in-depth), not a dead one Decide Action now
+// bypasses.
+function armedDecideAction(wf) {
+  return armConstants(jsCodeOf(wf, "Decide Action"), {
+    ALLOW_HUBSPOT_RECORD_WRITES: "true",
+    TEST_RECORD_DOMAINS: "wyongraceclub.com.au",
+  });
+}
+
 test("Decide Action (ingest, cloud): an update row carries `domain`, not just `company_domain`", () => {
   const wf = loadWorkflow();
-  const decideJs = jsCodeOf(wf, "Decide Action");
-  const [decided] = runCode(decideJs, [matchedUpdateRow()]);
+  const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
   assert.equal(decided.action, "update", "seed row must actually reach Decide Action as an update");
   assert.equal(decided.company_domain, "wyongraceclub.com.au");
   assert.equal(decided.domain, "wyongraceclub.com.au",
@@ -78,8 +90,7 @@ test("Decide Action (ingest, cloud): an update row carries `domain`, not just `c
 
 test("HubSpot Update Write Gate: a domain-only allowlist admits an update Decide Action produced", () => {
   const wf = loadWorkflow();
-  const decideJs = jsCodeOf(wf, "Decide Action");
-  const [decided] = runCode(decideJs, [matchedUpdateRow()]);
+  const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
 
   const gateJs = armConstants(jsCodeOf(wf, "HubSpot Update Write Gate"), {
     ALLOW_HUBSPOT_RECORD_WRITES: "true",
@@ -91,10 +102,9 @@ test("HubSpot Update Write Gate: a domain-only allowlist admits an update Decide
   assert.equal(gated[0].hs_object_id, "35551");
 });
 
-test("HubSpot Update Write Gate: still denies when the domain is not on the allowlist", () => {
+test("HubSpot Update Write Gate: still denies when the domain is not on the allowlist (defense-in-depth, independent of Decide Action's own precheck)", () => {
   const wf = loadWorkflow();
-  const decideJs = jsCodeOf(wf, "Decide Action");
-  const [decided] = runCode(decideJs, [matchedUpdateRow()]);
+  const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
 
   const gateJs = armConstants(jsCodeOf(wf, "HubSpot Update Write Gate"), {
     ALLOW_HUBSPOT_RECORD_WRITES: "true",

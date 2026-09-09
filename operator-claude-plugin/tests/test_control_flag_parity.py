@@ -115,9 +115,12 @@ def test_a_declaration_the_plugin_writes_is_read_back_by_phase_27s_reader():
     observed = n8n_read.read_write_safety(armed, "ALLOW_HUBSPOT_RECORD_WRITES")
     assert observed["value"] == "true"
     assert observed["disagreement"] is None
-    # 3 declaring nodes since 2026-08-25: the update and create gates plus the
-    # association gate, all embedding the same shared write-safety blob.
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 3
+    # 4 declaring nodes since F12 (uat-batch-review-row-reads-failed, 2026-09-09): the
+    # update and create gates and the association gate (2026-08-25), plus "Decide
+    # Action" itself, which now pre-computes an update's write-safety verdict so a row
+    # the downstream gate would refuse can still reach "Build Ingest Response" via
+    # "Set Review"'s edge instead of dead-ending with no path at all.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 4
 
     allowlist = n8n_read.read_write_safety(armed, "TEST_RECORD_IDS")
     assert allowlist["value"] == "12345,67890"
@@ -136,13 +139,14 @@ def test_maintenance_workflow_rewrite_counts():
 
 
 def test_contact_ingest_rewrite_counts_create_leads_by_one():
-    """The create constant appears in one more node than the record-writes constant,
-    added by 23-01. Counts rose by one each on 2026-08-25: the association lane's own
-    write gate embeds the same shared write-safety blob as every other gate."""
+    """RECORD_WRITES rose to 4 by F12 (2026-09-09): "Decide Action" now declares it too
+    (see the test above). CREATE stays 4 — "Decide Action" already declared it alone
+    before F12; F12 folded that single const into the same shared write-safety blob
+    the three gates embed, so the CREATE count does not change."""
     workflow = _workflow("wf_contact_ingest_cloud.json")
     _, counts = n8n_arming.set_write_safety(
         workflow, {"ALLOW_HUBSPOT_RECORD_WRITES": True, "ALLOW_HUBSPOT_CREATE": True})
-    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 3, "ALLOW_HUBSPOT_CREATE": 4}
+    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 4, "ALLOW_HUBSPOT_CREATE": 4}
 
 
 def test_rewrite_counts_are_derived_across_every_committed_cloud_workflow():
@@ -209,9 +213,8 @@ def test_an_armed_workflow_can_be_set_back_and_the_rescan_passes():
 
     assert n8n_read.read_write_safety(disarmed, "ALLOW_HUBSPOT_RECORD_WRITES")["value"] == "false"
     assert n8n_read.read_write_safety(disarmed, "TEST_RECORD_IDS")["value"] == ""
-    # 3 declaring nodes since 2026-08-25: the update and create gates plus the
-    # association gate, all embedding the same shared write-safety blob.
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 3
+    # 4 declaring nodes since F12 (2026-09-09) — see the round-trip test above.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 4
 
 
 def test_the_input_workflow_is_never_mutated():

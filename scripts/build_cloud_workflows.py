@@ -628,6 +628,30 @@ return $input.all().map((it) => {
     // curated, and re-flagging it would re-queue work that was deliberately finished.
     properties.lv_enrichment_requested = "true";
   }
+  // F12 (uat-batch-review-row-reads-failed, execution 12181): "HubSpot Update Write
+  // Gate" (downstream, spliced by splice_write_gates) filters its input to nothing
+  // when the allowlist refuses a row — a Code node emitting [] never fires its own
+  // outgoing connection (the same "wave dropping" semantics as "IF Company Skip"'s
+  // true lane elsewhere in this lane), so a batch of update-only rows the gate refuses
+  // in full would leave "Build Ingest Response" with no path to run at all (no review
+  // row exists to reach it via "Set Review"). Greg Purcell's row (execution 12181) hit
+  // the narrower half of this: the gate refused him, "HubSpot Update" never ran, yet
+  // "Build Ingest Response" (reconstructing every row from THIS node by name) still
+  // reported his pre-block `action: "update"` as if it had landed. Pre-computing the
+  // SAME verdict here — mirroring ENRICH_DECIDE_CLOUD's own precedent — routes a
+  // blocked row through "Set Review"'s already-wired edge (F1) instead, with no new
+  // wiring and no dependence on any node downstream of the IF Update/IF Create split.
+  // The downstream gate stays in place unchanged (test_write_gate_coverage.py,
+  // defense-in-depth). CREATE rows are NOT covered here: "HubSpot Create Write Gate"
+  // derives its own allowlist domain from the row's OWN email when no domain resolves
+  // (BUG 27, live-canary-proven) — reproducing that fallback here risks a false
+  // "write_blocked" precheck disagreeing with the real gate's verdict, an unevidenced
+  // regression this fix does not need to take on to close what execution 12181 actually
+  // showed. Filed as a follow-up:
+  // .planning/todos/pending/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md
+  if (action === "update" && !_writeSafetyAllows(action, id.contact_id || null, row.company_domain || null)) {
+    action = "write_blocked";
+  }
   return { json: {
     action,
     outcome,
@@ -925,7 +949,12 @@ return $input.all().map((it) => ({
     # this module, so calling it at definition time would raise NameError. Prepending it
     # to this one node's jsCode (not Set Config, not the other three chain nodes) keeps
     # Decide Action the single Cloud-only place this lane reads the baked constant.
-    decide_action_js = _write_safety_const("ALLOW_HUBSPOT_CREATE") + "\n" + DECIDE_CLOUD
+    # F12: WRITE_SAFETY_GATE_JS (not just the one ALLOW_HUBSPOT_CREATE const) — Decide
+    # Action now pre-computes an update's write-safety verdict itself (see the
+    # `action = "write_blocked"` block inside DECIDE_CLOUD), so it needs
+    # `_writeSafetyAllows` and the allowlist consts too, the same way ENRICH_DECIDE_CLOUD
+    # already does for the enrichment lane.
+    decide_action_js = WRITE_SAFETY_GATE_JS + DECIDE_CLOUD
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),

@@ -46,13 +46,19 @@ function runCode(jsCode, seedItems, nodeOutputs = {}) {
   return (fn($input, $) || []).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
+// F12: Decide Action now pre-computes an update's write-safety verdict itself (see
+// scripts/build_cloud_workflows.py), so row 3 below (an update, hs_object_id "555")
+// needs its id on the allowlist too, or it now correctly reports write_blocked —
+// orthogonal to what this file actually tests (association logic), so armed here
+// rather than left to collide with it.
 const ARM = (js) =>
   js
     .replace('const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";')
     .replace(
       'const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
       'const ALLOW_HUBSPOT_RECORD_WRITES = "true";'
-    );
+    )
+    .replace('const TEST_RECORD_IDS = "";', 'const TEST_RECORD_IDS = "555";');
 
 test("a batch of three rows: resolved create, unresolved create, and an update — one call, one execution", () => {
   const batch = [
