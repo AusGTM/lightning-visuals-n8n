@@ -158,3 +158,84 @@ test("every spliced write gate's Code node preserves item count on a mixed permi
     assert.equal(runCode(js, rows).length, 2, `${gateName}: output count must equal input count`);
   }
 });
+
+// =============================================================================================
+// Phase 70 Plan 05 Task 2 sub-step 2b — the enrichment lane's FIRST-EVER spliced gate.
+// Before this sub-step the enrichment lane decided write permission inline inside
+// "Decide Action"/"Decide Company Action"; D-70-13 moves that predicate to one home per
+// lane, so the lane gains four real gates it has never had.
+// =============================================================================================
+
+const ENRICHMENT = loadWorkflow("wf_enrichment_cloud.json");
+
+test("the enrichment lane has a spliced two-node gate in front of each of its four HubSpot writes", () => {
+  for (const write of ["HubSpot Create", "HubSpot Update",
+                       "HubSpot Company Update", "HubSpot Company Create"]) {
+    for (const suffix of [" Write Gate", " Write Gate IF"]) {
+      const name = write + suffix;
+      assert.ok(ENRICHMENT.nodes.some((n) => n.name === name),
+        `wf_enrichment_cloud.json must contain ${name}`);
+    }
+    // the write node's ONLY inbound edge is its own gate IF's true output
+    const inbound = Object.entries(ENRICHMENT.connections).flatMap(([src, spec]) =>
+      (spec.main || []).flatMap((outs, idx) =>
+        (outs || []).filter((c) => c.node === write).map(() => [src, idx])));
+    assert.deepEqual(inbound, [[write + " Write Gate IF", 0]],
+      `${write} is reachable only through its gate's true branch`);
+  }
+});
+
+test("the enrichment lane's gate IF false branch lands on the SAME Build Response Merge input its write path already feeds — no new starvable input", () => {
+  // The refusal and the success arrive on one channel (D-70-14). Reusing the existing
+  // input index is what keeps the ~30-entry starved-lane sentinel network correct
+  // without re-keying a single sentinel: every sentinel is keyed on the ROUTING IF's
+  // predicate, and the gate sits strictly downstream of routing, always delivering on
+  // exactly one of two outputs that both land here.
+  const merge = "Build Response Merge";
+  const indexOf = (src, outIdx) =>
+    ((ENRICHMENT.connections[src] || {}).main || [])[outIdx]
+      ?.filter((c) => c.node === merge).map((c) => c.index) ?? [];
+  for (const [write, realProducer] of [
+    ["HubSpot Create", "HubSpot Create"],
+    ["HubSpot Update", "HubSpot Update"],
+    ["HubSpot Company Update", "HubSpot Company Update"],
+    ["HubSpot Company Create", "Adapt Company Create"],
+  ]) {
+    const real = indexOf(realProducer, 0);
+    assert.equal(real.length, 1, `${realProducer} feeds ${merge} on exactly one index`);
+    assert.deepEqual(indexOf(write + " Write Gate IF", 1), real,
+      `${write}'s refusal lane must reuse ${realProducer}'s own ${merge} input index`);
+  }
+});
+
+test("neither enrichment Decide node computes write permission any more — one home per lane", () => {
+  for (const name of ["Decide Action", "Decide Company Action"]) {
+    const js = jsCodeOf(ENRICHMENT, name);
+    assert.ok(!js.includes("_writeSafetyAllows("),
+      `${name} must not call _writeSafetyAllows — the gate owns that decision now`);
+    assert.ok(js.includes("_buildWriteRequest("),
+      `${name} must emit the canonical write_request instead`);
+  }
+});
+
+test("the enrichment lane's carry merges pair with the gate IF's TRUE output, never the gate Code node (count mismatch)", () => {
+  // The gate Code node stamps EVERY row (refused included); the write node receives only
+  // the permitted subset. A combineByPosition carry merge fed from the Code node would
+  // pair row i of the HTTP response with row i of the FULL wave on any partially-refused
+  // batch. The IF's true output is the wave that actually entered the write node.
+  const carries = [
+    ["wf_enrichment_cloud.json", ENRICHMENT, "HubSpot Company Create Carry Merge",
+     "HubSpot Company Create Write Gate IF"],
+    ["wf_contact_ingest_cloud.json", INGEST, "Update Carry Merge", "HubSpot Update Write Gate IF"],
+    ["wf_contact_ingest_cloud.json", INGEST, "Create Carry Merge", "HubSpot Create Write Gate IF"],
+    ["wf_contact_ingest_cloud.json", INGEST, "Associate Carry Merge",
+     "HubSpot Associate Company Write Gate IF"],
+  ];
+  for (const [file, wf, mergeName, expectedSource] of carries) {
+    const feeders = Object.entries(wf.connections).flatMap(([src, spec]) =>
+      (spec.main || []).flatMap((outs, idx) =>
+        (outs || []).filter((c) => c.node === mergeName && c.index === 1).map(() => [src, idx])));
+    assert.deepEqual(feeders, [[expectedSource, 0]],
+      `${file}: ${mergeName}'s carry input must come from ${expectedSource}'s true output`);
+  }
+});
