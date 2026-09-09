@@ -171,9 +171,19 @@ builder.
   — **Reversibility:** costly — one shape across three workflows; re-adding tolerance means
   re-growing the ladder.
 
-- **D-70-13: Scope — all three splice sites, one shape; the review lane keeps id-only AS
-  DATA.** Enrichment (create/update/company), ingest (create/update/associate) and
-  review-decision (`Review Decision Update` etc.). The review lane's emitter sets
+- **D-70-13: Scope — every gated write in every lane, one shape; the review lane keeps id-only
+  AS DATA.** Enrichment (create/update/company), ingest (create/update/associate) and
+  review-decision (`Review Decision Update` etc.).
+  *Premise corrected by research 2026-09-09 (70-RESEARCH.md § Write-gate inventory): the
+  "three splice sites" named at discussion were misattributed. `splice_write_gates` is called
+  from `build_cloud` (ingest, :1086), `build_scheduled_maintenance_cloud` (:7989 — SJ-1/SJ-2/
+  Dedupe set-requested writes) and `build_review_decision_cloud` (:8675). The ENRICHMENT lane
+  has NO spliced gate node: its write check is inline inside `Decide Action` /
+  `Decide Company Action` via `_writeSafetyAllows` (:1795, :3804). The decision stands
+  unchanged and widens: the enrichment lane GAINS a real gate node emitting the refusal item
+  (D-70-14), the scheduled-maintenance writes adopt the same `write_request` shape, and the
+  inline `_writeSafetyAllows` calls in the two Decide nodes are removed so the predicate has
+  one home per lane.* The review lane's emitter sets
   `domain: null`, so 30-02's "contacts are `TEST_RECORD_IDS`-only on review writebacks" survives
   as the emitted value, not as a gate special-case; `reviewDecisionEndpoint.test.mjs` g3 stays
   green. Rejected: enrichment+ingest only; giving review the domain path.

@@ -283,9 +283,11 @@ Plans:
 write that happened, on one client result channel — and the offline harness would have
 caught every finding the 2026-09-09 UAT found.
 
-**Requirements:** captured at discussion 2026-09-09 as D-70-01..19 in
-`.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md` (no
-milestone requirement IDs; the phase was added after v1.2-REQUIREMENTS.md was cut).
+**Requirements:** TBD
+
+(No milestone requirement IDs — the phase was added after v1.2-REQUIREMENTS.md was cut. The
+locked decisions are D-70-01..19 in
+`.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md`.)
 
 **Brief:** `.planning/todos/pending/2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md`
 (seven instances of one idiom, F1/F5/F5b/F10/F11/F12 plus the July research-lane row loss).
