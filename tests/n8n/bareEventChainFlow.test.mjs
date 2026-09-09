@@ -149,11 +149,15 @@ test("contacts: a bare HubSpot event drives the full compiled chain to a patch p
   // mobilephone), not skip/create.
   assert.equal(trace["Enrichment Gate"].action, "enrich");
 
-  // (e) Decide Action's final output targets the REAL fetched record id, and is
-  // write_blocked — the correct offline expectation (WRITE_SAFETY_DEFAULTS ships every
-  // allowlist empty).
+  // (e) Decide Action's final output targets the REAL fetched record id and carries its
+  // REAL action. Phase 70 Plan 05 Task 2 (D-70-13) moved the write-permission predicate
+  // out of this node and into the lane's own spliced gate, so "write_blocked" is no
+  // longer stamped here — it is the gate's verdict, still denied by default
+  // (WRITE_SAFETY_DEFAULTS ships every allowlist empty; pinned in writeGateShape.test.mjs).
   assert.equal(final.hs_object_id, "789");
-  assert.equal(final.action, "write_blocked");
+  assert.equal(final.action, "enrich");
+  assert.equal(final.write_request.hs_object_id, "789",
+    "the canonical write_request the gate reads is emitted here (D-70-12)");
   assert.ok(final.properties && typeof final.properties === "object" && !Array.isArray(final.properties),
     "properties is a plain object");
 });
@@ -355,8 +359,13 @@ test("BUG 23: a no-match search reaches action:create through the gate, write-ga
   assert.equal(trace["Enrichment Gate"].action, "create",
     "BUG 23: this is the path that was structurally unreachable before the transport swap");
 
-  assert.equal(final.action, "write_blocked",
-    "write-gated by default — WRITE_SAFETY_DEFAULTS ships every allowlist empty");
+  // Phase 70 Plan 05 Task 2: an enrichment-lane create is held for association review
+  // (Phase 61 Plan 06 Task 1) BEFORE any write-safety question is asked — and the
+  // write-safety question itself no longer lives in this node at all. Under the old
+  // inline check the hold was masked by "write_blocked"; the hold is the stronger
+  // refusal and is what this lane actually does with a create.
+  assert.equal(final.action, "review",
+    "an enrichment-lane contact create is never landed unassociated (CLAUDE.md §13.0.1)");
   assert.equal(final.properties.email, "lv-bug23-canary-delete-me@lv-canary-delete-me.example",
     "the BUG 19 create-seed: this chain's Lusha/Apollo mocks are both {}, so the merge " +
     "carries no email candidate at all and canonicalPatch is empty on that field " +

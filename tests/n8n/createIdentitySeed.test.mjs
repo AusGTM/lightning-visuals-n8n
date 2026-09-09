@@ -42,8 +42,11 @@ test("companies create: payload carries domain + name from identity_keys", () =>
   assert.equal(out.properties.domain, "seed-canary.example");
   assert.equal(out.properties.name, "Seed Canary");
   assert.equal(out.properties.lv_org_type, "governing_body_league");
-  // Committed build ships write-safety disabled — the gate must still block the write.
-  assert.equal(out.action, "write_blocked");
+  // Phase 70 Plan 05 Task 2 (D-70-13): write permission left this node for the lane's
+  // own spliced "HubSpot Company Create Write Gate", which still denies on the committed
+  // build (writeGateShape.test.mjs). What this node owns now is the canonical request.
+  assert.equal(out.action, "create");
+  assert.equal(out.write_request.domain, "seed-canary.example");
 });
 
 test("companies enrich: payload does NOT receive the identity seed (non-clobber)", () => {
@@ -66,7 +69,11 @@ test("contacts create: payload carries email from identity_keys", () => {
   }]);
   assert.equal(out.properties.email, "seed@canary.example");
   assert.equal(out.properties.seniority, "Manager");
-  assert.equal(out.action, "write_blocked");
+  // Phase 70 Plan 05 Task 2: an enrichment-lane contact create is held for association
+  // review (Phase 61 Plan 06 Task 1) — the hold, not a write-safety verdict, is what
+  // this node stamps. The allowlist denial now lives in the spliced gate.
+  assert.equal(out.action, "review");
+  assert.equal(out.write_request.email, "seed@canary.example");
 });
 
 test("contacts enrich: payload does NOT receive the email seed (non-clobber)", () => {

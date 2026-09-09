@@ -104,9 +104,12 @@ function createRow() {
   };
 }
 
-test("Decide Action (enrichment lane): an ARMED contact create is downgraded to review, never landed unassociated", () => {
+test("Decide Action (enrichment lane): a contact create is downgraded to review, never landed unassociated", () => {
+  // Phase 70 Plan 05 Task 2 (D-70-13): the write-permission constants left this node for
+  // the lane's own spliced gate, so there is nothing to arm HERE any more — and nothing
+  // to arm AROUND either: the hold is unconditional (see the companion test below).
   const wf = loadWorkflow();
-  const [result] = runCode(arm(jsCodeOf(wf, "Decide Action")), [createRow()]);
+  const [result] = runCode(jsCodeOf(wf, "Decide Action"), [createRow()]);
 
   assert.equal(
     result.action, "review",
@@ -125,19 +128,27 @@ test("Decide Action (enrichment lane): an ARMED contact create is downgraded to 
   );
 });
 
-test("Decide Action (enrichment lane): non-vacuity — the SAME row disarmed is write_blocked, not review", () => {
-  // Proves the previous test exercises the downgrade branch rather than passing by
-  // accident. Disarmed, the create never reaches the downgrade at all: it is stopped
-  // earlier, at _writeSafetyAllows. A "not create" assertion on this path would be
-  // vacuous, which is exactly why the armed case is the one that carries the guarantee.
+test("Decide Action (enrichment lane): the hold is UNCONDITIONAL — arming the lane's own gate cannot land the create", () => {
+  // Non-vacuity, restated for Phase 70 Plan 05 Task 2. Before the gate existed, a
+  // disarmed create was stopped earlier by the inline _writeSafetyAllows, so the hold
+  // was only observable on an armed run. Now the hold happens in this node regardless of
+  // any write flag, and the row it emits ("review") matches neither "IF Create"
+  // (=="create") nor "IF Enrich" (=="enrich") — so "HubSpot Create Write Gate" never
+  // even runs for it. Arming the gate is therefore a genuine no-op for this row, which
+  // is a STRONGER guarantee than the old armed-only one, not a weaker one.
   const wf = loadWorkflow();
   const [result] = runCode(jsCodeOf(wf, "Decide Action"), [createRow()]);
+  assert.equal(result.action, "review", "the hold applies with nothing armed");
 
-  assert.equal(
-    result.action, "write_blocked",
-    "the committed (disarmed) build stops a create at the write-safety gate, upstream " +
-    "of the association hold — so the armed case above is the one under test",
-  );
+  const gateJs = jsCodeOf(wf, "HubSpot Create Write Gate");
+  for (const [disabled] of OVERLAY) {
+    assert.ok(gateJs.includes(disabled),
+      `the arming surface moved to the gate, which must carry ${disabled} verbatim`);
+  }
+  // Even fully armed, the gate would refuse to see this row at all: it is reachable only
+  // via "IF Create"'s true branch, and this row's action is "review".
+  const [gated] = runCode(arm(gateJs), [result]);
+  assert.notEqual(gated.action, "create");
 });
 
 test("Decide Action (enrichment lane): the association rule keeps exactly ONE implementation", () => {

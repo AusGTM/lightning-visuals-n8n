@@ -182,15 +182,37 @@ def test_write_safety_defaults_is_not_in_the_parity_guarded_config_flags():
     assert WRITE_SAFETY_DEFAULTS["ALLOW_HUBSPOT_RECORD_WRITES"] == "false"
 
 
-@pytest.mark.parametrize("name", ["Decide Action", "Decide Company Action"])
-def test_decide_nodes_bake_write_safety_constants_and_gate_the_action(name):
+@pytest.mark.parametrize("name", [
+    "HubSpot Create Write Gate", "HubSpot Update Write Gate",
+    "HubSpot Company Create Write Gate", "HubSpot Company Update Write Gate",
+])
+def test_write_gates_bake_write_safety_constants_and_gate_the_action(name):
+    """Phase 70 Plan 05 Task 2 sub-step 2b (D-70-13): the baked constants and the
+    `_writeSafetyAllows` call used to live INLINE in "Decide Action"/"Decide Company
+    Action" — the enrichment lane was the only lane in the build with no gate node at
+    all. They now live in the lane's four spliced gates, one home per lane. The predicate
+    is unchanged; only its site moved."""
     doc = _load()
-    node = _node(doc, name)
-    code = node["parameters"]["jsCode"]
+    code = _node(doc, name)["parameters"]["jsCode"]
     for const_name in WRITE_SAFETY_DEFAULTS:
         assert f"const {const_name} = " in code, f"{name} missing baked constant {const_name}"
     assert "_writeSafetyAllows(" in code
-    assert '"write_blocked"' in code
+    assert "'write_blocked'" in code or '"write_blocked"' in code
+
+
+@pytest.mark.parametrize("name", ["Decide Action", "Decide Company Action"])
+def test_decide_nodes_no_longer_decide_write_permission(name):
+    """The other half of the move: a decision node decides WHAT a row is, never WHETHER
+    it may be written. A second copy of the predicate here is exactly the drift D-70-13
+    closes."""
+    doc = _load()
+    code = _node(doc, name)["parameters"]["jsCode"]
+    assert "_writeSafetyAllows(" not in code
+    for const_name in WRITE_SAFETY_DEFAULTS:
+        assert f"const {const_name} = " not in code, (
+            f"{name} still bakes {const_name} — the arming surface belongs to the gate"
+        )
+    assert "_buildWriteRequest(" in code, f"{name} must emit the canonical write_request"
 
 
 def test_grep_allow_hubspot_record_writes_present_in_built_cloud_json():
@@ -258,16 +280,20 @@ def _strip_comments(js: str) -> str:
     return "\n".join(line for line in js.split("\n") if not line.strip().startswith("//"))
 
 
-def test_proposed_action_assignment_precedes_the_write_safety_call():
+def test_proposed_action_assignment_cannot_be_overridden_by_any_flag():
+    """Phase 70 Plan 05 Task 2 sub-step 2b: this used to assert an ORDERING — that
+    `action = "proposed"` was assigned before the inline `_writeSafetyAllows` call, so
+    propose mode's no-write property could not be re-armed by flipping a flag. The check
+    moved out of this node entirely, which makes the same guarantee STRUCTURAL and
+    stronger: no ALLOW_* flag is readable here at all, and "proposed" matches neither
+    "IF Create" (=="create") nor "IF Enrich" (=="enrich"), so a propose row never reaches
+    a write gate to be permitted by one. propose mode's no-write property does not depend on any ALLOW_* flag."""
     doc = _load()
     code = _strip_comments(_node(doc, "Decide Action")["parameters"]["jsCode"])
-    proposed_at = code.index('action = "proposed"')
-    call_at = code.index("!_writeSafetyAllows(")
-    assert proposed_at < call_at, (
-        f"Decide Action: action:\"proposed\" assignment (index {proposed_at}) must precede "
-        f"the _writeSafetyAllows call (index {call_at}) — that ordering is what guarantees "
-        "propose mode's no-write property does not depend on any ALLOW_* flag"
-    )
+    assert 'action = "proposed"' in code
+    assert "_writeSafetyAllows(" not in code
+    for const_name in WRITE_SAFETY_DEFAULTS:
+        assert f"const {const_name} = " not in code
 
 
 def test_decide_action_returns_row_id_mode_and_match():
@@ -303,16 +329,20 @@ def test_decide_action_medium_tier_never_creates():
 
 # --- (f) Phase 36-04 Task 2: propose mode on the companies branch — the same guard ---
 
-def test_proposed_action_assignment_precedes_the_write_safety_call_companies():
+def test_proposed_action_assignment_cannot_be_overridden_by_any_flag_companies():
+    """Phase 70 Plan 05 Task 2 sub-step 2b: this used to assert an ORDERING — that
+    `action = "proposed"` was assigned before the inline `_writeSafetyAllows` call, so
+    propose mode's no-write property could not be re-armed by flipping a flag. The check
+    moved out of this node entirely, which makes the same guarantee STRUCTURAL and
+    stronger: no ALLOW_* flag is readable here at all, and "proposed" matches neither
+    "IF Create" (=="create") nor "IF Enrich" (=="enrich"), so a propose row never reaches
+    a write gate to be permitted by one. a propose envelope naming objectType:"company" must not write either."""
     doc = _load()
     code = _strip_comments(_node(doc, "Decide Company Action")["parameters"]["jsCode"])
-    proposed_at = code.index('action = "proposed"')
-    call_at = code.index("!_writeSafetyAllows(")
-    assert proposed_at < call_at, (
-        f"Decide Company Action: action:\"proposed\" assignment (index {proposed_at}) must "
-        f"precede the _writeSafetyAllows call (index {call_at}) — a propose envelope naming "
-        "objectType:\"company\" must not write either"
-    )
+    assert 'action = "proposed"' in code
+    assert "_writeSafetyAllows(" not in code
+    for const_name in WRITE_SAFETY_DEFAULTS:
+        assert f"const {const_name} = " not in code
 
 
 def test_decide_company_action_returns_row_id_mode_and_match():

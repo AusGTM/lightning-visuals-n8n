@@ -155,25 +155,39 @@ const SEED_ROW = {
 // --- (3) run the chain, disarmed first (proves the harness is really running the
 // shipped safety gate, not a hand-rolled stand-in) ---------------------------------------
 
-test("disarmed (committed build, empty allowlist): Decide Action emits action write_blocked for hs_object_id 201", () => {
-  const nodes = loadWorkflow();
+// Phase 70 Plan 05 Task 2 (D-70-13): the write-permission constants left "Decide Action"
+// for the lane's own spliced "HubSpot Update Write Gate". `armWriteSafety` therefore
+// rewrites the GATE, and every run below is the real two-hop chain Decide -> gate.
+function decideThenGate(nodes, { armed = false } = {}) {
   const mergeOut = runJsCode(nodes["Merge Winners"].parameters.jsCode, [SEED_ROW]);
   assert.ok(mergeOut[0].merge, "Merge Winners produced a merge result");
   const decideOut = runJsCode(nodes["Decide Action"].parameters.jsCode, mergeOut);
-  assert.equal(decideOut[0].hs_object_id, "201");
-  assert.equal(decideOut[0].action, "write_blocked",
+  let gateCode = nodes["HubSpot Update Write Gate"].parameters.jsCode;
+  if (armed) {
+    const { code, counts } = armWriteSafety(gateCode);
+    for (const [target, count] of Object.entries(counts)) {
+      assert.equal(count, 1, `constant rewrite must match exactly once (got ${count}): ${target}`);
+    }
+    gateCode = code;
+  }
+  return { decided: decideOut[0], gated: runJsCode(gateCode, decideOut)[0] };
+}
+
+test("disarmed (committed build, empty allowlist): the spliced gate blocks the write for hs_object_id 201", () => {
+  const nodes = loadWorkflow();
+  const { decided, gated } = decideThenGate(nodes);
+  assert.equal(decided.hs_object_id, "201");
+  assert.equal(decided.action, "enrich",
+    "Decide Action decides WHAT the row is; whether it may be written is the gate's call");
+  assert.equal(gated.write_allowed, false);
+  assert.equal(gated.action, "write_blocked",
     "TEST_RECORD_IDS ships empty in the committed build — every write must be blocked");
 });
 
-test("armed (in-test constant rewrite, mirrors enable_baked_flags): Decide Action emits a non-empty properties patch honoring the non-clobber policy", () => {
+test("armed (in-test constant rewrite, mirrors enable_baked_flags): the gate permits and the row carries a non-empty properties patch honoring the non-clobber policy", () => {
   const nodes = loadWorkflow();
-  const mergeOut = runJsCode(nodes["Merge Winners"].parameters.jsCode, [SEED_ROW]);
-  const { code: armedCode, counts } = armWriteSafety(nodes["Decide Action"].parameters.jsCode);
-  for (const [target, count] of Object.entries(counts)) {
-    assert.equal(count, 1, `constant rewrite must match exactly once (got ${count}): ${target}`);
-  }
-  const decideOut = runJsCode(armedCode, mergeOut);
-  const item = decideOut[0];
+  const item = decideThenGate(nodes, { armed: true }).gated;
+  assert.equal(item.write_allowed, true, "armed + non-empty allowlist -> the gate permits");
 
   assert.equal(item.hs_object_id, "201");
   assert.equal(item.action, "enrich", "armed + non-empty allowlist -> action enrich, not write_blocked");
@@ -199,9 +213,7 @@ test("armed (in-test constant rewrite, mirrors enable_baked_flags): Decide Actio
 
 test("outbound PATCH request (RED today — BUG 11): the HubSpot Update node's own url/jsonBody expressions, evaluated against the armed item, yield a real PATCH to CRM v3 for id 201", () => {
   const nodes = loadWorkflow();
-  const mergeOut = runJsCode(nodes["Merge Winners"].parameters.jsCode, [SEED_ROW]);
-  const { code: armedCode } = armWriteSafety(nodes["Decide Action"].parameters.jsCode);
-  const armedItem = runJsCode(armedCode, mergeOut)[0];
+  const armedItem = decideThenGate(nodes, { armed: true }).gated;
 
   const req = buildOutboundPatchRequest(nodes["HubSpot Update"], armedItem);
   assert.equal(req.method, "PATCH");

@@ -96,14 +96,27 @@ test("review-decision: Review Decision Update Write Gate denies a fully-identifi
   assert.equal(out[0].write_allowed, false, "committed (disarmed) build must deny — empty allowlist");
 });
 
-test("enrichment lane (unchanged in this task): Decide Action's own empty-allowlist denial still holds", () => {
+test("enrichment lane: the empty-allowlist denial now comes from the spliced gate, not Decide Action", () => {
+  // Task 2 sub-step 2b moved the predicate out of "Decide Action" and into the lane's
+  // own gate. The denial itself is unchanged — proved behaviourally here, on the
+  // committed (disarmed) build, for each of the lane's four gates.
   const enrichment = loadWorkflow("wf_enrichment_cloud.json");
-  const js = jsCodeOf(enrichment, "Decide Action");
-  // Decide Action embeds _writeSafetyAllows itself (no spliced gate on this lane yet —
-  // Task 2). Proving the shared allowlist function denies with nothing armed is a direct
-  // structural check, not a behavioural run of the whole (very large) node.
-  assert.match(js, /function _writeSafetyAllows/);
-  assert.match(js, /empty allowlist denies everything/);
+  for (const [gate, action] of [
+    ["HubSpot Create Write Gate", "create"],
+    ["HubSpot Update Write Gate", "enrich"],
+    ["HubSpot Company Create Write Gate", "create"],
+    ["HubSpot Company Update Write Gate", "enrich"],
+  ]) {
+    const js = jsCodeOf(enrichment, gate);
+    assert.match(js, /function _writeSafetyAllows/);
+    assert.match(js, /empty allowlist denies everything/);
+    const out = runCode(js, [
+      { write_request: { action, hs_object_id: "999", domain: "armed.example", email: null } },
+    ]);
+    assert.equal(out.length, 1, `${gate}: committed build must still EMIT the row (D-70-14)`);
+    assert.equal(out[0].write_allowed, false, `${gate}: empty allowlist must deny`);
+    assert.equal(out[0].action, "write_blocked");
+  }
 });
 
 // --- named case: the review lane's emitted write_request carries a null domain --------
@@ -235,7 +248,46 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
     const feeders = Object.entries(wf.connections).flatMap(([src, spec]) =>
       (spec.main || []).flatMap((outs, idx) =>
         (outs || []).filter((c) => c.node === mergeName && c.index === 1).map(() => [src, idx])));
-    assert.deepEqual(feeders, [[expectedSource, 0]],
+    // A starved-lane sentinel may ALSO feed this input (D-70-01) — what must not appear
+    // is the gate's Code node, whose item count includes the refused rows.
+    assert.ok(feeders.some(([src, idx]) => src === expectedSource && idx === 0),
       `${file}: ${mergeName}'s carry input must come from ${expectedSource}'s true output`);
+    assert.ok(!feeders.some(([src]) => src === expectedSource.replace(/ IF$/, "")),
+      `${file}: ${mergeName} must not be carried from the gate Code node (count mismatch)`);
   }
+});
+
+// --- walker-driven: a FULLY REFUSED batch still produces one row per input row --------
+//
+// D-70-14's whole point, and the shape that dead-ended before: with nothing armed the
+// gate refuses every row, and the response builder must still see two rows for a two-row
+// batch, with "Build Response Merge" satisfied (never stalled). Drives the COMMITTED
+// wf_enrichment_cloud.json through tests/n8n/lib/walkWorkflow.mjs — no live n8n call.
+test("enrichment lane: a fully refused two-row batch produces exactly two rows at the response builder, with no stalled merge", async () => {
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems } =
+    await import("./lib/walkWorkflow.mjs");
+  const wf = loadWf(path.join(ROOT, "n8n", "wf_enrichment_cloud.json"));
+  const events = ["11", "22"].map((id) => ({
+    objectId: id, objectType: "company", domain: `co-${id}.example`,
+    recompute: true, row_id: `row-${id}`,
+  }));
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { run_id: "case-refused-batch", events } }],
+    httpStubs: {
+      "HubSpot Company Search": [
+        { results: [{ id: "11", properties: { domain: "co-11.example", name: "Co 11" } }] },
+        { results: [{ id: "22", properties: { domain: "co-22.example", name: "Co 22" } }] },
+      ],
+      "HubSpot Company Name Search": [{ results: [] }, { results: [] }],
+    },
+  });
+  assert.deepEqual(trace.stalled, [], "no merge may stall on a fully refused batch");
+  const rows = nodeItems(runData, "Build Response");
+  assert.equal(rows.length, 2, "one row per input row reaches the response builder");
+  for (const r of rows) {
+    assert.equal(r.action, "write_blocked", "the refusal is an EMITTED row, not a silence");
+    assert.ok(r.write_blocked_reason, "and it carries the gate's reason");
+  }
+  assert.deepEqual(rows.map((r) => r.row_id).sort(), ["row-11", "row-22"]);
 });

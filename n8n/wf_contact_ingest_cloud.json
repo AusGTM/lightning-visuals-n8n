@@ -1277,11 +1277,6 @@
             "node": "HubSpot Update Write Gate IF",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Update Carry Merge",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -1293,6 +1288,11 @@
             "node": "HubSpot Update",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Update Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ],
         []
@@ -1305,11 +1305,6 @@
             "node": "HubSpot Create Write Gate IF",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Create Carry Merge",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -1321,6 +1316,11 @@
             "node": "HubSpot Create",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Create Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ],
         []
@@ -1333,11 +1333,6 @@
             "node": "HubSpot Associate Company Write Gate IF",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Associate Carry Merge",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -1349,6 +1344,11 @@
             "node": "HubSpot Associate Company",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Associate Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ],
         []

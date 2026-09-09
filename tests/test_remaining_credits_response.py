@@ -195,6 +195,16 @@ BUILD_RESPONSE_SOURCES = {
     # carries a list-expansion refusal or a scale-up dispatch confirmation, both
     # mutually exclusive with the other ten firing at all this execution.
     ("Build Refusal Row", 0),
+    # Phase 70 Plan 05 Task 2 sub-step 2b (D-70-14): each of the lane's four new spliced
+    # write gates routes its REFUSAL out the IF's false output (index 1) onto the SAME
+    # merge input its own write path already feeds — the refusal and the success arrive
+    # on one channel, and no NEW merge input is created (which is what leaves the
+    # starved-lane sentinel network below untouched). Extends the expected set; exact
+    # equality is preserved.
+    ("HubSpot Create Write Gate IF", 1),
+    ("HubSpot Update Write Gate IF", 1),
+    ("HubSpot Company Create Write Gate IF", 1),
+    ("HubSpot Company Update Write Gate IF", 1),
 }
 
 

@@ -1333,12 +1333,12 @@ return anyNonWrite ? [] : [{}];
     # — so item count and order always agree between a merge's two inputs. Task 2's
     # hand-wired "Associate Carry Merge" is refactored onto this mechanism rather than
     # left as a second, driftable one-off.
-    splice_carry_merge_after(nodes, conns, "HubSpot Update", "HubSpot Update Write Gate",
+    splice_carry_merge_after(nodes, conns, "HubSpot Update", "HubSpot Update Write Gate IF",
                              merge_name="Update Carry Merge")
-    splice_carry_merge_after(nodes, conns, "HubSpot Create", "HubSpot Create Write Gate",
+    splice_carry_merge_after(nodes, conns, "HubSpot Create", "HubSpot Create Write Gate IF",
                              merge_name="Create Carry Merge")
     splice_carry_merge_after(nodes, conns, "HubSpot Associate Company",
-                             "HubSpot Associate Company Write Gate",
+                             "HubSpot Associate Company Write Gate IF",
                              merge_name="Associate Carry Merge")
     splice_carry_merge_after(nodes, conns, "Verify Emails (batch)", "Build Verify Batch",
                              merge_name="Verify Email Carry Merge")
@@ -2018,7 +2018,7 @@ function _buildContactPatch(merge) {
   }
   return patch;
 }
-""" + WRITE_SAFETY_GATE_JS + r"""
+""" + WRITE_REQUEST_JS + r"""
 return $input.all().map((it) => {
   const row = it.json;
   // Phase 36-04 Task 1 (36-CONTEXT.md §4 decision 1/§6): computed once per row from the
@@ -2082,10 +2082,12 @@ return $input.all().map((it) => {
     // IF Enrich's false lane.
     action = "needs_match_review";
   }
-  if ((action === "create" || action === "enrich") &&
-      !_writeSafetyAllows(action, hs_object_id, domain)) {
-    action = "write_blocked";
-  }
+  // Phase 70 Plan 05 Task 2 (D-70-13): the write-permission predicate USED to run here,
+  // inline, turning a create/enrich into "write_blocked" before either routing IF saw it.
+  // It now has exactly one home per lane — the spliced "<write node> Write Gate" — so this
+  // node decides WHAT the row is, never WHETHER it may be written. The row keeps its real
+  // action through "IF Create"/"IF Enrich" and is refused (or not) at the gate, which
+  // EMITS the refusal as a row rather than dropping it (D-70-14).
   // Phase 61 Plan 06 Task 1 (CLAUDE.md §13.0.1's closing gap): this contacts branch has
   // no company-resolution or association mechanism at all — the ONLY lane that
   // associates a created contact to a company is the ingest lane (contact-upload
@@ -2143,6 +2145,9 @@ return $input.all().map((it) => {
     // never appears in `properties`; only a value promoted blank-to-filled would).
     existingRecord: row.existingRecord ?? null,
     merge: row.merge ?? null,
+    // D-70-12: the canonical shape the spliced "HubSpot Create/Update Write Gate" reads —
+    // built by the one shared helper, never re-derived at the gate.
+    write_request: _buildWriteRequest(action, hs_object_id, domain || null, id.email || null),
     properties
   }};
 });
@@ -3901,7 +3906,7 @@ ENRICH_DECIDE_CO_CLOUD = inline(
     "matchProposal.js") + r"""
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
-""" + WRITE_SAFETY_GATE_JS + r"""
+""" + WRITE_REQUEST_JS + r"""
 // Phase 70 Plan 03 (D-70-01): this node sits behind a real Merge (the recompute lane's
 // direct edge + Merge Company's own output) with a starved-lane sentinel on whichever
 // side would otherwise never fire (normal mode vs. recompute mode); drop an identity-
@@ -4073,10 +4078,12 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     // tier "unknown") — there is still nothing to demote.
     action = "proposed";
   }
-  if ((action === "create" || action === "enrich") &&
-      !_writeSafetyAllows(action, hs_object_id, domain)) {
-    action = "write_blocked";
-  }
+  // Phase 70 Plan 05 Task 2 (D-70-13): the write-permission predicate USED to run here,
+  // inline, turning a create/enrich into "write_blocked" before either routing IF saw it.
+  // It now has exactly one home per lane — the spliced "<write node> Write Gate" — so this
+  // node decides WHAT the row is, never WHETHER it may be written. The row keeps its real
+  // action through "IF Create"/"IF Enrich" and is refused (or not) at the gate, which
+  // EMITS the refusal as a row rather than dropping it (D-70-14).
 
   // BUG 27 (live 400 on execution 328): HubSpot v3 PATCH rejects JSON arrays —
   // multi-checkbox values (lv_content_type) must be semicolon-joined strings.
@@ -4117,6 +4124,9 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     // `reason: row.reason ?? (row.gate && row.gate.reason) ?? null` hoist has
     // something to read for this lane too, instead of always resolving null.
     reason: (row.gate && row.gate.reason) || null,
+    // D-70-12: the canonical shape the spliced "HubSpot Company Create/Update Write Gate"
+    // reads. Companies carry no email identity — the allowlist matches on id or domain.
+    write_request: _buildWriteRequest(action, hs_object_id, domain || null, null),
   }};
 });
 """
@@ -7420,6 +7430,22 @@ return $input.all().map((it) => {
         })
 
     # =========================================================================
+    # Phase 70 Plan 05 Task 2 (D-70-13): the enrichment lane's FIRST-EVER spliced write
+    # gates. Until now this lane decided write permission INLINE inside "Decide Action"/
+    # "Decide Company Action" — the only lane in the build with no gate node at all. The
+    # predicate is unchanged; only its home moved, so each lane has exactly one.
+    #
+    # Ordered BEFORE the carry-merge block below on purpose: `HubSpot Company Create
+    # Carry Merge`'s `carry_source` must be the gate IF's TRUE output (the wave that
+    # actually entered the write node), which does not exist until this call has run.
+    splice_write_gates(nodes, conns, {
+        "HubSpot Create": "create",
+        "HubSpot Update": "enrich",
+        "HubSpot Company Create": "create",
+        "HubSpot Company Update": "enrich",
+    })
+
+    # =========================================================================
     # Phase 70 Plan 04 (D-70-04): a carry merge immediately after every provider,
     # HubSpot identity-search, and research/judge HTTP node on the enrichment lane —
     # re-attaching the pre-hop row (which the HTTP node's own response otherwise
@@ -7501,7 +7527,11 @@ return $input.all().map((it) => {
                               merge_name="ZoomInfo Mint Company Carry Merge")
 
     # --- COMPANIES create (Phase 61 Plan 06 Task 2's id-capture hop) ---
-    splice_carry_merge_after(nodes, conns, "HubSpot Company Create", "IF Company Create",
+    # Phase 70 Plan 05 Task 2: `carry_source` is the gate IF's TRUE output, not
+    # "IF Company Create" — the gate can refuse a SUBSET, so only the true branch is
+    # guaranteed to agree with the HTTP node on item count and order (combineByPosition).
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Create",
+                              "HubSpot Company Create Write Gate IF",
                               merge_name="HubSpot Company Create Carry Merge")
 
     # --- Shared credit-check lane (contacts + companies) ---
@@ -7551,6 +7581,32 @@ return $input.all().map((it) => {
     mw = lambda src, idx=0: (merge_winners_merge, _merge_input_index(conns, src, merge_winners_merge, source_out_idx=idx))
     mc = lambda src, idx=0: (merge_company_merge, _merge_input_index(conns, src, merge_company_merge, source_out_idx=idx))
     dca = lambda src, idx=0: (decide_co_action_merge, _merge_input_index(conns, src, decide_co_action_merge, source_out_idx=idx))
+
+    # --- Phase 70 Plan 05 Task 2 (D-70-14): each write gate's REFUSAL lane ------------
+    # The IF's false output lands on the SAME "Build Response Merge" input index the
+    # write path's own terminal already feeds, so a refusal and a success arrive on one
+    # channel — and, crucially, NO new Merge input is created. That is what keeps the
+    # ~30-entry starved-lane sentinel network below correct without re-keying a single
+    # sentinel: every sentinel is keyed on a ROUTING IF's predicate ("does any row have
+    # action X"), the gate sits strictly DOWNSTREAM of routing, and the gate always
+    # delivers every row it received on exactly one of two outputs that both terminate
+    # here. So "did that lane deliver to this input" remains answerable from the routing
+    # predicate alone, exactly as before this gate existed. Multiple producers on one
+    # merge input is the established idiom on this build (every `br(...)` sentinel target
+    # already shares its index with the real terminal).
+    #
+    # The companies-create refusal targets "Adapt Company Create"'s index: that adapter is
+    # the create path's real terminal into the merge, and a refused row has no create
+    # response to adapt.
+    for _gate_write, _real_producer in [
+        ("HubSpot Create", "HubSpot Create"),
+        ("HubSpot Update", "HubSpot Update"),
+        ("HubSpot Company Update", "HubSpot Company Update"),
+        ("HubSpot Company Create", "Adapt Company Create"),
+    ]:
+        _merge, _idx = br(_real_producer)
+        conns[f"{_gate_write} Write Gate IF"]["main"][1] = [
+            {"node": _merge, "type": "main", "index": _idx}]
 
     sx, sy = 40, 2200  # a dedicated, empty region of the canvas for the sentinel network
 

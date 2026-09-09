@@ -242,10 +242,13 @@ test("contacts: enabled build fires the research gate, escalates the judge, and 
   assert.notEqual(mergeOutput.merge, null, "Merge Winners merge is not null on the research lane");
   assert.ok(mergeOutput.merge && typeof mergeOutput.merge === "object");
 
-  // (g) write safety is not relaxed by enablement — Decide Action still reports the
-  // write-blocked outcome, and its target id is the fetched record id.
-  assert.equal(final.action, "write_blocked");
+  // (g) write safety is not relaxed by enablement. Phase 70 Plan 05 Task 2 (D-70-13)
+  // moved that verdict out of Decide Action and into the lane's own spliced gate, which
+  // still denies on the committed build (writeGateShape.test.mjs) — what this node emits
+  // is the row's real action plus the canonical request the gate reads.
+  assert.equal(final.action, "enrich");
   assert.equal(final.hs_object_id, "201");
+  assert.equal(final.write_request.hs_object_id, "201");
 });
 
 // =========================================================================================
@@ -360,8 +363,10 @@ test("companies: enabled build fires the research gate, escalates the judge, and
   assert.notEqual(mergeOutput.merge, null, "Merge Company merge is not null on the research lane");
   assert.ok(mergeOutput.merge && typeof mergeOutput.merge === "object");
 
-  assert.equal(final.action, "write_blocked");
+  // See the contacts case above: the write verdict is the spliced gate's, not this node's.
+  assert.equal(final.action, "enrich");
   assert.equal(final.hs_object_id, "9604614548");
+  assert.equal(final.write_request.hs_object_id, "9604614548");
 });
 
 // =========================================================================================
