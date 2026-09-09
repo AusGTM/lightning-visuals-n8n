@@ -47,9 +47,9 @@ function runJsCode(jsCode, items) {
   };
   const $ = () => ({ all: () => [], get item() { return { json: undefined }; } });
   const $now = new Date("2026-09-05T00:00:00Z");
-  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today", "$runIndex",
     `"use strict";\n${jsCode}`);
-  const out = fn($, $input, items[0], {}, $now, $now) || [];
+  const out = fn($, $input, items[0], {}, $now, $now, 0) || [];
   return out.map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
@@ -167,6 +167,12 @@ function gateRow() {
   };
 }
 
+// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md):
+// "Normalize + Score" now reads $runIndex to pair with the SAME run of
+// "Enrichment Gate" (recoverConvergedRun, n8n/code/nodeRunRecovery.js). This
+// harness models exactly ONE run of everything, so $runIndex is always 0; the
+// mock .all() below ignores the (branch, run) args it is now called with,
+// same single-run behaviour as before.
 function runNormalizeAndScore(jsCode, providerResponses) {
   const outputs = {
     "Enrichment Gate": [gateRow()],
@@ -180,9 +186,9 @@ function runNormalizeAndScore(jsCode, providerResponses) {
   });
   const $input = { all: () => [], get item() { return { json: undefined }; } };
   const $now = new Date("2026-09-05T00:00:00Z");
-  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today", "$runIndex",
     `"use strict";\n${jsCode}`);
-  const out = fn($, $input, undefined, {}, $now, $now) || [];
+  const out = fn($, $input, undefined, {}, $now, $now, 0) || [];
   return out.map((it) => (it && it.json !== undefined ? it.json : it));
 }
 

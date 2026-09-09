@@ -90,10 +90,14 @@ function runChain(wf, chainSpec, seedBody, httpMocks) {
     }
     const { $, $input, $json } = makeCtx(items);
     const $now = new Date("2026-07-28T00:00:00Z");
-    const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+    // F5 fix (2026-09-09): "Normalize + Score"/"Normalize + Score Company" now
+    // read $runIndex (recoverConvergedRun, n8n/code/nodeRunRecovery.js). This
+    // harness drives exactly one run per node, so $runIndex is always 0; the
+    // mock $()/.all() above ignores the (branch, run) args it is now called with.
+    const fn = new Function("$", "$input", "$json", "$node", "$now", "$today", "$runIndex",
       `"use strict";\n${node.parameters.jsCode}`);
     try {
-      const out = fn($, $input, $json, {}, $now, $now) || [];
+      const out = fn($, $input, $json, {}, $now, $now, 0) || [];
       items = out.map((it) => (it && it.json !== undefined ? it.json : it));
     } catch (e) { threw = { node: step.name, err: e.message }; break; }
     outputs[step.name] = items;

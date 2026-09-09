@@ -1807,12 +1807,26 @@ return $input.all().map((it) => {
 # CLOUD: NORMALIZE+SCORE reads the 3 provider HTTP nodes by name and re-attaches
 # the carried identity/gate context from the Gate node (HTTP nodes replace $json).
 ENRICH_NORMALIZE_SCORE_CLOUD = inline(
-    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+    "nodeRunRecovery.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js",
+    "scoreEnrichment.js"
 ) + r"""
 
 // --- n8n wrapper (CLOUD): pull provider responses by node name, score best-per-field ---
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const rows = $('Enrichment Gate').all().filter((it) => it.json.action !== "skip");
+// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md):
+// "Enrichment Gate" can run more than once per execution (one run per firing inbound
+// lane — email/linkedin/name/fetch-by-id/unmatchable); a bare
+// $('Enrichment Gate').all() collapsed to its LAST run only, silently dropping every
+// row from every earlier lane. recoverConvergedRun (nodeRunRecovery.js) scans for the
+// $runIndex-th SURVIVING (non-skip) run — immune to an all-skip lane consuming a run
+// index in between (a bare .all(0, $runIndex) is not: see nodeRunRecovery.js header).
+// Lusha/Apollo/ZoomInfo sit entirely downstream of the one drop point (IF Provider
+// Processing Needed) on a single-file chain, so their OWN run counts stay 1:1 with
+// this node's — $(name).all(0, $runIndex) is sufficient for them.
+function nodeAll(name) { try { return $(name).all(0, $runIndex); } catch (e) { return []; } }
+const rows = recoverConvergedRun(
+  (name, b, r) => $(name).all(b, r), 'Enrichment Gate', $runIndex,
+  (it) => it.json.action !== "skip"
+);
 const lusha = nodeAll('Lusha Enrich');
 const apollo = nodeAll('Apollo Match');
 const zoominfo = nodeAll('ZoomInfo Enrich');
@@ -1845,7 +1859,7 @@ return rows.map((it, i) => {
 # GTM enrich URL so the contacts and companies nodes share ONE token-cache implementation
 # (same $getWorkflowStaticData key -> one mint serves both branches).
 def _zoom_preamble(enrich_url):
-    return inline("zoominfoToken.js") + ZOOM_PREAMBLE_JS.replace("__ENRICH_URL__", enrich_url)
+    return inline("nodeRunRecovery.js", "zoominfoToken.js") + ZOOM_PREAMBLE_JS.replace("__ENRICH_URL__", enrich_url)
 
 
 ZOOM_PREAMBLE_JS = r"""
@@ -1921,7 +1935,14 @@ function hasZoomKey(m) {
 
 // identity_keys lives on the Enrichment Gate rows; $input here is the Apollo HTTP
 // response (which has replaced $json), so pull identity by paired index from the Gate.
-const gateRows = (function () { try { return $('Enrichment Gate').all(); } catch (e) { return []; } })();
+// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md): a bare
+// by-name .all() collapses to Enrichment Gate's LAST run only when it fires more than
+// once per execution (one run per firing inbound lane) — recoverConvergedRun
+// (nodeRunRecovery.js, pulled in via _zoom_preamble) is immune to that.
+const gateRows = recoverConvergedRun(
+  (name, b, r) => $(name).all(b, r), 'Enrichment Gate', $runIndex,
+  (it) => it.json.action !== "skip"
+);
 const items = $input.all();
 const out = [];
 for (let i = 0; i < items.length; i++) {
@@ -2145,7 +2166,15 @@ function hasZoomCoKey(m) { return !!(m.companyWebsite || m.companyName); }
 
 // identity_keys lives on the Company Gate rows; $input here is the Apollo Org HTTP
 // response (which has replaced $json), so pull identity by paired index from the Gate.
-const gateRows = (function () { try { return $('Company Gate').all(); } catch (e) { return []; } })();
+// F5 fix (2026-09-09, .planning/debug/uat-batch-review-row-reads-failed.md): a bare
+// by-name .all() collapses to Company Gate's LAST run only when it fires more than
+// once per execution (one run per firing inbound lane: fetch-by-id vs domain/name
+// search) — recoverConvergedRun (nodeRunRecovery.js, pulled in via _zoom_preamble)
+// is immune to that.
+const gateRows = recoverConvergedRun(
+  (name, b, r) => $(name).all(b, r), 'Company Gate', $runIndex,
+  (it) => it.json.action !== "skip"
+);
 const items = $input.all();
 const out = [];
 for (let i = 0; i < items.length; i++) {
@@ -2526,21 +2555,28 @@ return $input.all().map((it) => {
 """
 
 ENRICH_NORMALIZE_SCORE_CO = inline(
-    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+    "nodeRunRecovery.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js",
+    "scoreEnrichment.js"
 ) + r"""
 
 // --- n8n wrapper (companies): score best-per-field from the company provider responses ---
 // object_type is pinned to "companies" so toCandidates takes its companies branch — the
 // one that emits lv_revenue_band / lv_employee_band / lv_country_region_normalized.
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-// Phase 47.5: RETAINED as defence in depth, no longer load-bearing. `IF Company Skip` now
-// terminates skipped rows at Build Response BEFORE Build Company Requests, so a skipped row
-// can no longer reach this node at all. That is what closes the latent paired-index defect:
-// providers ran for EVERY gate row while this filter re-indexed the surviving rows against
-// the unfiltered provider arrays, so in a mixed 2-row batch rows[0] was row 1 but lusha[0]
-// was row 0's response — one company scored off another's provider data. The arrays now
-// align by construction, not by this filter.
-const rows = $('Company Gate').all().filter((it) => it.json.action !== "skip");
+function nodeAll(name) { try { return $(name).all(0, $runIndex); } catch (e) { return []; } }
+// Phase 47.5: RETAINED as defence in depth for the ORIGINAL reason (paired-index
+// alignment) — `IF Company Skip` terminates skipped rows before Build Company
+// Requests, so a skipped row can no longer reach this node. F5 fix (2026-09-09,
+// .planning/debug/uat-batch-review-row-reads-failed.md) — `action !== "skip"` is now
+// ALSO the `keep` predicate recoverConvergedRun uses to find which of "Company
+// Gate"'s own runs (it fires once per firing inbound lane: fetch-by-id vs
+// domain/name search) actually reached this node, since a bare $('Company
+// Gate').all() collapses to its LAST run only. Lusha/Apollo/ZoomInfo sit downstream
+// of the one drop point (IF Company Skip) on a single-file chain, so their own run
+// counts stay 1:1 with this node's — $(name).all(0, $runIndex) is sufficient for them.
+const rows = recoverConvergedRun(
+  (name, b, r) => $(name).all(b, r), 'Company Gate', $runIndex,
+  (it) => it.json.action !== "skip"
+);
 const lusha = nodeAll('Lusha Company');
 const apollo = nodeAll('Apollo Org');
 const zoominfo = nodeAll('ZoomInfo Company');
@@ -4248,15 +4284,21 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
 # the client secret, which the Enrich node deliberately never touches (see 16-01-SUMMARY.md).
 def _zoom_split_gate_js(gate_source_node):
     """Secret-free. $input here is the prior HTTP node's response (Apollo/Apollo Org),
-    which replaced $json — identity_keys is recovered by paired index from
-    `gate_source_node`, same lookup pattern the single-node cached body already used."""
-    return inline("zoominfoToken.js") + f"""
+    which replaced $json — the row is recovered from `gate_source_node` via
+    recoverConvergedRun (nodeRunRecovery.js), not a bare by-name .all(): that node can
+    run more than once per execution (one run per firing inbound lane) and a plain
+    .all() silently collapses to its LAST run (F5, 2026-09-09,
+    .planning/debug/uat-batch-review-row-reads-failed.md)."""
+    return inline("nodeRunRecovery.js", "zoominfoToken.js") + f"""
 
 // --- n8n wrapper: ZoomInfo token cache gate (CLOUD split-code-node, secret-free) ---
 // Never reads client_id/client_secret — only the credential-bound "ZoomInfo Mint" HTTP
 // node touches those (Task 2 decision).
 const sd = $getWorkflowStaticData("global");
-const gateRows = (function () {{ try {{ return $('{gate_source_node}').all(); }} catch (e) {{ return []; }} }})();
+const gateRows = recoverConvergedRun(
+  (name, b, r) => $(name).all(b, r), '{gate_source_node}', $runIndex,
+  (it) => it.json.action !== "skip"
+);
 const items = $input.all();
 return items.map((item, i) => {{
   const row = (gateRows[i] && gateRows[i].json) || item.json || {{}};
@@ -4270,13 +4312,20 @@ return items.map((item, i) => {{
 
 def _zoom_split_cache_js(token_gate_name):
     """Secret-free. Parses the Mint HTTP node's token response (never client_id/secret),
-    caches it in workflow static data, and re-attaches the original row read back from
-    the Token Gate node by paired index (the Mint response has replaced $json)."""
-    return inline("zoominfoToken.js") + f"""
+    caches it in workflow static data, and re-attaches the original row recovered from
+    the Token Gate node via recoverConvergedRun (nodeRunRecovery.js). This node only
+    runs for waves that needed a mint — a SUBSET of the Token Gate's own runs — so its
+    own $runIndex is paired against the Token Gate's `runIndex`-th run that ALSO
+    needed a mint, never its raw run count (same F5 class as gateRows in
+    _zoom_split_gate_js, .planning/debug/uat-batch-review-row-reads-failed.md)."""
+    return inline("nodeRunRecovery.js", "zoominfoToken.js") + f"""
 
 // --- n8n wrapper: cache the freshly-minted ZoomInfo token (CLOUD split-code-node) ---
 const sd = $getWorkflowStaticData("global");
-const gateRows = (function () {{ try {{ return $('{token_gate_name}').all(); }} catch (e) {{ return []; }} }})();
+const gateRows = recoverConvergedRun(
+  (name, b, r) => $(name).all(b, r), '{token_gate_name}', $runIndex,
+  (it) => it.json.zoom_needs_mint === true
+);
 const items = $input.all();
 return items.map((item, i) => {{
   const row = (gateRows[i] && gateRows[i].json) || {{}};
