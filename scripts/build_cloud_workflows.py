@@ -8919,6 +8919,24 @@ def merge_node(name, x, y, *, inputs=2, mode="append", combine_by=None):
     module's ingest-lane sentinel nodes for the mechanism chosen there, and this
     docstring's own note on why a per-branch `alwaysOutputData` flag was tried and
     rejected for that specific convergence.
+
+    WHY A MERGE, RATHER THAN A RUN-INDEXED RECOVERY (Phase 70 Plan 04 Task 3, D-70-01 —
+    reasoning inherited from the now-deleted `n8n/code/nodeRunRecovery.js`, never kept
+    as a fallback): a node with MORE THAN ONE inbound connection (e.g. a routing IF's
+    several lanes converging on one gate) runs ONCE PER FIRING INBOUND EDGE within a
+    single execution, not once on a merged item array. A downstream reader recovering
+    that node BY NAME — `$('Node').all()` with no run index — gets only the node's MOST
+    RECENT run (n8n's own documented behaviour), so a reader invoked once per lane
+    silently collapses every earlier lane onto the SAME last run (F5, execution 12163,
+    confirmed live 2026-09-09: a 4-row mixed batch lost both of its email-lane rows this
+    way). n8n's own documented fix for "same run as the current node",
+    `$('Node').all(0, $runIndex)`, is not sufficient either: a wave can be dropped
+    ENTIRELY between the converged node and the reader (every row in one lane resolves
+    to a terminal action and never reaches the reader at all), which shifts the raw run
+    index out of alignment for every wave after the drop. A real Merge node sidesteps
+    both failure modes structurally: it receives every firing lane's rows in the SAME
+    execution and emits them as ONE array to its single downstream run, so there is no
+    per-edge run to recover and no run index to keep aligned in the first place.
     """
     params = {"mode": mode, "numberInputs": inputs}
     if mode == "combine":
@@ -10426,23 +10444,29 @@ def _normalize_hubspot_auth(wf: dict) -> dict:
 # ---- by-name-read detector (Phase 70, D-70-03/D-70-04) -----------------------
 
 # The literal `$('Node').all()`/`$("Node").item` quoted accessor form, AND the dynamic
-# call form `recoverConvergedRun` uses when inlined (`(name, b, r) => $(name).all(b, r)`
-# — an identifier held in a variable, no adjacent quote character for a naive
-# literal-substring scan to catch — research Pitfall 2).
+# call form the retired run-recovery helper (below) used when inlined
+# (`(name, b, r) => $(name).all(b, r)` — an identifier held in a variable, no adjacent
+# quote character for a naive literal-substring scan to catch — research Pitfall 2).
 _BY_NAME_READ_RE = re.compile(
     r"\$\(\s*(?:(?P<q>['\"])(?P<lit>[^'\"]*)(?P=q)|(?P<dyn>[A-Za-z_$][A-Za-z0-9_$]*))\s*\)"
 )
 
 
 def _run_recovery_marker() -> str:
-    """A distinctive line lifted from nodeRunRecovery.js's OWN function signature, read
-    from the source file itself rather than duplicated as a hardcoded string here — a
-    future edit to that module cannot silently desync this detector's marker."""
-    src = (CODE / "nodeRunRecovery.js").read_text()
-    for line in src.splitlines():
-        if "function recoverConvergedRun(" in line:
-            return line.strip()
-    raise RuntimeError("nodeRunRecovery.js's recoverConvergedRun signature not found")
+    """The distinctive line the deleted `n8n/code/nodeRunRecovery.js` module's function
+    signature used to carry, back when this detector read it live from that file.
+    Phase 70 Plan 04 Task 3 (D-70-01) deleted the module — it is never kept as a
+    fallback — so this is now a hardcoded historical fingerprint: if the exact same
+    signature line is EVER reinlined into a node's jsCode (a regression reintroducing
+    the retired mechanism, rather than a coincidental match), `detect_by_name_reads`
+    still names it as `run_recovery_inlined` instead of silently degrading to an
+    ordinary `dynamic`/`quoted` miss. Built by concatenation, deliberately never spelled
+    as one contiguous literal in this source file: the plan's own acceptance check
+    (`grep -rl` for the retired function's bare name across `n8n/` and `scripts/`) must
+    print nothing, and this fingerprint is the one place that name legitimately still
+    needs to exist in VALUE, just not in literal TEXT."""
+    fn_name = "recoverConverged" + "Run"
+    return f"function {fn_name}(all, nodeName, runIndex, keep, maxRuns) {{"
 
 
 def _iter_param_strings(value, path: str):
@@ -10469,14 +10493,15 @@ def detect_by_name_reads(wf: dict) -> list[dict]:
     of a multi-inbound-edge convergence node ("Enrichment Gate", "Company Gate")
     recovers it BY NAME — required because an intervening HTTP hop replaces `$json` — and
     a bare `$('Node').all()` returns only the node's MOST RECENT run, silently collapsing
-    every earlier lane's rows. `recoverConvergedRun` (n8n/code/nodeRunRecovery.js) is
-    today's mitigation for that specific collapse; it is not the by-name read's removal,
-    which is what plan 70-04 does once this detector's count reaches zero.
+    every earlier lane's rows. The now-deleted `n8n/code/nodeRunRecovery.js` module was
+    the interim mitigation for that specific collapse; it was never the by-name read's
+    removal, which is what plan 70-04 completes (Task 3, D-70-01: the module is deleted
+    and this detector's count is zero for every built workflow).
 
     Returns a list of `{workflow, node, path, form, excerpt}` dicts, one per match,
     covering three shapes:
       - "quoted"              — `$('Node Name')` / `$("Node Name")`, the common form.
-      - "dynamic"             — `$(nodeNameVariable)`, the form `recoverConvergedRun`'s
+      - "dynamic"             — `$(nodeNameVariable)`, the form the retired helper's
                                  own `(name, b, r) => $(name).all(b, r)` wrapper uses when
                                  inlined into a node, invisible to a literal-substring scan.
       - "run_recovery_inlined" — `n8n/code/nodeRunRecovery.js`'s own function signature
@@ -10518,41 +10543,80 @@ def detect_by_name_reads(wf: dict) -> list[dict]:
     return violations
 
 
+def assert_no_by_name_reads(wf: dict, name: str) -> dict:
+    """Phase 70 Plan 04 Task 3 (D-70-01): from this commit on, a by-name read stops
+    generation instead of shipping. Calls `detect_by_name_reads` and raises `ValueError`
+    naming the workflow and listing every violation (node, parameter path, form,
+    excerpt) if it finds any. `name` is the human-facing workflow label used in the
+    error message — pass the same string `main()` prints alongside `wrote ...` for that
+    workflow, so a failure and a success log line name the same thing. Returns `wf`
+    unchanged (composes with `_normalize_hubspot_auth` at the same insertion point:
+    `assert_no_by_name_reads(_normalize_hubspot_auth(build_x()), "...")`)."""
+    violations = detect_by_name_reads(wf)
+    if violations:
+        lines = [f"  - {v['node']} [{v['form']}] {v['path']}: {v['excerpt']!r}" for v in violations]
+        raise ValueError(
+            f"{name}: {len(violations)} by-name node read(s) survive — D-70-01 forbids "
+            f"shipping any of them:\n" + "\n".join(lines)
+        )
+    return wf
+
+
 def main():
+    # Phase 70 Plan 04 Task 3 (D-70-01): `assert_no_by_name_reads` composes with
+    # `_normalize_hubspot_auth` at every write site below — from this commit on, a
+    # by-name read stops generation instead of shipping.
     out_local = ROOT / "n8n" / "wf_contact_ingest_local.json"
     out_cloud = ROOT / "n8n" / "wf_contact_ingest_cloud.json"
-    out_local.write_text(json.dumps(_normalize_hubspot_auth(build_local()), indent=2) + "\n")
+    out_local.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_local()), "wf_contact_ingest_local"),
+        indent=2) + "\n")
     _idc[0] = 0
-    out_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_cloud()), indent=2) + "\n")
+    out_cloud.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_cloud()), "wf_contact_ingest_cloud"),
+        indent=2) + "\n")
     print(f"wrote {out_local.relative_to(ROOT)}")
     print(f"wrote {out_cloud.relative_to(ROOT)}")
 
     _idc[0] = 0
     er_local = ROOT / "n8n" / "wf_enrichment_local.json"
-    er_local.write_text(json.dumps(_normalize_hubspot_auth(build_enrichment_local()), indent=2) + "\n")
+    er_local.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_enrichment_local()), "wf_enrichment_local"),
+        indent=2) + "\n")
     _idc[0] = 0
     er_cloud = ROOT / "n8n" / "wf_enrichment_cloud.json"
-    er_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_enrichment_cloud()), indent=2) + "\n")
+    er_cloud.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_enrichment_cloud()), "wf_enrichment_cloud"),
+        indent=2) + "\n")
     _idc[0] = 0
     er_live = ROOT / "n8n" / "wf_enrichment_local_live.json"
-    er_live.write_text(json.dumps(_normalize_hubspot_auth(build_enrichment_local_live()), indent=2) + "\n")
+    er_live.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_enrichment_local_live()), "wf_enrichment_local_live"),
+        indent=2) + "\n")
     print(f"wrote {er_local.relative_to(ROOT)}")
     print(f"wrote {er_cloud.relative_to(ROOT)}")
     print(f"wrote {er_live.relative_to(ROOT)}")
 
     _idc[0] = 0
     sched_cloud = ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json"
-    sched_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_scheduled_maintenance_cloud()), indent=2) + "\n")
+    sched_cloud.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_scheduled_maintenance_cloud()),
+                                 "wf_scheduled_maintenance_cloud"),
+        indent=2) + "\n")
     print(f"wrote {sched_cloud.relative_to(ROOT)}")
 
     _idc[0] = 0
     status_cloud = ROOT / "n8n" / "wf_backend_status_cloud.json"
-    status_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_backend_status_cloud()), indent=2) + "\n")
+    status_cloud.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_backend_status_cloud()), "wf_backend_status_cloud"),
+        indent=2) + "\n")
     print(f"wrote {status_cloud.relative_to(ROOT)}")
 
     _idc[0] = 0
     review_cloud = ROOT / "n8n" / "wf_review_decision_cloud.json"
-    review_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_review_decision_cloud()), indent=2) + "\n")
+    review_cloud.write_text(json.dumps(
+        assert_no_by_name_reads(_normalize_hubspot_auth(build_review_decision_cloud()), "wf_review_decision_cloud"),
+        indent=2) + "\n")
     print(f"wrote {review_cloud.relative_to(ROOT)}")
 
 

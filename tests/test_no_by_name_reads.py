@@ -21,11 +21,16 @@
 #   build_backend_status_cloud()        -> 3   violations (Task 2: -> 0)
 #   build_scheduled_maintenance_cloud() -> 1   violation  (Task 2: -> 0, dead-code by-name)
 #
-# Every one of the six workflows `main()` writes now reports zero. Task 3's job is the
-# ENFORCEMENT half — deleting nodeRunRecovery.js and wiring `assert_no_by_name_reads`
-# into `main()` so a regression fails the build, not just this test file.
+# Every one of the six workflows `main()` writes now reports zero. Task 3 (D-70-01) is
+# the ENFORCEMENT half, done: `n8n/code/nodeRunRecovery.js` is deleted (never kept as a
+# fallback — its per-inbound-edge run reasoning moved into `merge_node`'s own docstring),
+# and `assert_no_by_name_reads` is wired into `main()` at every one of the eight write
+# sites (composed with `_normalize_hubspot_auth`), so a regression fails the BUILD, not
+# just this test file.
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -34,6 +39,7 @@ import build_cloud_workflows as bcw  # noqa: E402
 REQUIRED_KEYS = {"workflow", "node", "path", "form", "excerpt"}
 
 ALL_BUILDERS = [
+    "build_local",
     "build_cloud",
     "build_enrichment_cloud",
     "build_enrichment_local",
@@ -139,6 +145,48 @@ def test_detector_sees_inlined_run_recovery():
     inlined = [v for v in violations if v["form"] == "run_recovery_inlined"]
     assert len(inlined) == 1, violations
     assert inlined[0]["node"] == "Gate Reader"
+
+
+def test_assert_no_by_name_reads_raises_on_a_violating_workflow():
+    """Phase 70 Plan 04 Task 3 (D-70-01): the raise itself, proven, never assumed. A
+    hand-built workflow carrying one violation must stop generation with a `ValueError`
+    naming the workflow label and the offending node — never silently ship."""
+    wf = {
+        "name": "synthetic",
+        "nodes": [
+            {
+                "name": "Splitter",
+                "type": "n8n-nodes-base.if",
+                "parameters": {
+                    "conditions": {
+                        "combinator": "and",
+                        "conditions": [
+                            {
+                                "leftValue": "={{ $('Gate').item.json.action }}",
+                                "rightValue": "update",
+                                "operator": {"type": "string", "operation": "equals"},
+                            }
+                        ],
+                    }
+                },
+            }
+        ],
+    }
+    with pytest.raises(ValueError) as excinfo:
+        bcw.assert_no_by_name_reads(wf, "wf_synthetic_example")
+    assert "wf_synthetic_example" in str(excinfo.value)
+    assert "Splitter" in str(excinfo.value)
+
+
+def test_assert_no_by_name_reads_passes_a_clean_workflow_through_unchanged():
+    wf = {
+        "name": "synthetic",
+        "nodes": [{
+            "name": "Passthrough", "type": "n8n-nodes-base.code",
+            "parameters": {"jsCode": "return $input.all();"},
+        }],
+    }
+    assert bcw.assert_no_by_name_reads(wf, "wf_synthetic_clean") is wf
 
 
 def test_detector_clean_workflow_returns_empty():

@@ -1,164 +1,110 @@
-// Regression guard for the F5 multi-run convergence fix
-// (.planning/debug/uat-batch-review-row-reads-failed.md), executed against the ACTUAL
-// committed jsCode in n8n/wf_enrichment_cloud.json — the same `new Function` mechanism
-// n8n's Code node uses at runtime (see researchChainRowFlow.test.mjs's note).
+// tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs
 //
-// Bug (confirmed live, execution 12163, 2026-09-09): "Enrichment Gate"/"Company Gate"
-// have more than one inbound connection (one lane per identity path — email, linkedin,
-// name, fetch-by-id, unmatchable for contacts; fetch-by-id vs domain/name-search for
-// companies) and n8n runs a node with multiple inbound edges ONCE PER FIRING EDGE, not
-// once on a merged item array. "Normalize + Score"/"Normalize + Score Company" read
-// their upstream gate BY NAME (required — HTTP provider hops replace $json) via a bare
-// `$('Gate').all()`, which n8n's own docs say returns only the node's MOST RECENT run.
-// A 4-row mixed batch (2 email rows, 2 no-email/name rows) came back with only the
-// no-email rows twice; the two email rows vanished from every downstream node.
+// Phase 70 Plan 04 Task 3 (D-70-01) — rewritten from a hand-modeled `recoverConvergedRun`
+// interpreter test to a WALKER-DRIVEN acceptance of the real convergence.
 //
-// This models n8n's documented `.all(branchIndex, runIndex)` / `$runIndex` contract
-// (bare `.all()` = most recent run; `.all(0, r)` = a specific run) directly, and proves
-// two things a naive `.all(0, $runIndex)` fix would NOT prove:
-//   (A) the F5 repro itself — two upstream runs, no drop, must not collapse to the last;
-//   (B) the drift case — a THIRD upstream run that is entirely `action: "skip"` (e.g.
-//       the unmatchable/"IF Name Searchable" false lane, or "IF Company Skip"'s true
-//       lane) never reaches this node at all, so this node's OWN run count falls behind
-//       the gate's raw run count — pairing by raw run index would return the wrong
-//       (dropped) run for every wave after the drop.
+// Original bug (confirmed live, execution 12163, 2026-09-09 —
+// .planning/debug/resolved/uat-batch-review-row-reads-failed.md, F5): "Enrichment Gate"/
+// "Company Gate" have more than one inbound connection (one lane per identity path —
+// email, linkedin, name, fetch-by-id, unmatchable for contacts; fetch-by-id vs
+// domain/name-search for companies) and n8n runs a node with multiple inbound edges ONCE
+// PER FIRING EDGE, not once on a merged item array. Downstream readers recovering it BY
+// NAME (`$('Gate').all()`, required because an HTTP hop replaces `$json`) got only the
+// gate's MOST RECENT run — a 4-row mixed batch (2 email, 2 no-email) lost the email rows
+// entirely. `n8n/code/nodeRunRecovery.js` (`recoverConvergedRun`) was the interim
+// mitigation; this file used to test it directly in isolation.
+//
+// D-70-04 retires the mechanism this module patched, not just the module: "Enrichment
+// Gate"/"Company Gate" downstream consumers no longer read either gate by name at all —
+// they sit behind a real n8n Merge ("Enrichment Gate Merge"/"Company Gate Merge",
+// Phase 70 Plan 03 Task 1) that collects every firing lane's rows into ONE array before
+// the reader ever runs. This file now proves THAT property directly against the
+// COMMITTED workflow, driven end to end through tests/n8n/lib/walkWorkflow.mjs (the same
+// mechanism n8n uses at runtime) with a batch that fires TWO DIFFERENT contacts lanes in
+// one execution — fetch-by-id (an event with no email) and email (an event with one) —
+// exactly the F5 shape, minus the interim workaround.
+//
+// NOTE: this replays the repo's OWN committed workflow jsCode/expressions via `new
+// Function` — the same mechanism n8n's Code/IF nodes use at runtime — over trusted,
+// in-repo JSON. No external or untrusted input is ever interpolated into a function body.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import fs from "node:fs";
+import { walkWorkflow, loadWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
-const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
 
-const node = (name) => {
-  const n = wf.nodes.find((x) => x.name === name);
-  assert.ok(n, `node present: ${name}`);
-  return n;
-};
-const jsCodeOf = (name) => node(name).parameters.jsCode;
+function load() {
+  return loadWorkflow(WF_PATH);
+}
 
-// runData: { nodeName: [ run0Items, run1Items, ... ] } — each runNItems is a plain array
-// of $json objects (NOT wrapped in {json}). Mirrors n8n's own per-node run history.
-function makeDollar(runData) {
-  return (name) => ({
-    all: (branch, run) => {
-      const runs = runData[name];
-      if (!runs) throw new Error(`no node named ${name}`);
-      const r = run === undefined ? runs.length - 1 : run; // bare .all() -> most recent run
-      if (r < 0 || r >= runs.length) throw new Error(`no run ${r} for ${name}`);
-      return runs[r].map((j) => ({ json: j }));
-    },
+// A generous stub set covering every HTTP node either lane below can reach on a
+// disarmed batch (both write flags are "false" in the committed JSON).
+function baseStubs() {
+  return {
+    "HubSpot Fetch By Id": (items) => items.map(() => ({ results: [] })),
+    "HubSpot Search": (items) => items.map(() => ({ results: [] })),
+    "HubSpot Name Search": (items) => items.map(() => ({ results: [] })),
+    "HubSpot Name Search Fallback": (items) => items.map(() => ({ results: [] })),
+    "HubSpot Linkedin Search": (items) => items.map(() => ({ results: [] })),
+    "Lusha Enrich": (items) => items.map(() => ({ matched: false, data: {} })),
+    "Apollo Match": (items) => items.map(() => ({})),
+    "ZoomInfo Mint": [{ access_token: "tok" }],
+    "Contact Web Research": (items) => items.map(() => ({})),
+    "Contact Judge Call": (items) => items.map(() => ({})),
+    "HubSpot Create": (items) => items.map((it, i) => ({ id: `create-${i}`, properties: it })),
+    "HubSpot Update": (items) => items.map((it, i) => ({ id: `update-${i}`, properties: it })),
+    "Lusha Usage": [{}],
+    "Apollo Usage": [{}],
+    "ZoomInfo Usage Mint": [{ access_token: "tok" }],
+  };
+}
+
+// fetch-by-id lane: objectId present, NO email — laneOf() (n8n/code/matchProposal.js)
+// resolves this to "fetch_by_id" specifically because email is absent.
+function bareEvent(objectId) {
+  return { objectId, objectType: "contact", run_id: "case" };
+}
+// email lane: objectId AND email both present — laneOf() resolves "email" whenever
+// email is present, regardless of objectId (a realistic property-change webhook shape).
+function emailEvent(objectId, email) {
+  return { objectId, objectType: "contact", email, run_id: "case" };
+}
+
+function run(events, stubOverrides) {
+  const wf = load();
+  return walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { events } }],
+    httpStubs: { ...baseStubs(), ...(stubOverrides || {}) },
   });
 }
 
-// Invokes ONE run (runIndex) of the named node's jsCode, feeding it the given $input
-// items and the upstream run history it may read BY NAME.
-function runOneNodeRun(jsCode, inputItems, runData, runIndex) {
-  const $ = makeDollar(runData);
-  const $input = { all: () => inputItems.map((j) => ({ json: j })) };
-  const $runIndex = runIndex;
-  // ZoomInfo Token Gate reads $getWorkflowStaticData("global") for its token cache —
-  // irrelevant to the run-recovery assertions here, so a fresh empty store per call is
-  // enough (the code's own needsMint(undefined, ...) branch handles it safely).
-  const $getWorkflowStaticData = () => ({});
-  const fn = new Function(
-    "$", "$input", "$runIndex", "$getWorkflowStaticData", `"use strict";\n${jsCode}`
-  );
-  const out = fn($, $input, $runIndex, $getWorkflowStaticData) || [];
-  return out.map((it) => (it && it.json !== undefined ? it.json : it));
-}
+test("a batch firing TWO DIFFERENT contacts identity lanes reaches Enrichment Gate with BOTH rows, not collapsed to the last lane (F5 repro, D-70-01)", () => {
+  const { runData, trace } = run([bareEvent("1"), emailEvent("2", "a@example.com")]);
+  assert.deepEqual(trace.stalled, []);
 
-const emailRow = (row_id) => ({
-  row_id, action: "create", object_type: "contacts",
-  identity_keys: { email: `${row_id}@example.com` },
-  existingRecord: {}, gate: { missingFields: [] },
-});
-const nameRow = (row_id) => ({
-  row_id, action: "enrich", object_type: "contacts",
-  identity_keys: { firstName: "F", lastName: row_id, companyName: "Co" },
-  existingRecord: {}, gate: { missingFields: [] },
-});
-const unmatchableSkipRow = (row_id) => ({ row_id, action: "skip", object_type: "contacts" });
+  const gateRows = nodeItems(runData, "Enrichment Gate");
+  const rowIds = gateRows.map((r) => r.object_id).sort();
+  assert.deepEqual(rowIds, ["1", "2"],
+    "both lanes' rows must reach the gate — a by-name recovery collapsing to the most " +
+    "recent run would return only one of them");
 
-const companyRow = (row_id) => ({
-  row_id, action: "create",
-  identity_keys: { domain: `${row_id}.example` },
-  existingRecord: {}, gate: { missingFields: [] },
-});
-const companySkipRow = (row_id) => ({ row_id, action: "skip" });
-
-test("F5 repro (A): Normalize + Score — two upstream Enrichment Gate runs, both must survive, in order", () => {
-  const jsCode = jsCodeOf("Normalize + Score");
-  const runData = {
-    "Enrichment Gate": [
-      [emailRow("row-1"), emailRow("row-4")],
-      [nameRow("row-2"), nameRow("row-3")],
-    ],
-  };
-  const run0 = runOneNodeRun(jsCode, runData["Enrichment Gate"][0], runData, 0);
-  const run1 = runOneNodeRun(jsCode, runData["Enrichment Gate"][1], runData, 1);
-  assert.deepEqual(run0.map((r) => r.row_id), ["row-1", "row-4"],
-    "run 0 (email lane) must return the email lane's own rows, not the last lane's");
-  assert.deepEqual(run1.map((r) => r.row_id), ["row-2", "row-3"],
-    "run 1 (name lane) must return the name lane's own rows");
+  // And downstream of the gate: neither row is lost or duplicated by the time it
+  // reaches the terminal convergence (the exact per-field content of each row is
+  // covered by enrichmentConvergenceMerge.test.mjs's own mixed-batch test; this
+  // assertion is scoped to the count, which is what a collapsed/duplicated run would
+  // break).
+  const responseRows = nodeItems(runData, "Build Response");
+  assert.equal(responseRows.length, 2, "exactly one response row per input row");
 });
 
-test("F5 drift case (B): Normalize + Score — an all-skip middle Gate run must not shift the pairing", () => {
-  const jsCode = jsCodeOf("Normalize + Score");
-  // Three Gate runs; the middle is entirely skip and never reaches this node at all —
-  // "Normalize + Score" itself therefore only runs twice (its own $runIndex is 0, 1).
-  const runData = {
-    "Enrichment Gate": [
-      [emailRow("row-1")],
-      [unmatchableSkipRow("row-x"), unmatchableSkipRow("row-y")],
-      [nameRow("row-9")],
-    ],
-  };
-  const readerRun0 = runOneNodeRun(jsCode, runData["Enrichment Gate"][0], runData, 0);
-  const readerRun1 = runOneNodeRun(jsCode, runData["Enrichment Gate"][2], runData, 1);
-  assert.deepEqual(readerRun0.map((r) => r.row_id), ["row-1"]);
-  assert.deepEqual(readerRun1.map((r) => r.row_id), ["row-9"],
-    "the reader's second run must pair with the Gate's SECOND SURVIVING run (index 2), not its raw run index 1 (the dropped all-skip run)");
-});
-
-test("F5 repro (A), companies: Normalize + Score Company — two upstream Company Gate runs, both must survive", () => {
-  const jsCode = jsCodeOf("Normalize + Score Company");
-  const runData = {
-    "Company Gate": [
-      [companyRow("co-1")],
-      [companyRow("co-2"), companyRow("co-3")],
-    ],
-  };
-  const run0 = runOneNodeRun(jsCode, runData["Company Gate"][0], runData, 0);
-  const run1 = runOneNodeRun(jsCode, runData["Company Gate"][1], runData, 1);
-  assert.deepEqual(run0.map((r) => r.row_id), ["co-1"]);
-  assert.deepEqual(run1.map((r) => r.row_id), ["co-2", "co-3"]);
-});
-
-test("F5 drift case (B), companies: Normalize + Score Company — an all-skip middle Company Gate run must not shift the pairing", () => {
-  const jsCode = jsCodeOf("Normalize + Score Company");
-  const runData = {
-    "Company Gate": [
-      [companyRow("co-1")],
-      [companySkipRow("co-skip")],
-      [companyRow("co-9")],
-    ],
-  };
-  const readerRun0 = runOneNodeRun(jsCode, runData["Company Gate"][0], runData, 0);
-  const readerRun1 = runOneNodeRun(jsCode, runData["Company Gate"][2], runData, 1);
-  assert.deepEqual(readerRun0.map((r) => r.row_id), ["co-1"]);
-  assert.deepEqual(readerRun1.map((r) => r.row_id), ["co-9"]);
-});
-
-test("ZoomInfo Token Gate: carries the row straight through from $input, never a by-name lookup (Phase 70 Plan 04, D-70-04)", () => {
-  const jsCode = jsCodeOf("ZoomInfo Token Gate");
-  // "Apollo Result Carry Merge" (or a bypassed provider's own row, unmodified) already
-  // re-attaches the row before this node runs, so $input here IS the row (optionally
-  // with apollo_result/lusha_result already attached) — no recoverConvergedRun, no
-  // $()/$runIndex dependency at all.
-  const rows = [emailRow("row-1"), emailRow("row-4")];
-  const out = runOneNodeRun(jsCode, rows, {}, 0);
-  assert.deepEqual(out.map((r) => r.row_id), ["row-1", "row-4"]);
+test("Normalize + Score reads the carried row off $input, never a by-name lookup of Enrichment Gate (D-70-04)", () => {
+  const wf = load();
+  const node = wf.nodes.find((n) => n.name === "Normalize + Score");
+  assert.ok(node, "node present: Normalize + Score");
+  assert.equal(node.parameters.jsCode.includes("$('"), false);
+  assert.equal(node.parameters.jsCode.includes('$("'), false);
 });
