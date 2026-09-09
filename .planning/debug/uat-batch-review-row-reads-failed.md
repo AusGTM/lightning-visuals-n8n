@@ -1,9 +1,9 @@
 ---
-status: verifying
+status: investigating
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T04:00:00Z
+updated: 2026-09-09T03:20:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
@@ -518,3 +518,29 @@ follow-on, not done here (F2's own scope was one flow, matching the todo's
 "minor" severity and this session's own priority ordering). The untracked
 `uat-batch-2026-09-09.csv` (real names/emails from the source batch) should be
 deleted once the operator no longer needs it for reference.
+
+
+## F5 — NEW, 2026-09-09 03:00Z, found during Round B (mixed batch) of the UAT — BLOCKS the UAT
+
+DATA_START
+**Symptom (operator's Claude, probing with `preingest.match_batch` in propose mode):** a 4-row match
+chunk — two rows WITH email (row-1 Natalie Waters, row-4 Barry Milton) and two WITHOUT (row-2
+Nardine Beresford, row-3 Greg Purcell) — came back with only 2 response items, both for the
+no-email rows; the two email rows were dropped from the response and fell to `unchecked`. Sent
+alone, or as an all-email chunk, every row returns. The operator's Claude worked around it by
+splitting the match by email presence (off-SKILL); the SKILL itself would have carried Natalie —
+an EXISTING contact `351336543679` — as unchecked, at risk of duplicate creation.
+
+**Root cause, traced on execution `12163` (`LV Enrichment (Cloud template)`, 2026-09-09T02:58:51Z),
+node by node, read-only via the plugin key:**
+- `Parse HubSpot Event` 4 items → `Build Identity` 4 → `IF Has Email` splits **2 | 2**.
+- Email lane: `HubSpot Search` 2 → `Adapt Search` 2 (row-1, row-4) → `Enrichment Gate` **run 0** = [row-1, row-4].
+- Name lane: `IF Name Searchable` 2 → `HubSpot Name Search` → `Adapt Name Search` 2 (row-2, row-3) → `Enrichment Gate` **run 1** = [row-2, row-3].
+- Both lanes then run `IF Provider Processing Needed` / `IF Lusha|Apollo|ZoomInfo Enabled` (all false in propose mode) → `Normalize + Score` runs twice — **and BOTH runs output [row-2, row-3]**. Every node downstream (`Contact Research Trigger Gate`, `Merge Winners`, `Decide Action`, `Build Response`, `Respond to Webhook`) runs twice with [row-2, row-3] each. row-1 and row-4 exist nowhere after `Enrichment Gate` run 0.
+- `ENRICH_NORMALIZE_SCORE_CLOUD` (`scripts/build_cloud_workflows.py:1815`): `const rows = $('Enrichment Gate').all().filter((it) => it.json.action !== "skip");` — a by-name read with no run index. n8n's `$('Node').all()` returned the node's LAST run ([row-2, row-3]) to both of this node's runs. The by-name read exists to survive provider HTTP hops replacing `$json` (memory `companies-research-lane-rowloss`); it silently assumed the named node ran once. A mixed chunk makes it run once per lane.
+- Same idiom, same exposure, to audit: `:1924` (`gateRows = $('Enrichment Gate').all()` in a try/catch), `:2148` (`$('Company Gate').all()`, companies lane), `:2543` (`$('Company Gate').all().filter(...)`, companies Normalize), and any downstream node reading `Decide Action`/`Build Requests` by name. Contacts lanes that can co-exist in one chunk: email, name, linkedin (`IF Linkedin Searchable`), fetch_by_id — any two present = two runs.
+- Executions `12160`–`12167` (8) were the operator's probes; propose mode, providers disabled, zero credits.
+DATA_END
+
+hypothesis: `$('Enrichment Gate').all()` without a run index returns the last run; when `IF Has Email` (or the linkedin/fetch_by_id splits) produce more than one upstream run, every converged by-name read collapses to the final lane's rows. Fix candidates, for the debugger to weigh: (a) `$('Enrichment Gate').all(0, $runIndex)` — pair this node's run with the gate's run of the same index (lanes reach the gate and this node in the same order, but prove it); (b) iterate run indexes 0..N collecting all gate rows, then select by `row_id` ∈ the current run's `$input` rows where `$input` still carries `row_id`, falling back to (a) only across an HTTP hop; (c) a Merge node before `Normalize + Score` so it runs once — changes node count and every downstream by-name read. Prefer the smallest change that a node-chain test in `tests/n8n/` can prove with TWO upstream runs (the existing harness models one run; extend it to model `.all(branch, runIndex)` and `$runIndex`).
+next_action: reproduce F5 offline — build a two-run simulation of `Enrichment Gate` → `Normalize + Score` from the emitted jsCode (extend the item-flow harness pattern of `tests/n8n/researchChainRowFlow.test.mjs`), confirm RED (email rows lost), fix in `scripts/build_cloud_workflows.py` at every listed site, regenerate the JSON via the builder, GREEN; then the operator deploys + bounces and re-runs Round B.
