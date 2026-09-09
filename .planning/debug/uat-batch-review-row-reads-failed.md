@@ -1,9 +1,9 @@
 ---
-status: investigating
+status: awaiting_human_verify
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T05:00:00Z
+updated: 2026-09-09T06:00:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
