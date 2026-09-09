@@ -1,9 +1,9 @@
 ---
-status: investigating
+status: awaiting_human_verify
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T03:20:00Z
+updated: 2026-09-09T05:00:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
@@ -103,7 +103,13 @@ reasoning_checkpoint:
     symptom.
 ```
 
-next_action: all four findings resolved, fixed, and committed (F1 `0c42b18`, F3/F4 `392753a`, F2 `734826b`, F4 row-accounting false-positive correction `00668a3`). Nothing verified live — every check ran offline. Awaiting operator confirmation per the CHECKPOINT below before this session moves the file to `resolved/` and appends the knowledge base.
+next_action: F1-F4 resolved, fixed, and committed (F1 `0c42b18`, F3/F4 `392753a`, F2
+  `734826b`, F4 row-accounting false-positive correction `00668a3`, F4 closed on direct
+  driver-script evidence `e14c7b1`). F5 (multi-run convergence row loss at
+  `Enrichment Gate`/`Company Gate`) also now fixed and offline-verified — see F5's own
+  Resolution section below. Nothing verified live for ANY finding — every check ran
+  offline. Awaiting operator confirmation per the CHECKPOINT below before this session
+  moves the file to `resolved/` and appends the knowledge base.
 test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green. F3/F4 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_chunking.py operator-claude-plugin/tests/test_preingest_merge.py -q` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q`; all green. F2 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_sweep_read_only.py -q`; green. Final pass after the row-accounting correction: plugin suite 2850/5, full repo 4608/154, node 942/0 — unchanged baselines, no regression.
 
 ## Constraints (project)
@@ -543,6 +549,256 @@ node by node, read-only via the plugin key:**
 DATA_END
 
 hypothesis: `$('Enrichment Gate').all()` without a run index returns the last run; when `IF Has Email` (or the linkedin/fetch_by_id splits) produce more than one upstream run, every converged by-name read collapses to the final lane's rows. Fix candidates, for the debugger to weigh: (a) `$('Enrichment Gate').all(0, $runIndex)` — pair this node's run with the gate's run of the same index (lanes reach the gate and this node in the same order, but prove it); (b) iterate run indexes 0..N collecting all gate rows, then select by `row_id` ∈ the current run's `$input` rows where `$input` still carries `row_id`, falling back to (a) only across an HTTP hop; (c) a Merge node before `Normalize + Score` so it runs once — changes node count and every downstream by-name read. Prefer the smallest change that a node-chain test in `tests/n8n/` can prove with TWO upstream runs (the existing harness models one run; extend it to model `.all(branch, runIndex)` and `$runIndex`).
-next_action: reproduce F5 offline — build a two-run simulation of `Enrichment Gate` → `Normalize + Score` from the emitted jsCode (extend the item-flow harness pattern of `tests/n8n/researchChainRowFlow.test.mjs`), confirm RED (email rows lost), fix in `scripts/build_cloud_workflows.py` at every listed site, regenerate the JSON via the builder, GREEN; then the operator deploys + bounces and re-runs Round B.
+next_action: F5 fixed, tested RED->GREEN, and full suites green (see Resolution below).
+  Nothing deployed — the operator's next step is to deploy `n8n/wf_enrichment_cloud.json`
+  and `n8n/wf_backend_status_cloud.json` and re-run Round B. Awaiting operator confirmation
+  per the CHECKPOINT below before this session moves the file to `resolved/`.
+
+```yaml
+reasoning_checkpoint:
+  hypothesis: >
+    "Enrichment Gate"/"Company Gate" each have MULTIPLE inbound connections (5 lanes for
+    contacts — email/linkedin/name/fetch-by-id/unmatchable; 2 for companies —
+    fetch-by-id/domain-search) and n8n runs a node with multiple inbound edges ONCE PER
+    FIRING EDGE, not once on a merged item array (confirmed live, execution 12163). Every
+    by-name `$('Gate').all()` read downstream of that convergence point (required because
+    HTTP provider hops replace $json) collapses to the gate's MOST RECENT run only — n8n's
+    own docs confirm `.all()` with no run index "returns the items of the node's most
+    recent run" — silently losing every row from every earlier lane.
+  confirming_evidence:
+    - "n8n docs (docs.n8n.io/code/cookbook/builtin/all, docs.n8n.io/code-examples/methods-variables-examples/run-index): bare .all() = most recent run; .all(0, $runIndex) = same run as the current node — confirms the mechanism, not just the live symptom."
+    - "Live trace (execution 12163, already in Evidence below): Enrichment Gate ran twice (run 0 = [row-1,row-4] email lane; run 1 = [row-2,row-3] name lane); BOTH runs of Normalize + Score returned [row-2,row-3] — exactly 'last run wins', matching the docs precisely."
+    - "Structural audit of scripts/build_cloud_workflows.py found the SAME by-name-.all()-with-no-run-index idiom at every downstream reader of Enrichment Gate/Company Gate: ENRICH_NORMALIZE_SCORE_CLOUD (:1815+1816-1818 nodeAll), ENRICH_NORMALIZE_SCORE_CO (:2543+2544-2546), ENRICH_ZOOMINFO_CACHED (:1924, local-live), ENRICH_ZOOMINFO_CO_CACHED (:2148, local-live), and — found during this session's audit, NOT named in the original F5 note — _zoom_split_gate_js/_zoom_split_cache_js (the CLOUD split-code-node ZoomInfo subgraph actually deployed for wf_enrichment_cloud.json; ENRICH_ZOOMINFO_CACHED/_CO_CACHED are the local-live-only single-node variant)."
+    - "Offline node-chain test against the ACTUAL committed pre-fix jsCode (tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs, git-stash-verified): 0/5 pass pre-fix, reproducing both the row-loss (F5's own symptom) AND a second, related defect the trace didn't show — cross-run IDENTITY CONTAMINATION in the ZoomInfo Token Gate (a run pairs $input row-1/row-4 with gateRows belonging to row-2/row-3, attaching the WRONG identity_keys to a live ZoomInfo call whenever ZoomInfo is enabled — invisible in execution 12163 only because providers were disabled there)."
+  falsification_test: >
+    If a Normalize+Score run legitimately needed the RAW (not surviving-only) run index
+    of its Gate — i.e. if n8n executes converged inbound branches out of the temporal
+    order they were wired, or if a dropped (all-skip) wave could somehow still trigger a
+    downstream run — the scan-based recoverConvergedRun (matching runs by SURVIVING
+    sequence position, not raw index) would misalign instead of fixing. Nothing in this
+    session observed or could construct such a case (no live access to prove branch
+    execution order deterministically); documented as a residual blind spot below rather
+    than silently assumed away.
+  fix_rationale: >
+    The straightforward documented fix, `$('Gate').all(0, $runIndex)`, is NOT sufficient
+    by itself: a wave can be dropped ENTIRELY between "Enrichment Gate"/"Company Gate" and
+    the reader (every row in that wave resolves action:"skip" — e.g. the "IF Name
+    Searchable" false/unmatchable lane, or "IF Company Skip"'s true lane — and "IF
+    Provider Processing Needed"/"IF Company Skip" is the ONE point where such a wave never
+    reaches the provider chain at all). A dropped wave still consumes one of the Gate's
+    raw run indices without ever producing a run of the reader, so a LATER wave's
+    $runIndex would then point at the WRONG (dropped) Gate run — a drift the advisor
+    caught before any code was written (see Evidence). recoverConvergedRun
+    (n8n/code/nodeRunRecovery.js) scans the Gate's own runs in order, keeping only the
+    ones surviving a `keep` predicate, and returns the SURVIVING run at the reader's own
+    $runIndex — immune to that drift by construction, proven by a dedicated offline test
+    scenario (B) that a bare .all(0,$runIndex) fix would fail. Lusha/Apollo/ZoomInfo Enrich
+    sit entirely DOWNSTREAM of the one drop point on a single-file chain (no further
+    branching), so their own run counts stay 1:1 with Normalize+Score's — a bare
+    `.all(0, $runIndex)` is provably sufficient for them (advisor-confirmed), which is why
+    the fix uses the cheaper form there and reserves the scan for reads that cross the
+    drop point.
+  blind_spots: >
+    No live n8n access this session (no .env) — the "last run wins" mechanism and the
+    documented .all(0,$runIndex) semantics are confirmed against n8n's own published docs
+    plus the ALREADY-CAPTURED live trace (execution 12163), but the drift scenario (an
+    all-skip wave landing BEFORE a later actionable wave) and the ZoomInfo Cache Token
+    predicate (zoom_needs_mint) were never observed live — only reasoned from the wiring
+    and proven against an offline simulation of n8n's documented .all(branch,run)
+    contract. The operator's Round B re-run after deploy is the first live proof.
+  candidate_causes:
+    - "code: by-name .all() reads with no run index, at every downstream consumer of a
+      multi-inbound-edge node (Enrichment Gate, Company Gate) — confirmed, fixed at all
+      6 call sites (2 shared functions covering 3 call sites each via _zoom_preamble/
+      _zoom_split_gate_js/_zoom_split_cache_js reuse)"
+    - "process: none — unlike F4, this is a pure code defect with a full mechanism proof;
+      no out-of-band call or operator action contributed to F5"
+  and_gate: >
+    no — one root cause (the by-name .all() collapse), fixed uniformly by one shared
+    helper function reused at every exposed call site; the AND-gate does not fire because
+    no second, independent contributing condition was found or needed to explain the
+    symptom.
+```
 
 ## F4 — evidence found after the fix (2026-09-09): `drv_enrich.py:11` in the 2026-09-08 session's scratchpad hard-codes `enrich_rows=[row-1, row-2]`; row-3 was excluded by the operator-Claude's driver before `run_state.start_run`. `:39` passes `async_ack=True` (the `392753a` leak's source). The "out-of-band call" hypothesis is confirmed with the exact file; no repo defect.
+
+## F5 — Evidence (audit + fix, 2026-09-09)
+
+- timestamp: 2026-09-09T04:00:00Z
+  checked: scripts/build_cloud_workflows.py wiring for every inbound edge into
+    "Enrichment Gate" (:6363-6412) and "Company Gate" (:6473-6489)
+  found: "Enrichment Gate" has FIVE inbound edges (fetch-by-id, email, linkedin, name,
+    and "IF Name Searchable"'s false/unmatchable branch straight to the Gate); "Company
+    Gate" has TWO (fetch-by-id, and domain-search -> name-search-fallback). Downstream of
+    each Gate there is exactly ONE wave-dropping point before the provider chain: "IF
+    Provider Processing Needed" (contacts) / "IF Company Skip" (companies) — a wave whose
+    every row resolves `action: "skip"` never reaches "Normalize + Score"/"Normalize +
+    Score Company" at all. `IF Company Recompute` does NOT create per-wave variability
+    (CLAUDE.md §13.0.2: `recompute` is a REQUEST-level boolean, same value for every row
+    in an execution, never a per-row split).
+  implication: confirms the advisor's structural claim before any code was written — a
+    naive `.all(0, $runIndex)` fix would drift whenever an all-skip wave lands before a
+    later actionable wave, because the dropped wave still consumes one of the Gate's raw
+    run indices without producing a run of the reader.
+- timestamp: 2026-09-09T04:10:00Z
+  checked: `_zoom_split_contacts_subgraph`/`_zoom_split_company_subgraph`/
+    `_zoom_split_usage_subgraph` (scripts/build_cloud_workflows.py:4249-4508) — the
+    ACTUAL ZoomInfo implementation `build_enrichment_cloud()` deploys (not
+    `ENRICH_ZOOMINFO_CACHED`/`ENRICH_ZOOMINFO_CO_CACHED`, which are the
+    `build_enrichment_local_live()`-only single-node variant)
+  found: `_zoom_split_gate_js(gate_source_node)` ("ZoomInfo Token Gate"/"ZoomInfo Company
+    Token Gate") reads `$('{gate_source_node}').all()` — same by-name, no-run-index
+    collapse, one MORE exposed site the original F5 note (which only named
+    ENRICH_ZOOMINFO_CACHED's :1924) did not cover. `_zoom_split_cache_js(token_gate_name)`
+    ("ZoomInfo Cache Token"/"ZoomInfo Company Cache Token") reads its OWN upstream Token
+    Gate node the SAME way, but that read has ITS OWN drop point: "ZoomInfo Cache Token"
+    only runs on waves that needed a token mint (`zoom_needs_mint === true`), a SUBSET of
+    the Token Gate's own runs — a second instance of the identical drift class, one level
+    deeper in the chain, needing the SAME scan-based fix with a DIFFERENT `keep` predicate.
+    `_zoom_split_usage_subgraph` (the credit-check branch, "Credit Request"/"Status Credit
+    Request" as `gate_source_node`) reuses the SAME two functions — fixing them once fixed
+    it too, safely: its rows carry no `.action` field at all, so the `action !== "skip"`
+    predicate degrades to "keep everything" there, matching its own single-run reality.
+  implication: the fix touches 6 call sites total via 2 shared helper functions
+    (`_zoom_preamble` for the local-live single-node variant's 2 sites;
+    `_zoom_split_gate_js`/`_zoom_split_cache_js` for the CLOUD split-subgraph's 4 sites,
+    reused 3x each across contacts/companies/credit-usage) — one code change per function,
+    not 6 separate hand-edits.
+- timestamp: 2026-09-09T04:20:00Z
+  checked: web search of n8n's own published docs (docs.n8n.io/code/cookbook/builtin/all,
+    docs.n8n.io/code-examples/methods-variables-examples/run-index)
+  found: `$('Node').all()` with no run index "returns the items of the node's most recent
+    run" (matches the live collapse exactly); `.all(branchIndex, runIndex)` is the
+    documented signature; `.all(0, $runIndex)` is n8n's own documented idiom for "same run
+    as the current node". `$('Node').itemMatching(currentNodeInputIndex)` is a second,
+    lineage-based primitive that survives HTTP-hop $json replacement without any run-index
+    arithmetic at all — considered as an alternative design (advisor raised it as worth
+    weighing), not used: it requires every intervening node between the Gate and the
+    reader to preserve n8n's automatic paired-item linking (a real but unverified
+    assumption for the ZoomInfo split-subgraph's Mint/Cache hops, since this repo has no
+    live n8n access to confirm linking survives every hop), whereas the scan-based fix
+    depends only on documented, already-confirmed `.all(branch,run)` semantics.
+  implication: the chosen fix (recoverConvergedRun, a bounded forward scan over
+    `.all(0, r)` keeping only surviving runs) is grounded in CONFIRMED semantics only,
+    not an additional unverified assumption about paired-item lineage survival.
+- timestamp: 2026-09-09T04:40:00Z
+  checked: `tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs` + `tests/n8n/
+    nodeRunRecovery.test.mjs` executed against the pre-fix committed workflow JSON
+    (`git stash` of `scripts/build_cloud_workflows.py` + the 3 regenerated `n8n/wf_*.json`
+    files, restoring the exact pre-session state) vs. the post-fix state
+  found: RED before fix — 0/5 integration tests pass (all 5 fail: two-run row loss on
+    both contacts and companies Normalize+Score, the drift case on both, and the ZoomInfo
+    Token Gate cross-run identity-contamination case). GREEN after fix — 5/5 pass, plus
+    7/7 on the pure-function `recoverConvergedRun` unit tests (unaffected by the stash
+    since that file was untracked, moved aside separately and confirmed present for both
+    runs).
+  implication: proves the fix is what fixes it (Fix-Acceptance Guardrail signal 5,
+    revert-and-reconfirm), not merely correlated with the test passing.
+- timestamp: 2026-09-09T04:50:00Z
+  checked: full `node --test tests/n8n/*.test.mjs` run immediately after the fix, before
+    any collateral repair
+  found: 9 pre-existing tests broke — `personaGroupProducer.test.mjs` (2),
+    `linkedinProducer.test.mjs` (1), `bareEventChainFlow.test.mjs` (2),
+    `enabledResearchLaneFlow.test.mjs` (3), plus 1 duplicate-count line — every failure
+    `ReferenceError: $runIndex is not defined`. Each of these files runs "Normalize +
+    Score"/"Normalize + Score Company" jsCode via its OWN hand-rolled `new Function(...)`
+    harness (pre-dating this fix), none of which declared a `$runIndex` parameter, because
+    nothing in the committed jsCode read it before this session.
+  implication: NOT a sign the fix is wrong — a genuinely new global the fixed jsCode reads
+    that 4 test harnesses (all copies/mirrors of the same single-run pattern, per their own
+    comments) never declared. Fixed by adding `"$runIndex"` to each `new Function(...)`
+    parameter list and passing `0` at each call site (every one of these harnesses models
+    exactly one execution of each node, so $runIndex is always 0 by construction — matches
+    the mocked `.all()` in each of these files, which already ignores its arguments).
+    Confirms Fix-Acceptance Guardrail signal 4 (adjacent tests) caught a REAL collateral
+    break the driving test alone would not have — full node suite green (954/954) only
+    after this repair.
+
+## F5 — RESOLVED
+
+root_cause: `scripts/build_cloud_workflows.py`'s downstream readers of "Enrichment
+  Gate"/"Company Gate" (required to read them BY NAME, not via `$input`, because HTTP
+  provider-hop nodes replace `$json` — memory `companies-research-lane-rowloss`) used a
+  bare `$('Gate').all()` with no run index. "Enrichment Gate"/"Company Gate" each have
+  more than one inbound connection (contacts: fetch-by-id/email/linkedin/name/unmatchable;
+  companies: fetch-by-id/domain-search) and n8n runs a node with multiple inbound edges
+  ONCE PER FIRING EDGE (confirmed live, execution 12163), not once on a merged item array.
+  n8n's own docs confirm a bare `.all()` "returns the items of the node's most recent
+  run" — so every run of a downstream reader collapsed onto the SAME final Gate run,
+  silently losing every row from every earlier lane (a mixed 4-row batch returned only
+  the 2 no-email rows, twice, and lost both email rows — one of which, Natalie Waters, was
+  an EXISTING contact, putting her at risk of duplicate creation). A second, related
+  defect was found in the same audit: the ZoomInfo split-subgraph's Token
+  Gate/Cache Token nodes pair `$input`'s row i with the Gate's (collapsed, wrong-run)
+  row i by POSITION — not just row loss but silent cross-run IDENTITY CONTAMINATION,
+  attaching one lane's identity_keys to another lane's ZoomInfo request whenever ZoomInfo
+  is enabled (invisible in execution 12163 only because providers were disabled there).
+fix: added `n8n/code/nodeRunRecovery.js` (`recoverConvergedRun`) — a pure, Node-testable
+  function that scans an upstream node's own runs in temporal order via `.all(0, r)`,
+  keeping only the runs surviving a caller-supplied `keep` predicate, and returns the
+  SURVIVING run at the reader's own `$runIndex`. This is deliberately NOT the simpler
+  documented `.all(0, $runIndex)` idiom alone: a wave can be dropped entirely between the
+  Gate and the reader (every row in it resolves `action: "skip"`, e.g. the unmatchable
+  contacts lane or "IF Company Skip"'s true lane) — a dropped wave still consumes one of
+  the Gate's raw run indices without ever producing a run of the reader, so pairing by raw
+  run index would misalign for every wave after the drop (an advisor-caught risk, proven
+  by a dedicated offline drift-scenario test). Applied at all 6 exposed call sites via 2
+  shared functions: `_zoom_preamble` (adds `nodeRunRecovery.js` to the local-live
+  single-node ZoomInfo variant's shared inline() — `ENRICH_ZOOMINFO_CACHED`/
+  `ENRICH_ZOOMINFO_CO_CACHED`) and `_zoom_split_gate_js`/`_zoom_split_cache_js` (the CLOUD
+  split-subgraph actually deployed — reused 3x each across contacts/companies/
+  credit-usage). `ENRICH_NORMALIZE_SCORE_CLOUD`/`ENRICH_NORMALIZE_SCORE_CO` (the shared
+  "Normalize + Score"/"Normalize + Score Company" constants, used by BOTH
+  `build_enrichment_local_live()` and `build_enrichment_cloud()`) use the scan for their
+  Gate read and a plain `.all(0, $runIndex)` for Lusha/Apollo/ZoomInfo Enrich — provably
+  sufficient there because those three sit entirely downstream of the ONE drop point on a
+  single-file chain with no further branching, so their own run counts stay 1:1 with the
+  reader's. Regenerated every affected `n8n/wf_*.json` via `scripts/build_cloud_workflows.py`
+  (never hand-edited) — only `wf_enrichment_cloud.json`, `wf_enrichment_local_live.json`,
+  and `wf_backend_status_cloud.json` (the credit-usage branch reuses the same two shared
+  functions) changed; `wf_enrichment_local.json` (the fully-mocked variant, no by-name
+  Gate reads at all), `wf_contact_ingest_*`, `wf_scheduled_maintenance_cloud.json`, and
+  `wf_review_decision_cloud.json` are untouched, confirmed via `git status --porcelain`.
+verification: RED before fix — `tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs` (5
+  tests, run against the pre-fix committed JSON via `git stash`): 0/5 pass, reproducing
+  both the row-loss (F5's reported symptom, scenarios A on both contacts/companies) and
+  the drift case (scenario B on both) and the ZoomInfo Token Gate cross-run identity
+  contamination. GREEN after fix (`git stash pop`): 5/5 pass; `tests/n8n/
+  nodeRunRecovery.test.mjs` (7 pure-function tests, including the same drift scenario and
+  a `zoom_needs_mint` predicate case for the Cache Token site, and explicit coverage of
+  both possible "past the last run" signals — throw or empty array, since n8n's docs do
+  not specify which): 7/7 pass.
+  Collateral repair (Fix-Acceptance Guardrail signal 4, adjacent tests): 9 pre-existing
+  tests across `personaGroupProducer.test.mjs`, `linkedinProducer.test.mjs`,
+  `bareEventChainFlow.test.mjs`, `enabledResearchLaneFlow.test.mjs` broke
+  (`$runIndex is not defined` — their own hand-rolled single-run `new Function(...)`
+  harnesses never declared it); fixed by adding `"$runIndex"` to each harness's parameter
+  list and passing `0` (every one of these harnesses models exactly one node execution).
+  Full suites green: `node --test tests/n8n/*.test.mjs` 954/954 (940 baseline + 12 new: 5
+  + 7 across the two new files; 2 collateral-fixed files' test counts unchanged).
+  `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` 2850/2850 (unchanged — no
+  Python source touched by F5). `.venv/bin/python -m pytest -q --tb=short` 4608/154
+  (unchanged). No Stryker configuration exists in this repo (mutation-check signal
+  skipped, logged per the guardrail's degradation table). No-op/deletion detector: the
+  diff is purely additive (one new shared helper, its adoption at 6 call sites, and the 4
+  collateral test-harness parameter additions) — no branch, assertion, or behavior was
+  removed or weakened.
+operator_handoff: deploy the regenerated `n8n/wf_enrichment_cloud.json` and
+  `n8n/wf_backend_status_cloud.json` to n8n Cloud (needs the operator's `.env`, out of
+  scope for this session), bounce, and re-run Round B's mixed email/no-email chunk. This
+  is the first live proof of the fix (no live n8n access this session) — specifically
+  re-check that Natalie Waters (`351336543679`, an EXISTING contact) is no longer at risk
+  of duplicate creation via the `unchecked` fallback the operator's Claude worked around
+  off-SKILL during Round B.
+files_changed:
+  - n8n/code/nodeRunRecovery.js (new)
+  - scripts/build_cloud_workflows.py
+  - n8n/wf_enrichment_cloud.json
+  - n8n/wf_enrichment_local_live.json
+  - n8n/wf_backend_status_cloud.json
+  - tests/n8n/nodeRunRecovery.test.mjs (new)
+  - tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs (new)
+  - tests/n8n/personaGroupProducer.test.mjs
+  - tests/n8n/linkedinProducer.test.mjs
+  - tests/n8n/bareEventChainFlow.test.mjs
+  - tests/n8n/enabledResearchLaneFlow.test.mjs
