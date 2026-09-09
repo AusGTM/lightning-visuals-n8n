@@ -20,6 +20,23 @@ def _merged(row_id, **fields):
     return {"row_id": row_id, **fields}
 
 
+def _preview(rows, merge_report=None, responses=None, tier="high"):
+    """Phase 70 Plan 06 (D-70-11): the preview's per-row verdict is
+    `confidence.assess`'s now, so a render needs the RECOVERED rows to assess. The
+    tests below predate that and are about the RENDER — the row view, the sampling, the
+    statements — not about the gate, which `test_the_previews_send_count_is_the_dispatch
+    _sendable_count_itself` and its neighbours at the bottom of this file own. So they
+    default to a high-tier answer per row: the batch the gate passes, which is exactly
+    the batch each of these tests was written against.
+    """
+    if responses is None:
+        source = merge_report.rows if merge_report is not None else rows
+        responses = [_answer(row.get("row_id"), tier) for row in source
+                     if isinstance(row, dict) and row.get("row_id")]
+    return preingest.render_enriched_preview(rows, merge_report, responses=responses)
+
+
+
 # --------------------------------------------------------- per-row shape (behavior 1)
 
 
@@ -29,7 +46,7 @@ def test_every_row_shows_source_values_enriched_values_source_and_verdict():
         rows=(_merged("row-1", firstname="Amy", email="amy@x.com", jobtitle="CEO"),),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert result["adaptive"] is False
     entry = result["send_rows"][0]
@@ -47,7 +64,7 @@ def test_a_row_enrichment_added_nothing_to_carries_no_source_and_no_enriched_val
         rows=(_merged("row-1", firstname="Amy", email="amy@x.com"),),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     entry = result["send_rows"][0]
     assert entry["enriched_values"] == {}
@@ -56,7 +73,7 @@ def test_a_row_enrichment_added_nothing_to_carries_no_source_and_no_enriched_val
 
 def test_omitting_the_merge_report_renders_the_rows_as_their_own_merged_form():
     rows = [_row("row-1", firstname="Amy", email="amy@x.com")]
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
     entry = result["send_rows"][0]
     assert entry["enriched_values"] == {}
     assert entry["verdict"] == "SEND"
@@ -79,7 +96,7 @@ def test_the_verdict_comes_from_extraction_hold_emailless_never_a_second_predica
 
     monkeypatch.setattr(extraction, "hold_emailless", _hold_everything)
 
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
 
     assert result["send_count"] == 0
     assert result["held_count"] == 2
@@ -91,7 +108,7 @@ def test_a_real_emailless_row_is_held_by_the_real_predicate_with_no_stub():
     rows = [_row("row-1", firstname="Amy", email="amy@x.com"),
             _row("row-2", firstname="Ben", email="")]
 
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
 
     assert result["send_count"] == 1
     assert result["held_count"] == 1
@@ -117,7 +134,7 @@ def test_a_two_row_chunk_answered_with_one_item_puts_row_2_in_unanswered_never_h
         unanswered=(_unanswered_entry("row-2", _merged("row-2", firstname="Ben", email="ben@x.com")),),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert result["unanswered_count"] == 1
     assert {entry["row_id"] for entry in result["unanswered_rows"]} == {"row-2"}
@@ -136,7 +153,7 @@ def test_an_unanswered_row_with_no_email_is_never_held_for_it_the_live_bug_pinne
         unanswered=(_unanswered_entry("row-2", _merged("row-2", firstname="Ben")),),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert {entry["row_id"] for entry in result["held_rows"]} == set(), (
         "an unanswered row with no email must never land in held — the reason would "
@@ -153,7 +170,7 @@ def test_an_unanswered_row_with_a_source_email_is_still_unanswered_not_sent():
         unanswered=(_unanswered_entry("row-1", _merged("row-1", email="ben@x.com")),),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert result["unanswered_count"] == 1
     assert {entry["row_id"] for entry in result["send_rows"]} == set()
@@ -166,7 +183,7 @@ def test_no_entry_in_unanswered_rows_carries_the_no_email_reason():
         unanswered=(_unanswered_entry("row-1", _merged("row-1", firstname="Ben")),),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     for entry in result["unanswered_rows"]:
         assert "no usable email" not in entry["reason"]
@@ -185,14 +202,14 @@ def test_send_count_plus_held_count_plus_unanswered_count_equals_total():
         ),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert result["send_count"] + result["held_count"] + result["unanswered_count"] == result["total"]
 
 
 def test_a_batch_with_no_unanswered_rows_says_so_explicitly():
     rows = [_row("row-1", email="a@x.com")]
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
     assert result["unanswered_count"] == 0
     assert "No rows are unanswered" in result["unanswered_statement"]
 
@@ -208,7 +225,7 @@ def test_over_a_50_row_batch_with_12_held_rows_all_12_are_named_while_send_is_sa
         else:
             rows.append(_row(f"row-{i}", firstname=f"Person{i}", email=f"p{i}@x.com"))
 
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
 
     assert result["held_count"] == 12
     assert len(result["held_rows"]) == 12
@@ -231,7 +248,7 @@ def test_a_held_batch_larger_than_the_adaptive_threshold_still_names_every_row()
     silently dropped from the operator's view."""
     rows = [_row(f"row-{i}", email="") for i in range(1, 26)]
 
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
 
     assert result["held_count"] == 25
     assert len(result["held_rows"]) == 25
@@ -250,7 +267,7 @@ def test_an_unanswered_batch_larger_than_the_adaptive_threshold_still_names_ever
         ),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert result["unanswered_count"] == 25
     assert len(result["unanswered_rows"]) == 25
@@ -262,14 +279,14 @@ def test_an_unanswered_batch_larger_than_the_adaptive_threshold_still_names_ever
 
 def test_a_batch_where_nothing_is_held_says_so_explicitly():
     rows = [_row("row-1", email="a@x.com"), _row("row-2", email="b@x.com")]
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
     assert result["held_count"] == 0
     assert "No rows are held back" in result["held_statement"]
 
 
 def test_a_batch_where_everything_is_held_says_so_and_that_sending_writes_nothing():
     rows = [_row("row-1", email=""), _row("row-2", email="")]
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
     assert result["held_count"] == 2
     assert result["send_count"] == 0
     assert "All 2 rows" in result["held_statement"]
@@ -281,7 +298,7 @@ def test_a_batch_where_everything_is_held_says_so_and_that_sending_writes_nothin
 
 def test_the_result_states_nothing_has_reached_hubspot_yet():
     rows = [_row("row-1", email="a@x.com")]
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
     assert "reached HubSpot" in result["nothing_reached_hubspot"]
     assert "yet" in result["nothing_reached_hubspot"]
 
@@ -298,7 +315,7 @@ def test_merge_conflicts_are_surfaced_in_the_result():
         ),
     )
 
-    result = preingest.render_enriched_preview(rows, merge_report)
+    result = _preview(rows, merge_report)
 
     assert result["conflicts"] == (
         {"row_id": "row-1", "field": "jobtitle", "kept": "CEO", "provider_value": "COO"},
@@ -307,7 +324,7 @@ def test_merge_conflicts_are_surfaced_in_the_result():
 
 def test_no_merge_report_means_no_conflicts_reported():
     rows = [_row("row-1", email="amy@x.com")]
-    result = preingest.render_enriched_preview(rows)
+    result = _preview(rows)
     assert result["conflicts"] == ()
 
 
@@ -325,7 +342,103 @@ def test_render_enriched_preview_performs_no_network_call_and_writes_no_file(tmp
         rows=(_merged("row-1", firstname="Amy", email="amy@x.com", jobtitle="CEO"),),
         conflicts=({"row_id": "row-1", "field": "jobtitle", "kept": "x", "provider_value": "y"},),
     )
-    preingest.render_enriched_preview(rows, merge_report)
+    _preview(rows, merge_report)
 
     after = sorted(p.name for p in tmp_path.iterdir())
     assert before == after == []
+
+
+# =====================================================================================
+# Phase 70 Plan 06 Task 2 (D-70-11) — ONE per-row verdict, and it is
+# `confidence.assess`'s. Folded todo: 2026-09-09-enriched-preview-says-send-for-rows-
+# the-confidence-gate-holds.md — on run `2bc3617b` the preview said SEND for two rows
+# the confidence gate held `no_match`, the operator granted the write on that display,
+# and nothing was ingested.
+# =====================================================================================
+
+import confidence  # noqa: E402
+
+
+def _answer(row_id, tier, *, candidate_count=1):
+    """One `Build Response` item as `preingest.parse_outcome` reads it."""
+    return {
+        "row_id": row_id,
+        "outcome_contract_version": preingest.OUTCOME_CONTRACT_VERSION,
+        "match": {"tier": tier},
+        "candidate_count": candidate_count,
+    }
+
+
+def test_a_no_match_row_with_a_found_email_renders_held_never_sendable():
+    """The exact shape the folded todo found: enrichment DID find an email, and the
+    gate still holds the row because there is no existing record to confirm against
+    (D-61-03). Email presence is not a verdict."""
+    rows = [_row("row-1", firstname="Greg")]
+    merge_report = preingest.MergeResult(
+        rows=(_merged("row-1", firstname="Greg", email="greg@found.example"),),
+    )
+
+    preview_data = preingest.render_enriched_preview(
+        rows, merge_report, responses=[_answer("row-1", "none")])
+
+    assert preview_data["send_count"] == 0
+    assert [r["row_id"] for r in preview_data["held_rows"]] == ["row-1"]
+    held = preview_data["held_rows"][0]
+    assert held["hold_code"] == confidence.HOLD_NO_MATCH
+    assert "no match" in held["reason"].lower()
+
+
+def test_a_high_tier_row_with_an_email_renders_sendable():
+    rows = [_row("row-1", firstname="Amy")]
+    merge_report = preingest.MergeResult(
+        rows=(_merged("row-1", firstname="Amy", email="amy@x.com"),),
+    )
+
+    preview_data = preingest.render_enriched_preview(
+        rows, merge_report, responses=[_answer("row-1", "high")])
+
+    assert preview_data["send_count"] == 1
+    assert preview_data["held_rows"] == []
+
+
+def test_the_previews_send_count_is_the_dispatch_sendable_count_itself():
+    """D-70-11: an EQUALITY, not two computations that agree today. The preview renders
+    exactly what `partition_for_ingest` returns — the same function the dispatch step
+    calls to build its CSV — so there is no second predicate that can drift."""
+    rows = [_row("row-1"), _row("row-2"), _row("row-3")]
+    merged = (
+        _merged("row-1", email="amy@x.com"),        # high tier + email -> sendable
+        _merged("row-2", email="greg@found.example"),  # no match -> held
+        _merged("row-3"),                            # high tier, no email -> held
+    )
+    merge_report = preingest.MergeResult(rows=merged)
+    responses = [_answer("row-1", "high"), _answer("row-2", "none"),
+                 _answer("row-3", "high")]
+
+    preview_data = preingest.render_enriched_preview(rows, merge_report,
+                                                     responses=responses)
+    sendable, held = preingest.partition_for_ingest(list(merged), responses)
+
+    assert preview_data["send_count"] == len(sendable) == 1
+    assert preview_data["held_count"] == len(held) == 2
+
+
+def test_partition_for_ingest_holds_before_it_checks_the_email():
+    """A no-match row is held for NO_MATCH, never for the email — the reason the
+    operator reads has to be the one that actually withheld it."""
+    rows = [_merged("row-1")]  # no email AND no match
+
+    _, held = preingest.partition_for_ingest(rows, [_answer("row-1", "none")])
+
+    assert held[0]["hold_code"] == confidence.HOLD_NO_MATCH
+
+
+def test_partition_for_ingest_never_widens_the_hold_code_vocabulary():
+    """SAFE-01: the email hold is real, but it is not a confidence hold — it carries no
+    code rather than a new one, so `confidence.ALL_HOLD_CODES` stays closed."""
+    rows = [_merged("row-1")]
+
+    _, held = preingest.partition_for_ingest(rows, [_answer("row-1", "high")])
+
+    assert held[0]["hold_code"] is None
+    assert held[0]["reason"]

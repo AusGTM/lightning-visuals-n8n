@@ -194,7 +194,11 @@ COVERED = {
     (
         "enrich-before-ingest",
         (
-            "extraction.hold_emailless", "preingest.strip_enrichment_extras",
+            # Phase 70 Plan 06 (D-70-11): `partition_for_ingest` replaces
+            # `extraction.hold_emailless` at the head of this lane — ONE verdict,
+            # `confidence.assess` first and the email second, shared with the preview
+            # the operator granted the write on.
+            "preingest.partition_for_ingest", "preingest.strip_enrichment_extras",
             "extraction.strip_row_id", "extraction.write_dispatch_csv",
         ),
     ): "test_preingest_merge.py::test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv",

@@ -763,7 +763,12 @@ whatever seven columns happened to be in the source file.
    it:
 
    ```python
-   preview = preingest.render_enriched_preview(unmatched_rows, merge_report)
+   # `responses` is the SAME recovered list step 5 assessed — the preview's per-row
+   # verdict is `confidence.assess`'s own (D-70-11), so it cannot show a row as SEND
+   # that the dispatch step then holds. Omitting `responses` holds every row: a preview
+   # with no evidence never promises a write.
+   preview = preingest.render_enriched_preview(unmatched_rows, merge_report,
+                                               responses=responses)
    ```
 
    State explicitly, in your own words, that nothing here has reached HubSpot yet —
@@ -809,7 +814,12 @@ whatever seven columns happened to be in the source file.
    import extraction
    import preingest
 
-   sendable_rows, held = extraction.hold_emailless(merge_report.rows)
+   # D-70-11: ONE verdict. `partition_for_ingest` is what the preview above rendered,
+   # so `len(sendable_rows)` IS the `send_count` the operator granted the write on —
+   # by construction, not by two computations agreeing. It runs `confidence.assess`
+   # first and the email check second, so a no-match row is held for `no_match`, the
+   # signal that actually withheld it, never for an email the waterfall did find.
+   sendable_rows, held = preingest.partition_for_ingest(merge_report.rows, responses)
    # Kept row_id-bearing, separately from the CSV-bound copy below, so a pre-call
    # ceiling breach (see the dispatch block that follows) can still name these rows
    # individually in the remainder queue — `strip_row_id` below removes the join key

@@ -426,16 +426,25 @@ def test_write_dispatch_csv_still_raises_on_a_genuinely_unknown_key_after_the_st
 # below.
 def test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv(tmp_path):
     rows = _rows(2)
+    # Phase 70 Plan 06 (D-70-11): the lane's head is `partition_for_ingest` now, so the
+    # response items carry the match signals `confidence.assess` reads — both rows
+    # match high-tier here, and the SECOND is held on the email, exactly as before.
     responses = [
-        _response(rows[0]["row_id"], {"email": "amy@example.com", "seniority": "Director"}),
-        _response(rows[1]["row_id"], {}),  # no email supplied — this row is held
+        {**_response(rows[0]["row_id"],
+                     {"email": "amy@example.com", "seniority": "Director"}),
+         "outcome_contract_version": preingest.OUTCOME_CONTRACT_VERSION,
+         "match": {"tier": "high"}, "candidate_count": 1},
+        {**_response(rows[1]["row_id"], {}),  # no email supplied — this row is held
+         "outcome_contract_version": preingest.OUTCOME_CONTRACT_VERSION,
+         "match": {"tier": "high"}, "candidate_count": 1},
     ]
 
     merge_report = preingest.merge_enriched(rows, responses)
     assert merge_report.rows[0]["seniority"] == "Director"
-    sendable, held = extraction.hold_emailless(merge_report.rows)
+    sendable, held = preingest.partition_for_ingest(merge_report.rows, responses)
     assert len(sendable) == 1
     assert len(held) == 1
+    assert held[0]["hold_code"] is None, "held on the email, not on a confidence signal"
 
     sendable = preingest.strip_enrichment_extras(sendable)
     sendable = extraction.strip_row_id(sendable)

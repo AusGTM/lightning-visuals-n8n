@@ -981,7 +981,55 @@ def _unanswered_statement(total, unanswered_count):
     return f"{unanswered_count} of {total} rows are unanswered and will be re-requested."
 
 
-def render_enriched_preview(rows, merge_report=None):
+def partition_for_ingest(rows, responses=None) -> tuple:
+    """`(sendable, held)` — THE per-row verdict for the enriched batch, and the only one
+    (D-70-11, Phase 70 Plan 06).
+
+    Before this, the preview asked `extraction.hold_emailless` and the dispatch step
+    asked `confidence.assess` separately, and the two answered differently: on run
+    `2bc3617b` the preview showed two rows as SEND that the confidence gate held
+    `no_match`, the operator granted the write on that display, and nothing was
+    ingested (folded todo,
+    `.planning/todos/pending/2026-09-09-enriched-preview-says-send-for-rows-the-
+    confidence-gate-holds.md`). Two computations that happen to agree today are what
+    produced that defect, so both callers now call THIS, and the preview's send count is
+    the dispatch's sendable count by construction rather than by agreement.
+
+    ORDER IS LOAD-BEARING: `confidence.assess` first, the email second. A no-match row
+    with an email the waterfall just found is held for `no_match` — the signal that
+    actually withheld it — never for an email it does have.
+
+    `confidence.py` is untouched here: no hold code is added, no threshold moves
+    (SAFE-01). The email hold is real but is NOT a confidence hold, so it carries
+    `hold_code: None` rather than a new word, and `confidence.ALL_HOLD_CODES` stays
+    closed.
+
+    `responses` is the flat per-row list recovered from the settled execution
+    (`chunking.dispatch_and_recover(...)["rows"]`). A row with no response item parses
+    as `UNPARSEABLE_OUTCOME` and is held — the same fail-toward-the-hold rule
+    `parse_outcome` already holds, applied to a row the channel said nothing about.
+    """
+    outcomes = {}
+    for item in responses or []:
+        if isinstance(item, dict) and item.get("row_id") is not None:
+            outcomes[item["row_id"]] = parse_outcome(item)
+
+    confident, held = [], []
+    for row in rows:
+        verdict = confidence.assess(outcomes.get(row.get("row_id"), UNPARSEABLE_OUTCOME))
+        if verdict.verdict == confidence.CONFIDENT:
+            confident.append(row)
+        else:
+            held.append({"row": row, "hold_code": verdict.hold_code,
+                          "reason": verdict.reason})
+
+    sendable, no_email = extraction.hold_emailless(confident)
+    held.extend({"row": entry["row"], "hold_code": None, "reason": entry["reason"]}
+                for entry in no_email)
+    return sendable, held
+
+
+def render_enriched_preview(rows, merge_report=None, responses=None):
     """The post-enrichment, pre-ingest render (37-CONTEXT §5 step 6) — the
     operator's one look at exactly what will reach HubSpot before "arm the
     upload" can be spoken. Pure: no network, no file write, no config read.
@@ -990,12 +1038,12 @@ def render_enriched_preview(rows, merge_report=None):
     `MergeResult` `merge_enriched(rows, responses)` returned. When `merge_report`
     is omitted, `rows` are rendered as their own merged form (nothing enriched).
 
-    The SEND/HELD verdict is computed by calling `extraction.hold_emailless` over
-    the rows as they will actually be sent (the MERGED rows, since enrichment can
-    fill a previously-blank email) — never re-derived here. `write_dispatch_csv`
-    refuses on that exact same predicate; a second one in this render could
-    disagree with the gate, and the operator would grant the second arming on a
-    display that does not match what the gate actually does next. As of T-38-01
+    The SEND/HELD verdict is computed by calling `partition_for_ingest` over the rows
+    as they will actually be sent (the MERGED rows, since enrichment can fill a
+    previously-blank email) — never re-derived here. That is the SAME function the
+    dispatch step calls to build its CSV, so this render cannot show a row as SEND that
+    the gate then refuses (D-70-11). `responses` is the recovered per-row list; a row
+    the channel said nothing about is held, never sent. As of T-38-01
     the gate is asked only about rows the backend actually ANSWERED for — an
     unanswered row is partitioned out first, so this does not weaken the
     one-predicate guarantee: `hold_emailless` remains the sole source of the
@@ -1049,10 +1097,14 @@ def render_enriched_preview(rows, merge_report=None):
     # about the response.
     answered_rows = [row for row in merged_rows if row.get("row_id") not in unanswered_row_ids]
 
-    sendable, held = extraction.hold_emailless(answered_rows)
+    # D-70-11: ONE verdict, `partition_for_ingest`'s — the SAME function the dispatch
+    # step calls to build its CSV, so `send_count` below IS the dispatch sendable count
+    # rather than a second number that agrees with it today.
+    sendable, held = partition_for_ingest(answered_rows, responses)
 
     held_rows = [
-        {**_row_view(entry["row"]), "verdict": "HELD", "reason": entry["reason"]}
+        {**_row_view(entry["row"]), "verdict": "HELD", "reason": entry["reason"],
+         "hold_code": entry["hold_code"]}
         for entry in held
     ]
 

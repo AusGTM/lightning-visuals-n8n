@@ -301,8 +301,15 @@ def plan_chunks(spec, ceiling):
                 "No companies were given, so there is nothing to enrich and nothing to "
                 "plan. Name at least one company with its website domain."
             )
+        # [Rule 1 - Bug] `propose` was DROPPED here (found Phase 70 Plan 06 Task 2):
+        # `enrichment.build_envelope` reads it off the spec to stamp `mode: "propose"`
+        # request-level AND per-event, so a chunked enrich-proposal request arrived at
+        # the backend as a WRITE — `isReturnOnly()` false, the write-safety gate the
+        # only thing left between it and HubSpot. Carried per chunk, and only when set,
+        # so a plain companies plan's chunk shape is byte-identical to today's.
         chunks = tuple(
-            {"companies": list(companies[start:start + ceiling])}
+            {"companies": list(companies[start:start + ceiling]),
+             **({"propose": True} if spec.get("propose") else {})}
             for start in range(0, len(companies), ceiling)
         )
         return ChunkPlan(

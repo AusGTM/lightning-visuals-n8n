@@ -713,3 +713,116 @@ def test_classify_read_never_raises_on_any_input(tmp_path):
     assert written_records.classify_read("x", path=target) == written_records.ABSENT
     assert written_records.classify_read(None, path=target) == written_records.ABSENT
     assert written_records.classify_read({"unhashable": True}, path=target) == written_records.ABSENT
+
+
+# =====================================================================================
+# Phase 70 Plan 06 Task 2 (D-70-09) — the ledger records WRITES only. Folded todo:
+# 2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md — on run
+# `2bc3617b` the end-of-run report read `row-2 [contacts:unknown]: None -> failed` for
+# two rows that were never sent to the ingest lane at all (`SENDABLE=0`); the entries
+# came from the enrichment PROPOSE legs, which write nothing.
+#
+# The gate is CALLER DISCIPLINE, at `chunking.dispatch_and_recover`'s own append site —
+# not a new outcome taught to `append_chunk`. Restricting who calls the ledger is
+# smaller and more durable than widening what it can say.
+# =====================================================================================
+
+import chunking  # noqa: E402
+import pytest  # noqa: E402
+
+
+class _RecordingLedger:
+    """A ledger double that records every append — the only way to assert an append
+    that must NOT happen actually did not."""
+
+    def __init__(self):
+        self.appends = []
+
+    def __call__(self, run_id, chunk_index, rows, *args, **kwargs):
+        self.appends.append({"run_id": run_id, "chunk_index": chunk_index,
+                             "rows": rows})
+        return True
+
+
+def _recovered(rows):
+    return {"recovered": True, "responses": [dict(r) for r in rows], "run_data": {}}
+
+
+@pytest.fixture
+def ledger_double(monkeypatch):
+    ledger = _RecordingLedger()
+    monkeypatch.setattr(written_records, "append_chunk", ledger)
+    monkeypatch.setattr(chunking.written_records, "append_chunk", ledger)
+    return ledger
+
+
+@pytest.fixture
+def _stub_channel(monkeypatch):
+    import watch
+
+    def _install(rows):
+        monkeypatch.setattr(watch, "recover_dispatch",
+                            lambda *a, **k: _recovered(rows))
+
+    return _install
+
+
+_A_WRITTEN_ROW = {"row_id": "r1", "action": "update", "hs_object_id": "1001"}
+
+
+@pytest.mark.parametrize("spec_form", [
+    # a propose leg (a contacts `rows` form is pinned to mode: propose by construction)
+    {"rows": [{"row_id": "r1", "email": "a@b.com"}], "object_type": "contacts"},
+    # a match leg — the same propose-mode form the match pass sends
+    {"rows": [{"row_id": "r1", "firstname": "Amy", "lastname": "Adams",
+               "company": "Acme"}], "object_type": "contacts"},
+    # an enrich-proposal leg: companies, explicitly propose
+    {"companies": [{"name": "Acme", "domain": "acme.com"}], "propose": True},
+])
+def test_a_no_write_leg_never_enters_the_ledger(
+        spec_form, fake_config, stub_module_transport_factory, ledger_double,
+        _stub_channel):
+    _stub_channel([_A_WRITTEN_ROW])
+    plan = chunking.plan_chunks(spec_form, 10)
+
+    chunking.dispatch_and_recover(
+        plan, ["zoominfo"], True, fake_config,
+        transport=stub_module_transport_factory())
+
+    assert ledger_double.appends == [], (
+        "a leg that cannot write must never be recorded as one — that is how a row "
+        "that was never sent gets labelled `failed` in the end-of-run report"
+    )
+
+
+def test_a_write_leg_still_creates_its_ledger_entry(
+        fake_config, stub_module_transport_factory, ledger_double, _stub_channel):
+    _stub_channel([_A_WRITTEN_ROW])
+    plan = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 10)
+
+    chunking.dispatch_and_recover(
+        plan, ["zoominfo"], True, fake_config,
+        transport=stub_module_transport_factory())
+
+    assert len(ledger_double.appends) == 1
+    assert [row["row_id"] for row in ledger_double.appends[0]["rows"]] == ["r1"]
+
+
+def test_the_ingest_leg_still_creates_its_ledger_entry(
+        fake_config, tmp_path, ledger_double, stub_module_transport_factory,
+        monkeypatch):
+    """`dispatch.dispatch` is the ingest lane's write site and is unchanged by the
+    gate — its leg always writes."""
+    import dispatch as dispatch_module
+    import watch
+
+    monkeypatch.setattr(dispatch_module.written_records, "append_chunk", ledger_double)
+    monkeypatch.setattr(watch, "recover_dispatch",
+                        lambda *a, **k: _recovered([_A_WRITTEN_ROW]))
+    csv_path = tmp_path / "contacts.csv"
+    csv_path.write_text("email\na@b.com\n")
+
+    dispatch_module.dispatch(str(csv_path), True, fake_config,
+                             transport=stub_module_transport_factory().post)
+
+    assert len(ledger_double.appends) == 1
