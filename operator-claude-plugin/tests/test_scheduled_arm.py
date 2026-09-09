@@ -428,12 +428,14 @@ def _poisoned_body():
 def test_a_written_records_bookkeeping_failure_still_completes_the_cycle(
         armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory,
         tmp_path, monkeypatch):
-    """Test 1 — the integration test for the unattended path: run one FULL
-    `run_scheduled_arm_cycle` where the one chunk's bookkeeping fails (its response
-    poisons `written_records.append_chunk`). It must return a structured outcome dict
-    rather than raising, the dispatch must have completed (`outcome == "dispatched"`,
-    the disarm still ran), and the outcome must name the incomplete written-records
-    condition."""
+    """Test 1 — the integration test for the unattended path. Phase 70 Plan 03 Task 2
+    (D-70-07) retired `chunking.dispatch_plan`'s own `written_records` flush entirely
+    — the poisoned-body shape that used to trip `written_records.append_chunk` no
+    longer reaches any bookkeeping code at all, so the cycle completes with NOTHING
+    incomplete, even for this exact response shape. What this test still proves: the
+    cycle returns a structured outcome dict rather than raising, and the dispatch
+    completed (`outcome == "dispatched"`, the disarm still ran) regardless of the
+    response body's shape."""
     artifact = tmp_path / "written_records.json"
     monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
@@ -460,9 +462,8 @@ def test_a_written_records_bookkeeping_failure_still_completes_the_cycle(
 
     assert result["outcome"] == "dispatched"
     assert result["disarm"]["outcome"] == n8n_arming.DISARMED
-    assert result["records_incomplete"] is True
-    assert result["written_records_failures"][0]["chunk_index"] == 0
-    assert result["written_records_failures"][0]["reason"]
+    assert result["records_incomplete"] is False
+    assert list(result["written_records_failures"]) == []
 
 
 def test_the_incomplete_outcome_carries_the_dispatchs_run_id(

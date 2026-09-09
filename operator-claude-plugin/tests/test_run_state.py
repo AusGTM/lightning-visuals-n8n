@@ -434,7 +434,9 @@ def test_run_id_minted_before_submit_and_passed_into_dispatch_plan_rides_the_env
     Demonstrated here by minting first, registering the run's scope with the SAME id
     BEFORE dispatch_plan is ever called, then asserting dispatch_plan's own outcome
     carries that identical id back, and that the wire body (captured by the injected
-    transport) carries it too — the mechanism `Build Async Ack` reads server-side.
+    transport) carries it too — the mechanism `Build Ack` reads server-side (Phase 70
+    Plan 03 Task 2, D-70-07: renamed from `Build Async Ack`, and now unconditional —
+    `run_id` rides EVERY envelope, not only an opted-in one).
     """
     _point_at_a_fake_durable_home(monkeypatch, tmp_path)
 
@@ -445,12 +447,11 @@ def test_run_id_minted_before_submit_and_passed_into_dispatch_plan_rides_the_env
     transport = stub_module_transport_factory()
     outcome = chunking.dispatch_plan(
         plan, ["zoominfo"], True, fake_config, transport=transport,
-        run_id=run_id, async_ack=True,
+        run_id=run_id,
     )
 
     assert outcome.run_id == run_id, "dispatch_plan must echo the SAME id, never mint a second one"
     assert [call["json"]["run_id"] for call in transport.calls] == [run_id, run_id]
-    assert [call["json"]["async_ack"] for call in transport.calls] == [True, True]
 
     for index, chunk in enumerate(plan.chunks):
         run_state.mark_dispatched(run_id, [row["row_id"] for row in chunk["rows"]])
@@ -460,24 +461,27 @@ def test_run_id_minted_before_submit_and_passed_into_dispatch_plan_rides_the_env
     assert progress.total == 3
     assert progress.pending == 0
     assert progress.running == 3, (
-        "no row has a run_manifest verdict yet — the async ack returns before the "
-        "real work finishes, so every dispatched row reads as running, not done"
+        "no row has a run_manifest verdict yet — the ack returns before the real work "
+        "finishes, so every dispatched row reads as running, not done"
     )
     assert (progress.pending + progress.running + progress.done + progress.held
             + progress.failed) == progress.total
 
 
-def test_async_ack_false_by_default_leaves_the_envelope_byte_identical_to_today(
+def test_run_id_always_rides_the_envelope_even_when_the_caller_omits_it(
     monkeypatch, tmp_path, fake_config, stub_module_transport_factory,
 ):
-    """Every EXISTING caller of dispatch_plan omits async_ack — this must send neither
-    `run_id` nor `async_ack` on the wire, so no live behaviour changes for them."""
+    """Phase 70 Plan 03 Task 2 (D-70-07): `run_id` used to ride the envelope only under
+    the retired `async_ack` opt-in — every OTHER caller sent neither key. Now it rides
+    UNCONDITIONALLY (the server reads it on every request, and every leg's rows are
+    recovered from runData by this id), even when the caller passes no explicit
+    `run_id` at all — `dispatch_plan` mints one itself rather than leaving it absent."""
     _point_at_a_fake_durable_home(monkeypatch, tmp_path)
     plan = chunking.plan_chunks({"rows": _rows(2), "object_type": "contacts"}, 2)
     transport = stub_module_transport_factory()
 
-    chunking.dispatch_plan(plan, ["zoominfo"], True, fake_config, transport=transport)
+    outcome = chunking.dispatch_plan(plan, ["zoominfo"], True, fake_config, transport=transport)
 
     for call in transport.calls:
-        assert "run_id" not in call["json"]
-        assert "async_ack" not in call["json"]
+        assert call["json"]["run_id"] == outcome.run_id
+        assert call["json"]["run_id"] is not None

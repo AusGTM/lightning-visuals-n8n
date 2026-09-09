@@ -29,17 +29,20 @@ skip rule (D-11b) — telling "the backend rejected it" from "the backend timed 
 still working" is Phase 26's job, and conflating them here would either duplicate work or
 throw away the chunks that would have succeeded.
 
-5. A WRITTEN-RECORDS BOOKKEEPING FAILURE NEVER STOPS THE DISPATCH (D-59-10, operator,
-   2026-08-29). `written_records.append_chunk` can go short two ways — it can raise
-   `WrittenRecordsError`, or it can return a falsey result on an `OSError` — and BOTH are
-   caught in `dispatch_plan`'s loop, recorded, and the run keeps sending. This honours
-   D-59-06's shipped, operator-facing promise that once enrichment and writing start, the
-   run continues until done; the rejected alternative was aborting the dispatch on an
-   unrecordable write, which trades a known, reportable gap in the record for an unknown,
-   partial write state in HubSpot. The trade-off D-59-10 names explicitly: a run can now
-   finish with an INCOMPLETE written-records list, and that condition is surfaced loudly —
-   never swallowed — in `DispatchOutcome.written_records_failures`, and from there into
-   `scheduled_arm.py`'s outcome and exit code and both skills' relay to the operator.
+5. (RETIRED 2026-09-10, Phase 70 Plan 03 Task 2, D-70-07.) A WRITTEN-RECORDS
+   BOOKKEEPING FAILURE NEVER STOPS THE DISPATCH used to describe a `written_records.
+   append_chunk` flush inside `dispatch_plan`'s own loop (D-59-10, operator,
+   2026-08-29). That flush is DELETED WHOLE, not merely guarded further: the
+   server-side change that makes `Build Ack` the workflow's ONLY responder input means
+   this call's own synchronous `body` is ALWAYS just `{run_id, accepted, row_ids}`, for
+   every request — never a real per-row outcome — so trusting it for written-records
+   bookkeeping would be wrong on every call, not an edge case to guard. `dispatch_plan`
+   no longer touches `written_records` at all; `DispatchOutcome.written_records_
+   failures` stays on the dataclass for shape compatibility but is now always an empty
+   tuple. A caller's real outcome is recovered from runData via `watch.recover_dispatch`,
+   keyed on `run_id`. Left as a KNOWN, DEFERRED gap by this change: `run_report.py`'s
+   end-of-run report currently reads `written_records.load()` for entries this function
+   used to write — migrating it to runData is D-70-08's scope, not this one's.
 """
 import json
 import uuid
@@ -51,7 +54,6 @@ import requests
 import enrichment
 import remainder_queue
 import run_manifest
-import written_records
 from dispatch import DispatchError, NotArmedError
 
 CEILING_KEY = "max_records_per_chunk"
@@ -350,7 +352,7 @@ def _failure_reason(watcher):
 
 
 def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None,
-                   async_ack=False, scale_up=False, execution_ceiling=None):
+                   scale_up=False, execution_ceiling=None, **_ignored_legacy_kwargs):
     """Send every chunk of an approved plan, in plan order, one at a time.
 
     `armed` has NO default and is passed to each `dispatch_enrichment` call rather than
@@ -360,10 +362,13 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     place: an unsuccessful status, a transport exception including a timeout (D-11b), or
     an unreadable body where a readable one was expected.
 
-    `run_id` names the D-59-07 written-records artifact this run flushes into, per
-    chunk (see `written_records.py`). Keyword-only so an existing positional caller is
-    unaffected; when omitted, one is generated (`uuid.uuid4().hex`) so every dispatch
-    still gets the artifact without every call site naming a run of its own. This
+    `run_id` (Phase 61 Plan 05 Task 2; generalised Phase 70 Plan 03 Task 2, D-70-07) is
+    the caller's own client-minted handle. It ALWAYS rides the envelope now — the
+    backend reads it unconditionally (`Parse HubSpot Event`) and every leg's rows are
+    recovered from runData by this id (`watch.recover_dispatch`, landed 70-02), not from
+    this call's own synchronous response. Keyword-only so an existing positional caller
+    is unaffected; when omitted, one is generated (`uuid.uuid4().hex`) so every dispatch
+    still gets a correlatable id without every call site naming a run of its own. This
     function stays deliberately GRANT-UNAWARE — no per-chunk revocation hook is added
     here (D-59-06/GRANT-05: revocation bites on the next send, not mid-run; see
     `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`). A BUDGET stop is a
@@ -371,6 +376,12 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     it consults a plain number (`execution_ceiling`) it is handed, never a grant object,
     and the grant-close it enables happens in the CALLER, through
     `write_grant.record_dispatch_outcome` — never here.
+
+    `**_ignored_legacy_kwargs` (Phase 70 Plan 03 Task 2, D-70-07): the retired early-ack
+    opt-in this function used to accept (and any other stale keyword a caller has not
+    yet stopped passing) is swallowed here rather than rejected — "a caller that still
+    passes it is ignored, not rejected", so a stale caller degrades to the new
+    behaviour instead of erroring on a `TypeError`.
 
     `execution_ceiling` (Phase 57, D-57-01), keyword-only, defaults to `None`: today's
     behaviour, byte-identical envelope, byte-identical `DispatchOutcome` with
@@ -389,38 +400,34 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     `ceiling_stop` stays `None`; that one shape is genuinely unbounded by this mechanism,
     not silently guessed at.
 
-    `async_ack` (Phase 61 Plan 05 Task 2, REVIEW-C14, substrate 1 of
-    61-SPIKE-VERDICT.md — see `run_state.py`'s module docstring for why substrate 1 was
-    chosen over substrate 3 for this plan): keyword-only, defaults to `False`, so every
-    existing caller sends the byte-identical envelope it sends today. When `True`, this
-    run's already-minted `run_id` (the SAME one the caller is about to pass, or has
-    passed, to `run_state.start_run` — never a second id) rides the envelope as
-    `run_id`/`async_ack: true`, which `Parse HubSpot Event` (the n8n side,
-    `scripts/build_cloud_workflows.py`) reads to fan an immediate ack to `Respond to
-    Webhook` alongside the unchanged full chain. This does not change what `dispatch_plan`
-    itself waits for — the caller's own transport still returns synchronously from this
-    call exactly as it does today; what changes is how FAST the real backend's response
-    arrives once `async_ack` is honoured server-side, which is not observable from an
-    injected test transport and is proven live at this plan's own checkpoint, not here.
-    F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): also means this
-    chunk's `written_records.append_chunk` flush is SKIPPED — the synchronous `body` is
-    just the ack, never a real per-row outcome, and flushing it produced a bogus
-    `action: null` entry (see the guard at the call site below).
-
     `scale_up` (Phase 61 Plan 06 Task 5, T-61-25, substrate-3 of 61-SPIKE-VERDICT.md — see
     `scripts/build_cloud_workflows.py`'s `SCALE_UP_MAX_FAN_DEPTH`/`ENRICH_BUILD_SCALE_UP_
     FAN_OUT` for the n8n-side mechanism): keyword-only, defaults to `False`, so every
     existing caller sends the byte-identical envelope it sends today. When `True`, rides
-    the envelope as `scale_up: true` — the SAME opt-in-flag idiom `async_ack` already
-    established one Task ago, "a pattern, not an invention." THERE IS NO `fan_depth`
-    PARAMETER HERE, DELIBERATELY: the depth bound this feature's safety rests on
-    (T-61-25) is a workflow-internal counter this workflow's OWN "Build Scale Up Fan-Out"
-    node owns and increments — the client has no knob to request a depth, and cannot ask
-    for one, structurally (see
+    the envelope as `scale_up: true` — the SAME opt-in-flag idiom `recompute` already
+    established, "a pattern, not an invention." THERE IS NO `fan_depth` PARAMETER HERE,
+    DELIBERATELY: the depth bound this feature's safety rests on (T-61-25) is a
+    workflow-internal counter this workflow's OWN "Build Scale Up Fan-Out" node owns
+    and increments — the client has no knob to request a depth, and cannot ask for one,
+    structurally (see
     `test_scale_up_runtime.py::test_dispatch_plan_has_no_depth_parameter_to_forge`).
 
-    A written-records bookkeeping failure (D-59-10) never stops this loop either — see
-    fact 5 in the module docstring and the guard around `append_chunk` below.
+    D-70-07 (Phase 70 Plan 03 Task 2): this function no longer flushes `body` into
+    `written_records` at all — the sync-body-trusting branch it used to take, skipped
+    only for an opted-in early-ack request, is DELETED whole, because the server-side
+    change that retired that opt-in (`Build Ack` is now the workflow's ONLY responder
+    input, unconditionally) means `body` is ALWAYS just `{run_id, accepted, row_ids}`
+    for EVERY call, never a real per-row outcome — the exact bogus-entry failure mode
+    F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09) already proved live
+    for the async case is now universal, so the guard that used to skip it there now
+    always applies. `written_records_failures` stays on `DispatchOutcome` for shape
+    compatibility but is now always an empty tuple — no consumer's field goes missing,
+    it simply never has anything to report. A caller's real outcome is recovered
+    separately via `watch.recover_dispatch`, keyed on `run_id`, never through this
+    artifact. `run_report.py`'s end-of-run report, which currently reads
+    `written_records.load()` for entries THIS function used to write, is a KNOWN,
+    DEFERRED gap this change opens — migrating it to read runData instead is D-70-08's
+    scope, not this plan's; recorded in 70-03-SUMMARY.md, not silently papered over here.
     """
     if run_id is None:
         run_id = uuid.uuid4().hex
@@ -490,9 +497,10 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         watcher = _StatusCapturingTransport(transport)
         try:
             envelope = enrichment.build_envelope(chunk, providers)
-            if async_ack:
-                envelope["run_id"] = run_id
-                envelope["async_ack"] = True
+            # D-70-07: always rides the envelope now — the server reads it
+            # unconditionally, and every leg's rows are recovered from runData by this
+            # id, not from this call's own synchronous response.
+            envelope["run_id"] = run_id
             if scale_up:
                 envelope["scale_up"] = True
             body = enrichment.dispatch_enrichment(envelope, armed, config, transport=watcher)
@@ -521,54 +529,11 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
             ChunkResult(index=index, rows=rows, ok=reason is None, reason=reason)
         )
         responses.append(body)
-        # D-59-07: flushed INLINE, immediately after the line above, never assembled
-        # after the loop. `DispatchOutcome` is built in one statement once the
-        # loop completes, so a crash of the calling process between this chunk and the
-        # next would lose everything the loop had accumulated if this call moved out of
-        # the loop — that is the exact partial-run guarantee this artifact exists for.
-        #
-        # D-59-10 (operator, 2026-08-29): a bookkeeping failure here must never stop
-        # the dispatch — this is the ONE guard covering BOTH ways the written-records
-        # list can go short. `append_chunk` is documented to return a falsey result on
-        # an `OSError` rather than raising (T-59-04) — checked below. It can ALSO
-        # raise `WrittenRecordsError` for a shape or forbidden-name problem in the
-        # response body (a defect in the DATA, not the environment, so `append_chunk`
-        # itself does not decide whether to continue) — caught below. Guarding only
-        # the exception would leave the falsey-return path open, which is exactly the
-        # live silent-short-artifact class D-59-10 names; guarding only the exception
-        # would repeat that mistake. Neither path touches this chunk's own
-        # `ChunkResult` (already appended above) or `failed_chunks`: a bookkeeping miss
-        # is not a dispatch failure, and the HubSpot write for this chunk may already
-        # have landed.
-        #
-        # F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): skipped
-        # entirely when `async_ack` is True. `body` here is then deterministically
-        # `Build Async Ack`'s own race-winning output — `{run_id, accepted, row_id}`,
-        # never a real per-row outcome (see this function's own `async_ack` docstring
-        # paragraph: "Build Async Ack wins the race... every time"). `written_records`
-        # exists to record what was ACTUALLY WRITTEN (its own module docstring); an
-        # async-ack'd chunk's real outcome is recovered separately via
-        # `watch.recover_async_dispatch` and was never re-flushed into this artifact
-        # either way, so flushing the ack body here only ever produced a bogus
-        # `action: null / outcome: failed` entry for whichever row happened to be
-        # first in the chunk — confirmed live, run 377a913c1c9d49129663c6c8740f436d.
-        # Skipping is a deliberate no-op, never a bookkeeping FAILURE: nothing was
-        # attempted, so nothing went short.
-        if not async_ack:
-            try:
-                flushed = written_records.append_chunk(run_id, index, body)
-            except written_records.WrittenRecordsError as e:
-                flushed = False
-                bookkeeping_reason = str(e)
-            else:
-                bookkeeping_reason = (
-                    None if flushed
-                    else "the written-records artifact could not be saved (an I/O failure)"
-                )
-            if not flushed:
-                written_records_failures.append(
-                    {"chunk_index": index, "reason": bookkeeping_reason}
-                )
+        # D-70-07 (Phase 70 Plan 03 Task 2): the `written_records.append_chunk` flush
+        # that used to run here is DELETED — see this function's own docstring for why
+        # `body` can never carry a real per-row outcome anymore, for ANY call. Nothing
+        # is appended to `written_records_failures` either; it stays an always-empty
+        # tuple below, for `DispatchOutcome` shape compatibility only.
         if reason is not None:
             failed_chunks.append(chunk)
 

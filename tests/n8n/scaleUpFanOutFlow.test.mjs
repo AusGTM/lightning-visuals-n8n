@@ -58,14 +58,18 @@ function targetsOf(nodeName, branchIndex = 0) {
 test("wiring: Parse HubSpot Event's first target is now IF Scale Up Route, not IF Object Type Supported directly", () => {
   assert.deepEqual(
     new Set(targetsOf("Parse HubSpot Event")),
-    // Phase 70 Plan 03 (D-70-01): two more unconditional fan targets off this SAME
-    // single-producer node — the recompute-mode starved-lane sentinel pair, read the
-    // same request-level way "IF Company Recompute" itself reads `recompute`. Fed
-    // from "Parse HubSpot Event" (not "IF Scale Up Route") deliberately: `recompute`
-    // is a request-level flag independent of `scale_up`, so both sentinels must see
-    // every request, fanned or not.
-    new Set(["IF Scale Up Route", "Credit Request", "Build Async Ack",
-             "Recompute Not Requested Sentinel", "Recompute Requested Sentinel"]),
+    // Phase 70 Plan 03 Task 2 (Rule 1 fix — a scale_up=true walker probe stalled
+    // "Decide Company Action Merge"): the recompute-mode starved-lane sentinel pair
+    // moved OFF this node onto "IF Scale Up Route"'s false lane (see that test below)
+    // — they used to fire even when scale_up=true (this node still runs then), feeding
+    // one merge input while the OTHER input the same merge needs never fires at all.
+    // "Build Ack" (renamed from "Build Async Ack", Task 2, D-70-07) keeps its own
+    // unconditional edge here — it is now the SOLE responder input and must see every
+    // request, fanned or not. "Refusal Row Absent Sentinel" is the new starved-lane
+    // marker for "Build Response Merge"'s eleventh input (Build Refusal Row's), guarded
+    // on `scale_up !== true` so it stays silent when the fan-out's own dispatch
+    // confirmation is the real content instead.
+    new Set(["IF Scale Up Route", "Credit Request", "Build Ack", "Refusal Row Absent Sentinel"]),
   );
 });
 
@@ -75,10 +79,13 @@ test("wiring: IF Scale Up Route's FALSE lane reaches IF Object Type Supported �
   // sentinels, which read `object_type` off the same rows and stay silent unless a
   // whole branch (contacts/companies/unsupported) is absent from the batch. "IF
   // Object Type Supported" itself is untouched — same edge, same index.
+  // Phase 70 Plan 03 Task 2 (Rule 1 fix): the recompute-mode sentinel pair moved HERE
+  // from "Parse HubSpot Event" — see the test above for why.
   assert.deepEqual(
     new Set(targetsOf("IF Scale Up Route", 1)),
     new Set(["IF Object Type Supported", "Contacts Absent Sentinel",
-             "Companies Absent Sentinel", "Unsupported Absent Sentinel"]),
+             "Companies Absent Sentinel", "Unsupported Absent Sentinel",
+             "Recompute Not Requested Sentinel", "Recompute Requested Sentinel"]),
   );
 });
 
@@ -86,14 +93,18 @@ test("wiring: IF Scale Up Route's TRUE lane feeds the fan-out chain, never the b
   assert.deepEqual(targetsOf("IF Scale Up Route", 0), ["Build Scale Up Fan-Out"]);
 });
 
-test("wiring: Build Scale Up Fan-Out -> Dispatch Self -> Build Scale Up Ack -> Respond to Webhook", () => {
+test("wiring: Build Scale Up Fan-Out -> Dispatch Self -> Build Scale Up Ack -> Build Refusal Row", () => {
+  // Phase 70 Plan 03 Task 2 (D-70-07): the dispatch confirmation used to race
+  // "Respond to Webhook" directly (a body-borne status). It now feeds "Build Refusal
+  // Row", which lands it as a ROW on the sole channel instead — "Build Ack" (fed
+  // unconditionally from "Parse HubSpot Event" above) is what answers this request.
   assert.deepEqual(targetsOf("Build Scale Up Fan-Out"), ["Dispatch Self"]);
   assert.deepEqual(targetsOf("Dispatch Self"), ["Build Scale Up Ack"]);
-  assert.deepEqual(targetsOf("Build Scale Up Ack"), ["Respond to Webhook"]);
+  assert.deepEqual(targetsOf("Build Scale Up Ack"), ["Build Refusal Row"]);
 });
 
-test("wiring: Build Response still feeds Respond to Webhook unchanged — the fan-out path races it, never replaces it", () => {
-  assert.ok(targetsOf("Build Response").includes("Respond to Webhook"));
+test("wiring: Build Response no longer feeds Respond to Webhook — Build Ack is the sole responder input (D-70-07)", () => {
+  assert.ok(!targetsOf("Build Response").includes("Respond to Webhook"));
 });
 
 test("Dispatch Self is a detached self-reference: waitForSubWorkflow=false, references this workflow's own name/id", () => {
@@ -198,17 +209,21 @@ test("Build Scale Up Fan-Out: fan_depth already at the ceiling never fans, regar
 // --- Build Scale Up Ack -----------------------------------------------------------------
 
 test("Build Scale Up Ack: reports dispatch, never a business outcome", () => {
-  const [ack] = runBuildScaleUpAck([{ run_id: "run-1" }]);
-  assert.deepEqual(ack, { scale_up_dispatched: true, run_id: "run-1" });
+  // Phase 70 Plan 03 Task 2 (D-70-07): now also carries `row_id` — "Dispatch Self" is
+  // passthrough, so the dispatched child's own row_id survives on `it.json`, and
+  // "Build Refusal Row" (the sole downstream consumer now) needs it to shape a
+  // correlatable row.
+  const [ack] = runBuildScaleUpAck([{ run_id: "run-1", row_id: "row-1" }]);
+  assert.deepEqual(ack, { scale_up_dispatched: true, run_id: "run-1", row_id: "row-1" });
 });
 
-test("Build Scale Up Ack: a missing run_id reads as null, never a missing key or a thrown error", () => {
+test("Build Scale Up Ack: a missing run_id/row_id reads as null, never a missing key or a thrown error", () => {
   const [ack] = runBuildScaleUpAck([{}]);
-  assert.deepEqual(ack, { scale_up_dispatched: true, run_id: null });
+  assert.deepEqual(ack, { scale_up_dispatched: true, run_id: null, row_id: null });
 });
 
 test("Build Scale Up Ack: acks every dispatched child, not just the first (same Rule 1 fix)", () => {
-  const acks = runBuildScaleUpAck([{ run_id: "run-1" }, { run_id: "run-1" }]);
+  const acks = runBuildScaleUpAck([{ run_id: "run-1", row_id: "a" }, { run_id: "run-1", row_id: "b" }]);
   assert.equal(acks.length, 2);
   assert.ok(acks.every((a) => a.scale_up_dispatched === true));
 });

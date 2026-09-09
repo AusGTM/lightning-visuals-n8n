@@ -161,7 +161,7 @@ ALL_OUTCOMES = frozenset({
 # happened, and is resolved via `ACTION_TO_OUTCOME` below instead.
 WRITE_ACTIONS = frozenset({"update", "enrich", "create"})
 
-# The six non-write actions the backend actually emits (scripts/build_cloud_workflows.py),
+# The non-write actions the backend actually emits (scripts/build_cloud_workflows.py),
 # mapped to their outcome word. An action in neither this table nor `WRITE_ACTIONS`
 # resolves to `FAILED` — a value this module has never seen is a thing to look at, and
 # calling it a no-action would be a silent success.
@@ -173,6 +173,14 @@ ACTION_TO_OUTCOME = {
     "recompute_refused": FAILED,
     "skip": NO_ACTION,
     "proposed": NO_ACTION,
+    # Phase 70 Plan 03 Task 2 (D-70-07): "Build Refusal Row"'s two shapes, now reachable
+    # via runData like every other terminal. `scale_up_dispatched` did nothing HERE —
+    # the row was handed to a self-fanned child execution, the identical rationale
+    # `skip`/`proposed` already use for NO_ACTION. `list_expansion_refused` is a
+    # whole-request refusal before any row was even attempted — nothing was enriched,
+    # the same bucket `research_failed`/`recompute_refused` already resolve to.
+    "scale_up_dispatched": NO_ACTION,
+    "list_expansion_refused": FAILED,
 }
 
 # The review endpoint's seven outcome words (review_decision.OUTCOMES), mapped onto
@@ -476,17 +484,24 @@ def append_chunk(run_id, chunk_index, body, path=None, *, classify=classify_item
     written-records document — this chunk's entries appended to whatever `run_id`'s file
     already held — through `durable_paths._atomic_write_0600`.
 
-    Three call sites, all at the write itself, never in a caller (written-records-misses-write,
-    debug session 2026-08-29 — the gap this docstring used to name only one of them left open):
-    `chunking.dispatch_plan`'s per-chunk loop, INSIDE it immediately after
-    `responses.append(body)` (`chunk_index` is the loop index; see the call site there for why
-    moving this call out of the loop breaks D-59-07's partial-run guarantee); `dispatch.dispatch`
-    (`chunk_index` is always `0` — that function sends exactly one request); and
-    `review_decision.submit_decision` (D-60-08, Phase 60 — `chunk_index` is likewise always `0`,
-    exactly as `dispatch.dispatch`'s own, because that function also sends exactly one request
-    per decision). Entries accumulate across decisions the same way they accumulate across
-    dispatch chunks: a document already at this path is always this run's own earlier writes
-    (D-59-09) — a review call site never needs to reason about that separately.
+    TWO call sites remain, both at the write itself, never in a caller
+    (written-records-misses-write, debug session 2026-08-29): `dispatch.dispatch`
+    (`chunk_index` is always `0` — that function sends exactly one request) and
+    `review_decision.submit_decision` (D-60-08, Phase 60 — `chunk_index` is likewise
+    always `0`, exactly as `dispatch.dispatch`'s own, because that function also sends
+    exactly one request per decision). Entries accumulate across decisions the same
+    way they accumulate across dispatch chunks: a document already at this path is
+    always this run's own earlier writes (D-59-09) — a review call site never needs to
+    reason about that separately.
+
+    `chunking.dispatch_plan`'s own per-chunk call site — INSIDE its loop, immediately
+    after `responses.append(body)` — was RETIRED whole by Phase 70 Plan 03 Task 2
+    (D-70-07): the server-side change that makes `Build Ack` the workflow's only
+    responder input means that function's own `body` is ALWAYS just the ack shape now
+    (`{run_id, accepted, row_ids}`), never a real per-row outcome, so there is nothing
+    left there for this function to classify correctly. `dispatch_plan` no longer
+    imports or calls this module at all; a caller's real outcome is recovered from
+    runData via `watch.recover_dispatch` instead.
 
     `classify`, keyword-only, defaults to `classify_item` — the dispatch-response shape every
     existing caller already uses. `review_decision.submit_decision` passes

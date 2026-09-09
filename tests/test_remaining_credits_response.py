@@ -178,6 +178,11 @@ BUILD_RESPONSE_SOURCES = {
     # Validate Research Output / Merge Company / Decide Company Action as if it were real
     # data. Extends the expected set again; exact equality is preserved.
     ("Build Research Failure Response", 0),
+    # Phase 70 Plan 03 Task 2 (D-70-07): the ELEVENTH input, added via
+    # `_append_merge_input` after this merge was already sized to the ten above —
+    # carries a list-expansion refusal or a scale-up dispatch confirmation, both
+    # mutually exclusive with the other ten firing at all this execution.
+    ("Build Refusal Row", 0),
 }
 
 
@@ -186,10 +191,10 @@ def test_build_response_is_reachable_from_every_terminal_branch():
     IF-enrich-false lanes, the unsupported terminal and the companies skip terminal must
     ALSO feed Build Response.
 
-    Phase 70 Plan 03 (D-70-01): all ten terminals now converge on "Build Response Merge"
-    first, which is "Build Response"'s own sole inbound edge — the ten real sources are
-    checked one level further back, against the Merge, rather than against "Build
-    Response" directly."""
+    Phase 70 Plan 03 (D-70-01): all eleven terminals now converge on "Build Response
+    Merge" first, which is "Build Response"'s own sole inbound edge — the eleven real
+    sources are checked one level further back, against the Merge, rather than against
+    "Build Response" directly."""
     doc = _load()
     assert _inbound_edges(doc, "Build Response") == [("Build Response Merge", 0)]
     merge_edges = {(src, idx) for (src, idx) in _inbound_edges(doc, "Build Response Merge")
@@ -201,9 +206,16 @@ def test_build_response_is_reachable_from_every_terminal_branch():
 
 
 def test_build_response_feeds_respond_to_webhook():
+    """Phase 70 Plan 03 Task 2 (D-70-07): "Build Response" is now a terminal leaf with
+    NO outgoing connection at all — the caller reads its output from runData, never the
+    HTTP response body. "Build Ack" is the sole producer "Respond to Webhook" hears
+    from."""
     doc = _load()
-    targets = [e["node"] for b in doc["connections"]["Build Response"]["main"] for e in b]
-    assert targets == ["Respond to Webhook"]
+    spec = doc["connections"].get("Build Response")
+    targets = [e["node"] for b in (spec or {}).get("main", []) for e in b]
+    assert targets == []
+    ack_targets = [e["node"] for b in doc["connections"]["Build Ack"]["main"] for e in b]
+    assert ack_targets == ["Respond to Webhook"]
     node = _node(doc, "Respond to Webhook")
     assert node["type"] == "n8n-nodes-base.respondToWebhook"
 

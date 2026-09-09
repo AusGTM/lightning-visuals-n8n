@@ -7,8 +7,8 @@ injected transport, no live n8n/HubSpot/Anthropic call anywhere in it:
 
 1. `chunking.dispatch_plan`'s `scale_up` keyword defaults to `False` and, when omitted or
    `False`, sends the byte-identical envelope every existing caller sends today (mirrors
-   61-05's own async_ack precedent, which this plan's own docstring calls "a pattern, not
-   an invention").
+   the `recompute` opt-in precedent, which this plan's own docstring calls "a pattern,
+   not an invention").
 2. There is NO client-side depth knob to forge. `dispatch_plan` accepts `scale_up` only —
    never a `fan_depth`/`depth` parameter — so a caller cannot manufacture the trust the
    n8n-side depth counter is built to withhold (`scripts/build_cloud_workflows.py`'s
@@ -57,13 +57,21 @@ def test_scale_up_defaults_to_false(fake_config, stub_module_transport_factory):
 def test_omitting_scale_up_sends_the_byte_identical_envelope_every_existing_caller_sends_today(
     fake_config, stub_module_transport_factory
 ):
+    # Phase 70 Plan 03 Task 2 (D-70-07): `run_id` now rides EVERY envelope
+    # unconditionally (it used to ride only under the retired `async_ack` opt-in), so
+    # both calls are pinned to the SAME explicit `run_id` — otherwise each call's own
+    # freshly-minted id would make the two envelopes differ for a reason unrelated to
+    # `scale_up`, the one thing this test means to isolate.
     with_flag_omitted = stub_module_transport_factory()
-    chunking.dispatch_plan(_one_chunk_plan(), PROVIDERS, True, fake_config, transport=with_flag_omitted)
+    chunking.dispatch_plan(
+        _one_chunk_plan(), PROVIDERS, True, fake_config, transport=with_flag_omitted,
+        run_id="fixed-run-id",
+    )
 
     with_flag_false = stub_module_transport_factory()
     chunking.dispatch_plan(
         _one_chunk_plan(), PROVIDERS, True, fake_config, transport=with_flag_false,
-        scale_up=False,
+        run_id="fixed-run-id", scale_up=False,
     )
 
     assert with_flag_omitted.calls[0]["json"] == with_flag_false.calls[0]["json"]
@@ -76,12 +84,17 @@ def test_omitting_scale_up_sends_the_byte_identical_envelope_every_existing_call
 def test_scale_up_true_adds_exactly_one_key_to_the_envelope_and_changes_nothing_else(
     fake_config, stub_module_transport_factory
 ):
+    # Same `run_id` pin as above, for the same reason.
     off = stub_module_transport_factory()
-    chunking.dispatch_plan(_one_chunk_plan(), PROVIDERS, True, fake_config, transport=off)
+    chunking.dispatch_plan(
+        _one_chunk_plan(), PROVIDERS, True, fake_config, transport=off,
+        run_id="fixed-run-id",
+    )
 
     on = stub_module_transport_factory()
     chunking.dispatch_plan(
         _one_chunk_plan(), PROVIDERS, True, fake_config, transport=on, scale_up=True,
+        run_id="fixed-run-id",
     )
 
     off_envelope = off.calls[0]["json"]

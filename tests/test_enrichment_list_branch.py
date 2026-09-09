@@ -98,11 +98,14 @@ def assert_branch_wiring(doc):
     assert _outbound(doc, "HubSpot List Memberships") == [["Expand List To Events"]]
     assert _outbound(doc, "Expand List To Events") == [["IF List Expanded"]]
 
-    # Success re-enters the ordinary path; a refusal reaches the caller as a response
-    # rather than dangling.
+    # Success re-enters the ordinary path; a refusal (Phase 70 Plan 03 Task 2, D-70-07)
+    # now reaches the caller via TWO parallel targets instead of a direct answer:
+    # "Build Ack" (the sole responder input — "Parse HubSpot Event" never ran this
+    # execution, so this is the only producer that can answer it) and "Build Refusal
+    # Row" (so the reason lands as a ROW at "Build Response" rather than the body).
     assert _outbound(doc, "IF List Expanded") == [
         ["Parse HubSpot Event"],
-        ["Respond to Webhook"],
+        ["Build Ack", "Build Refusal Row"],
     ]
 
     # The parser is fed by exactly these three lanes and nothing else. fix(40) /

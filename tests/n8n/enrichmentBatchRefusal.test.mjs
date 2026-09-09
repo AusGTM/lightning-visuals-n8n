@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { walkWorkflow, loadWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
@@ -128,4 +129,96 @@ test("a typo mode (\"proprose\"), 3 events: accepted — unrecognised mode gets 
   const rows = runParseHubSpotEvent({ mode: "proprose", events: makeEvents(3) });
   assert.equal(rows.length, 3);
   for (const r of rows) assert.notEqual(r.outcome, "refused");
+});
+
+// =============================================================================================
+// Phase 70 Plan 03 Task 2 (D-70-07) — walker-driven: each of the four body-borne refusal/
+// status shapes now reaches "Build Response" as a ROW instead of the HTTP body, while
+// "Respond to Webhook" still fires exactly once with the ack shape
+// `{run_id, accepted, row_ids}`. Drives the COMMITTED workflow through
+// tests/n8n/lib/walkWorkflow.mjs — the same interpreter enrichmentConvergenceMerge.test.mjs
+// uses — never a live n8n/HubSpot call.
+// =============================================================================================
+
+function loadWf() {
+  return loadWorkflow(WF_PATH);
+}
+
+function assertAckOnlyResponse(trace, { runId = null } = {}) {
+  assert.deepEqual(trace.stalled, []);
+  assert.equal(trace.respondSuppressed.length, 0, "the responder must fire exactly once");
+  assert.ok(trace.respond, "the responder must fire at all");
+  const [ack] = trace.respond.items;
+  assert.equal(ack.accepted, true);
+  assert.equal(ack.run_id, runId);
+  assert.ok(Array.isArray(ack.row_ids));
+}
+
+test("unsupported object type: the refusal reaches Build Response as a row, and the responder still answers with the ack only", () => {
+  const wf = loadWf();
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { run_id: "case-unsupported", events: [
+      { objectId: "1", objectType: "deal", row_id: "row-1" },
+    ] } }],
+    httpStubs: {},
+  });
+  assertAckOnlyResponse(trace, { runId: "case-unsupported" });
+  const rows = nodeItems(runData, "Build Response");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].object_type, "unsupported");
+  assert.equal(rows[0].row_id, "row-1");
+});
+
+test("recompute_refused: a recompute request resolving to no existing company reaches Build Response as a row, and the responder still answers with the ack only", () => {
+  const wf = loadWf();
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { run_id: "case-recompute", events: [
+      { objectId: "1", objectType: "company", domain: "nowhere.example", recompute: true, row_id: "row-1" },
+    ] } }],
+    httpStubs: {
+      "HubSpot Company Search": [{ results: [] }],
+      "HubSpot Company Name Search": [{ results: [] }],
+    },
+  });
+  assertAckOnlyResponse(trace, { runId: "case-recompute" });
+  const rows = nodeItems(runData, "Build Response");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].action, "recompute_refused");
+  assert.ok(rows[0].reason, "the top-level reason hoist (D-70-07) must be populated");
+});
+
+test("list-expansion refusal: the reason reaches Build Response as a row, and the responder still answers with the ack only", () => {
+  const wf = loadWf();
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { list: { objectType: "company", name: "Some List" } } }],
+    httpStubs: {
+      "HubSpot List By Name": [{ objectTypeId: "0-2", listId: "1" }],
+      "HubSpot List Memberships": [{ results: [] }],
+    },
+  });
+  assertAckOnlyResponse(trace, { runId: null });
+  const rows = nodeItems(runData, "Build Response");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].action, "list_expansion_refused");
+  assert.match(rows[0].reason, /no members/i);
+});
+
+test("scale_up: the dispatch confirmation reaches Build Response as a row (not the body), and the responder still answers with the ack only", () => {
+  const wf = loadWf();
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { scale_up: true, run_id: "case-scale-up", events: [
+      { objectId: "1", objectType: "company", row_id: "row-1" },
+    ] } }],
+    httpStubs: {},
+  });
+  assertAckOnlyResponse(trace, { runId: "case-scale-up" });
+  assert.deepEqual(trace.respond.items[0].row_ids, ["row-1"]);
+  const rows = nodeItems(runData, "Build Response");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].action, "scale_up_dispatched");
+  assert.equal(rows[0].row_id, "row-1");
 });

@@ -984,178 +984,69 @@ def test_dispatch_plan_never_writes_into_the_operators_real_durable_directory(
 
 
 # ==================================================================================
-# 59-09 gap closure (D-59-10) — a written-records bookkeeping failure never stops the
-# dispatch. Two ways the list can go short (a raised WrittenRecordsError, and a falsey
-# append_chunk return on an OSError) are guarded in ONE place and reported, never
-# silent.
+# D-59-10's bookkeeping-failure guard was RETIRED whole by Phase 70 Plan 03 Task 2
+# (D-70-07): `dispatch_plan` no longer flushes `body` into `written_records` at all,
+# for ANY call — the server-side change that makes "Build Ack" the workflow's ONLY
+# responder input means `body` is ALWAYS just the ack shape now, never a real
+# per-row outcome, so there is nothing left for a bookkeeping guard to flush or fail
+# on. `written_records_failures` stays on `DispatchOutcome` for shape compatibility
+# only; the tests below prove it is now UNCONDITIONALLY empty, and that
+# `dispatch_plan` never imports or calls `written_records` at all.
 # ==================================================================================
 
-def _poisoned_body():
-    """A response item whose free-text `reason` contains a forbidden marker — the
-    identical shape `test_written_records.py`'s own
-    `test_a_value_naming_a_secret_refuses_rather_than_persisting` proves makes
-    `written_records.classify_item` raise `WrittenRecordsError`."""
-    return {"action": "write_blocked", "reason": "bad webhook_secret configured"}
-
-
-def test_a_written_records_bookkeeping_failure_does_not_stop_the_dispatch(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+def test_written_records_failures_is_always_empty_regardless_of_body_shape(
+    fake_config, stub_module_transport_factory,
 ):
-    """Test 1 — the integration test that would have caught this gap: the MIDDLE
-    chunk's response poisons `written_records.append_chunk` (it raises
-    `WrittenRecordsError`), and the LATER chunk must still be sent — proved by the
-    stub transport's own call count, not by inspection — and `dispatch_plan` must
-    return normally rather than letting the exception escape."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-
+    """Phase 70 Plan 03 Task 2 (D-70-07): even a response shaped like the OLD
+    poisoned-body case (`written_records.classify_item` would have raised on this
+    exact shape) does nothing now — `dispatch_plan` never reads `body` for bookkeeping
+    at all."""
     transport = stub_module_transport_factory(
-        [{"ok": True}, _poisoned_body(), {"ok": True}]
+        [{"ok": True}, {"action": "write_blocked", "reason": "bad webhook_secret configured"}, {"ok": True}]
     )
     outcome = chunking.dispatch_plan(
         three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
     )
     assert len(transport.calls) == 3
     assert sent_ids(transport) == [["1", "2"], ["3", "4"], ["5", "6"]]
-    assert [r.ok for r in outcome.results] == [True, True, True], (
-        "a bookkeeping miss is not a dispatch failure — this chunk's HubSpot write "
-        "may already have landed"
-    )
-
-
-def test_the_bookkeeping_failure_is_named_loudly_in_the_dispatch_outcome(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
-):
-    """Test 2 — the new field is non-empty, identifies the failing chunk, and carries
-    a reason a human can act on."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-
-    transport = stub_module_transport_factory(
-        [{"ok": True}, _poisoned_body(), {"ok": True}]
-    )
-    outcome = chunking.dispatch_plan(
-        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
-    )
-    assert len(outcome.written_records_failures) == 1
-    failure = outcome.written_records_failures[0]
-    assert failure["chunk_index"] == 1
-    assert failure["reason"]
-
-
-def test_an_io_failure_in_append_chunk_is_caught_by_the_same_guard(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
-):
-    """Test 3 — `append_chunk`'s documented falsey return on an `OSError` is the
-    OTHER way the list can go short, and `dispatch_plan` ignored it before this plan.
-    Driven directly (not by inducing a real `OSError`) so this test cannot be confused
-    with the raised-exception path Tests 1/2 cover — one guard must catch both."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-    real_append_chunk = written_records.append_chunk
-
-    def _flaky_append_chunk(run_id, chunk_index, body, path=None):
-        if chunk_index == 1:
-            return False
-        return real_append_chunk(run_id, chunk_index, body, path=path)
-
-    monkeypatch.setattr(chunking.written_records, "append_chunk", _flaky_append_chunk)
-
-    transport = stub_module_transport_factory()
-    outcome = chunking.dispatch_plan(
-        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
-    )
-    assert len(transport.calls) == 3
-    assert [f["chunk_index"] for f in outcome.written_records_failures] == [1]
-    assert "I/O failure" in outcome.written_records_failures[0]["reason"]
-    # Chunks 0 and 2 flushed normally through the same guard — only chunk 1 went short.
-    assert [e["chunk_index"] for e in written_records.load(path=artifact)] == [0, 2]
-
-
-def test_a_clean_run_reports_an_empty_written_records_failures_tuple(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
-):
-    """Test 4 — the field is an empty tuple, never `None`, so a caller iterates it
-    unconditionally."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-
-    transport = stub_module_transport_factory()
-    outcome = chunking.dispatch_plan(
-        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
-    )
     assert outcome.written_records_failures == ()
     assert outcome.written_records_failures is not None
 
 
-def test_a_bookkeeping_failure_does_not_flip_the_chunks_result_or_join_failed_batch(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+def test_dispatch_plan_no_longer_imports_written_records_at_all(fake_config, stub_module_transport_factory):
+    """Structural guard against a regression re-growing the deleted flush: the module
+    must not even hold a reference to `written_records` anymore."""
+    assert not hasattr(chunking, "written_records")
+
+
+def test_a_legacy_caller_still_passing_the_retired_early_ack_keyword_is_ignored_not_rejected(
+    fake_config, stub_module_transport_factory,
 ):
-    """Test 5 — the chunk whose bookkeeping failed keeps the `ChunkResult` it already
-    earned: its HubSpot write may have succeeded, so a bookkeeping miss must not be
-    reported as a dispatch failure, and it must not be added to `failed_batch` for
-    re-send."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-
-    transport = stub_module_transport_factory(
-        [{"ok": True}, _poisoned_body(), {"ok": True}]
-    )
-    outcome = chunking.dispatch_plan(
-        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
-    )
-    assert outcome.results[1].ok is True
-    assert outcome.failed_batch is None
-
-
-def test_an_async_ack_body_is_never_flushed_into_written_records(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
-):
-    """F4 (uat-batch-review-row-reads-failed, run 377a913c…): `dispatch_plan` under
-    `async_ack=True` receives `Build Async Ack`'s bare `{run_id, accepted, row_id}` as
-    its synchronous `body` — CLAUDE.md §13.0.2, "Build Async Ack wins the race against
-    the full chain, deterministically, every time." That shape carries no `action` key
-    at all, so flushing it through `written_records.append_chunk` produces a bogus
-    `action: null / outcome: failed` entry misrepresenting a row that may have
-    succeeded — confirmed live: `written_records-377a913c….json` held exactly this
-    shape for Natalie Waters' row, who was in fact created successfully moments later
-    by a DIFFERENT (synchronous) dispatch leg. `written_records` exists to record what
-    was ACTUALLY WRITTEN (its own module docstring); an async-ack'd propose-mode
-    dispatch writes nothing, so nothing should be flushed for it at all."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-
-    ack_body = {"run_id": "some-run-id", "accepted": True, "row_id": "row-1"}
-    transport = stub_module_transport_factory([ack_body])
+    """D-70-07: "a caller that still passes it is ignored, not rejected" — a stale
+    caller's kwarg degrades to the new behaviour instead of a `TypeError`."""
+    transport = stub_module_transport_factory([{"ok": True}])
     outcome = chunking.dispatch_plan(
         chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
         transport=transport, run_id="some-run-id", async_ack=True,
     )
-    assert len(transport.calls) == 1, "the chunk was still sent"
-    assert outcome.responses == (ack_body,), "the raw ack body is still returned to the caller"
-    assert outcome.written_records_failures == (), (
-        "skipping the flush is a deliberate no-op, never a bookkeeping FAILURE"
-    )
-    assert written_records.load(path=artifact) == [], (
-        "no entry — bogus or otherwise — was written for an async-ack'd chunk"
+    assert len(transport.calls) == 1
+    assert outcome.run_id == "some-run-id"
+    assert transport.calls[0]["json"]["run_id"] == "some-run-id"
+    assert "async_ack" not in transport.calls[0]["json"], (
+        "the retired flag must never reach the wire even when a stale caller passes it"
     )
 
 
-def test_a_non_async_ack_dispatch_is_unaffected_by_the_async_ack_guard(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
-):
-    """The guard is scoped to `async_ack=True` only — every existing synchronous caller
-    (the default) still flushes exactly as it always has."""
-    artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
-
+def test_run_id_always_rides_the_envelope_now(fake_config, stub_module_transport_factory):
+    """D-70-07: `run_id` used to ride the envelope only under the retired early-ack
+    opt-in — every OTHER caller (the default) now ALSO sends it, unconditionally."""
     transport = stub_module_transport_factory([{"ok": True}])
     outcome = chunking.dispatch_plan(
         chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
         transport=transport, run_id="some-run-id",
     )
     assert outcome.written_records_failures == ()
-    assert len(written_records.load(path=artifact)) == 1
+    assert transport.calls[0]["json"]["run_id"] == "some-run-id"
 
 
 def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(
@@ -1209,10 +1100,16 @@ def _ingest_settled_execution(run_id, rows, execution_id="exec-ingest-1"):
     }
 
 
-def test_enrichment_and_contacts_writes_from_the_same_run_share_one_file(
+def test_ingest_write_lands_in_written_records_even_though_the_enrichment_leg_no_longer_flushes(
     fake_config, stub_module_transport_factory, stub_post_transport_factory,
     stub_get_transport_factory, tmp_path, monkeypatch, sample_csv,
 ):
+    """Phase 70 Plan 03 Task 2 (D-70-07) retired `chunking.dispatch_plan`'s own flush
+    into `written_records` — this test used to prove BOTH legs of one run (the
+    enrichment chunk here, the contacts write below) shared one file; the enrichment
+    leg no longer contributes an entry at all (its `body` is always just the ack now).
+    `dispatch()` (a DIFFERENT function, `scripts/dispatch.py`, out of this plan's
+    scope) is unaffected and still flushes its own write — proving that leg alone."""
     artifact = tmp_path / "written_records.json"
     monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
@@ -1232,12 +1129,11 @@ def test_enrichment_and_contacts_writes_from_the_same_run_share_one_file(
     )
 
     entries = written_records.load(path=artifact)
-    assert len(entries) == 2, (
-        "the enrichment lane's chunk and the contacts write must both land in the ONE "
-        "file this run's run_id names — a caller that omits run_id= on the second call "
-        "silently starts a second file instead"
+    assert len(entries) == 1, (
+        "only the ingest write (dispatch()) still flushes — the enrichment chunk's "
+        "own written_records entry is gone, by design, per D-70-07"
     )
-    assert {e.get("hs_object_id") for e in entries} == {None, "348695309760"}
+    assert entries[0].get("hs_object_id") == "348695309760"
 
 
 # ==================================================================================
@@ -1440,10 +1336,9 @@ def test_the_enrich_before_ingest_waterfall_submits_async_and_recovers_through_m
         dispatch_transport = stub_module_transport_factory()  # default accepted body
         outcome = chunking.dispatch_plan(plan, providers, True, cfg,
                                          transport=dispatch_transport,
-                                         run_id=run_id, async_ack=True)
+                                         run_id=run_id)
 
     assert outcome.run_id == run_id, "dispatch_plan must echo the SAME id, never mint a second one"
-    assert dispatch_transport.calls[0]["json"]["async_ack"] is True
     assert dispatch_transport.calls[0]["json"]["run_id"] == run_id
 
     run_state.mark_dispatched(run_id, [row_id])

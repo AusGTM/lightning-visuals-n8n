@@ -4083,6 +4083,18 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     // searched by email/object id/name+company. See matchProposal.js's "company" arm.
     match: row.match ?? summarizeMatch({ lane: "company" }),
     properties,
+    // Phase 70 Plan 03 Task 2 (D-70-07, Rule 1 fix): this node's explicit return shape
+    // never carried `row.gate.reason` forward — CLAUDE.md §13.0's own comment on
+    // ENRICH_CO_GATE ("the reason string is what makes the outcome readable in the
+    // response") never actually reached the response through THIS node, for either a
+    // recompute_refused row (this lane) or a plain skip (Build Response reads
+    // `row.gate.gate.reason` directly for that OTHER lane, which bypasses this node
+    // entirely — see companyRecomputeLaneFlow.test.mjs). Additive: a row's own
+    // `row.gate` (set by "Company Gate", still present on the INPUT here) is
+    // preserved onto the OUTPUT as a top-level `reason`, so Build Response's own
+    // `reason: row.reason ?? (row.gate && row.gate.reason) ?? null` hoist has
+    // something to read for this lane too, instead of always resolving null.
+    reason: (row.gate && row.gate.reason) || null,
   }};
 });
 """
@@ -4965,18 +4977,20 @@ const PROVIDER_NAMES = __PROVIDER_NAMES__;
 const body = $json.body ?? $json;
 const parsed = parseWebhookBody(body);
 // Phase 61 Plan 05 Task 2 (REVIEW-C14, substrate 1): the caller's own client-minted
-// run_id and its per-REQUEST async_ack opt-in. Both describe the REQUEST, not a row, so
-// they are read straight off `body` at the envelope level — the identical idiom
-// `parsed.mode`/`parsed.providers` already use, but `parseWebhookBody` itself is not
-// widened to carry them (its own contract is `{events, providers, mode}` and nothing
-// else, and this plan's own file scope does not touch n8n/code/providerSelection.js).
+// run_id describes the REQUEST, not a row, so it is read straight off `body` at the
+// envelope level — the identical idiom `parsed.mode`/`parsed.providers` already use,
+// but `parseWebhookBody` itself is not widened to carry it (its own contract is
+// `{events, providers, mode}` and nothing else, and this plan's own file scope does
+// not touch n8n/code/providerSelection.js).
+// Phase 70 Plan 03 Task 2 (D-70-07): the sibling opt-in flag this comment used to
+// describe alongside `run_id` is retired — the body is ALWAYS just the ack now
+// ("Build Ack" fires unconditionally), so there is nothing left to opt into.
 const envelopeIsObject = body && typeof body === "object" && !Array.isArray(body);
 const ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;
-const ENVELOPE_ASYNC_ACK = envelopeIsObject ? body.async_ack === true : false;
-// Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up): a THIRD request-level opt-in
-// boolean, the SAME envelope+event-fallback idiom as async_ack above — a pattern, not an
-// invention (61-06-PLAN.md's own framing, citing `recompute` and `async_ack` as the two
-// precedents). `fan_depth` is deliberately NOT read from the envelope: the only value
+// Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up): a request-level opt-in
+// boolean, the SAME envelope+event-fallback idiom `recompute` already established — a
+// pattern, not an invention (61-06-PLAN.md's own framing). `fan_depth` is deliberately
+// NOT read from the envelope: the only value
 // this workflow ever trusts is one ITS OWN "Build Scale Up Fan-Out" node wrote onto a
 // self-dispatched child event, below. A caller-supplied one still normalizes safely via
 // `Number(...) || 0` exactly like a genuine one — it just cannot manufacture trust.
@@ -5064,11 +5078,12 @@ return parsed.events.map((event) => {
     // Phase 61 Plan 05 Task 2 (REVIEW-C14, substrate 1): placed AFTER the `...event`
     // spread for the SAME reason `recompute` above is — a caller-supplied raw row
     // property must not shadow the envelope-level normalization. `run_id` is the
-    // caller's own client-minted handle (never generated here); `async_ack` opts this
-    // request into the immediate ack `Build Async Ack` fans out below.
+    // caller's own client-minted handle (never generated here), read unconditionally
+    // now — every request's ack ("Build Ack") reports it, not only an opted-in one
+    // (Phase 70 Plan 03 Task 2, D-70-07 — the opt-in flag this field used to gate is
+    // retired).
     run_id: ENVELOPE_RUN_ID ?? event.run_id ?? null,
-    async_ack: (ENVELOPE_ASYNC_ACK || event.async_ack) === true,
-    // Phase 61 Plan 06 Task 5: same placement rationale as recompute/async_ack — AFTER
+    // Phase 61 Plan 06 Task 5: same placement rationale as recompute above — AFTER
     // the `...event` spread so a caller-supplied raw row property cannot shadow this.
     scale_up: (ENVELOPE_SCALE_UP || event.scale_up) === true,
     fan_depth: Number(event.fan_depth) || 0,
@@ -5085,33 +5100,60 @@ return parsed.events.map((event) => {
 # the SAME fan-out shape that pair already uses (Phase 16.1 reviews C1) — so this is one
 # more parallel target, not a re-point of any existing edge.
 #
-# Opt-in, per request: `async_ack` is normalized onto every event above; absent or not
-# exactly `true` (every existing test payload, and every caller that has not opted in)
-# returns nothing here, so "Respond to Webhook" is reached, as always, only via "Build
-# Response" below — BYTE-IDENTICAL to today's behaviour for every request that does not
-# ask for this.
-#
-# When `async_ack` IS true, this item reaches "Respond to Webhook" first (it is a single
-# Code node vs. the full provider+Haiku+Sonnet chain, so it wins the race), and the
-# UNCHANGED chain below keeps running afterward (P-07's own finding: an execution keeps
-# running once its own triggering webhook's response has already been sent) until it
-# reaches "Build Response" -> "Respond to Webhook" a second time for the SAME execution.
-# This is the identical "multiple inbound branches, first arrival wins" property
-# ENRICH_BUILD_RESPONSE's own comment already documents for that node's several terminal
-# branches (reviews C3) — n8n's webhook responder answers once and treats a later arrival
-# as already-answered; nothing downstream of that second arrival exists to be affected by
-# it (this workflow's actual HubSpot writes all happen BEFORE Build Response, never
-# after). Pinned as a static graph/topology fact in tests/n8n/asyncAck.test.mjs, not
-# claimed as a live-proven behaviour — this exact mechanism (an execution continuing past
-# its own already-sent response) is what P-07 measured live; a SECOND arrival at the SAME
-# responder node specifically is not itself separately live-tested by this plan and is
-# left for this plan's own checkpoint to observe.
-ENRICH_BUILD_ASYNC_ACK = r"""// Build Async Ack — Phase 61 Plan 05 Task 2 (substrate 1).
-// Opt-in per request via `async_ack`, normalized by Parse HubSpot Event onto every
-// event. Absent or not exactly `true` returns nothing — a request that never asked for
-// an early ack takes the byte-identical path it takes today.
-if ($json.async_ack !== true) return [];
-return [{ json: { run_id: $json.run_id ?? null, accepted: true, row_id: $json.row_id ?? null } }];
+# Phase 70 Plan 03 Task 2 (D-70-07): the opt-in is retired. "Build Ack" (renamed from
+# "Build Async Ack" — the node this feeds is no longer conditional, so the name should
+# not imply one) is now the SOLE producer "Respond to Webhook" ever hears from: every
+# OTHER edge into that node ("IF List Expanded" false, "Build Scale Up Ack", "Build
+# Response") is removed. It fires unconditionally, exactly once, for every request —
+# `$input.all()` because this node also gains a SECOND inbound edge, from "IF List
+# Expanded" false (a list-expansion refusal, where "Parse HubSpot Event" never runs at
+# all this execution) — the two producers are mutually exclusive per execution (a
+# list-refusal short-circuits BEFORE Parse HubSpot Event, and every OTHER path requires
+# it to have run), so this node still runs exactly once regardless of which one
+# delivered; first-arrival semantics is safe here for the identical reason it is safe
+# throughout this plan's class-(b) convergences. `row_ids` are the request's own row
+# identifiers (D-70-08a): one per event row that carried one, empty for a spec form
+# that mints none or for a refusal (neither carries `row_id`).
+ENRICH_BUILD_ACK = r"""// Build Ack — Phase 70 Plan 03 Task 2 (D-70-07). THE sole responder input.
+const rows = $input.all().map((it) => it.json || {});
+const run_id = rows.length ? (rows[0].run_id ?? null) : null;
+const row_ids = rows
+  .map((r) => r.row_id)
+  .filter((id) => id !== null && id !== undefined);
+return [{ json: { run_id, accepted: true, row_ids } }];
+"""
+
+# Phase 70 Plan 03 Task 2 (D-70-07). Turns a reason that used to reach the caller ONLY
+# via the HTTP response body into a row that reaches "Build Response" instead — the sole
+# channel now that the body is always the ack. Fed by two producers that are mutually
+# exclusive PER EXECUTION (see this node's own wiring comment at its connections):
+# "IF List Expanded" false (a list-expansion refusal — "Parse HubSpot Event" never ran
+# this execution) and "Build Scale Up Ack" (the scale-up dispatch confirmation — a
+# status row, not a refusal, but body-borne today and moved the same way). Routed into
+# "Build Response Merge" via a NEW input (`_append_merge_input`, below) rather than
+# straight into "Build Response": the Merge's other ~10 inputs are all sourced from
+# nodes downstream of the normal (non-refused, non-fanned) chain, so in EITHER of this
+# node's two scenarios none of them ever fire either — covered by "Refusal Fired
+# Sentinel", fed FROM this node, feeding every one of those OTHER inputs directly,
+# mirroring this plan's own starved-lane mechanism rather than inventing a second one.
+ENRICH_BUILD_REFUSAL_ROW = r"""// Build Refusal Row — Phase 70 Plan 03 Task 2 (D-70-07).
+return $input.all().map((it) => {
+  const row = it.json || {};
+  if (row.scale_up_dispatched === true) {
+    return { json: {
+      action: "scale_up_dispatched",
+      reason: "batch dispatched to a self-fanned child execution",
+      run_id: row.run_id ?? null,
+      row_id: row.row_id ?? null,
+    } };
+  }
+  return { json: {
+    action: "list_expansion_refused",
+    reason: row.reason || "list expansion refused",
+    run_id: row.run_id ?? null,
+    row_id: row.row_id ?? null,
+  } };
+});
 """
 
 # Phase 61 Plan 06 Task 5 (T-61-25, RUN-02/AFTER-02's substrate-3 scale-up path,
@@ -5202,8 +5244,12 @@ return $input.all()
 ENRICH_BUILD_SCALE_UP_ACK = r"""// Build Scale Up Ack — Phase 61 Plan 06 Task 5.
 // Reports what was DISPATCHED (fire-and-forget), never a business outcome — each child
 // execution this represents may still be running when this responds.
+// Phase 70 Plan 03 Task 2 (D-70-07): also carries `row_id` — "Dispatch Self" is
+// passthrough, so the dispatched child's own row_id survives on `it.json`, and this
+// node's sole downstream consumer ("Build Refusal Row") needs it to shape a
+// correlatable row now that this confirmation is read from runData, not the body.
 return $input.all().map((it) => ({
-  json: { scale_up_dispatched: true, run_id: it.json.run_id ?? null },
+  json: { scale_up_dispatched: true, run_id: it.json.run_id ?? null, row_id: it.json.row_id ?? null },
 }));
 """
 
@@ -5391,7 +5437,12 @@ ENRICH_BUILD_RESPONSE = inline("providerSelection.js") + r"""
 
 // --- n8n wrapper: Build Response (Phase 16.1 Plan 02) ---
 function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const first = $('Parse HubSpot Event').first();
+// Phase 70 Plan 03 Task 2 (D-70-07): wrapped in try/catch — "Build Refusal Row" now
+// also reaches this node's Merge on a list-expansion refusal, where "Parse HubSpot
+// Event" never ran this execution at all; every OTHER existing path to this node
+// already guaranteed it had run, so this line never needed the guard before.
+let first = null;
+try { first = $('Parse HubSpot Event').first(); } catch (e) { first = null; }
 const providers_requested = (first && first.json && first.json.providers_requested) || [];
 const CREDIT_NODE_BY_PROVIDER = { lusha: "Lusha Usage", apollo: "Apollo Usage", zoominfo: "ZoomInfo Usage" };
 const remaining_credits = providers_requested.map((provider) => {
@@ -5468,7 +5519,7 @@ function _contactability(row) {
   return { state, fields: { email: emailField, phone: phoneField } };
 }
 // Phase 70 Plan 03 (D-70-01): this node ("Build Response") sits behind a real Merge with
-// a starved-lane sentinel on every one of its 10 terminal inputs that could otherwise
+// a starved-lane sentinel on every one of its 11 terminal inputs that could otherwise
 // never fire on a given batch; drop an identity-less sentinel marker before it is
 // reported back to the caller as a phantom row.
 return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((item) => {
@@ -5494,6 +5545,12 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     // D-66-05/D-66-06: report-only, no branch anywhere reads these two keys.
     contactability: contactability.state,
     contactability_fields: contactability.fields,
+    // Phase 70 Plan 03 Task 2 (D-70-07): a top-level `reason`, additive — most terminal
+    // shapes already carry one directly (Build Refusal Row's rows, `gate.reason` is
+    // ALSO surfaced here for the recompute_refused/write_blocked shapes, whose reason
+    // otherwise lives nested at `gate.reason` only) so a client reading runData off
+    // this ONE contract never has to know which terminal produced a given row.
+    reason: row.reason ?? (row.gate && row.gate.reason) ?? null,
   }};
 });
 """
@@ -5893,10 +5950,15 @@ def build_enrichment_cloud():
 
     x += 220
     nodes.append(code_node("Parse HubSpot Event", ENRICH_PARSE_EVENT_CLOUD, x, y))
-    # Phase 61 Plan 05 Task 2 — see ENRICH_BUILD_ASYNC_ACK's own comment above for why
-    # this is a third, unconditional fan target (not a re-point) and a no-op for every
-    # request that does not opt in.
-    nodes.append(code_node("Build Async Ack", ENRICH_BUILD_ASYNC_ACK, x, y + 260))
+    # Phase 61 Plan 05 Task 2 — a third, unconditional fan target off "Parse HubSpot
+    # Event" (not a re-point). Phase 70 Plan 03 Task 2 (D-70-07): renamed "Build Ack" —
+    # see ENRICH_BUILD_ACK's own comment above — and gains a SECOND inbound edge below
+    # (from "IF List Expanded" false).
+    nodes.append(code_node("Build Ack", ENRICH_BUILD_ACK, x, y + 260))
+    # Phase 70 Plan 03 Task 2 (D-70-07): the shared refusal/status-row normalizer, fed by
+    # "IF List Expanded" false and "Build Scale Up Ack" below — see
+    # ENRICH_BUILD_REFUSAL_ROW's own comment above.
+    nodes.append(code_node("Build Refusal Row", ENRICH_BUILD_REFUSAL_ROW, x, y + 380))
 
     # Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up, off by default). Spliced
     # BETWEEN "Parse HubSpot Event" and "IF Object Type Supported" — the ONE edge this
@@ -6744,32 +6806,40 @@ return $input.all().map((it, i) => {
     # SAME shape a record-ID envelope arrives in — the branch adds a producer of that shape,
     # it does not fork the envelope contract.
     #
-    # False (a refusal): straight to "Respond to Webhook", so the caller gets the reason as a
-    # response rather than a dangling execution. It deliberately does NOT route through
-    # "Build Response" — that node's first statement reads $('Parse HubSpot Event'), which on
-    # a refusal never executed, and its inbound edge set is pinned exactly by
-    # tests/test_remaining_credits_response.py as the enrichment terminals. A refusal burned
-    # no provider credit, so it has no remaining_credits to report.
+    # False (a refusal): Phase 70 Plan 03 Task 2 (D-70-07) re-points this from a direct
+    # answer at "Respond to Webhook" to TWO parallel targets — "Build Ack" (so the caller
+    # still gets its ack; "Parse HubSpot Event" never ran this execution, so this is the
+    # ONLY producer that can reach the responder here) and "Build Refusal Row" (so the
+    # refusal reason lands as a ROW at "Build Response" instead of the body). Never
+    # "Build Response" directly, and never through "Build Response Merge"'s original ten
+    # inputs — that node's first statement reads $('Parse HubSpot Event'), which on a
+    # refusal never executed; "Build Refusal Row" is a NEW, eleventh Merge input, added
+    # below via `_append_merge_input`, precisely so this stays additive to the pin
+    # tests/test_remaining_credits_response.py already carries for the original ten.
     conns["IF List Expanded"] = {"main": [
         [{"node": "Parse HubSpot Event", "type": "main", "index": 0}],  # true: expanded
-        [{"node": "Respond to Webhook", "type": "main", "index": 0}],   # false: refused
+        [{"node": "Build Ack", "type": "main", "index": 0},             # false: refused
+         {"node": "Build Refusal Row", "type": "main", "index": 0}],
     ]}
     # Phase 16.1 Plan 02 (reviews C1): Parse HubSpot Event ALSO forks to the single-item
     # credit branch (Credit Request) — a parallel fan-out from the SAME output, not a
     # re-point of the existing IF Object Type Supported edge.
-    # Phase 61 Plan 05 Task 2: a THIRD parallel fan target, "Build Async Ack" — see that
-    # node's own comment (ENRICH_BUILD_ASYNC_ACK) for why this is additive and a no-op
-    # absent the request-level `async_ack` opt-in.
+    # Phase 61 Plan 05 Task 2: a THIRD parallel fan target, "Build Ack" (renamed, Phase 70
+    # Plan 03 Task 2, D-70-07) — see that node's own comment (ENRICH_BUILD_ACK) for why
+    # this fires unconditionally now, not opt-in.
     # Phase 61 Plan 06 Task 5: the FIRST target is now "IF Scale Up Route", not
     # "IF Object Type Supported" directly — the ONE re-pointed edge this task discloses
     # (see "IF Scale Up Route"'s own comment above for why an unconditional 4th fan
-    # target, mirroring Build Async Ack, would double-process a fanned row).
+    # target, mirroring Build Ack, would double-process a fanned row).
     conns["Parse HubSpot Event"] = {"main": [[
         {"node": "IF Scale Up Route", "type": "main", "index": 0},
         {"node": "Credit Request", "type": "main", "index": 0},
-        {"node": "Build Async Ack", "type": "main", "index": 0},
+        {"node": "Build Ack", "type": "main", "index": 0},
     ]]}
-    conns["Build Async Ack"] = {"main": [[
+    # Phase 70 Plan 03 Task 2 (D-70-07): THE sole edge into "Respond to Webhook" — every
+    # other producer that used to feed it directly ("IF List Expanded" false, "Build
+    # Scale Up Ack", "Build Response") is re-pointed elsewhere below.
+    conns["Build Ack"] = {"main": [[
         {"node": "Respond to Webhook", "type": "main", "index": 0},
     ]]}
     # Phase 61 Plan 06 Task 5: true (is fanning, `_SCALE_UP_IS_FANNING_EXPR`) -> the
@@ -6780,8 +6850,12 @@ return $input.all().map((it, i) => {
         [{"node": "IF Object Type Supported", "type": "main", "index": 0}],  # false: today's path
     ]}
     conns.update(chain(["Build Scale Up Fan-Out", "Dispatch Self", "Build Scale Up Ack"]))
+    # Phase 70 Plan 03 Task 2 (D-70-07): re-pointed from "Respond to Webhook" (a
+    # body-borne status) to "Build Refusal Row" (a row) — "Build Ack" already answered
+    # this request via its own edge from "Parse HubSpot Event" above, since that node
+    # runs whenever a scale-up dispatch does.
     conns["Build Scale Up Ack"] = {"main": [[
-        {"node": "Respond to Webhook", "type": "main", "index": 0},
+        {"node": "Build Refusal Row", "type": "main", "index": 0},
     ]]}
     # Phase 16.1 (reviews A2): unsupported/unknown object_type terminates HERE, before
     # Route By Object Type ever runs — no path to any provider gate.
@@ -6995,7 +7069,11 @@ return $input.all().map((it, i) => {
     conns["HubSpot Company Update"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
     conns["Unsupported Object Type"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
     conns.update(credit_conns)
-    conns["Build Response"] = {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+    # Phase 70 Plan 03 Task 2 (D-70-07): "Build Response" is now a terminal leaf — no
+    # outgoing edge at all. The caller reads its output from runData (`recover_dispatch`,
+    # landed 70-02), never from the HTTP response body; "Build Ack" is the sole producer
+    # "Respond to Webhook" hears from (wired above, off "Parse HubSpot Event"/"IF List
+    # Expanded").
 
     notes = [
         {"content": (
@@ -7174,9 +7252,19 @@ return $input.all().map((it, i) => {
     # scale-up dispatch, where feeding a merge input here would satisfy it while the
     # fanned child's OWN execution never runs the rest of the graph at all
     # (scaleUpFanOutFlow.test.mjs would then see a half-fed merge -> false stall).
+    # Phase 70 Plan 03 Task 2 (Rule 1 fix — a walker probe over an unsupported-object-
+    # type-ONLY batch, added by enrichmentBatchRefusal.test.mjs, stalled Build Response
+    # Merge): the ORIGINAL condition tested `every row IS "companies"` — sufficient but
+    # not necessary for "contacts absent". A batch whose rows are all "unknown" (or a
+    # mix of "unknown" and "companies", with no "contacts" row at all) is genuinely
+    # contacts-absent but is NEITHER "every row is companies", so this sentinel never
+    # fired and Build Response Merge's contacts-side inputs went unfed forever. Fixed
+    # to the actually-correct predicate, `every row is NOT "contacts"` (equivalently
+    # "no row is contacts") — this is what "contacts absent" means, and it is now
+    # correct for every object_type value including "unknown", not just "companies".
     _add_starved_lane_sentinel(
         nodes, conns, "Contacts Absent Sentinel", "IF Scale Up Route",
-        'if (rows.length > 0 && rows.every((r) => r.object_type === "companies")) '
+        'if (rows.length > 0 && rows.every((r) => r.object_type !== "contacts")) '
         'return [{}]; return [];',
         [eg("Adapt Fetch By Id"),
          eg("Adapt Linkedin Search"),
@@ -7272,11 +7360,28 @@ return $input.all().map((it, i) => {
     # --- Recompute (RECOMP-01) is a whole-REQUEST flag, read the same way
     # "IF Company Recompute" itself reads it — `.first()` off "Parse HubSpot Event",
     # never per-row.
+    #
+    # Phase 70 Plan 03 Task 2 (Rule 1 — bug found live via a scale_up=true walker probe
+    # this task added, `Decide Company Action Merge` stalled on `Merge Company`'s input):
+    # both sentinels below used to be sourced from "Parse HubSpot Event" directly, which
+    # STILL RUNS in a scale_up=true execution (it is the node that computes `scale_up`),
+    # so they fired their marker into "Decide Company Action Merge" even though the
+    # WHOLE companies waterfall never runs on that path — a partial delivery (this
+    # input satisfied, "Merge Company"'s own 3 inputs never satisfied at all, since
+    # THEIR sentinels are correctly gated off "IF Scale Up Route"'s false lane) that
+    # hangs the merge forever instead of leaving it correctly dormant. Re-sourced from
+    # "IF Scale Up Route"'s FALSE lane (source_out_idx=1) — the exact same idiom the
+    # pre-fork sentinels ("Contacts/Companies/Unsupported Absent Sentinel") already use
+    # — so in scale_up mode NEITHER sentinel runs at all, and "Decide Company Action
+    # Merge" gets zero deliveries on every input (dormant, not stalled), matching
+    # "Merge Company"'s own already-correct behaviour. `rows` is unchanged for every
+    # non-scale_up request: the false lane delivers every event row whenever scale_up
+    # is not requested, byte-identical to what "Parse HubSpot Event" delivered before.
     _add_starved_lane_sentinel(
-        nodes, conns, "Recompute Not Requested Sentinel", "Parse HubSpot Event",
+        nodes, conns, "Recompute Not Requested Sentinel", "IF Scale Up Route",
         'if (rows.length > 0 && rows[0].recompute !== true) return [{}]; return [];',
         [dca("IF Company Recompute")],
-        sx, sy,
+        sx, sy, source_out_idx=1,
     )
     sy += 120
     # The inverse: in recompute mode, "IF Company Skip" and everything downstream of it
@@ -7288,7 +7393,7 @@ return $input.all().map((it, i) => {
     # against this exact scenario) — feed that index directly too, alongside the 3
     # starved "Merge Company" inputs.
     _add_starved_lane_sentinel(
-        nodes, conns, "Recompute Requested Sentinel", "Parse HubSpot Event",
+        nodes, conns, "Recompute Requested Sentinel", "IF Scale Up Route",
         'if (rows.length > 0 && rows[0].recompute === true) return [{}]; return [];',
         [mc("IF Research Needed", 1),
          mc("IF Needs Judge", 1),
@@ -7299,7 +7404,7 @@ return $input.all().map((it, i) => {
          br("IF Company Skip"),
          br("Build Research Failure Response"),
          dca("Merge Company")],
-        sx, sy,
+        sx, sy, source_out_idx=1,
     )
     sy += 120
 
@@ -7520,6 +7625,47 @@ return $input.all().map((it, i) => {
     # the "research happened, no error" case; the "no research at all" case is covered
     # by "Companies Research None Needed Sentinel" above.
     set_always_output_data(nodes, ["IF Research Errored"])
+
+    # Phase 70 Plan 03 Task 2 (D-70-07): "Build Refusal Row" is "Build Response Merge"'s
+    # ELEVENTH input — a genuinely new producer discovered after `splice_merge_before`
+    # already sized that merge to its original ten, added via `_append_merge_input`
+    # rather than folded into the splice. It delivers on exactly two scenarios (a
+    # list-expansion refusal, or a scale-up dispatch confirmation) that are BOTH
+    # mutually exclusive with the normal chain — in either one, none of the OTHER ten
+    # inputs' real producers ever run, so "Refusal Fired Sentinel" below (fed FROM this
+    # node, the same starved-lane mechanism used throughout this build) feeds all ten of
+    # them directly whenever this node delivers anything.
+    refusal_row_index = _append_merge_input(nodes, conns, build_response_merge, "Build Refusal Row")
+    _add_starved_lane_sentinel(
+        nodes, conns, "Refusal Fired Sentinel", "Build Refusal Row",
+        'if (rows.length > 0) return [{}]; return [];',
+        [br("Skip (NoOp)"),
+         br("HubSpot Create"),
+         br("HubSpot Update"),
+         br("IF Enrich", 1),
+         br("Unsupported Object Type"),
+         br("IF Company Skip"),
+         br("Build Research Failure Response"),
+         br("Adapt Company Create"),
+         br("HubSpot Company Update"),
+         br("IF Company Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+    # The inverse: the normal chain ran (this input's own real producer never fires this
+    # execution) — fed from "Parse HubSpot Event" (single producer, runs on every
+    # request except a list-expansion refusal, where Parse HubSpot Event never runs at
+    # all and the real producer above covers it instead), guarded on `scale_up !== true`
+    # so it stays silent on a scale-up dispatch (where "Build Scale Up Ack" ->
+    # "Build Refusal Row" delivers the real content) — the same idiom "Recompute Not/
+    # Requested Sentinel" use for the identical reason.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Refusal Row Absent Sentinel", "Parse HubSpot Event",
+        'if (rows.length > 0 && rows[0].scale_up !== true) return [{}]; return [];',
+        [(build_response_merge, refusal_row_index)],
+        sx, sy,
+    )
+    sy += 120
 
     return {
         "id": "LVenrichmentCloud01",
@@ -8637,6 +8783,27 @@ def _merge_input_index(conns, source_name, merge_name, *, source_out_idx=0):
             return conn["index"]
     raise ValueError(f"_merge_input_index: {source_name!r} (output {source_out_idx}) "
                       f"does not feed {merge_name!r}")
+
+
+def _append_merge_input(nodes, conns, merge_name, source_name, *, source_out_idx=0):
+    """Adds ONE more declared input to an ALREADY-created merge node (Phase 70 Plan 03
+    Task 2, D-70-07) — `splice_merge_before` only ever sizes a merge to what it collected
+    at splice time; this appends a genuinely NEW producer discovered later in the same
+    build (`Build Refusal Row`), bumping `numberInputs` and wiring `source_name`'s output
+    straight to the new index. Never used to re-wire an EXISTING edge — that stays
+    `_merge_input_index`'s job. Returns the new index."""
+    nodes_by_name = {n["name"]: n for n in nodes}
+    merge = nodes_by_name.get(merge_name)
+    if merge is None:
+        raise ValueError(f"_append_merge_input: no node named {merge_name!r}")
+    index = merge["parameters"]["numberInputs"]
+    merge["parameters"]["numberInputs"] = index + 1
+    conns.setdefault(source_name, {"main": [[]]})
+    while len(conns[source_name]["main"]) <= source_out_idx:
+        conns[source_name]["main"].append([])
+    conns[source_name]["main"][source_out_idx].append(
+        {"node": merge_name, "type": "main", "index": index})
+    return index
 
 
 def _add_starved_lane_sentinel(nodes, conns, name, source, condition_js, targets, x, y,

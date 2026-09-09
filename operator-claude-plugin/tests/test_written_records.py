@@ -157,10 +157,12 @@ def test_a_queue_field_with_a_real_action_present_is_unaffected():
     assert entry["outcome"] == written_records.NO_ACTION
 
 
-def test_the_ten_real_action_values_are_extracted_from_the_builder_not_hardcoded():
+def test_the_twelve_real_action_values_are_extracted_from_the_builder_not_hardcoded():
     """REVIEW-57-M: circularity guard. The set is read FROM
-    `scripts/build_cloud_workflows.py`, not typed out here — an eleventh action added
-    there fails this test in the client, which is the point."""
+    `scripts/build_cloud_workflows.py`, not typed out here — a thirteenth action added
+    there fails this test in the client, which is the point. Phase 70 Plan 03 Task 2
+    (D-70-07) added the eleventh and twelfth: `scale_up_dispatched`/
+    `list_expansion_refused`, "Build Refusal Row"'s two shapes."""
     extracted = _action_literals_from_builder()
     assert extracted == set(written_records.ACTION_TO_OUTCOME) | written_records.WRITE_ACTIONS
 
@@ -168,9 +170,10 @@ def test_the_ten_real_action_values_are_extracted_from_the_builder_not_hardcoded
 @pytest.mark.parametrize("action", [
     "create", "update", "enrich", "write_blocked", "review", "needs_match_review",
     "research_failed", "recompute_refused", "skip", "proposed",
+    "scale_up_dispatched", "list_expansion_refused",
 ])
-def test_every_one_of_the_ten_real_actions_is_exercised(action):
-    """Non-circular per-value exercise — the ten literals above are typed here only to
+def test_every_one_of_the_twelve_real_actions_is_exercised(action):
+    """Non-circular per-value exercise — the twelve literals above are typed here only to
     drive the call, not to assert what the mapping table says; the actual mapping
     assertions live in the more specific tests above and the builder-extraction test."""
     entry = written_records.classify_item({"action": action, "hs_object_id": "999"})
@@ -369,56 +372,42 @@ def test_load_on_entries_holding_a_non_dict_item_returns_empty_not_partial(tmp_p
 # ------------------------------------------------------------------------------------
 
 def test_a_dispatch_that_crashes_mid_loop_leaves_a_durable_file_holding_earlier_chunks(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+    tmp_path, monkeypatch
 ):
+    """Phase 70 Plan 03 Task 2 (D-70-07): `chunking.dispatch_plan` no longer calls
+    `append_chunk` at all — see this module's own `append_chunk` docstring for why
+    that call site was retired whole, not merely relocated. This test's PROPERTY
+    (each `append_chunk` call is a complete, atomic, crash-surviving write, so a
+    caller that crashes between calls loses nothing already flushed) still holds of
+    this module regardless of which caller invokes it — driven here directly, the
+    same way `dispatch.dispatch`/`review_decision.submit_decision` (this module's
+    two surviving call sites) invoke it one chunk/decision at a time."""
     artifact = tmp_path / "written_records.json"
     monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
-    plan = chunking.plan_chunks(
-        {"record_ids": [str(n) for n in range(1, 6)], "object_type": "companies"}, 1
-    )
-    assert plan.chunk_count == 5, "the point of the test is a mid-run crash, not a one-off"
-
-    real_dispatch_enrichment = enrichment_module.dispatch_enrichment
-    calls = {"count": 0}
-
-    def _flaky(*args, **kwargs):
-        calls["count"] += 1
-        if calls["count"] == 3:
-            raise RuntimeError("simulated process kill mid-dispatch")
-        return real_dispatch_enrichment(*args, **kwargs)
-
-    monkeypatch.setattr(chunking.enrichment, "dispatch_enrichment", _flaky)
-
-    with pytest.raises(RuntimeError):
-        chunking.dispatch_plan(
-            plan, ["lusha"], True, fake_config,
-            transport=stub_module_transport_factory(), run_id="crash-run",
-        )
+    written_records.append_chunk("crash-run", 0, {"action": "create", "hs_object_id": "1"})
+    written_records.append_chunk("crash-run", 1, {"action": "create", "hs_object_id": "2"})
+    # Simulated process kill BETWEEN chunk 1's flush and chunk 2's — chunk 2 never
+    # calls append_chunk at all, mirroring what a killed process would leave behind.
 
     entries = written_records.load(path=artifact)
     assert [e["chunk_index"] for e in entries] == [0, 1], (
-        "chunks 0 and 1 must already be on disk — the flush happened INLINE, before "
-        "the crash on chunk index 2"
+        "chunks 0 and 1 must already be on disk — each append_chunk call is a "
+        "complete flush, independent of any later call ever happening"
     )
 
 
-def test_a_clean_five_chunk_run_leaves_all_five_chunks_on_disk(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
-):
+def test_a_clean_five_chunk_run_leaves_all_five_chunks_on_disk(tmp_path, monkeypatch):
     """The positive control for the crash test above — without it, an implementation
     that flushed nothing would still pass the crash assertion vacuously (0 == 0 is not
     what `[0, 1]` asserts against, but this pins the happy path explicitly anyway)."""
     artifact = tmp_path / "written_records.json"
     monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
-    plan = chunking.plan_chunks(
-        {"record_ids": [str(n) for n in range(1, 6)], "object_type": "companies"}, 1
-    )
-    chunking.dispatch_plan(
-        plan, ["lusha"], True, fake_config,
-        transport=stub_module_transport_factory(), run_id="clean-run",
-    )
+    for index in range(5):
+        written_records.append_chunk(
+            "clean-run", index, {"action": "create", "hs_object_id": str(index + 1)}
+        )
 
     entries = written_records.load(path=artifact)
     assert [e["chunk_index"] for e in entries] == [0, 1, 2, 3, 4]
@@ -440,36 +429,22 @@ def _patch_durable_dir(monkeypatch, tmp_path):
 
 
 def test_two_interleaved_dispatch_runs_against_one_durable_directory_do_not_clobber_each_other(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+    tmp_path, monkeypatch
 ):
-    """THE test the gap needed — driven through `dispatch_plan`, not `append_chunk`
-    alone (a unit test of `append_chunk` in isolation is exactly the kind of test that
-    let this gap ship). Two REAL runs, interleaved by hand: run A flushes a chunk, run B
-    (a DIFFERENT run_id) flushes into the same durable directory, then run A flushes
-    again. Under the pre-D-59-09 shared path, run B's flush would replace run A's
-    earlier chunk on disk (the old run-id-mismatch branch); under per-run paths nothing
-    is lost and no lock is involved."""
+    """THE test the gap needed — driven through direct `append_chunk` calls (Phase 70
+    Plan 03 Task 2, D-70-07: `chunking.dispatch_plan` no longer has a call site to
+    drive this through — see that function's own docstring), not `append_chunk` in
+    total isolation from a real multi-call sequence either. Two REAL runs, interleaved
+    by hand: run A flushes a chunk, run B (a DIFFERENT run_id) flushes into the same
+    durable directory, then run A flushes again. Under the pre-D-59-09 shared path,
+    run B's flush would replace run A's earlier chunk on disk (the old
+    run-id-mismatch branch); under per-run paths nothing is lost and no lock is
+    involved."""
     _patch_durable_dir(monkeypatch, tmp_path)
 
-    plan_a_first = chunking.ChunkPlan(
-        chunks=({"record_ids": ["1"], "object_type": "companies"},),
-        row_counts=(1,), record_count=1,
-    )
-    plan_b = chunking.ChunkPlan(
-        chunks=({"record_ids": ["9"], "object_type": "companies"},),
-        row_counts=(1,), record_count=1,
-    )
-    plan_a_second = chunking.ChunkPlan(
-        chunks=({"record_ids": ["2"], "object_type": "companies"},),
-        row_counts=(1,), record_count=1,
-    )
-
-    chunking.dispatch_plan(plan_a_first, ["lusha"], True, fake_config,
-                            transport=stub_module_transport_factory(), run_id="run-a")
-    chunking.dispatch_plan(plan_b, ["lusha"], True, fake_config,
-                            transport=stub_module_transport_factory(), run_id="run-b")
-    chunking.dispatch_plan(plan_a_second, ["lusha"], True, fake_config,
-                            transport=stub_module_transport_factory(), run_id="run-a")
+    written_records.append_chunk("run-a", 0, {"action": "create", "hs_object_id": "1"})
+    written_records.append_chunk("run-b", 0, {"action": "create", "hs_object_id": "9"})
+    written_records.append_chunk("run-a", 1, {"action": "create", "hs_object_id": "2"})
 
     entries_a = written_records.load(path=written_records.written_records_path("run-a"))
     entries_b = written_records.load(path=written_records.written_records_path("run-b"))
@@ -478,16 +453,12 @@ def test_two_interleaved_dispatch_runs_against_one_durable_directory_do_not_clob
 
 
 def test_load_with_no_path_unions_every_runs_file_and_names_the_run_on_each_entry(
-    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+    tmp_path, monkeypatch
 ):
     _patch_durable_dir(monkeypatch, tmp_path)
 
-    plan_a = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 1)
-    plan_b = chunking.plan_chunks({"record_ids": ["9"], "object_type": "companies"}, 1)
-    chunking.dispatch_plan(plan_a, ["lusha"], True, fake_config,
-                            transport=stub_module_transport_factory(), run_id="run-a")
-    chunking.dispatch_plan(plan_b, ["lusha"], True, fake_config,
-                            transport=stub_module_transport_factory(), run_id="run-b")
+    written_records.append_chunk("run-a", 0, {"action": "create", "hs_object_id": "1"})
+    written_records.append_chunk("run-b", 0, {"action": "create", "hs_object_id": "9"})
 
     entries = written_records.load()
     assert len(entries) == 2, "one entry per run, one record each"
