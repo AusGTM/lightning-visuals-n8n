@@ -1108,6 +1108,56 @@ def test_a_bookkeeping_failure_does_not_flip_the_chunks_result_or_join_failed_ba
     assert outcome.failed_batch is None
 
 
+def test_an_async_ack_body_is_never_flushed_into_written_records(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """F4 (uat-batch-review-row-reads-failed, run 377a913c…): `dispatch_plan` under
+    `async_ack=True` receives `Build Async Ack`'s bare `{run_id, accepted, row_id}` as
+    its synchronous `body` — CLAUDE.md §13.0.2, "Build Async Ack wins the race against
+    the full chain, deterministically, every time." That shape carries no `action` key
+    at all, so flushing it through `written_records.append_chunk` produces a bogus
+    `action: null / outcome: failed` entry misrepresenting a row that may have
+    succeeded — confirmed live: `written_records-377a913c….json` held exactly this
+    shape for Natalie Waters' row, who was in fact created successfully moments later
+    by a DIFFERENT (synchronous) dispatch leg. `written_records` exists to record what
+    was ACTUALLY WRITTEN (its own module docstring); an async-ack'd propose-mode
+    dispatch writes nothing, so nothing should be flushed for it at all."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    ack_body = {"run_id": "some-run-id", "accepted": True, "row_id": "row-1"}
+    transport = stub_module_transport_factory([ack_body])
+    outcome = chunking.dispatch_plan(
+        chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
+        transport=transport, run_id="some-run-id", async_ack=True,
+    )
+    assert len(transport.calls) == 1, "the chunk was still sent"
+    assert outcome.responses == (ack_body,), "the raw ack body is still returned to the caller"
+    assert outcome.written_records_failures == (), (
+        "skipping the flush is a deliberate no-op, never a bookkeeping FAILURE"
+    )
+    assert written_records.load(path=artifact) == [], (
+        "no entry — bogus or otherwise — was written for an async-ack'd chunk"
+    )
+
+
+def test_a_non_async_ack_dispatch_is_unaffected_by_the_async_ack_guard(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """The guard is scoped to `async_ack=True` only — every existing synchronous caller
+    (the default) still flushes exactly as it always has."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_module_transport_factory([{"ok": True}])
+    outcome = chunking.dispatch_plan(
+        chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
+        transport=transport, run_id="some-run-id",
+    )
+    assert outcome.written_records_failures == ()
+    assert len(written_records.load(path=artifact)) == 1
+
+
 def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(
     fake_config, stub_module_transport_factory
 ):

@@ -792,6 +792,47 @@ def test_rerequest_unanswered_with_no_execution_ceiling_is_unchanged(
     assert result.dispatch_outcome.ceiling_stop is None
 
 
+def test_rerequest_unanswered_threads_run_id_through_to_dispatch_plan(
+        fake_config, stub_module_transport_factory):
+    """F4 (uat-batch-review-row-reads-failed): without `run_id=`, `chunking.dispatch_plan`
+    mints a FRESH `uuid.uuid4().hex` internally, orphaning this pass's
+    `written_records`/bookkeeping under a run_id nobody else in the batch ever sees —
+    directly contradicting SKILL.md step 9's own documented invariant, "the match pass,
+    the enrich pass, the re-request pass when it ran, and the final ingest send — all
+    under the SAME run_id." Passing `run_id=` here must make `dispatch_outcome.run_id`
+    echo the SAME id the caller already minted for the rest of this batch."""
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory(responses=[
+        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
+    ])
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport, run_id="the-batch-run-id",
+    )
+
+    assert result.dispatch_outcome.run_id == "the-batch-run-id"
+
+
+def test_rerequest_unanswered_with_no_run_id_is_unchanged(
+        fake_config, stub_module_transport_factory):
+    """`run_id=None` (the default) is today's behaviour — a fresh id, unchanged for
+    every existing caller that does not pass one."""
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory(responses=[
+        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
+    ])
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    assert result.dispatch_outcome.run_id is not None
+
+
 def test_rerequest_unanswered_with_nothing_unanswered_carries_no_dispatch_outcome(
         fake_config, stub_module_transport_factory):
     """No unanswered rows means no dispatch happened at all — `dispatch_outcome` must

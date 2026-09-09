@@ -46,3 +46,11 @@ and no `action` to HELD with reason "backend review — reason not returned", ne
 workflow's node chain and assert the RESPONSE item carries `action: "review"` and the
 reason. Plugin: `test_written_records.py` — a `{"queue": "needs_review"}` body classifies
 HELD, and the report block never prints "failed" for it.
+
+## Resolved 2026-09-09
+
+Fixed in debug session `.planning/debug/uat-batch-review-row-reads-failed.md` (F1):
+`Set Review -> Build Ingest Response` wired, `results` sourced by node name instead of
+`$input`, `n8n/wf_contact_ingest_cloud.json` regenerated, and `written_records.classify_item`
+given the defensive `queue: "needs_review"` -> HELD mapping. Deploying the regenerated
+workflow to n8n Cloud is still the operator's own next action (needs `.env`).

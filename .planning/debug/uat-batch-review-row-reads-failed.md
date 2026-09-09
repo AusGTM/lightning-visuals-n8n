@@ -3,7 +3,7 @@ status: fixing
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T00:10:00Z
+updated: 2026-09-09T02:00:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
@@ -29,9 +29,82 @@ DATA_END
 
 ## Current Focus
 
-hypothesis: F1 CONFIRMED and FIXED (see Resolution). F4 — row-3 was dispatched in its own enrichment leg (12140) and then dropped before `run_state` recorded dispatched rows, most likely at the step-7 `hold_emailless` split (held rows are named in prose but persisted nowhere on this lane) or at step 2's identity/resolution gate. F3 — the SKILL.md's step 9 depends on names (`outcome`, `outcome_ingest`, `disarm`, `balances_at_grant`, `ceiling`) bound in earlier fences; if any was unbound after the review row's null body, the fence raised or the step was skipped.
-next_action: F4/F3 next (work order item 2) — read `enrich-before-ingest/SKILL.md` steps 2, 7, 9 in full, `operator-claude-plugin/scripts/run_state.py`, and the four store files for run `377a913c…` (run_state, held_queue.json, written_records, run_audit) to trace exactly where row-3 fell out and whether step 9's fence names were bound.
-test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green.
+hypothesis: F1 CONFIRMED and FIXED (see Resolution). F3/F4 CONFIRMED — see reasoning_checkpoint and Resolution below.
+
+```yaml
+reasoning_checkpoint:
+  hypothesis: >
+    F4's row-3 reached the enrichment webhook (execution 12140, real gap_flag/
+    contactability output) via an out-of-band call that bypasses this repo's ONLY
+    sanctioned dispatch path (chunking.dispatch_plan) — the sole surviving in-repo
+    caller of enrichment.dispatch_enrichment that skips ALL bookkeeping is
+    scripts/enrichment.py's own __main__ CLI entry point, which no SKILL.md
+    references for a real send. F3's report block was computed (run_report.
+    build_run_report never raises — it degrades to a REPORT INCOMPLETE block on any
+    internal error) but never persisted anywhere durable, so its absence from the
+    operator's chat is unrecoverable and unprovable after the fact — a Claude-relay
+    omission, not a code crash.
+  confirming_evidence:
+    - "run_state.start_run records the FULL unmatched_rows row_id list unconditionally,
+      before any HTTP call; row-3's absence from total_row_ids proves he was never a
+      member of unmatched_rows for this run — not an execution-order artifact."
+    - "Every legitimate dispatch path (chunking.dispatch_plan, called from step 5's
+      main pass AND from rerequest_unanswered) unconditionally attempts
+      written_records.append_chunk, which even on an I/O failure still ATTEMPTS a
+      write; a Python mtime scan of the whole durable directory for the local
+      09:10-10:00 window (execution 12140's real time) shows literally zero files
+      touched other than the six files belonging to run 377a913c itself — ruling out
+      an orphaned-run_id write from rerequest_unanswered too."
+    - "scripts/enrichment.py's __main__ block calls dispatch_enrichment directly with
+      zero bookkeeping — the only such call site in the repository."
+  falsification_test: >
+    A written_records-<uuid>.json (or any other durable file) with an mtime in the
+    09:10-10:00 local window, under a run_id other than 377a913c, would prove a
+    dispatch_plan-routed call (the rerequest_unanswered orphaned-run_id defect) was
+    the mechanism instead. Ruled out by the mtime scan (see Evidence).
+  fix_rationale: >
+    F3 — persisting report["block"] to a durable, run_id-keyed file
+    (run_report-<run_id>.md) makes "was the report actually rendered" a
+    file-existence check instead of a memory of chat scrollback: addresses the ROOT
+    gap (the report existed only as a Python return value) not the symptom (operator
+    says "I did not get a report"). F4 — two REAL code defects were found in the same
+    investigation and are fixed regardless of whether either explains row-3 (neither
+    does — see Eliminated) because both independently corrupt this run's own
+    written_records artifact under NORMAL operation: (a) dispatch_plan flushes the
+    async-ack's bare {run_id, accepted, row_id} body as a bogus action:null/
+    outcome:failed entry whenever async_ack=True, even though written_records exists
+    specifically to record actual writes and a propose-mode async dispatch writes
+    nothing; (b) rerequest_unanswered omits run_id= when calling dispatch_plan,
+    breaking the documented "all dispatch legs share one run_id" invariant
+    (SKILL.md step 9's own prose) for any future run that actually exercises a
+    re-request pass. Row-3's specific disappearance itself has no code defect to
+    patch — it is made DETECTABLE in future via a row-count line in the persisted
+    report, not silently fixed.
+  blind_spots: >
+    Cannot fetch n8n execution 12140's raw request body directly (no .env access) to
+    see literally what was POSTed and by what tool; "operator's Claude ran
+    enrichment.py's CLI directly" is the only surviving code-level explanation after
+    eliminating dispatch_plan and rerequest_unanswered, but it is inferred by
+    elimination, not directly observed.
+  candidate_causes:
+    - "code: dispatch_plan flushes an async-ack body into written_records as a bogus
+      failure entry (confirmed, fixed)"
+    - "code: rerequest_unanswered omits run_id=, orphaning a re-request's bookkeeping
+      under a fresh UUID (confirmed invariant violation, fixed, not causal for row-3)"
+    - "process: an out-of-band, unsanctioned direct call (enrichment.py's CLI) to the
+      enrichment webhook for row-3, bypassing all SKILL.md-prescribed bookkeeping —
+      the surviving explanation for row-3's specific disappearance, not a repo code
+      defect"
+  and_gate: >
+    no — F3 and F4 are two independent gaps (report never persisted; a row's
+    dispatch bypassed bookkeeping) with two independent minimal fixes; neither
+    requires the other to be true, and the two in-repo defects found (async-ack
+    flush, missing run_id) each stand alone, not jointly required to explain any one
+    symptom.
+```
+
+next_action: F2 next (work order item 3) — implement `prune_durable_state` per `.planning/todos/pending/2026-09-09-durable-state-dir-never-prunes.md`'s proposed design (run_state-*/written_records-*/run_audit-*/run_manifest-* on their respective TTLs; held_queue.json/suggestion_declines.json/operator.local.json* never pruned; add the new run_report-*.md file from F3 to the same TTL family), RED then GREEN, one commit.
+test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green. F3/F4 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_chunking.py operator-claude-plugin/tests/test_preingest_merge.py -q` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q`; all green. F2 — pending.
 
 ## Constraints (project)
 
@@ -64,16 +137,120 @@ test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` an
   checked: tests/n8n/pairPipelineAssociationFlow.test.mjs, companyAssociationFlow.test.mjs
   found: `Build Ingest Response`'s `results = $input.all()` line is read ONLY to
     index-align against `gatedRows` (`nodeAll('HubSpot Associate Company Write Gate')`).
-    Existing tests already prove n8n's own connection-merge semantics are exercised
-    elsewhere in this codebase (`fan()` helper) for multi-source -> one-node wiring — so
-    adding `Set Review -> Build Ingest Response` as a second inbound edge is architecturally
-    consistent, but risks scrambling `results[i]` alignment in a mixed batch if the merge
-    interleaves Set Review's bare items with the association chain's items.
+    A second inbound edge into one node is already an established pattern in this exact
+    lane (`HubSpot Update` + `HubSpot Create` both -> `Build Association Request`, :989-992
+    — fan-IN precedent, not `fan()`, which is a fan-OUT helper for one source -> many
+    targets and is not the relevant precedent here) — so adding `Set Review -> Build
+    Ingest Response` as a second inbound edge is architecturally consistent.
   implication: safest fix sources `results` by NODE NAME (`nodeAll('HubSpot Associate
     Company')`) instead of `$input.all()` — decouples correctness from what else feeds
     the node's input, preserves byte-identical alignment for the existing write path.
+    Advisor correction (2026-09-09): n8n may run a node with multiple inbound branches
+    ONCE PER BRANCH THAT FIRES rather than once on a merged item array (an explicit Merge
+    node is n8n's documented way to combine branches) — unverified live either way in
+    this repo. It does not matter which is true here: EVERY value `Build Ingest Response`
+    computes is read by NODE NAME (`nodeAll('Decide Action')`, `nodeAll('Build Association
+    Request')`, `nodeAll('HubSpot Associate Company Write Gate')`, `nodeAll('HubSpot
+    Associate Company')`) — none of it is derived from this node's OWN `$input`, only
+    triggered by it. So whether the node runs once (merged) or twice (once per firing
+    branch) in a mixed create+review batch, every run reads the SAME full named-node
+    snapshots and produces a BYTE-IDENTICAL output array. `responseMode: "lastNode"`
+    taking whichever run happened last is therefore safe by construction, not by luck —
+    still worth a first-live-mixed-batch spot-check (Resolution operator handoff note),
+    since this is reasoned from source, not observed live.
+
+- timestamp: 2026-09-09T01:00:00Z
+  checked: written_records-377a913c….json's 3 entries against chunking.py's
+    dispatch_plan/append_chunk, preingest.rerequest_unanswered, enrichment.py's __main__
+  found: entry[0] (row_id="row-1", action=null, outcome=failed — no "queue" key) is
+    NOT the F1 dead-end shape; it is `written_records.append_chunk`'s classification of
+    a BARE dict body — `items = body if isinstance(body, list) else [body]` — and
+    `Build Async Ack`'s own documented shape is exactly `{run_id, accepted: true,
+    row_id}` (`ENRICH_BUILD_ASYNC_ACK`, scripts/build_cloud_workflows.py:4679-4685),
+    which CLAUDE.md §13.0.2 states "wins the race against the full chain,
+    deterministically, every time" whenever `async_ack: true`. Step 5's own dispatch
+    call passes `async_ack=True`. Entries[1]/[2] (Natalie's create, and a second
+    action=null/row_id=null entry) are from step 7's SYNCHRONOUS `dispatch.dispatch`
+    ingest send (no async_ack there — confirmed by reading SKILL.md :795-889), so
+    entry[2] is plausibly Barry's F1-shaped review hold, flushed correctly by chunk
+    but misclassified for the ALREADY-FIXED F1 reason.
+  implication: a REAL, distinct, confirmed defect — `chunking.dispatch_plan` flushes
+    the meaningless async-ack body into `written_records` whenever `async_ack=True`,
+    producing a bogus `action:null/outcome:failed` entry every time. Independent of F4.
+- timestamp: 2026-09-09T01:10:00Z
+  checked: preingest.rerequest_unanswered's own `chunking.dispatch_plan(...)` call
+    (operator-claude-plugin/scripts/preingest.py:840-841)
+  found: called WITHOUT `run_id=` — `dispatch_plan`'s default (`run_id=None`) mints a
+    fresh `uuid.uuid4().hex` internally, so any re-requested row's `written_records`
+    entries land in a DIFFERENT, orphaned file, never `written_records-377a913c….json`.
+    Directly contradicts SKILL.md step 9's own documented invariant: "One grant, two
+    lanes, several dispatch legs — the match pass, the enrich pass, the re-request
+    pass when it ran, and the final ingest send — all under the SAME run_id."
+  implication: a REAL, distinct, confirmed invariant violation. Fixed regardless of
+    causal relevance to row-3 (ruled out below) because a future run that DOES
+    exercise a re-request pass would silently lose that leg's bookkeeping the same way.
+- timestamp: 2026-09-09T01:20:00Z
+  checked: Python mtime scan of the WHOLE durable directory
+    (~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/) for
+    the local window 2026-09-09T09:10:00-10:00:00 (covers execution 12140's local time,
+    09:22:18)
+  found: exactly six files touched in that window, all six belonging to run
+    377a913c1c9d49129663c6c8740f436d (run_state, held_queue.json, run_manifest.json,
+    run_manifest-377a913c…, written_records-377a913c…, run_audit-377a913c…). No
+    OTHER run_id's file (which `rerequest_unanswered`'s orphaned-UUID defect would
+    have produced) exists anywhere near this timestamp.
+  implication: rules out `rerequest_unanswered` as F4's row-3 mechanism (its defect is
+    real but did not fire for this run — no second dispatch_plan-driven leg happened
+    at all). The ONLY surviving in-repo caller of `enrichment.dispatch_enrichment` that
+    produces ZERO bookkeeping trace by design is `scripts/enrichment.py`'s bare
+    `__main__` CLI entry point (verified: it calls `dispatch_enrichment` directly,
+    :600, with no `chunking.dispatch_plan`/`run_state`/`written_records` involvement
+    anywhere in that code path). No SKILL.md file references invoking it directly for
+    a real send (checked enrich-before-ingest, enrich-records, contact-upload).
+  implication_2: F4's root cause is therefore an out-of-band call outside every
+    SKILL.md-sanctioned path — a process/operator-Claude-execution gap, not a repo
+    code defect, per the objective's own framing for this case.
+- timestamp: 2026-09-09T01:30:00Z
+  checked: run_report.build_run_report's own exception handling
+    (operator-claude-plugin/scripts/run_report.py:668-694)
+  found: wraps its entire body in `try/except Exception`, degrading to a valid
+    `{"block": "**REPORT INCOMPLETE**...", ...}` dict rather than ever raising — "this
+    is the report's own never-raise contract" (its own comment). SKILL.md step 9's own
+    fence is PURE PROSE at the render step: "Render `report["block"]` to the operator
+    verbatim" — no code persists it anywhere; it exists only as a Python return value.
+  implication: `build_run_report` could not have crashed silently — if step 9's fence
+    executed, `report["block"]` existed as a real string. The only remaining
+    explanations are (a) step 9's fence never ran at all, or (b) it ran and the
+    resulting string was computed but never relayed to the operator's chat — neither
+    is a code defect; both are undetectable after the fact because nothing persists
+    the block. Confirms F3's root cause and its fix (persist the block to a durable
+    file, making its existence a checkable fact rather than a chat-scrollback memory).
 
 ## Eliminated
+
+- hypothesis: F4 — row-3 was dropped at step 2's identity/resolution gate (never
+    passed identity, never dispatched at all).
+  evidence: row-3's actual response (execution 12140) carries real `gap_flag`/
+    `contactability`/candidate-search output — a row that failed identity never
+    reaches the enrichment webhook at all, so it must have passed
+    firstname+lastname+company identity and been dispatched for real.
+  timestamp: 2026-09-09T00:45:00Z
+- hypothesis: F4 — row-3 fell out via `preingest.rerequest_unanswered`'s re-request
+    pass (a second, legitimate dispatch leg for a row unanswered in the first pass).
+  evidence: `rerequest_unanswered` DOES have a real bug (omits `run_id=`, see Evidence)
+    but that bug means IF it ran, it would still leave a trace — a
+    `written_records-<some-other-uuid>.json` file with an mtime near 09:22 local. The
+    directory-wide mtime scan found none. `rerequest_unanswered` therefore did not run
+    for this batch at all; it cannot be F4's mechanism.
+  timestamp: 2026-09-09T01:25:00Z
+- hypothesis: F4 — row-3 was classified `unchecked` at step 2's MATCH stage (a chunk
+    failure in the HubSpot search itself) and retried at the match level.
+  evidence: an unchecked-row retry re-runs `preingest.match_batch` (the MATCH/search
+    lane, hitting the ingest webhook's search-only mode) — it cannot itself produce
+    `gap_flag`/`contactability`, which are ENRICHMENT-lane merge-output fields. Whatever
+    produced execution 12140's real output was an enrichment dispatch, not a match
+    retry.
+  timestamp: 2026-09-09T01:28:00Z
 
 - hypothesis: F1 is a logic bug inside `Build Ingest Response`'s field-building JS
     (e.g. it drops review rows, or mis-maps `action`/`reason`).
@@ -130,6 +307,13 @@ verification: offline only (deploy to n8n Cloud is the operator's own next actio
     `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` 2821/2821 (2818 + 3
     new), 5 known skips unchanged. `.venv/bin/python -m pytest -q --tb=short` 4579/4579
     (4576 + 3 new), 154 known skips unchanged.
+operator_handoff: deploy `n8n/wf_contact_ingest_cloud.json` to n8n Cloud (needs the
+  operator's `.env`, out of scope for this session — see CHECKPOINT below). On the FIRST
+  mixed create+review batch after deploy, spot-check that the response body is the full
+  decided set exactly once (not duplicated, not truncated to one branch) — reasoned safe
+  by construction above (every value `Build Ingest Response` computes is read by node
+  name, so any run's output is byte-identical regardless of firing order), but never
+  observed live.
 files_changed:
   - scripts/build_cloud_workflows.py
   - n8n/wf_contact_ingest_cloud.json
@@ -139,4 +323,110 @@ files_changed:
   - tests/n8n/companyAssociationFlow.test.mjs
   - tests/n8n/pairPipelineAssociationFlow.test.mjs
 
-### F2/F3/F4 — pending, next in this session's work order.
+### F3 — RESOLVED
+
+root_cause: `run_report.build_run_report` never raises — an internal error degrades to
+  a valid `{"block": "**REPORT INCOMPLETE**...", ...}` dict, so `report["block"]`
+  ALWAYS existed as a real string once step 9's fence ran. SKILL.md step 9's own fence
+  was pure prose at the render step ("Render `report["block"]` to the operator
+  verbatim") — nothing persisted it anywhere durable. The block existed only as a
+  Python return value; whether step 9's fence ran at all, and whether its result was
+  actually relayed into the chat, are BOTH unrecoverable and unprovable after the
+  fact — a Claude-execution-fidelity gap, not a code crash.
+fix: `run_report.build_run_report` now PERSISTS `report["block"]` verbatim to
+  `run_report-<run_id>.md` (new `report_path`/`_persist_report`, mirroring
+  `run_audit_path`'s own resolution convention and every sibling store's
+  degrade-on-I/O-failure contract — never raises, never withholds the in-memory
+  report) before returning, for BOTH the happy path and the internal-error degrade
+  path. Closes the gap: "was this report actually rendered" is now a file-existence
+  check, never only a memory of chat scrollback. SKILL.md step 9's fence and prose
+  updated to say so.
+verification: RED before fix — `test_build_run_report_persists_the_block_verbatim_to_a_durable_file`,
+  `test_report_path_is_named_by_run_id_in_the_same_durable_directory_as_run_audit`,
+  `test_build_run_report_persists_even_the_report_incomplete_block` all failed
+  (`AttributeError: module 'run_report' has no attribute 'report_path'`). GREEN after
+  fix; `test_persisting_the_report_never_raises_on_an_io_failure` pins the
+  never-raise contract survives an injected `_atomic_write_0600` failure.
+files_changed:
+  - operator-claude-plugin/scripts/run_report.py
+  - operator-claude-plugin/tests/test_run_report.py
+  - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
+
+### F4 — RESOLVED (repo defects fixed; row-3's specific mechanism is process, not code)
+
+root_cause: row-3 (Ross Burridge, Tasmanian Racing Club) reached the enrichment
+  webhook for a real dispatch (execution 12140, genuine gap_flag/contactability
+  output) via a call outside every SKILL.md-sanctioned bookkeeping path. Proven by
+  elimination: (1) `run_state.start_run` unconditionally records the FULL
+  `unmatched_rows` row_id list before any HTTP call — row-3's absence from
+  `total_row_ids` proves he was never a member of `unmatched_rows` for this run, not
+  an execution-order artifact; (2) every legitimate dispatch path
+  (`chunking.dispatch_plan`, from step 5's main pass OR `rerequest_unanswered`)
+  unconditionally attempts `written_records.append_chunk`, which even on an I/O
+  failure still ATTEMPTS a write — a directory-wide mtime scan of the WHOLE durable
+  state directory for the local window covering execution 12140 (09:10-10:00) found
+  literally zero files touched other than the six files belonging to run 377a913c
+  itself, ruling out an orphaned-run_id write too; (3) the ONLY in-repo caller of
+  `enrichment.dispatch_enrichment` that produces zero bookkeeping trace by design is
+  `scripts/enrichment.py`'s bare `__main__` CLI entry point, which no SKILL.md file
+  references invoking directly for a real send. This is a process/operator-Claude
+  execution gap, not a repo code defect, per the objective's own framing for this
+  case.
+
+  Two REAL, DISTINCT, CONFIRMED code defects were found and fixed in the same
+  investigation — both independently corrupt this run's own `written_records`
+  artifact under NORMAL operation, though NEITHER explains row-3's specific
+  disappearance (see Eliminated):
+    (a) `chunking.dispatch_plan`, whenever `async_ack=True`, flushed the
+        deterministic ack body (`{run_id, accepted, row_id}` — `Build Async Ack`'s
+        own documented race-winning output, CLAUDE.md §13.0.2) into
+        `written_records` as a bogus `action: null / outcome: failed` entry,
+        misrepresenting a row that may have succeeded. Confirmed live: the entry
+        for Natalie Waters' row (who was in fact created successfully moments
+        later by a separate, synchronous dispatch leg).
+    (b) `preingest.rerequest_unanswered` called `chunking.dispatch_plan` without
+        `run_id=`, so `dispatch_plan`'s default (mint a fresh `uuid.uuid4().hex`)
+        orphaned any re-requested row's bookkeeping under an id nobody else in the
+        batch ever sees — directly contradicting SKILL.md step 9's own documented
+        invariant ("all under the SAME run_id").
+fix: (a) `chunking.dispatch_plan` now skips the `append_chunk` flush entirely when
+  `async_ack=True` (a deliberate no-op, never counted as a bookkeeping FAILURE) —
+  `written_records` exists to record what was ACTUALLY WRITTEN, and a propose-mode
+  async dispatch writes nothing; the real per-row outcome is recovered separately via
+  `watch.recover_async_dispatch` and was never re-flushed into this artifact either
+  way. (b) `preingest.rerequest_unanswered` gained a keyword-only `run_id=None`
+  parameter, threaded straight through to `chunking.dispatch_plan`; SKILL.md step
+  5's prose now instructs every caller to pass `run_id=run_id`. (c) F3's persisted
+  report plus a new row-accounting section (`build_run_report(...,
+  original_row_count=...)`) states this run's own `run_state.total_row_ids` count
+  against the caller-supplied original batch row count and names any mismatch
+  explicitly — the detectable-in-future gate for row-3's OWN class of symptom (a
+  row that never reached `run_state` at all, whatever the cause): SKILL.md step 9
+  now passes `original_row_count=len(rows)` (step 2's own, unreassigned row list).
+  No fix was written for row-3's specific mechanism — there is no code defect to
+  patch for an out-of-band CLI call; the row-accounting line is what makes a future
+  recurrence of this CLASS of symptom visible on the report's own face, per the
+  objective's explicit instruction for a process-not-code cause.
+verification: RED before fix —
+  `test_an_async_ack_body_is_never_flushed_into_written_records` (chunking) failed
+  with a real entry present where none was expected;
+  `test_rerequest_unanswered_threads_run_id_through_to_dispatch_plan` failed with
+  `TypeError: unexpected keyword argument 'run_id'`;
+  `test_row_accounting_flags_a_mismatch`/`test_row_accounting_reports_a_match`/
+  `test_row_accounting_states_unknown_when_no_original_row_count_is_given` (shared
+  with F3) failed before the row-accounting section existed. All GREEN after fix.
+  Full suites: `node --test tests/n8n/*.test.mjs` 942/942 (unchanged — no n8n JSON
+  touched by F3/F4). `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q`
+  2832/2832 (2821 + 11 new), 5 known skips unchanged.
+  `.venv/bin/python -m pytest -q --tb=short` 4590/4590 (4579 + 11 new), 154 known
+  skips unchanged.
+files_changed:
+  - operator-claude-plugin/scripts/chunking.py
+  - operator-claude-plugin/scripts/preingest.py
+  - operator-claude-plugin/scripts/run_report.py
+  - operator-claude-plugin/tests/test_chunking.py
+  - operator-claude-plugin/tests/test_preingest_merge.py
+  - operator-claude-plugin/tests/test_run_report.py
+  - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
+
+### F2 — pending, next in this session's work order.

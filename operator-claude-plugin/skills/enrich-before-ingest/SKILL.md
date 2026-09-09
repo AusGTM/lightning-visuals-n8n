@@ -566,7 +566,12 @@ whatever seven columns happened to be in the source file.
    it the SAME decremented `remaining_execution_ceiling` this dispatch just computed —
    never a fresh sample — and decrement it again from the returned `MergeResult.
    dispatch_outcome` with `chunking.projected_spend` before the final ingest leg below,
-   exactly as this dispatch decremented it from the enrich pass's own outcome.
+   exactly as this dispatch decremented it from the enrich pass's own outcome. **Also
+   pass `run_id=run_id`** — this run's already-minted id, never omitted. Without it,
+   `chunking.dispatch_plan` mints its own fresh id for this pass alone, orphaning the
+   re-request's `written_records` entries under a run_id step 9's report never looks
+   at (gap-closure 2026-09-09, F4 of `uat-batch-review-row-reads-failed`) — the exact
+   opposite of step 9's own promise that every dispatch leg lives under one run_id.
 
    **`recovery["responses"]` is already flat** — one `Build Response` item per row,
    because that is what one settled execution's own output already is (unlike a
@@ -1060,16 +1065,34 @@ whatever seven columns happened to be in the source file.
        outcome, globals().get("rerequest_dispatch_outcome"), outcome_ingest
    ) if o is not None]
 
+   # `original_row_count` (F4, gap-closure 2026-09-09): `rows` is step 2's own, minted
+   # once and never reassigned before this point in the normal (non-resume) flow —
+   # the whole batch's row count, BEFORE match/classification narrowed anything down.
+   # Compared against this run's own `run_state.total_row_ids` count inside the
+   # rendered block; a mismatch means a row never reached `run_state.start_run` at
+   # all (F4's own live shape — a row dispatched outside chunking.dispatch_plan,
+   # bypassing every store this report reads). May over-count when step 2's own
+   # extraction pass also yielded company rows (a different lane's own row set) —
+   # a rough, honest check, not a strict invariant.
    report = run_report.build_run_report(
        run_id, cfg, outcomes=outcomes, disarm=disarm,
-       balances=balances_at_grant, ceiling=ceiling)
+       balances=balances_at_grant, ceiling=ceiling, original_row_count=len(rows))
    ```
 
    Render `report["block"]` to the operator verbatim. It already carries the
    `REPORT INCOMPLETE` banner when any store could not be read cleanly, and it already
    states which provider balances were readable and which were not, and which part of
    the spend was therefore actually bounded (D-57-02): a ceiling cannot guard what it
-   cannot read.
+   cannot read. It also states this run's own row count against the batch's original
+   row count (F4), naming any mismatch explicitly rather than leaving a dropped row
+   to be found by hand.
+
+   **`build_run_report` also PERSISTS this block to `run_report-<run_id>.md` in the
+   durable state directory, before returning (F3, gap-closure 2026-09-09).** This does
+   not replace rendering it to the operator here — that is still mandatory, still the
+   step AFTER-01 names — but it closes the gap a chat-relay omission left open: "was
+   this report actually shown" is now a file that either exists or does not, never
+   only a memory of what scrolled past.
 
    **A `gated` row on this surface must never read as a completed one (AFTER-03).** It
    says the row would have been written and is recoverable by opening a grant and

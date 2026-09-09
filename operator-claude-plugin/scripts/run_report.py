@@ -145,6 +145,35 @@ def run_audit_path(run_id) -> Path:
     return durable_paths.resolve_state_path().parent / f"run_audit-{run_id}.json"
 
 
+def report_path(run_id) -> Path:
+    """Where ONE run's rendered end-of-run report block lives — F3 (gap-closure
+    2026-09-09): SKILL.md step 9's own fence was pure prose at the render step
+    ("Render `report["block"]` to the operator verbatim"), so the block existed only
+    as a Python return value with nothing persisting it. Resolved fresh, same durable
+    directory as every sibling artifact, one `.md` file per run, mirroring
+    `run_audit_path`'s own convention."""
+    return durable_paths.resolve_state_path().parent / f"run_report-{run_id}.md"
+
+
+def _persist_report(run_id, block, path=None) -> bool:
+    """Persist the rendered block verbatim — makes "was this report actually shown"
+    a file-existence check instead of a memory of chat scrollback. Never raises:
+    mirrors every sibling store's degrade-on-I/O-failure contract (D-59-10's same
+    posture) — a persistence miss must never make `build_run_report`'s own
+    never-raise promise a lie, and must never withhold the in-memory report from the
+    caller. Called for BOTH the happy path and the internal-error degrade path, so a
+    crash mid-build still leaves something durable naming that this run's report was
+    incomplete."""
+    target = Path(path) if path is not None else report_path(run_id)
+    if _refuses_real_durable_write_under_pytest(target):
+        return False
+    try:
+        durable_paths._atomic_write_0600(target, block)
+        return True
+    except OSError:
+        return False
+
+
 def _refuses_real_durable_write_under_pytest(target: Path) -> bool:
     """Mirrored verbatim from `written_records.py`/`remainder_queue.py`'s own guard: if
     `run_audit_path` resolves into the operator's REAL durable directory while running
@@ -533,7 +562,7 @@ def _find_contradictions(run_id, records, scoped_verdicts, remainder_entries,
 
 
 def _render_block(run_id, records, held_section, remainder_entries, spend, disarm,
-                  balances, contradictions, gaps):
+                  balances, contradictions, gaps, total_row_ids_count, original_row_count):
     lines = []
     if gaps or contradictions:
         lines.append(
@@ -544,6 +573,41 @@ def _render_block(run_id, records, held_section, remainder_entries, spend, disar
         lines.append("")
 
     lines.append(f"## End-of-run report — {run_id}")
+    lines.append("")
+
+    # F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): states this
+    # run's own registered row count against the caller-supplied original batch
+    # count, so a row that never reached `run_state.start_run` at all (whatever the
+    # cause — an out-of-band dispatch, a future code defect, anything) is visible on
+    # the report's own face rather than only discoverable by diffing store files.
+    lines.append("### Row accounting")
+    if total_row_ids_count is None:
+        lines.append(
+            "- This run's own registered row count: not observed (run_state unreadable)."
+        )
+    else:
+        lines.append(
+            f"- This run's own registered row count (run_state.total_row_ids): "
+            f"{total_row_ids_count}."
+        )
+    if original_row_count is None:
+        lines.append(
+            "- Original batch row count: not provided by the caller — a mismatch "
+            "cannot be checked this run."
+        )
+    elif original_row_count == total_row_ids_count:
+        lines.append(
+            f"- Matches the original batch's {original_row_count} row(s) — every "
+            "row accounted for."
+        )
+    else:
+        lines.append(
+            f"- **MISMATCH**: the original batch named {original_row_count} row(s), "
+            f"but only {total_row_ids_count} ever reached this run's own tracked "
+            f"scope. {abs(original_row_count - (total_row_ids_count or 0))} row(s) "
+            "never registered with run_state at all — check for a dispatch outside "
+            "chunking.dispatch_plan."
+        )
     lines.append("")
 
     lines.append("### Per-record outcomes")
@@ -666,7 +730,7 @@ def _render_block(run_id, records, held_section, remainder_entries, spend, disar
 
 
 def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
-                     ceiling=None):
+                     ceiling=None, original_row_count=None):
     """One end-of-run report over FIVE primary durable stores
     (`written_records`, `run_state`, `run_manifest`, `held_queue`, `remainder_queue`)
     plus one run-audit record (`record_audit`/`load_audit`) — AFTER-01, AFTER-03's
@@ -678,23 +742,43 @@ def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
     each falls back to this run's persisted audit record when omitted, and only then to
     a stated gap. Never raises: a missing or malformed input degrades to a named entry
     in `gaps`, never an exception.
+
+    `original_row_count` (F4, uat-batch-review-row-reads-failed, gap-closure
+    2026-09-09): keyword-only, defaults to `None` — the caller's own count of rows the
+    batch started with (e.g. the spreadsheet's row count), compared in the rendered
+    block against `run_state.total_row_ids`'s own count for this run. A mismatch
+    means some row never reached `run_state.start_run` at all — the exact shape F4
+    found live (a row dispatched out-of-band, bypassing every SKILL.md-sanctioned
+    bookkeeping path) — named on the report's own face rather than only discoverable
+    by diffing store files by hand. `None` (the caller did not pass it) states the
+    comparison as unavailable rather than guessing.
+
+    The rendered block is PERSISTED to `report_path(run_id)` before this function
+    returns — for both the happy path and the internal-error degrade path below —
+    closing F3: "was the end-of-run report actually rendered" becomes a
+    file-existence check, never only a memory of what scrolled past in chat.
     """
     try:
-        return _build_run_report(run_id, config, tuple(outcomes or ()), disarm, balances, ceiling)
+        report = _build_run_report(
+            run_id, config, tuple(outcomes or ()), disarm, balances, ceiling,
+            original_row_count,
+        )
     except Exception as exc:  # noqa: BLE001 — this is the report's own never-raise contract.
         gaps = [f"internal report error: {exc!r} — this report is incomplete."]
         block = (
             "**REPORT INCOMPLETE** — an internal error prevented building this report.\n"
             f"- {gaps[0]}"
         )
-        return {
+        report = {
             "run_id": run_id, "records": {}, "held": {"this_run": [], "backlog": {}},
             "remainder": [], "spend": {}, "disarm": None, "balances": {},
             "contradictions": [], "gaps": gaps, "block": block,
         }
+    _persist_report(run_id, report["block"])
+    return report
 
 
-def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling):
+def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling, original_row_count):
     gaps = []
 
     # --- written_records --------------------------------------------------------------
@@ -785,7 +869,7 @@ def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling):
 
     block = _render_block(
         run_id, records, held_section, remainder_entries, spend, resolved_disarm,
-        resolved_balances, contradictions, gaps)
+        resolved_balances, contradictions, gaps, progress.total, original_row_count)
 
     return {
         "run_id": run_id,

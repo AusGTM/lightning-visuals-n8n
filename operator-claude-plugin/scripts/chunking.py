@@ -402,6 +402,10 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     call exactly as it does today; what changes is how FAST the real backend's response
     arrives once `async_ack` is honoured server-side, which is not observable from an
     injected test transport and is proven live at this plan's own checkpoint, not here.
+    F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): also means this
+    chunk's `written_records.append_chunk` flush is SKIPPED — the synchronous `body` is
+    just the ack, never a real per-row outcome, and flushing it produced a bogus
+    `action: null` entry (see the guard at the call site below).
 
     `scale_up` (Phase 61 Plan 06 Task 5, T-61-25, substrate-3 of 61-SPIKE-VERDICT.md — see
     `scripts/build_cloud_workflows.py`'s `SCALE_UP_MAX_FAN_DEPTH`/`ENRICH_BUILD_SCALE_UP_
@@ -536,20 +540,35 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         # `ChunkResult` (already appended above) or `failed_chunks`: a bookkeeping miss
         # is not a dispatch failure, and the HubSpot write for this chunk may already
         # have landed.
-        try:
-            flushed = written_records.append_chunk(run_id, index, body)
-        except written_records.WrittenRecordsError as e:
-            flushed = False
-            bookkeeping_reason = str(e)
-        else:
-            bookkeeping_reason = (
-                None if flushed
-                else "the written-records artifact could not be saved (an I/O failure)"
-            )
-        if not flushed:
-            written_records_failures.append(
-                {"chunk_index": index, "reason": bookkeeping_reason}
-            )
+        #
+        # F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): skipped
+        # entirely when `async_ack` is True. `body` here is then deterministically
+        # `Build Async Ack`'s own race-winning output — `{run_id, accepted, row_id}`,
+        # never a real per-row outcome (see this function's own `async_ack` docstring
+        # paragraph: "Build Async Ack wins the race... every time"). `written_records`
+        # exists to record what was ACTUALLY WRITTEN (its own module docstring); an
+        # async-ack'd chunk's real outcome is recovered separately via
+        # `watch.recover_async_dispatch` and was never re-flushed into this artifact
+        # either way, so flushing the ack body here only ever produced a bogus
+        # `action: null / outcome: failed` entry for whichever row happened to be
+        # first in the chunk — confirmed live, run 377a913c1c9d49129663c6c8740f436d.
+        # Skipping is a deliberate no-op, never a bookkeeping FAILURE: nothing was
+        # attempted, so nothing went short.
+        if not async_ack:
+            try:
+                flushed = written_records.append_chunk(run_id, index, body)
+            except written_records.WrittenRecordsError as e:
+                flushed = False
+                bookkeeping_reason = str(e)
+            else:
+                bookkeeping_reason = (
+                    None if flushed
+                    else "the written-records artifact could not be saved (an I/O failure)"
+                )
+            if not flushed:
+                written_records_failures.append(
+                    {"chunk_index": index, "reason": bookkeeping_reason}
+                )
         if reason is not None:
             failed_chunks.append(chunk)
 

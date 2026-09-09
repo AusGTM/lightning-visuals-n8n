@@ -191,6 +191,92 @@ def test_build_run_report_never_raises_on_a_run_with_no_artifacts_at_all(tmp_pat
     assert set(report) >= REQUIRED_TOP_LEVEL_KEYS
 
 
+# =====================================================================================
+# F3 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): the report block was
+# ALWAYS computable (build_run_report never raises) but never PERSISTED anywhere — its
+# absence from the operator's chat was unrecoverable and unprovable after the fact. A
+# real, durable file makes "was this report rendered" a file-existence check instead of
+# a memory of chat scrollback.
+# =====================================================================================
+
+
+def test_build_run_report_persists_the_block_verbatim_to_a_durable_file(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    report = run_report.build_run_report("run-persist-1", {})
+    target = run_report.report_path("run-persist-1")
+    assert target.exists()
+    assert target.read_text(encoding="utf-8") == report["block"]
+
+
+def test_report_path_is_named_by_run_id_in_the_same_durable_directory_as_run_audit(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    assert run_report.report_path("abc123").parent == run_report.run_audit_path("abc123").parent
+    assert run_report.report_path("abc123").name == "run_report-abc123.md"
+
+
+def test_build_run_report_persists_even_the_report_incomplete_block(tmp_path, monkeypatch):
+    """The internal-error degrade path (`build_run_report`'s own except branch) still
+    produces a real `block` string — it must be persisted too, so a crash mid-build
+    still leaves SOMETHING durable naming that this run's report was incomplete."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+
+    def _boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(run_report, "_build_run_report", _boom)
+    report = run_report.build_run_report("run-crash-1", {})
+    assert "REPORT INCOMPLETE" in report["block"]
+    target = run_report.report_path("run-crash-1")
+    assert target.exists()
+    assert "REPORT INCOMPLETE" in target.read_text(encoding="utf-8")
+
+
+def test_persisting_the_report_never_raises_on_an_io_failure(tmp_path, monkeypatch):
+    """Mirrors every sibling store's degrade-on-write-failure contract (D-59-10's same
+    posture) — a persistence miss must never make build_run_report's own never-raise
+    promise a lie."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        run_report.durable_paths, "_atomic_write_0600",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    report = run_report.build_run_report("run-io-fail-1", {})
+    assert set(report) >= REQUIRED_TOP_LEVEL_KEYS
+
+
+# =====================================================================================
+# F4's detectable-in-future gate: the persisted report states this run's own row count
+# (run_state.total_row_ids) against the caller-supplied original batch row count, so a
+# future row that falls out of tracking BEFORE run_state.start_run (whatever the cause)
+# is visible on the report's own face, not only discoverable by diffing store files by
+# hand.
+# =====================================================================================
+
+
+def test_row_accounting_states_unknown_when_no_original_row_count_is_given(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    report = run_report.build_run_report("run-rowcount-1", {})
+    assert "not provided by the caller" in report["block"]
+
+
+def test_row_accounting_reports_a_match(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    run_state.start_run("run-rowcount-2", ["row-1", "row-2"])
+    report = run_report.build_run_report("run-rowcount-2", {}, original_row_count=2)
+    assert "every row accounted for" in report["block"]
+    assert "MISMATCH" not in report["block"]
+
+
+def test_row_accounting_flags_a_mismatch(tmp_path, monkeypatch):
+    """F4's exact live shape: a 3-row batch (row-1, row-2, row-3) whose run_state only
+    ever registered 2 of them."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    run_state.start_run("run-rowcount-3", ["row-1", "row-2"])
+    report = run_report.build_run_report("run-rowcount-3", {}, original_row_count=3)
+    assert "MISMATCH" in report["block"]
+    assert "3" in report["block"] and "2" in report["block"]
+
+
 def test_build_run_report_signature_takes_outcomes_plural_not_outcome():
     params = inspect.signature(run_report.build_run_report).parameters
     assert "outcomes" in params and "outcome" not in params

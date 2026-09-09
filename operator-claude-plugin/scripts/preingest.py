@@ -776,12 +776,23 @@ def strip_enrichment_extras(rows, policy_path=None) -> list[dict]:
 
 
 def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests, *,
-                          execution_ceiling=None):
+                          execution_ceiling=None, run_id=None):
     """One re-request pass over `merge_report.unanswered`, dispatched through the SAME
     `chunking.dispatch_plan` -> `enrichment.dispatch_enrichment` path the first pass
     used. No new send path exists here — see the comment on the `dispatch_plan` call
     below, and `test_retry_reuses_dispatch.py`'s `_EXPECTED_SEND_SHAPED`, which this
     function must leave unchanged (T-38-03).
+
+    `run_id` (F4, uat-batch-review-row-reads-failed, gap-closure 2026-09-09):
+    keyword-only, defaults to `None` — `chunking.dispatch_plan` mints its own fresh
+    `uuid.uuid4().hex` in that case, unchanged for every caller that does not pass one.
+    Every SANCTIONED caller (`enrich-before-ingest/SKILL.md` step 5) MUST pass the
+    batch's own already-minted run_id here — omitting it orphans this pass's
+    `written_records`/bookkeeping under an id nobody else in the batch ever sees,
+    directly contradicting step 9's own documented invariant: "the match pass, the
+    enrich pass, the re-request pass when it ran, and the final ingest send — all
+    under the SAME run_id." `dispatch_outcome.run_id` echoes back whatever
+    `dispatch_plan` actually used, so a caller can always confirm which id landed.
 
     `execution_ceiling` (Phase 57 / D-57-01 / REVIEW-57-H3): passed straight through to
     `chunking.dispatch_plan`, budget-aware exactly as every other dispatch path now is.
@@ -838,7 +849,7 @@ def rerequest_unanswered(rows, merge_report, providers, armed, config, transport
     # `requests` module AND calls `transport.post`/`.put` directly in its own body: this
     # function does the first and not the second.
     outcome = chunking.dispatch_plan(plan, providers, armed, config, transport=transport,
-                                     execution_ceiling=execution_ceiling)
+                                     execution_ceiling=execution_ceiling, run_id=run_id)
 
     new_items = []
     for body in outcome.responses:
