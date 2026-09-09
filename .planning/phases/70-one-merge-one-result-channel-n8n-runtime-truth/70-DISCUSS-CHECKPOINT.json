@@ -1,0 +1,28 @@
+{
+  "phase": "70",
+  "phase_name": "One merge, one result channel — n8n runtime truth",
+  "timestamp": "2026-09-09T10:30:00Z",
+  "areas_completed": ["Convergence mechanism"],
+  "areas_remaining": ["Result channel", "Write-gate contract", "Harness depth + UAT shape"],
+  "decisions": {
+    "Convergence mechanism": [
+      {"question": "How should lanes reconverge before a shared reader?", "answer": "Explicit Merge node (append, N inputs) at each convergence point; nodeRunRecovery.js retired", "options_presented": ["Explicit Merge node", "Per-item pairedItem lineage", "Keep nodeRunRecovery.js as the idiom"]},
+      {"question": "Is flipping executionOrder to v1 on the table?", "answer": "Researcher decides after n8n doc check on Merge empty-lane semantics under v0 vs v1", "options_presented": ["Flip to v1 via the builder", "Stay on v0, design around it", "Researcher decides after doc check"]},
+      {"question": "How far does retiring by-name reads go?", "answer": "Retire EVERY by-name read — no $('X') anywhere in generated jsCode", "options_presented": ["Retire bare .all() on converged nodes; lint the rest", "Retire every by-name read", "Retire only the seven listed instances"]},
+      {"question": "Which carry mechanism survives HTTP hops without $('Prev')?", "answer": "Researcher picks the carry mechanism; the locked rule is a build-time assertion that generated jsCode contains zero $('X') reads", "options_presented": ["Researcher picks carry; builder asserts zero $('X')", "Merge combine-by-position after every HTTP hop", "HTTP calls inside Code nodes"]}
+    ]
+  },
+  "folded_todos": [
+    "2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md",
+    "2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md",
+    "2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md",
+    "2026-09-09-enriched-preview-says-send-for-rows-the-confidence-gate-holds.md"
+  ],
+  "deferred_ideas": [],
+  "canonical_refs": [
+    ".planning/todos/pending/2026-09-09-n8n-lanes-reconverge-by-name-reads-one-result-channel.md",
+    ".planning/debug/resolved/uat-batch-review-row-reads-failed.md",
+    ".planning/uat/UAT-autonomous-batch-2026-09-09.md",
+    "docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md"
+  ]
+}
