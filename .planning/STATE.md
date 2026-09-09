@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
-status: executing
-stopped_at: Completed 70-06-PLAN.md
-last_updated: "2026-09-09T22:01:32.827Z"
+status: verifying
+stopped_at: Completed 70-07-PLAN.md
+last_updated: "2026-09-09T22:27:51.585Z"
 last_activity: 2026-09-10
 last_activity_desc: Phase 70 execution in progress — 70-05 Task 1 + Task 2 sub-step 2a landed
-state_head: f4840925e71cf06742d007784413f0e62c0664e1
+state_head: 8ba4c8be678334f8e80daee3253df96e6250fb44
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
   percent: 29
 ---
 
@@ -360,7 +360,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-09 — Phase 70 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-09T22:01:32.451Z
-**Stopped at:** Completed 70-06-PLAN.md
+**Last session:** 2026-09-09T22:27:42.871Z
+**Stopped at:** Completed 70-07-PLAN.md
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
@@ -651,6 +651,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 70 P04 | ~100min | 3 tasks | 42 files |
 | Phase 70 P05 | 6h | 3 tasks | 30 files |
 | Phase 70 P06 | 46 min | 3 tasks | 38 files |
+| Phase 70 P07 | 1h | 3 tasks | 18 files |
 
 ## Decisions
 
@@ -801,6 +802,10 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 70]: The ledger gate is caller discipline at dispatch_and_recover's append site; written_records.append_chunk is unchanged
 - [Phase 70]: config_gate.CAPABILITY_KEYS is the fail-closed mechanism for n8n_api_key; watch.require_executions_api is its named front door
 - [Phase 70]: preingest.partition_for_ingest runs confidence.assess first and the email check second, so a no-match row is held for the signal that withheld it
+- [Phase 70]: 70-07: the enrichment 2x2 rides a propose batch — Parse HubSpot Event caps a write request at 2 events and refuses an oversize one whole
+- [Phase 70]: 70-07: the ingest lane's two identity lanes are the two COMPANY-resolution keys (domain, name); contact identity there is email-only
+- [Phase 70]: 70-07: a predicted-only verdict writes shapes_equal: null and is test-pinned never to write true — an offline run must not fabricate the field the live gate turns on
+- [Phase 70]: 70-07: async_ack retired from every operator-facing document; three request-level flags remain (recompute, scale_up, source_by_field)
 
 ### Roadmap Evolution
 
