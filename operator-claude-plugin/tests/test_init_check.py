@@ -63,19 +63,25 @@ def test_template_placeholders_are_NOT_treated_as_configured(config_path):
 
 
 def test_a_partly_configured_file_says_what_still_works(config_path):
-    """PLUGIN-03 forbids over-refusing: no api key still uploads contacts fine."""
+    """PLUGIN-03 forbids over-refusing: a partly configured file still names what DOES
+    work. D-70-10 moved which capability that is — without `n8n_api_key` a send's rows
+    can never be read back, so uploading contacts is genuinely not ready; reading the
+    review queue still is."""
     _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET)
 
     report = init_check.inspect(config_path)
 
     assert report["status"] == init_check.STATUS_NEEDS_VALUES
-    assert report["capabilities"]["contact-upload"]["ready"] is True
+    # D-70-10 (Phase 70 Plan 06): `contact-upload` needs `n8n_api_key` too now, so a
+    # config carrying only the webhook secret is no longer ready for it; `review` is.
+    assert report["capabilities"]["contact-upload"]["ready"] is False
     assert report["capabilities"]["review"]["ready"] is True
     assert report["capabilities"]["status"]["ready"] is False
     assert report["capabilities"]["status"]["needs"] == ["n8n_api_key"]
+    assert report["capabilities"]["contact-upload"]["needs"] == ["n8n_api_key"]
 
     rendered = init_check.render(report)
-    assert "uploading contacts: ready" in rendered
+    assert "ready" in rendered, "a partly configured file must still name what works"
 
 
 def test_unparseable_json_is_its_own_state_not_a_crash(config_path):

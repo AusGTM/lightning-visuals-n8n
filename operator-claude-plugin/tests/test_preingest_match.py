@@ -26,6 +26,30 @@ from dispatch import DispatchError
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 
 
+# =====================================================================================
+# Phase 70 Plan 06 (D-70-05): the match webhook answers with an ack, so `match_batch`
+# reads its verdicts from the settled execution's runData, correlated on the batch's own
+# `run_id`. These tests are about the BATCH's own bookkeeping — call order, the unchecked
+# partition, the refusal, the re-sendable failed batch — not about the recovery
+# mechanism, which `test_watch_settle_reporting.py` owns. So the channel is stubbed here
+# and answers whatever the test says the backend decided.
+# =====================================================================================
+
+@pytest.fixture
+def recovers_matches(monkeypatch):
+    import watch
+
+    def _install(items, *, recovered=True):
+        monkeypatch.setattr(
+            watch, "recover_dispatch",
+            lambda *a, **k: {"recovered": recovered,
+                             "responses": [dict(item) for item in items],
+                             "run_data": {}},
+        )
+
+    return _install
+
+
 def _rows(n):
     return [
         {"firstname": f"First{i}", "lastname": "Doe", "company": "GCTC"}
@@ -214,13 +238,11 @@ def _item(row_id, tier="none"):
 
 
 def test_match_batch_issues_exactly_two_calls_in_plan_order(
-        fake_config, stub_post_transport_factory):
+        fake_config, stub_post_transport_factory, recovers_matches):
     plan = _plan_of(4, ceiling=2)  # two chunks of two rows
-    responses = [
-        [_item("row-1"), _item("row-2")],
-        [_item("row-3"), _item("row-4")],
-    ]
-    stub = stub_post_transport_factory(responses=list(responses))
+    stub = stub_post_transport_factory()
+    recovers_matches([_item("row-1"), _item("row-2"),
+                      _item("row-3"), _item("row-4")])
 
     outcome = preingest.match_batch(plan, fake_config, transport=stub)
 
@@ -230,12 +252,13 @@ def test_match_batch_issues_exactly_two_calls_in_plan_order(
 
 
 def test_a_chunk_whose_transport_raises_does_not_stop_the_run(
-        fake_config, stub_post_transport_factory):
+        fake_config, stub_post_transport_factory, recovers_matches):
     plan = _plan_of(4, ceiling=2)
     stub = stub_post_transport_factory(responses=[
         RuntimeError("dead endpoint"),
-        [_item("row-3"), _item("row-4")],
+        {"accepted": True},
     ])
+    recovers_matches([_item("row-3"), _item("row-4")])
 
     outcome = preingest.match_batch(plan, fake_config, transport=stub)
 
@@ -244,12 +267,13 @@ def test_a_chunk_whose_transport_raises_does_not_stop_the_run(
 
 
 def test_partition_unchecked_ids_and_response_row_ids_cover_the_plan_with_no_overlap(
-        fake_config, stub_post_transport_factory):
+        fake_config, stub_post_transport_factory, recovers_matches):
     plan = _plan_of(4, ceiling=2)
     stub = stub_post_transport_factory(responses=[
         RuntimeError("dead endpoint"),
-        [_item("row-3"), _item("row-4")],
+        {"accepted": True},
     ])
+    recovers_matches([_item("row-3"), _item("row-4")])
 
     outcome = preingest.match_batch(plan, fake_config, transport=stub)
 
@@ -260,12 +284,15 @@ def test_partition_unchecked_ids_and_response_row_ids_cover_the_plan_with_no_ove
 
 
 def test_the_backends_whole_batch_refusal_marks_the_whole_chunk_unchecked_with_its_own_reason(
-        fake_config, stub_post_transport_factory):
+        fake_config, stub_post_transport_factory, recovers_matches):
     plan = _plan_of(2, ceiling=2)  # one chunk
     refusal = [{"outcome": "refused", "reason": "Request carries 2 events, more than "
                 "this backend can enrich in one request", "events": [],
                 "object_type": "unknown"}]
-    stub = stub_post_transport_factory(responses=[refusal])
+    stub = stub_post_transport_factory()
+    # The refusal is emitted by the RUN now, not by the webhook body — the ack accepted
+    # the request and the execution then refused it.
+    recovers_matches(refusal)
 
     outcome = preingest.match_batch(plan, fake_config, transport=stub)
 
@@ -274,12 +301,13 @@ def test_the_backends_whole_batch_refusal_marks_the_whole_chunk_unchecked_with_i
 
 
 def test_the_outcomes_failed_batch_resends_through_plan_chunks_as_the_original_rows(
-        fake_config, stub_post_transport_factory):
+        fake_config, stub_post_transport_factory, recovers_matches):
     plan = _plan_of(4, ceiling=2)
     stub = stub_post_transport_factory(responses=[
         RuntimeError("dead endpoint"),
-        [_item("row-3"), _item("row-4")],
+        {"accepted": True},
     ])
+    recovers_matches([_item("row-3"), _item("row-4")])
 
     outcome = preingest.match_batch(plan, fake_config, transport=stub)
 
@@ -289,9 +317,10 @@ def test_the_outcomes_failed_batch_resends_through_plan_chunks_as_the_original_r
 
 
 def test_when_nothing_fails_unchecked_is_empty_and_failed_batch_is_absent(
-        fake_config, stub_post_transport_factory):
+        fake_config, stub_post_transport_factory, recovers_matches):
     plan = _plan_of(2, ceiling=2)
-    stub = stub_post_transport_factory(responses=[[_item("row-1"), _item("row-2")]])
+    stub = stub_post_transport_factory()
+    recovers_matches([_item("row-1"), _item("row-2")])
 
     outcome = preingest.match_batch(plan, fake_config, transport=stub)
 

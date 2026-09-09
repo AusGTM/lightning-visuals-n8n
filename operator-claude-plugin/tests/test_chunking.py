@@ -1544,3 +1544,119 @@ def test_dispatch_and_recover_reads_rows_from_rundata_never_from_the_ack(
     assert [row["row_id"] for row in result["rows"]] == ["only"]
     assert result["outcome"].responses == ({"run_id": run_id, "accepted": True,
                                             "row_ids": []},)
+
+
+def _stepping_clock(step=10.0):
+    """A monotonic stub that ADVANCES. A constant `now` makes `elapsed` permanently 0,
+    so a recovery that never matches loops forever instead of hitting its bound —
+    a hang, not a failure, which is the worst shape a test can have."""
+    ticks = [0.0]
+
+    def _now():
+        ticks[0] += step
+        return ticks[0] - step
+
+    return _now
+
+
+def test_a_failed_chunk_does_not_erase_the_rows_of_the_chunks_that_landed(
+    fake_config, stub_module_transport_factory, stub_get_transport_factory
+):
+    """A chunk the backend refused produced no execution carrying this run id. Waiting
+    for one execution per RESULT would burn the whole bound and then return nothing —
+    erasing the two chunks that did land."""
+    run_id = "run-70-06-partial"
+    post_transport = stub_module_transport_factory(
+        [{"accepted": True}, (500, {"message": "boom"}), {"accepted": True}])
+    # Two executions carrying this run id — one per chunk that actually landed.
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-a"}, {"id": "exec-b"}]},
+        _scale_up_free_execution(run_id, [{"row_id": "1", "action": "update"}]),
+        _scale_up_free_execution(run_id, [{"row_id": "5", "action": "update"}]),
+    ])
+
+    result = chunking.dispatch_and_recover(
+        three_chunk_plan(), PROVIDERS, True, fake_config, run_id=run_id,
+        transport=post_transport, get_transport=get_transport,
+        workflow_id="wf-enrichment-cloud", now=_stepping_clock(),
+        sleep=lambda s: None, bound_seconds=30,
+    )
+
+    assert result["recovered"] is True, (
+        "two of three chunks landed — their rows must not be erased by the third"
+    )
+    assert sorted(row["row_id"] for row in result["rows"]) == ["1", "5"]
+
+
+def test_a_run_where_every_chunk_failed_never_waits_on_the_result_channel(
+    fake_config, stub_module_transport_factory
+):
+    """Nothing reached the backend, so there is no execution to wait for — reported as
+    not recovered immediately rather than after the full bound."""
+    def _never(*args, **kwargs):
+        raise AssertionError("no execution can exist for a run that sent nothing")
+
+    result = chunking.dispatch_and_recover(
+        three_chunk_plan(), PROVIDERS, True, fake_config, run_id="run-70-06-none",
+        transport=stub_module_transport_factory([(500, {}), (500, {}), (500, {})]),
+        get_transport=_never)
+
+    assert result["recovered"] is False
+    assert result["rows"] == []
+
+
+def test_the_ingest_mode_completes_a_full_dispatch_and_recover_cycle(
+    fake_config, tmp_path, stub_get_transport_factory, monkeypatch
+):
+    """The third mode of D-70-10's acceptance: the ingest lane, driven end to end
+    through the REAL result channel with the time-proximity lookup patched to raise."""
+    import dispatch as dispatch_module
+
+    def _never(*args, **kwargs):
+        raise AssertionError("the time-proximity lookup is not a correlation path")
+
+    monkeypatch.setattr(executions_client, "find_execution_for_dispatch", _never)
+    executions_client._workflow_id_cache.clear()
+
+    run_id = "run-70-06-ingest"
+    execution = {
+        "id": "exec-ingest", "status": "success",
+        "data": {"resultData": {"runData": {
+            watch.INGEST_ECHO_NODE: [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+            watch.INGEST_RESPONSE_NODE: [{"data": {"main": [[
+                {"json": {"contact_id": "c1", "action": "update",
+                          "hs_object_id": "1001", "association": "associated"}}]]}}],
+            "HubSpot Update": [{"data": {"main": [[{"json": {"id": "1001"}}]]}}],
+        }}},
+    }
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "wf-ingest", "name": watch.INGEST_WORKFLOW_NAME}]},
+        {"data": [{"id": "exec-ingest"}]},
+        execution,
+    ])
+
+    csv_path = tmp_path / "contacts.csv"
+    csv_path.write_text("email\na@b.com\n")
+
+    class _Post:
+        @staticmethod
+        def __call__(*args, **kwargs):
+            class _R:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"run_id": run_id, "accepted": True, "row_ids": ["c1"]}
+            return _R()
+
+    result = dispatch_module.dispatch(
+        str(csv_path), True, fake_config, transport=_Post(), run_id=run_id,
+        get_transport=get_transport, now=_stepping_clock(), sleep=lambda s: None,
+        bound_seconds=30)
+
+    assert result["recovered"] is True
+    assert [row["contact_id"] for row in result["rows"]] == ["c1"]
+    assert result["rows"][0]["reported_outcome"] == "update", (
+        "the ingest lane still reconciles against the write node's own output"
+    )
+    assert result["body"] == result["ack"], "the body is the ack, never a row outcome"

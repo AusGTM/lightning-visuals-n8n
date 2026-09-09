@@ -640,20 +640,39 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
     outcome = dispatch_plan(plan, providers, armed, config, transport=transport,
                             run_id=run_id, **dispatch_kwargs)
 
-    recovery_kwargs = {"transport": get_transport} if get_transport is not None else {}
-    if workflow_id is not None:
-        recovery_kwargs["workflow_id"] = workflow_id
-    recovery = _watch.recover_dispatch(
-        config, outcome.run_id, expected_chunk_count=len(outcome.results) or 1,
-        lane=lane, now=now, sleep=sleep, bound_seconds=bound_seconds, **recovery_kwargs)
+    # Only chunks that actually REACHED the backend produced an execution carrying this
+    # run id. Counting every result would make one failed chunk out of three wait the
+    # whole bound and then return NOTHING — erasing the two chunks that did land.
+    landed = sum(1 for r in outcome.results if r.ok)
+    if landed == 0:
+        recovery = {"recovered": False, "responses": [], "run_data": {},
+                     "matched_executions": 0}
+    else:
+        recovery_kwargs = {"transport": get_transport} if get_transport is not None else {}
+        if workflow_id is not None:
+            recovery_kwargs["workflow_id"] = workflow_id
+        recovery = _watch.recover_dispatch(
+            config, outcome.run_id, expected_chunk_count=landed,
+            lane=lane, now=now, sleep=sleep, bound_seconds=bound_seconds,
+            **recovery_kwargs)
 
     rows = recovery.get("responses") or []
     run_data = recovery.get("run_data") or {}
-    # `report.reconcile` is what makes a row's `action` reflect the write node's OWN
-    # output rather than the pre-write intent `Build Response` reports (Pitfall 3) —
-    # routed through the SAME function `dispatch.dispatch` already uses for the ingest
-    # lane, never a second copy of that rule.
-    rows = report.reconcile(rows, run_data)
+    # D-70-06: the reconcile rule is SHARED, not copied — `report.reconcile` is the one
+    # function that downgrades a decided `create`/`update` to `not_confirmed` when the
+    # terminal write node produced nothing (Pitfall 3 / T-26-01), and `dispatch.dispatch`
+    # already routes the ingest lane through it.
+    #
+    # It is applied ONLY on the ingest lane, deliberately. `WRITE_NODE_FOR_ACTION` names
+    # `HubSpot Update`/`HubSpot Create` — the INGEST workflow's node names. The
+    # enrichment lane has no node by either name, so reconciling there would downgrade
+    # EVERY enrichment write to `not_confirmed` on the strength of a node that was never
+    # going to be in its runData: a false downgrade written into the ledger. A parity
+    # test would only pin two rules in agreement about the wrong lane. When the
+    # enrichment lane's own write-node map is established, it belongs as a parameter to
+    # this same function — never as a second copy of the rule.
+    if lane == "ingest":
+        rows = report.reconcile(rows, run_data)
 
     can_write = any(r.can_write for r in outcome.results)
 

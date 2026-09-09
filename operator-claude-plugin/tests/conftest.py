@@ -143,15 +143,34 @@ class _StubTransport:
     def __init__(self, responses=None):
         self._responses = list(responses) if responses is not None else None
         self.calls = []
+        # Phase 70 Plan 06 (D-70-05): the webhook answers with an ack now, so a test that
+        # scripts ROW-shaped payloads here is describing what the RUN decided, not what
+        # the POST returned. Captured at construction (before the list is consumed) so
+        # `_recovered_from_scripted_posts` below can hand those same rows back through
+        # the one channel that still carries them. See that fixture for why this shim
+        # exists instead of seven per-test rewrites.
+        self.scripted_rows = [
+            item
+            for scripted in (responses or [])
+            if isinstance(scripted, list)
+            for item in scripted
+            if isinstance(item, dict)
+        ]
 
     def __call__(self, url, headers=None, files=None, timeout=None, **kwargs):
         self.calls.append(
             {"url": url, "headers": headers, "files": files, "timeout": timeout, **kwargs}
         )
+        _LAST_CALLED_POST_STUB.append(self)
         if self._responses is None:
             return _StubResponse()
         scripted = self._responses.pop(0) if self._responses else {}
         return _as_response(scripted, _StubResponse)
+
+
+# The most recently CALLED post stub, so the recovery shim below can find the rows the
+# test scripted. A list rather than a module global so it can be cleared per test.
+_LAST_CALLED_POST_STUB: list = []
 
 
 @pytest.fixture
@@ -699,3 +718,38 @@ def no_durable_writes(monkeypatch, tmp_path):
         return real_written_records_path(run_id)
 
     monkeypatch.setattr(written_records, "written_records_path", _safe_written_records_path)
+
+
+@pytest.fixture(autouse=True)
+def _recovered_from_scripted_posts(monkeypatch):
+    """Phase 70 Plan 06 (D-70-05/D-70-08): every send in every mode now reads its rows
+    from the settled execution's runData (`watch.recover_dispatch`), never from the POST
+    response — the webhook answers `{run_id, accepted, row_ids}` and nothing else.
+
+    A large body of existing tests scripts ROW-shaped payloads on the POST stub. Those
+    tests are describing WHAT THE RUN DECIDED; only the channel it comes back on
+    changed. Rather than rewrite each one, this autouse shim routes those same scripted
+    rows through the real entry point: `recover_dispatch` answers with whatever the most
+    recently CALLED post stub was scripted with.
+
+    It is deliberately NOT a fallback in production code — `chunking.dispatch_and_recover`
+    and `preingest.match_batch` have no body-reading branch left to take. It is a test
+    harness, and a test that wants to exercise the recovery mechanism itself
+    (`test_watch_settle_reporting.py`, `test_chunking.py`'s dispatch-and-recover cases)
+    overrides it by passing its own `get_transport`/patching `recover_dispatch` directly,
+    which wins because it is applied later.
+    """
+    _LAST_CALLED_POST_STUB.clear()
+    import watch
+
+    real = watch.recover_dispatch
+
+    def _recover(config, run_id, expected_chunk_count=1, **kwargs):
+        if kwargs.get("transport") is not None or kwargs.get("workflow_id") is not None:
+            return real(config, run_id, expected_chunk_count, **kwargs)
+        stub = _LAST_CALLED_POST_STUB[-1] if _LAST_CALLED_POST_STUB else None
+        rows = list(getattr(stub, "scripted_rows", []) or [])
+        return {"recovered": True, "responses": rows, "run_data": {},
+                "matched_executions": expected_chunk_count}
+
+    monkeypatch.setattr(watch, "recover_dispatch", _recover)

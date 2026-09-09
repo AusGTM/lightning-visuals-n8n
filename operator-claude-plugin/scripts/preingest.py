@@ -11,6 +11,7 @@ The one rule that makes the whole flow safe: every row is joined to its verdict 
 shift every later row onto the wrong person's verdict, and nothing downstream could
 detect it (37-CONTEXT §12, §7).
 """
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -243,7 +244,7 @@ def refused_reason(items):
     return None
 
 
-def fetch_matches(chunk, config, transport=requests.post):
+def fetch_matches(chunk, config, transport=requests.post, *, run_id=None):
     """One POST per chunk of rows — unarmed. Written attribute-shaped
     (`transport=requests.post`, dispatch.py's exact shape, deliberately NOT
     enrichment.py's module-shaped `transport=requests` default) so this function IS
@@ -255,10 +256,20 @@ def fetch_matches(chunk, config, transport=requests.post):
     selection (`enrichment.build_envelope(chunk, [])`), so it burns no provider
     credit, and it reads HubSpot search results without writing anything HubSpot-side
     — there is nothing here for arming to protect.
+
+    RETURNS THE ACK, NOT THE MATCH VERDICTS (D-70-05/D-70-08, Phase 70 Plan 06). The
+    webhook answers `{run_id, accepted, row_ids}` for every send in every mode now, so
+    what this returns says only that the chunk was accepted. `match_batch` reads the
+    verdicts from the settled execution's runData, correlated on `run_id` — which this
+    function puts on the envelope. Reading this return as verdicts is what would file
+    every matched row as `unmatched`: the highest-consequence version of this defect,
+    because the match verdicts are `confidence.assess`'s only input.
     """
     config_gate.require_capability(config, "match")
 
     envelope = enrichment.build_envelope(chunk, [])
+    if run_id:
+        envelope["run_id"] = run_id
     url = enrichment.enrichment_target(config)
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
 
@@ -320,9 +331,13 @@ class MatchOutcome:
     unchecked_row_ids: frozenset = field(default_factory=frozenset)
     failure_reasons: tuple = field(default_factory=tuple)
     failed_batch: dict = None
+    # D-70-05: the batch's own correlation handle — what its verdicts were recovered on,
+    # and what a caller passes back to read them again without re-sending.
+    run_id: str = None
 
 
-def match_batch(plan, config, transport=requests.post):
+def match_batch(plan, config, transport=requests.post, *, run_id=None,
+                 get_transport=None, now=None, sleep=None, bound_seconds=None):
     """Send every chunk of a rows plan, in plan order, one at a time — mirrors
     `chunking.dispatch_plan`'s sequential, skip-a-failing-chunk contract, without
     arming: there is nothing to arm, since `fetch_matches` takes no `armed`
@@ -344,36 +359,68 @@ def match_batch(plan, config, transport=requests.post):
     reason, and is never zipped against the chunk's row ids — it carries no join key,
     and there is exactly one of it regardless of how many rows were sent.
     """
+    run_id = run_id or uuid.uuid4().hex
+
     responses = []
     unchecked = set()
     failure_reasons = []
     failed_chunks = []
+    landed = 0
+    landed_row_ids = set()
 
     for chunk in plan.chunks:
         chunk_row_ids = {row["row_id"] for row in chunk.get("rows", [])}
 
         try:
-            items = fetch_matches(chunk, config, transport=transport)
+            fetch_matches(chunk, config, transport=transport, run_id=run_id)
         except DispatchError as exc:
             unchecked |= chunk_row_ids
             failure_reasons.append(str(exc))
             failed_chunks.append(chunk)
             continue
 
+        landed += 1
+        landed_row_ids |= chunk_row_ids
+
+    # D-70-05 (Phase 70 Plan 06): ONE recovery for the whole batch, from the settled
+    # execution(s) carrying this batch's own `run_id`. The per-chunk POST returns an ack
+    # and nothing else, so reading it as verdicts would have filed every row `unmatched`
+    # — and these verdicts are `confidence.assess`'s only input, so an `unmatched` here
+    # becomes a held row, an unenriched person, and an operator told nothing was found.
+    #
+    # The bounded wait lives entirely in `watch.recover_dispatch`; nothing here loops.
+    if landed:
+        import watch  # lazy: watch -> scheduled_arm -> chunking -> ... -> this module
+
+        recovery = watch.recover_dispatch(
+            config, run_id, expected_chunk_count=landed,
+            **({"transport": get_transport} if get_transport is not None else {}),
+            now=now, sleep=sleep, bound_seconds=bound_seconds)
+        items = list(recovery.get("responses") or [])
         reason = refused_reason(items)
         if reason is not None:
-            unchecked |= chunk_row_ids
+            # A whole-batch refusal is the backend's own, and it is about every chunk
+            # that reached it — the same conclusion the per-chunk read used to draw.
+            unchecked |= landed_row_ids
             failure_reasons.append(reason)
-            failed_chunks.append(chunk)
-            continue
-
-        responses.extend(items)
+            failed_chunks.extend(plan.chunks)
+        elif not recovery.get("recovered"):
+            # "We could not look" — never `unmatched`. A row the channel said nothing
+            # about must not be reported as a row HubSpot does not hold.
+            unchecked |= landed_row_ids
+            failure_reasons.append(
+                "the match run did not settle inside the watch's bound — these rows "
+                "were sent but no verdict has come back yet.")
+            failed_chunks.extend(plan.chunks)
+        else:
+            responses.extend(items)
 
     return MatchOutcome(
         responses=tuple(responses),
         unchecked_row_ids=frozenset(unchecked),
         failure_reasons=tuple(failure_reasons),
         failed_batch=chunking.failed_batch(failed_chunks),
+        run_id=run_id,
     )
 
 

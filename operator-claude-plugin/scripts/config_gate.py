@@ -55,12 +55,18 @@ def config_path(allow_migration: bool = True) -> Path:
 # §7), and a refusal that printed enrichment wording ("enriching records") would tell the
 # operator they were about to spend money on a call that spends none.
 CAPABILITY_KEYS = {
-    "contact-upload": ("n8n_url", "webhook_secret"),
+    # D-70-10 (Phase 70 Plan 06): `n8n_api_key` joins every SEND-capable row. runData is
+    # the only channel a row's outcome comes back on now, so a config that cannot read
+    # the executions API cannot report on what it sends — and a refusal that fires only
+    # AFTER the POST is a diagnosis, not a gate. Adding it to this table (rather than
+    # inventing a second refusal) is what makes every send path refuse before the money
+    # is spent; `watch.require_executions_api` is that rule's named front door.
+    "contact-upload": ("n8n_url", "webhook_secret", "n8n_api_key"),
     "status": ("n8n_url", "n8n_api_key"),
     "control": ("n8n_url", "n8n_api_key"),
     "review": ("n8n_url", "webhook_secret"),
-    "enrichment": ("n8n_url", "webhook_secret"),
-    "match": ("n8n_url", "webhook_secret"),
+    "enrichment": ("n8n_url", "webhook_secret", "n8n_api_key"),
+    "match": ("n8n_url", "webhook_secret", "n8n_api_key"),
     # The sweep runs UNATTENDED (29-03, D-15) — its own row so an admin can decline to
     # enable it without disabling the interactive status check. All three keys on
     # purpose: `status` degrades to the half it can read, but a sweep that can only read

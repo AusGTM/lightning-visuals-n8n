@@ -160,7 +160,9 @@ def test_control_refuses_in_plain_language_without_the_api_key(fake_config):
         config_gate.require_capability(cfg, "control")
     message = str(exc.value)
     assert "n8n_api_key" in message
-    assert "contact-upload" in message, "a missing API key is not the plugin being broken"
+    # D-70-10 (Phase 70 Plan 06): see test_status_unknown.py — `contact-upload` needs
+    # the executions-API key now; `review` is what still works without it.
+    assert "review" in message, "a missing API key is not the plugin being broken"
     for value in fake_config.values():
         if isinstance(value, str) and value:
             assert value not in message

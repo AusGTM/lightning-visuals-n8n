@@ -123,7 +123,10 @@ def test_that_refusal_points_at_the_example_file_and_says_what_still_works(fake_
         config_gate.require_capability(cfg, "status")
     message = str(exc.value)
     assert "operator.local.example.json" in message
-    assert "contact-upload" in message  # a missing API key is not the plugin being broken
+    # D-70-10 (Phase 70 Plan 06): `contact-upload` needs `n8n_api_key` too now — a send
+    # whose rows can never be read back cannot be reported on. What still works without
+    # the key is the read-only `review` capability.
+    assert "review" in message  # a missing API key is not the plugin being broken
 
 
 def test_no_capability_refusal_ever_contains_a_configured_value(fake_config):
