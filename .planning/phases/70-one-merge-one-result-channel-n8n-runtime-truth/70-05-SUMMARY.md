@@ -86,7 +86,7 @@ coverage:
     description: "Task 2's FIRST sub-step (2a: reshape splice_write_gates itself into the two-node IF-shaped gate, on the three lanes it already covers) is done. Task 2's remaining sub-steps (2b: the enrichment lane's first-ever spliced gate; 2c: remove the ingest precheck per D-70-06 and wire each lane's false branch to its response Merge, fixing the Associate/Review Lane Sentinel's pre-gate anyWrite check in the process) and Task 3 (one verdict for update+association, scheduled-maintenance's remaining adoption) are NOT executed in this dispatch."
     verification: []
     human_judgment: true
-    rationale: "Deferred to a continuation dispatch under explicit context-budget guidance in this plan's own execution instructions (\"work lean ... if you approach exhaustion, commit what is green ... never leave uncommitted work\"). 2c specifically was deferred because it requires touching the Associate Lane Sentinel's/Review Lane Sentinel's condition (currently computed pre-gate, purely off row.action) to avoid a newly-reachable Merge starvation once the ingest precheck is removed — see \"Next Phase Readiness\" below for the full mechanism, which this dispatch traced but did not yet fix."
+    rationale: "Deferred to a continuation dispatch under explicit context-budget guidance in this plan's own execution instructions (\"work lean ... if you approach exhaustion, commit what is green ... never leave uncommitted work\"). 2c specifically was deferred because it requires touching the Associate Lane Sentinel's/Review Lane Sentinel's condition (currently computed pre-gate, purely off row.action) to avoid a newly-reachable Merge starvation once the ingest precheck is removed. A THIRD dispatch traced 2b itself and found the identical class of hazard is larger there: Build Response is already behind a real, ~30-sentinel-covered Merge (Phase 70 Plan 03/04), and moving the write-safety check out of Decide Action/Decide Company Action breaks the existing br(HubSpot Create)-family sentinels' row.action-keyed conditions on EVERY disarmed batch containing a create/enrich row, not just an edge case — see \"Next Phase Readiness\" below (\"2b's OWN hazard\") for the full mechanism. No code was written for 2b this dispatch; the advisor consulted mid-dispatch said \"no Merge on this lane\", which is incorrect, and implementing on that basis would have shipped a live hang."
 
 duration: ~2h20m (single continuous session across two checkpoints, Task 1 + Task 2's 2a sub-step)
 completed: 2026-09-10
@@ -189,6 +189,88 @@ between two OTHER unconditional reassignments (`returnOnly`→`"proposed"`, medi
 { action = "review"; ... }` (the association-hold rule, Phase 61 Plan 06 Task 1) — removing the
 write-safety check changes what value reaches that immediately-following check, and needs
 tracing through, not just deleting in isolation.
+
+**2b's OWN hazard, found THIS dispatch (the third), not yet fixed — read before touching
+`splice_write_gates` again.** A continuation dispatch's advisor call correctly identified three
+things this SUMMARY's previous revision missed (gate `HubSpot Company Create` too — the plan's
+"three" is the identical off-by-one class already caught for scheduled-maintenance; a
+`false_target` kwarg wiring the IF's false lane to `Build Response`; and the carry-merge
+`carry_source` for `HubSpot Company Create` must become the new gate IF's TRUE output, not `IF
+Company Create` directly, mirroring the exact count-mismatch class already latent at ingest
+L1336-1338). But that advisor call also said "no Merge on this lane" for `Build Response` — **that
+is wrong, and tracing it revealed a fourth, larger problem the advice never surfaced:**
+
+`Build Response` has been behind a real `mode="append"` Merge (`Build Response Merge`) since Phase
+70 Plan 03/04 (D-70-01), sized at splice time to its then-existing inbound edges and backed by a
+~30-entry starved-lane sentinel network (`_add_starved_lane_sentinel` calls, ~L7574-7990) that
+feeds a marker `{}` into every declared Merge input whenever that input's real producer will not
+run this execution. `HubSpot Create`/`HubSpot Update`/`HubSpot Company Update`/`Adapt Company
+Create` (which is what actually feeds the Merge for the create path, downstream of the create
+carry-merge) are ALREADY declared inputs, covered by an existing family of sentinels keyed on
+`row.action` as `Decide Action`/`Decide Company Action` computed it — e.g. `Contacts None Create
+Sentinel`: `!rows.some(r => r.action === "create")` feeds `br("HubSpot Create")`; its mirror
+`Contacts All Create Sentinel` feeds `br("HubSpot Update")`/`br("IF Enrich", 1)`; and the four
+Companies-branch mirrors of both.
+
+**These existing sentinels' conditions silently break once the write-safety check moves out of
+`Decide Action`/`Decide Company Action` and into the new gate.** Today, in the COMMITTED
+(unconditionally disarmed — `ALLOW_HUBSPOT_RECORD_WRITES` is a baked JS `const`, not a runtime
+`$env` read) build, a create/enrich row is ALREADY converted to `action: "write_blocked"` INSIDE
+`Decide Action`/`Decide Company Action`, before it ever reaches `IF Create`/`IF Enrich` — so
+`rows.some(r => r.action === "create")` is ALREADY false for every disarmed batch, and
+`Contacts None Create Sentinel` ALREADY fires 100% of the time in the committed build (this is not
+new — Task 2b would not change today's disarmed behaviour if it stopped there). The moment the
+inline check is removed from `ENRICH_DECIDE_CLOUD`/`ENRICH_DECIDE_CO_CLOUD` (2b's own action item),
+`row.action` stays `"create"`/`"enrich"` all the way to `IF Create`/`IF Enrich`, REGARDLESS of
+whether the new downstream gate will refuse it — so `Contacts None Create Sentinel`'s condition
+flips to FALSE whenever any create-type row exists, EVEN THOUGH THE GATE WILL STILL REFUSE IT
+(disarmed default). Its target (`br("HubSpot Create")`, the write node's own unchanged direct edge
+into `Build Response Merge`) then never receives a delivery — the write node genuinely never runs,
+because the gate's TRUE branch is empty — and `Build Response Merge` hangs forever on that input.
+This reproduces on EVERY disarmed execution that contains so much as one create/enrich-typed row,
+which is the overwhelmingly common case, not an edge case; it is strictly worse than the D-70-06
+ingest hazard 2c documents below, which needs a specific all-refused batch to trigger.
+
+The fix has to touch BOTH sides of the Merge, not just the new gate's false branch:
+
+1. **The pre-existing `br(<write-node>)` sentinel family must be re-keyed on the gate's verdict,
+   not on `row.action`.** Each condition (`Contacts None/All Create Sentinel`, `Contacts NonCreate
+   None/All Enrich Sentinel`, and the four Companies mirrors) needs to ask "will ANY/NO row
+   actually reach the write node", which after 2b means re-implementing the SAME
+   `_writeSafetyAllows`-shaped predicate inside the sentinel's own `condition_js` — the identical
+   "duplicate for graph-plumbing, never a second authorization" pattern 2c's own fix (below)
+   already needs for the ingest sentinels, generalised to a THIRD site. A sentinel evaluating this
+   predicate needs the same `ALLOW_HUBSPOT_RECORD_WRITES`/`ALLOW_HUBSPOT_CREATE`/allowlist inputs
+   the gate itself closes over — either inline the same baked constants into the sentinel's
+   `condition_js` (this module already re-embeds `WRITE_SAFETY_GATE_JS`-shaped bodies verbatim at
+   more than one call site, so this is consistent with the existing style) or read the row's own
+   `write_allowed`/`write_blocked_reason` field once the GATE has already stamped it — the latter
+   requires sourcing the sentinel from the GATE's own Code node output (a single producer, exactly
+   like every other sentinel source in this network) rather than from `Decide Action`, which is
+   almost certainly the cleaner fix since it needs no predicate duplication at all: `!rows.some(r
+   => r.write_allowed === true && r.action === "create")` fed from `"HubSpot Create Write Gate"`.
+2. **The new gate-false-branch Merge input needs its OWN sentinel**, firing whenever the gate ran
+   but refused at least one row of the matching action, feeding whichever Merge input
+   `false_target="Build Response"` produces (resolved via `_merge_input_index` after
+   `splice_merge_before` runs, exactly like every other `br(...)`/`cg(...)`/`eg(...)` target in the
+   file) — the mirror-image condition of (1), sourced from the SAME gate Code node output.
+3. Both of these must be figured out and wired for FOUR gates (contacts create, contacts update,
+   companies create, companies update) — eight new/rewritten sentinel entries in total, not four.
+
+**This dispatch did not implement any of 2b** (no file was edited this session — `git status` was
+clean at both the start and end) precisely because attempting the mechanical gate-splice-plus-
+false-target change alone, without first solving this sentinel re-keying, would have shipped code
+that passes the plan's OWN listed acceptance criteria references superficially (the two Decide
+nodes would genuinely stop computing write permission, and a fully-refused two-row batch WOULD
+produce two rows at a response builder in a hand-built unit test that never exercises the real
+`Build Response Merge`) while introducing a live hang on every disarmed batch containing a single
+create/enrich row when driven through the FULL committed graph (`node --test tests/n8n/*.test.mjs`
+would very likely have caught this via `enrichmentBatchRefusal.test.mjs`'s walker-driven cases or
+`enrichmentConvergenceMerge.test.mjs`, if either drives a create/enrich-shaped row through — check
+that BEFORE writing any implementation, since a green suite that never actually exercises this path
+would be a false all-clear). Read the ~30 existing sentinel entries at `scripts/build_cloud_workflows.py`
+~L7574-7990 in full before writing the eight new/changed ones — the exact `br()`/`_merge_input_index`
+idiom and `sx, sy` canvas-placement convention must be followed, not reinvented.
 
 **2c — the hazard this dispatch found and did NOT fix.** Do not skip this trace; it is the reason
 2a stopped short of wiring any false branch anywhere.
