@@ -297,13 +297,13 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 7 plans (planned 2026-09-09), waves 0–5, sequential on the builder file except
+**Plans:** 1/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
 70-05 ∥ 70-06.
 
 Plans:
 **Wave 1**
 
-- [ ] 70-01-PLAN.md — Wave 0: the graph walker over the committed JSON, its own RED-detection unit tests, and the by-name-read detector proven against today's violations
+- [x] 70-01-PLAN.md — Wave 0: the graph walker over the committed JSON, its own RED-detection unit tests, and the by-name-read detector proven against today's violations
 - [ ] 70-02-PLAN.md — Wave 1: TRACER — one ingest row end to end (Merge at the convergence, carry Merge across the HTTP hops, ack-only webhook, runData at the client); leads with the one-way contract checkpoint and closes on a disarmed live Merge-semantics probe before any expansion plan runs
 
 **Wave 2** *(blocked on Wave 1 completion)*

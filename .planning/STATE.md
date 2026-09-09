@@ -4,18 +4,18 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
-status: completed
-stopped_at: Phase 70 context gathered
-last_updated: "2026-09-09T12:28:50.442Z"
-last_activity: 2026-09-08
-last_activity_desc: Phase 69 complete
-state_head: 16fc57bbbae4b37779c47a024ae74350e4f8feac
+status: executing
+stopped_at: Completed 70-01-PLAN.md
+last_updated: "2026-09-09T12:53:23.342Z"
+last_activity: 2026-09-09
+last_activity_desc: Phase 70 execution started
+state_head: 59812becd9770857ec7776797547908d36d025e7
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 23
-  completed_plans: 16
-  percent: 70
+  completed_plans: 17
+  percent: 74
 ---
 
 # Project State
@@ -358,10 +358,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 70 (One merge, one result channel — n8n runtime truth) — READY TO EXECUTE
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-09-08 — Phase 69 complete
+Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-09-09 — Phase 70 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████░░░░░] 50% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [███████░░░] 74% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,12 +501,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-09T10:48:50.416Z
-**Stopped at:** Phase 70 context gathered
+**Last session:** 2026-09-09T12:53:22.414Z
+**Stopped at:** Completed 70-01-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -642,6 +642,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 67 P02 | 25min | 3 tasks | 5 files |
 | Phase 67 P03 | 35min | 3 tasks | 6 files |
 | Phase 67 P04 | 20min | 3 tasks | 6 files |
+| Phase 70 P01 | 45min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -774,6 +775,9 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 67]: suggest-contacts sources run_id/outcome/disarm from step 8's reused enrich-before-ingest step-5 dispatch block, never minting a second run_id.
 - [Phase 67]: REVIEW-57-L5's contact-upload exclusion paragraph is retired at enrich-before-ingest and enrich-records: contact-upload now builds the mandatory report too, since autonomy breaks the real-time-watching premise.
 - [Phase 67]: AUTO-02/AUTO-04 closed: plugin 0.41.0 released with a CHANGELOG section stating the changed autonomy write posture; the D-61-08 reversal recorded verbatim beside ALLOW_N8N_ARM in backend-control/SKILL.md, pinned by test_disclosure_audit.py.
+- [Phase 70]: walkerSmoke.json authored in Task 1 (verify dependency), not deferred to Task 2 as the plan's file listing implied
+- [Phase 70]: n8n-nodes-base.extractFromFile treated as explicit identity-passthrough, not the generic unhandled-type fallback
+- [Phase 70]: Merge nodes fire exactly once per replay (buffer-until-ready then lock) rather than modelling n8n's full multi-wave re-firing
 
 ### Roadmap Evolution
 
