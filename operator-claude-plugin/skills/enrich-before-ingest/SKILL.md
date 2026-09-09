@@ -190,6 +190,21 @@ whatever seven columns happened to be in the source file.
    )
    ```
 
+   **A chunk mixing identity lanes (some rows with an email, some without, some with
+   only a LinkedIn URL) can come back over HTTP carrying fewer items than rows sent —
+   trust `classify_matches`, do not re-split or re-send by hand.** The enrichment
+   webhook's synchronous response only ever reflects ONE lane's worth of items when a
+   chunk fires more than one of its lanes in the same n8n execution (n8n's own
+   `Respond to Webhook` semantics: only the first lane's run is sent back over HTTP,
+   later lanes' runs are computed correctly server-side but never reach the caller —
+   uat-batch-review-row-reads-failed F5b). This is why `classify_matches` above is
+   handed `spec["rows"]` (every row the chunk sent), never `outcome.responses` alone,
+   and why it walks that row list rather than the response body: a row with no
+   matching response item is bucketed `unchecked` (see its own docstring), never
+   silently dropped and never misread as `unmatched`. An `unchecked` row already has
+   a real second chance — the re-request pass, below — so a short-looking sync body
+   here is an expected shape, not a signal to intervene.
+
    **This search needs no arming.** It writes nothing to HubSpot and spends no
    provider credit — it is a read wearing a search's clothes, not a step this flow's
    two grants protect. Widening what this search can look up — including the
