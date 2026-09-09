@@ -142,10 +142,15 @@ test("Build Ingest Response reports every decided row, associated or not", () =>
   ];
   const requested = [{ contact_id: "12345", email: "jo@other.example", company_id: "901" }];
   const gated = [{ contact_id: "12345" }];
-  const out = runCode(jsCodeOf("Build Ingest Response"), [{ status: "ok" }], {
+  // F1 fix: "results" is now read by node name ("HubSpot Associate Company"), not
+  // $input — Build Ingest Response also runs off Set Review's branch now, so $input can
+  // carry an unpredictable mix. seedItems is passed through unused; kept as [] to make
+  // that explicit rather than a misleading leftover value.
+  const out = runCode(jsCodeOf("Build Ingest Response"), [], {
     "Decide Action": decided,
     "Build Association Request": requested,
     "HubSpot Associate Company Write Gate": gated,
+    "HubSpot Associate Company": [{ status: "ok" }],
   });
   assert.equal(out.length, 2);
   assert.equal(out[0].association, "associated");

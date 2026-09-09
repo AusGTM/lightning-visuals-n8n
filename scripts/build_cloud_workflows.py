@@ -502,9 +502,14 @@ function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } 
 const decided = nodeAll('Decide Action').map((it) => it.json);
 const requested = nodeAll('Build Association Request').map((it) => it.json);
 const gatedRows = nodeAll('HubSpot Associate Company Write Gate').map((it) => it.json);
-const results = $input.all();
-// results[i] is gatedRows[i]'s own response — the association HTTP node runs once per
-// item on a straight chain out of its gate.
+// F1 (uat-batch-review-row-reads-failed): sourced by NAME, not `$input.all()`. This node
+// now also runs off `Set Review`'s branch (a review-only batch has nothing on the
+// association chain at all), so `$input` can hold a mix of association responses and
+// bare `{queue: "needs_review"}` items in an unpredictable merge order. `results[i]` is
+// gatedRows[i]'s own response — the association HTTP node runs once per item on a
+// straight chain out of its gate — and reading it by node name keeps that alignment
+// correct regardless of what else feeds this node's input.
+const results = nodeAll('HubSpot Associate Company');
 const associated = {};
 gatedRows.forEach((g, i) => {
   const r = results[i] && results[i].json;
@@ -993,6 +998,17 @@ return $input.all().map((it) => ({
     conns["IF Create"] = {"main": [
         [{"node": "HubSpot Create", "type": "main", "index": 0}],   # true (gated)
         [{"node": "Set Review", "type": "main", "index": 0}],       # false
+    ]}
+    # F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): `Set
+    # Review` was a dead end — a batch where every row is held for review never reached
+    # `Build Ingest Response`, so `responseMode: "lastNode"` answered the webhook with
+    # `Set Review`'s own bare `{"queue": "needs_review"}` output, losing `Decide
+    # Action`'s real `action`/`reason`/`row_id`. `Build Ingest Response` already
+    # reconstructs every decided row from `Decide Action` by NAME (see BUILD_INGEST_
+    # RESPONSE above), so this wiring only needs to make it RUN when a batch is
+    # review-only; it does not need Set Review's own output content.
+    conns["Set Review"] = {"main": [
+        [{"node": "Build Ingest Response", "type": "main", "index": 0}]
     ]}
 
     note = {

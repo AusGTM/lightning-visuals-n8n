@@ -125,6 +125,38 @@ def test_an_unrecognised_action_is_failed_and_reason_is_preserved():
     assert entry["reason"] == "never seen this"
 
 
+def test_a_bare_queue_needs_review_body_with_no_action_is_held_not_failed():
+    """F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): before the
+    backend fix, `Set Review`'s dead-end wiring meant the webhook responded with its bare
+    `{"queue": "needs_review"}` — no `action`, no `reason`, no `row_id`. Without this
+    defensive mapping `outcome_for_action(None)` falls through `ACTION_TO_OUTCOME`'s
+    fallback to FAILED, which is exactly what the durable `written_records-377a913c….json`
+    recorded for the held row. Defense in depth: the backend fix (routing `Set Review`
+    through `Build Ingest Response`) means this exact null-action shape should no longer
+    occur live, but an un-deployed workflow or a future regression re-severing the same
+    edge must not silently misreport a held row as a write failure."""
+    entry = written_records.classify_item({"queue": "needs_review"})
+    assert entry["outcome"] == written_records.HELD
+    assert entry["outcome"] != written_records.FAILED
+    assert entry["reason"] == "backend review — reason not returned"
+
+
+def test_a_queue_needs_review_body_that_does_carry_a_reason_keeps_it():
+    entry = written_records.classify_item(
+        {"queue": "needs_review", "reason": "no company in HubSpot matched name X"}
+    )
+    assert entry["outcome"] == written_records.HELD
+    assert entry["reason"] == "no company in HubSpot matched name X"
+
+
+def test_a_queue_field_with_a_real_action_present_is_unaffected():
+    """The defensive fallback is scoped to `action is None` — a body that DOES carry an
+    action (the normal, fixed-backend shape, or any other lane) must resolve exactly as
+    it always has, `queue` or no `queue`."""
+    entry = written_records.classify_item({"queue": "needs_review", "action": "skip"})
+    assert entry["outcome"] == written_records.NO_ACTION
+
+
 def test_the_ten_real_action_values_are_extracted_from_the_builder_not_hardcoded():
     """REVIEW-57-M: circularity guard. The set is read FROM
     `scripts/build_cloud_workflows.py`, not typed out here — an eleventh action added

@@ -306,7 +306,21 @@ def classify_item(item) -> dict:
     hs_object_id = item.get("hs_object_id") or None
     object_type = item.get("object_type") or "contacts"
     reason = item.get("reason")
-    outcome = outcome_for_action(action, hs_object_id)
+    # F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): before the
+    # backend fix (scripts/build_cloud_workflows.py's ingest lane, `Set Review` wired as
+    # a dead end), a review-only batch's webhook body was `Set Review`'s bare
+    # `{"queue": "needs_review"}` — no `action` at all, so `outcome_for_action(None)` fell
+    # through `ACTION_TO_OUTCOME`'s fallback to FAILED, exactly what
+    # `written_records-377a913c….json` recorded for the held row. Defense in depth: the
+    # backend fix means this shape should no longer occur live, but a caller on an
+    # un-deployed workflow, or a future regression re-severing the same edge, must not
+    # silently misreport a held row as a write failure. Scoped to `action is None`: a
+    # body that DOES carry an action resolves exactly as it always has, `queue` or not.
+    if action is None and item.get("queue") == "needs_review":
+        outcome = HELD
+        reason = reason or "backend review — reason not returned"
+    else:
+        outcome = outcome_for_action(action, hs_object_id)
 
     entry = {
         "object_type": object_type,
