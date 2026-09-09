@@ -2,347 +2,326 @@
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 plan: 05
 subsystem: n8n-workflow-generation
-tags: [n8n, workflow-automation, code-generation, write-safety, hubspot]
+tags: [n8n, workflow-automation, code-generation, write-safety, hubspot, merge-convergence]
 
 requires:
   - phase: 70-04
     provides: carry Merges at every hop, zero by-name reads across all 8 built cloud workflows, assert_no_by_name_reads wired into main()
 provides:
-  - "D-70-12 Task 1 only: one canonical write_request shape ({action, hs_object_id, domain, email}) emitted by every gated write's upstream Code node in the ingest and scheduled-maintenance lanes and by review-decision's Build Review Decision, via one shared _buildWriteRequest JS helper (_write_request_js() in scripts/build_cloud_workflows.py)"
-  - "_write_gate_js reads ONLY write_request now; the four-way identity fallback ladder (existingRecord.hs_object_id / identity_keys.domain / properties.email / bare .email) is deleted, not extended"
-  - "assert_write_request_emitters, called from splice_write_gates, walks a gated write's inbound edges back through routing IFs/Merges to the nearest Code node and raises at generation time if that node does not call _buildWriteRequest"
-  - "Review lane's write_request.domain is forced to the literal null for BOTH companies and contacts (D-70-13), plus a same-dispatch Rule-1 fix keeping Build Review Decision's own allowlist precheck in agreement with the gate it precedes"
-affects: [70-06, remainder of 70-05 (Task 2's 2b/2c sub-steps and Task 3, not yet executed)]
+  - "D-70-12: one canonical `write_request` ({action, hs_object_id, domain, email}) emitted by every gated write's upstream Code node on all four lanes, via one shared `_buildWriteRequest` helper; the gate reads ONLY that shape; the four-way identity fallback ladder is deleted; `assert_write_request_emitters` raises at generation time when an emitter is missing"
+  - "D-70-13: the enrichment lane has real spliced gates for the first time (four of them: HubSpot Create/Update, HubSpot Company Create/Update); neither Decide node computes write permission or bakes an arming constant any more"
+  - "D-70-14: every gate is IF-shaped — a Code node stamps a `write_allowed` verdict onto EVERY item and a paired IF routes it; a refused row is emitted with `action: \"write_blocked\"` and a reason, reaching the lane's response builder through its OWN merge input"
+  - "D-70-06: the ingest lane's pre-write refusal precheck is deleted; the row's outcome of record is the gate's own emitted verdict, overlaid onto the decided snapshot by Build Ingest Response"
+  - "D-70-15: an update and its association share ONE write_request and ONE allowlist verdict; the association's second gate is removed; an update is never held for lack of a company"
+  - "`wire_gate_refusal_lane(...)`: the one helper that gives a gate's refusal its own merge input plus the three sentinels that keep both that input and the write path's own fed"
+affects: [70-06, 70-07]
 
 actuals:
-  tokens: 260000
-  tasks: 1.3
-  commits: 3
+  tokens: 690000
+  tasks: 3
+  commits: 15
   plan_head_before: 0350531
 
 tech-stack:
   added: []
   patterns:
-    - "Shared emitter helper composed at module top (WRITE_REQUEST_JS / _write_request_js()), unlike WRITE_SAFETY_GATE_JS's build-site composition — the emitter has no dependency on constants defined later in the module, so `+ WRITE_REQUEST_JS +` works at every call site regardless of definition order, while WRITE_SAFETY_GATE_JS still must be composed at each build site because it depends on WRITE_SAFETY_DEFAULTS."
-    - "Generation-time emitter assertion via a walk-to-nearest-Code-node BFS (_write_request_source_names) plus a string-literal marker check (`_buildWriteRequest(` in jsCode) — same string-marker-at-generation-time approach as _run_recovery_marker/assert_no_by_name_reads, extended to a graph walk because the emitter is not always the write node's DIRECT predecessor (native IF/Merge nodes carry no jsCode and must be walked through)."
+    - "Shared emitter helper composed at module top (WRITE_REQUEST_JS / _write_request_js()), unlike WRITE_SAFETY_GATE_JS's build-site composition — the emitter has no dependency on constants defined later in the module, so `+ WRITE_REQUEST_JS +` works at every call site regardless of definition order."
+    - "Generation-time emitter assertion via a walk-to-nearest-Code-node BFS (_write_request_source_names) plus a string-literal marker check (`_buildWriteRequest(` in jsCode) — same string-marker-at-generation-time approach as _run_recovery_marker/assert_no_by_name_reads, extended to a graph walk because the emitter is not always the write node's DIRECT predecessor."
+    - "A merge input may have many MARKER producers but exactly ONE real producer. Markers carry no data and are filtered downstream, so a double marker delivery is harmless; two real producers on one input race, and the Merge fires and locks on whichever satisfies it first."
+    - "`mirror_index`: derive a new merge input's starvation sentinels from the ones already feeding a sibling input, instead of hand-listing ~30 sentinel names that would go stale the first time one is added."
 
 key-files:
-  created:
-    - tests/n8n/writeGateShape.test.mjs
+  created: []
   modified:
     - scripts/build_cloud_workflows.py
     - n8n/wf_contact_ingest_cloud.json
+    - n8n/wf_enrichment_cloud.json
     - n8n/wf_review_decision_cloud.json
     - n8n/wf_scheduled_maintenance_cloud.json
+    - tests/n8n/writeGateShape.test.mjs
+    - tests/n8n/companyRecomputeLaneFlow.test.mjs
+    - tests/n8n/ingestUpdateWriteBlockedFlow.test.mjs
     - tests/n8n/ingestUpdateGateDomainFallback.test.mjs
     - tests/n8n/companyAssociationFlow.test.mjs
     - tests/n8n/contactCreateGateFlow.test.mjs
+    - tests/n8n/enrichmentLaneContactCreateRefusal.test.mjs
+    - tests/n8n/bareEventChainFlow.test.mjs
+    - tests/n8n/createIdentitySeed.test.mjs
+    - tests/n8n/enabledResearchLaneFlow.test.mjs
+    - tests/n8n/writePatchBodyFlow.test.mjs
+    - tests/n8n/ingestCarryMerge.test.mjs
+    - tests/n8n/ingestTracerFlow.test.mjs
+    - tests/n8n/reviewAllowlistRefusal.test.mjs
     - tests/n8n/reviewDecisionEndpoint.test.mjs
     - tests/n8n/reviewWriteFlagSeparation.test.mjs
+    - tests/n8n/dedupeSweepWiring.test.mjs
+    - tests/n8n/sjPredicates.test.mjs
     - tests/test_write_gate_coverage.py
+    - tests/test_cloud_write_path.py
+    - tests/test_merge_helpers.py
+    - tests/test_remaining_credits_response.py
+    - operator-claude-plugin/tests/test_control_flag_parity.py
+    - .planning/todos/completed/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md
+    - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md
 
 key-decisions:
-  - "D-70-13 was implemented literally and lane-wide, not contacts-only: Build Review Decision feeds BOTH the companies PATCH (Review Decision Update) and the contacts PATCH (Review Contact Decision Update) through routing IFs, so forcing write_request.domain to null there applies to companies too. Companies lose their domain-allowlist path on review writebacks as a side effect of this task's literal instruction — flagged here for the operator rather than silently accepted, since the plan's own wording (\"contacts stay id-allowlist-only\") reads contacts-specific even though the single emitter node cannot distinguish."
-  - "Scheduled-maintenance's splice_write_gates call actually gates FOUR write nodes, not the plan's stated three: SJ-1 Set Requested, SJ-2 Set Requested, Dedupe Set Needs Review, AND Review Apply Update (all action=\"enrich\", one dict literal at ~L9605 in the current file). Task 1 treated all four uniformly (emitters: SJ-1 Extract Rows, SJ-2 Company Gate, Dedupe Sweep, Apply Review respectively) since assert_write_request_emitters is wired unconditionally into splice_write_gates and would have raised on the fourth otherwise. Task 3's plan text (\"its three set-requested gates\") is off by one against the actual code and should be read as four when Task 3 executes."
-  - "ENRICH_EXTRACT_SEARCH_ROWS is a shared Code body (SJ-1/SJ-3/Dedupe/Review Extract Rows all use it) — adding write_request emission there for SJ-1's sake means SJ-3 Extract Rows and Dedupe/Review Extract Rows also now carry an unused write_request field on their output. Harmless: SJ-3's own reshape (ENRICH_SJ3_BUILD_DISPATCH_EVENT) drops it, and Dedupe/Review's own downstream Code nodes (Dedupe Sweep / Apply Review) construct their OWN write_request from the row's real fields rather than relying on the pass-through one."
-  - "TDD RED/GREEN was collapsed into a single feat commit (implementation preceded the dedicated test files, no gsd-tools check tdd-red-evidence run) under this dispatch's context-budget pressure — documented as a deviation, not fabricated as a separate RED commit."
+  - "A gate's refusal lane gets its OWN merge input, never a share of the write path's. The first design shared it — reasoning that reusing an existing index left the ~30-entry starved-lane sentinel network untouched, which it does. It is still wrong: every OTHER multi-producer input on these merges is mutually exclusive by construction (a marker OR the real terminal, never both), and this one was not. On an ARMED batch with a MIXED verdict the zero-hop refusal beats the permitted row's multi-hop delivery, the Merge fires and locks, and the real arrival is dropped. Measured with the walker over the committed graph: the permitted row reported `association: \"not_confirmed\"` when HubSpot had associated it. Every disarmed suite was green through the bug, because disarmed every row is refused and the two producers ARE exclusive."
+  - "The refusal lane costs three sentinels per gate, not one: `No Refusal Sentinel` (gate-sourced, feeds the refusal input when the gate refused nothing), `Gate Unreached Sentinel` or a derived `mirror_index` (feeds it when the gate never ran), and `All Refused Sentinel` (gate-sourced, feeds the WRITE path's own input when the gate allowed nothing). The third is newly required precisely because refused rows now keep their real action past the routing IFs: the routing-keyed sentinels correctly stay silent when rows ARE heading for the write, yet the gate can refuse every one of them."
+  - "Ingest's `Associate Lane Sentinel` gains the gate predicate itself (`_writeSafetyAllows` duplicated into its jsCode) — the review lane's accepted BUG-30 pattern, for the identical reason: it is graph plumbing deciding whether a Merge-feeding marker is needed, never a second authorization. It is required because that marker SHARES the association lane's input with a real delivery, so the two must be mutually exclusive. Consequence: it becomes a third `ALLOW_HUBSPOT_RECORD_WRITES` declaring node on the ingest lane, and any arming run that misses it reproduces the dropped-association bug on a real batch."
+  - "D-70-13's null-domain rule (Task 1) was implemented literally and LANE-WIDE, not contacts-only: `Build Review Decision` feeds BOTH the companies and contacts review PATCHes through routing IFs, so forcing `write_request.domain` to null there applies to companies too. Companies lose their domain-allowlist path on review writebacks. FLAGGED FOR THE OPERATOR rather than silently accepted — the plan's own wording (\"contacts stay id-allowlist-only\") reads contacts-specific even though the single emitter node cannot distinguish."
+  - "`association: \"none\"` is KEPT over the plan's `not_attempted` wording. The behaviour D-70-15 asks for is implemented exactly (a permitted update with no resolved company runs, is never held, and reports that it associated nothing); only the vocabulary differs, and it is a live client-visible value — `operator-claude-plugin/scripts/preingest.py:1186` keys on `== \"none\"`, and `run_report.py` already maps BOTH `not_confirmed` and `not_attempted` for display. Renaming it would break a reader for no behavioural gain."
+  - "Scheduled-maintenance gates FOUR writes, not the plan's three: `SJ-1 Set Requested`, `SJ-2 Set Requested`, `Dedupe Set Needs Review`, `Review Apply Update`. Task 1 + 2a already put all four on the canonical shape and the IF shape. That lane has NO response builder and no webhook response, so its gates' false branches have nowhere useful to go — leaving them unwired is correct and final for that lane, not a placeholder."
+  - "The enrichment lane gates FOUR writes too, not the plan's three: `HubSpot Company Create` is the identical off-by-one already caught for scheduled-maintenance. `assert_write_request_emitters` runs INSIDE `splice_write_gates`, so the two Decide nodes had to stamp `write_request` BEFORE the splice call was added, not after."
+  - "An enrichment-lane contact create now reports `review` rather than `write_blocked` on a disarmed run. The Phase 61 Plan 06 association hold (`if (action === \"create\") action = \"review\"`) was always unconditional and always sat immediately AFTER the inline write-safety check; the check merely masked it disarmed. The hold is the stronger refusal — it is upstream of the gate, so an armed gate cannot land the create either."
 
 patterns-established:
-  - "_write_request_js()/WRITE_REQUEST_JS + _buildWriteRequest(action, hsObjectId, domain, email): the one place any future gated write's emitter should call, rather than hand-deriving identity fields at a new call site."
+  - "`wire_gate_refusal_lane(nodes, conns, write_name, merge_name, x, y, *, mirror_index=None, unreached_source=None, unreached_condition_js=None)` — the one place any future gated write's refusal lane should be wired, rather than hand-appending a merge input and three sentinels at a new call site."
+  - "_write_request_js()/WRITE_REQUEST_JS + _buildWriteRequest(action, hsObjectId, domain, email): the one place any future gated write's emitter should call, rather than hand-deriving identity fields."
 
-requirements-completed: []
+requirements-completed: [D-70-12, D-70-13, D-70-14, D-70-15, D-70-06]
 
 coverage:
-  - id: D-70-12-task1
-    description: "Every node feeding a gated write in the ingest and scheduled-maintenance lanes, plus review-decision's Build Review Decision, emits write_request; the gate reads only write_request; the fallback ladder is deleted; generation raises when an upstream emitter is missing"
+  - id: D-70-12
+    description: "Every node feeding a gated write emits the canonical write_request; the gate reads only that shape; the fallback ladder is deleted; generation raises when an upstream emitter is missing"
     verification:
       - kind: unit
-        ref: "tests/n8n/writeGateShape.test.mjs (new, 15 tests)"
+        ref: "tests/n8n/writeGateShape.test.mjs (28 tests — every gate's jsCode references no identity key outside write_request; empty-allowlist denial on all four lanes)"
         status: pass
       - kind: unit
         ref: "tests/test_write_gate_coverage.py::test_assert_write_request_emitters_raises_on_a_missing_emitter, ::test_assert_write_request_emitters_passes_when_the_emitter_is_correct, ::test_assert_write_request_emitters_walks_through_a_native_if_node"
         status: pass
       - kind: unit
-        ref: "tests/n8n/ingestUpdateGateDomainFallback.test.mjs (rewritten against the canonical shape)"
+        ref: "tests/n8n/ingestUpdateGateDomainFallback.test.mjs (rewritten against the canonical shape — its subject, the gate-side fallback, is gone)"
         status: pass
       - kind: unit
-        ref: "node --test tests/n8n/*.test.mjs (1017/1017)"
-        status: pass
-      - kind: unit
-        ref: "pytest tests/ -q (1785 passed, 149 skipped), pytest operator-claude-plugin/tests/ -q (2849 passed, 5 skipped)"
+        ref: "node --test tests/n8n/*.test.mjs (1032/1032)"
         status: pass
     human_judgment: false
-  - id: D-70-13-task1
-    description: "Review lane's write_request.domain is forced to the literal null, applying to both companies and contacts"
+  - id: D-70-13
+    description: "The enrichment lane gains four real spliced gates; the write-permission predicate has exactly one home per lane; the scheduled-maintenance writes adopt the same shape"
     verification:
       - kind: unit
-        ref: "tests/n8n/writeGateShape.test.mjs::\"review lane: Build Review Decision always emits write_request.domain === null\""
+        ref: "tests/test_write_gate_coverage.py::test_every_enrichment_write_sits_behind_its_own_spliced_gate (4 params), ::test_the_enrichment_decide_nodes_no_longer_compute_write_permission (2 params)"
         status: pass
       - kind: unit
-        ref: "tests/n8n/reviewDecisionEndpoint.test.mjs (g3/g4/g5 unmodified in outcome, g4's hand-built row updated to carry the same write_request shape)"
+        ref: "tests/test_cloud_write_path.py::test_write_gates_bake_write_safety_constants_and_gate_the_action (4 params), ::test_decide_nodes_no_longer_decide_write_permission (2 params), ::test_proposed_action_assignment_cannot_be_overridden_by_any_flag{,_companies}"
+        status: pass
+      - kind: unit
+        ref: "tests/n8n/writeGateShape.test.mjs::\"the enrichment lane has a spliced two-node gate in front of each of its four HubSpot writes\", ::\"enrichment lane: the empty-allowlist denial now comes from the spliced gate, not Decide Action\""
+        status: pass
+      - kind: unit
+        ref: "tests/n8n/companyRecomputeLaneFlow.test.mjs::\"execution 11858's refusal survives, now emitted by the spliced gate rather than by Decide Company Action\""
         status: pass
     human_judgment: false
-  - id: task2a-done-2b-2c-3-not-started
-    description: "Task 2's FIRST sub-step (2a: reshape splice_write_gates itself into the two-node IF-shaped gate, on the three lanes it already covers) is done. Task 2's remaining sub-steps (2b: the enrichment lane's first-ever spliced gate; 2c: remove the ingest precheck per D-70-06 and wire each lane's false branch to its response Merge, fixing the Associate/Review Lane Sentinel's pre-gate anyWrite check in the process) and Task 3 (one verdict for update+association, scheduled-maintenance's remaining adoption) are NOT executed in this dispatch."
+  - id: D-70-14
+    description: "A refused row is EMITTED, never dropped; a fully refused batch cannot dead-end; the refusal reaches the response builder on a channel that cannot starve or race"
+    verification:
+      - kind: unit
+        ref: "tests/n8n/writeGateShape.test.mjs::\"every spliced write gate's Code node preserves item count on a mixed permit/refuse batch\""
+        status: pass
+      - kind: integration
+        ref: "tests/n8n/writeGateShape.test.mjs::\"enrichment lane: a fully refused two-row batch produces exactly two rows at the response builder, with no stalled merge\" (walker over the committed wf_enrichment_cloud.json)"
+        status: pass
+      - kind: integration
+        ref: "tests/n8n/writeGateShape.test.mjs::\"ingest: a batch of nothing but REFUSED updates still reaches Build Ingest Response, one row, reported blocked\", ::\"ingest: a batch of updates that resolve NO company does not stall\""
+        status: pass
+      - kind: integration
+        ref: "tests/n8n/enrichmentConvergenceMerge.test.mjs::\"a mixed batch (one create, one update) reaches Build Response with exactly two rows\", ::\"a companies-only batch does not stall any contacts-side merge input\", ::\"a contacts-only batch does not stall any companies-side merge input\""
+        status: pass
+      - kind: unit
+        ref: "tests/n8n/writeGateShape.test.mjs::\"the enrichment lane's gate IF false branch has its OWN Build Response Merge input\", ::\"ingest: each gate's refusal lane has its OWN Ingest Merge Response input, with both its sentinels\""
+        status: pass
+    human_judgment: false
+  - id: D-70-06
+    description: "The ingest pre-write refusal precheck is removed rather than extended to create rows; the row's outcome of record is the write node's actual output"
+    verification:
+      - kind: unit
+        ref: "tests/n8n/writeGateShape.test.mjs::\"ingest: the pre-write refusal precheck is gone from Decide Action (D-70-06)\", ::\"ingest: Build Ingest Response reports the GATE's verdict, not the pre-write intention\""
+        status: pass
+      - kind: unit
+        ref: "tests/n8n/ingestUpdateWriteBlockedFlow.test.mjs (5 tests, rewritten: the F11/execution-12181 regression pin now runs Decide Action -> gate -> Build Ingest Response)"
+        status: pass
+    human_judgment: false
+  - id: D-70-15
+    description: "An update and its association share one write_request and one verdict; both run or neither; an update is never held for lack of a company"
+    verification:
+      - kind: unit
+        ref: "tests/n8n/writeGateShape.test.mjs::\"ingest: ONE gate covers both the update and its association (D-70-15)\""
+        status: pass
+      - kind: integration
+        ref: "tests/n8n/writeGateShape.test.mjs::\"ingest: a batch of nothing but REFUSED updates...\" (asserts NEITHER HubSpot Update NOR HubSpot Associate Company ran), ::\"ingest: a batch of updates that resolve NO company does not stall\" (association \"none\", not held)"
+        status: pass
+      - kind: unit
+        ref: "tests/n8n/companyAssociationFlow.test.mjs (rewritten: the association's only remaining condition is a resolved company id, applied in Build Association Request), tests/n8n/pairPipelineAssociationFlow.test.mjs (unmodified, still green)"
+        status: pass
+    human_judgment: false
+  - id: live-armed-mixed-verdict
+    description: "The armed, MIXED-verdict batch observed on the real n8n engine rather than on the offline walker"
     verification: []
     human_judgment: true
-    rationale: "Deferred to a continuation dispatch under explicit context-budget guidance in this plan's own execution instructions (\"work lean ... if you approach exhaustion, commit what is green ... never leave uncommitted work\"). 2c specifically was deferred because it requires touching the Associate Lane Sentinel's/Review Lane Sentinel's condition (currently computed pre-gate, purely off row.action) to avoid a newly-reachable Merge starvation once the ingest precheck is removed. A THIRD dispatch traced 2b itself and found the identical class of hazard is larger there: Build Response is already behind a real, ~30-sentinel-covered Merge (Phase 70 Plan 03/04), and moving the write-safety check out of Decide Action/Decide Company Action breaks the existing br(HubSpot Create)-family sentinels' row.action-keyed conditions on EVERY disarmed batch containing a create/enrich row, not just an edge case — see \"Next Phase Readiness\" below (\"2b's OWN hazard\") for the full mechanism. No code was written for 2b this dispatch; the advisor consulted mid-dispatch said \"no Merge on this lane\", which is incorrect, and implementing on that basis would have shipped a live hang."
+    rationale: "Deferred per the operator's standing ruling that `gate=\"blocking-human\"` LIVE probes go to end-of-phase UAT; nothing is armed and no unattended credit-spending batch has run. Recorded as Gate 70-05-A in `70-DEFERRED-GATES.md` with its six required observations. The fix IS proven offline (walker over the committed graph, RED before the fix and GREEN after), but `tests/n8n/lib/walkWorkflow.mjs`'s own comment states its fire-once Merge model is a spec, \"not n8n's real multi-wave behaviour\" — and this phase's thesis is n8n runtime truth, so the model's agreement is not the engine's."
 
-duration: ~2h20m (single continuous session across two checkpoints, Task 1 + Task 2's 2a sub-step)
+duration: ~6h (four dispatches)
 completed: 2026-09-10
-status: partial
+status: complete
 ---
 
-# Phase 70 Plan 05: One write request, one gate per lane (Task 1 + Task 2's 2a) Summary
+# Phase 70 Plan 05: One write request, one gate per lane, and a refusal that is a row Summary
 
-**Task 1 landed: one canonical `write_request` shape, one shared emitter helper, the four-way identity fallback ladder deleted, and a generation-time assertion that a gated write's upstream actually emits it. Task 2's 2a sub-step also landed: `splice_write_gates` itself is now the two-node IF-shaped gate (Code node stamps a `write_allowed` verdict via `.map()`, never `.filter()`s a row away; a paired IF node routes true/false) on all three lanes it already covered — ingest, review-decision, scheduled-maintenance. The enrichment lane's first-ever spliced gate (2b), the ingest precheck removal plus false-branch-to-response-Merge wiring (2c), and Task 3 (one verdict for update+association) are not started.**
+**Every gated write on all four lanes now sits behind a two-node IF-shaped gate that reads one canonical `write_request`, stamps a verdict on every row instead of filtering any away, and routes refusals onto their own merge input so a fully refused batch reports rather than dead-ends. The enrichment lane got real gates for the first time (four of them); the ingest lane lost both its pre-write refusal precheck and the association's duplicate second verdict; and the identity fallback ladder that grew from two live incidents is deleted, with a generation-time assertion that every gated node's upstream emits the shape the gate reads.**
 
 ## Performance
-- **Duration:** ~2h20m (this dispatch, across two checkpoints) · **Started:** 2026-09-09 (session date) · **Completed (Task 1 + 2a):** 2026-09-10 · **Tasks:** 1 done + 2's first sub-step / 3 total · **Commits:** 3 (`12866c8` feat, `e0a35aa` fix, `d87eef1` feat) · **Files modified:** 11 (Task 1) + 2 (fix) + 13 (2a)
+
+- **Duration:** ~6h across four dispatches · **Started:** 2026-09-09 · **Completed:** 2026-09-10 · **Tasks:** 3 (Task 2 executed as sub-steps 2a/2b/2c) · **Commits:** 15 · **Files modified:** 28
 
 ## Accomplishments
 
-- Added `_write_request_js()` / `WRITE_REQUEST_JS` (`scripts/build_cloud_workflows.py`, composed at module top so it has no build-site-ordering dependency, unlike `WRITE_SAFETY_GATE_JS`): defines the single shared `_buildWriteRequest(action, hsObjectId, domain, email)` JS helper, embedded verbatim into every emitting Code node.
-- Rewrote `_write_gate_js(action)` to read exclusively from `it.json.write_request` — the four-way identity fallback ladder (`existingRecord.hs_object_id`, `identity_keys.domain`, `properties.email`, bare `.email`) that grew from two live incidents (F11, BUG 27) is deleted outright.
-- Added `assert_write_request_emitters` (+ its `_write_request_source_names` upstream-BFS helper) and wired it into `splice_write_gates` unconditionally — every future `splice_write_gates` call site (including Task 2's future enrichment-lane call) is now covered by the same generation-time guard for free.
-- Made every emitter in the ingest, scheduled-maintenance, and review-decision lanes stamp `write_request`:
-  - Ingest: `Decide Action` (feeds `HubSpot Update`/`HubSpot Create`) and `Build Association Request` (feeds `HubSpot Associate Company`).
-  - Scheduled maintenance: `SJ-1 Extract Rows` (shared `ENRICH_EXTRACT_SEARCH_ROWS`, feeds `SJ-1 Set Requested`), `SJ-2 Company Gate` (feeds `SJ-2 Set Requested`), `Dedupe Sweep` (feeds `Dedupe Set Needs Review`), `Apply Review` (feeds `Review Apply Update`) — **four** gated writes, not the plan's stated three (see Decisions Made).
-  - Review-decision: `Build Review Decision` (feeds both `Review Decision Update` and `Review Contact Decision Update`), forcing `domain: null` for both object types per D-70-13.
-- Rewrote `tests/n8n/ingestUpdateGateDomainFallback.test.mjs` against the canonical shape (its subject, the gate-side fallback, is gone; the case it protected is now an emitter-side assertion on `Decide Action`'s own `write_request.domain`).
-- Created `tests/n8n/writeGateShape.test.mjs` (15 tests): every gate's jsCode references no identity key outside `write_request`; empty-allowlist denial on all four lanes (ingest, scheduled-maintenance, review-decision, plus the enrichment lane's own unchanged inline check); the review lane's `domain: null` emission.
-- Added three tests to `tests/test_write_gate_coverage.py` proving `assert_write_request_emitters` raises (naming both the write node and the offending source) on a hand-built graph with a missing emitter, passes on a correct one, and correctly walks through a native IF node with no jsCode of its own.
-- **[Rule 1 fix, found by the plan's own advisor review immediately after Task 1's commit]** `Build Review Decision`'s BUG-30 allowlist precheck still passed `row.domain` (the record's real domain) into `_writeSafetyAllows`, while the gate downstream now sees `write_request.domain === null` unconditionally. Under `ALLOW_HUBSPOT_REVIEW_WRITES=true` + a domain-only `TEST_RECORD_DOMAINS` armed window, a real company submit would have: precheck says allowed (`outcome: "applied"`, `dry_run: false`) → gate refuses (domain null, id unlisted) → row never reaches `Review Verify Fetch` → its Absent Sentinel never fires (guarded on `dry_run === true`, which this branch is not) → `Build Review Response Merge` starves waiting on an input that never delivers — D-70-14's hang class, newly reachable on companies specifically because Task 1 widened the null-domain rule to the whole lane. Fixed by passing `null` to the precheck too, matching the gate it precedes. Committed separately (`e0a35aa`) since it was found after, not during, Task 1's own commit.
+**Task 1 — one canonical write request, emitted once (commits `12866c8`, `e0a35aa`)**
+
+- `_write_request_js()` / `WRITE_REQUEST_JS` define the single shared `_buildWriteRequest(action, hsObjectId, domain, email)` helper, embedded verbatim into every emitting Code node.
+- `_write_gate_js(action)` reads exclusively from `it.json.write_request`. The four-way fallback ladder (`existingRecord.hs_object_id`, `identity_keys.domain`, `properties.email`, bare `.email`) that grew from F11 and BUG 27 is deleted outright.
+- `assert_write_request_emitters` (+ `_write_request_source_names`, a backwards BFS stopping at the nearest Code node on each path) is wired unconditionally into `splice_write_gates`, so every present and future call site is covered for free — including Task 2's enrichment call.
+- Every emitter on the ingest, scheduled-maintenance and review-decision lanes stamps `write_request`; the review lane forces `domain: null` per D-70-13.
+- A same-dispatch Rule 1 fix (`e0a35aa`) kept `Build Review Decision`'s own BUG-30 precheck in agreement with the gate it precedes — Task 1 had widened the null-domain rule to the whole lane, making a company review approval under a domain-only armed window reach the gate with a verdict the precheck disagreed with, and starve `Build Review Response Merge`.
+
+**Task 2a — the gate becomes IF-shaped (commit `d87eef1`)**
+
+- `_write_gate_js` rewritten from `.filter()` to `.map()`: it stamps `write_allowed`, and on refusal `action: "write_blocked"` plus a reason, onto EVERY item. Its item count in equals its item count out on every call — that invariant is what makes a refused row a row.
+- `splice_write_gates` emits a paired `<write> Write Gate IF` node and rewires the write node behind its true output.
+
+**Task 2b — the enrichment lane's first-ever gates (commit `2c75e90`, RED `2a8370e`)**
+
+- Four gates spliced: `HubSpot Create`, `HubSpot Update`, `HubSpot Company Create`, `HubSpot Company Update`.
+- `ENRICH_DECIDE_CLOUD` and `ENRICH_DECIDE_CO_CLOUD` stop calling `_writeSafetyAllows` and stop baking any write-safety constant; they emit `write_request` instead. `Decide Action` (ingest) later shed `WRITE_SAFETY_GATE_JS` too, keeping only the one `ALLOW_HUBSPOT_CREATE` const it genuinely reads for create-vs-review routing.
+- Carry-merge count-mismatch fix (Rule 1, pre-existing at ingest since 2a): a carry merge's `carry_source` must be the gate IF's TRUE output — never the gate CODE node, whose output includes the refused rows, and never the routing IF upstream of it. Applied to the enrichment company-create carry and all three ingest carries.
+
+**Task 2c + Task 3 — the precheck deleted, one verdict per row (commit `d90fdba`, RED `71ec850`)**
+
+- The ingest `Decide Action` pre-write refusal precheck is deleted. It PREDICTED the gate's verdict instead of reporting it; its own comment conceded create rows were left uncovered because reproducing the create gate's email-domain derivation risked a false `write_blocked`. `Build Ingest Response` now overlays the gate's emitted verdict (and its reason) onto the decided snapshot, which still carries the pre-write action — closing F11 / execution 12181 for creates and updates alike, with no per-action derivation to get wrong. The todo the precheck filed is closed by construction and moved to `.planning/todos/completed/`.
+- The association's own second allowlist gate is removed (D-70-15). It ran downstream of a write that had already passed a gate, so a second verdict could only ever disagree with the first. Its only remaining condition is a resolved company id, which `Build Association Request` already applies by dropping rows without one — an update is never held, and reports `association: "none"`.
+- `Associate Lane Sentinel`'s condition gains the `company_id` conjunct (and, in the follow-up fix, the gate predicate), so it asks the question the lane actually answers.
+
+**The Rule 1 fix that mattered most (commit `45cbd50`)**
+
+2b and 2c both wired each gate IF's false output onto the SAME merge input the write path's own terminal already feeds, on the reasoning that reusing an existing index leaves the entire starved-lane sentinel network untouched. It does. It is still wrong, and every disarmed suite was green through it.
+
+An advisor-prompted walker run over the committed graph with ONE row on the allowlist and one not — the primary armed use case of an allowlist — showed the failure: the refusal travels zero hops from the gate to the merge while the permitted row travels the real multi-hop chain (`HubSpot Update` → `Update Carry Merge` → `Build Association Request` → `HubSpot Associate Company` → `Associate Carry Merge`). The Merge fires on whichever set of deliveries satisfies it first and locks; the permitted row's real association arrival was dropped and it reported `association: "not_confirmed"` when HubSpot had associated it. Disarmed, every row is refused, so the two producers ARE mutually exclusive — which is exactly why nothing caught it.
+
+Fixed via one new helper, `wire_gate_refusal_lane`, called once per gate:
+
+- each gate's refusal gets its OWN merge input (`_append_merge_input`);
+- `<write> No Refusal Sentinel` (gate-sourced) feeds it when the gate refused nothing;
+- `<write> Gate Unreached Sentinel` (routing-predicate-sourced) feeds it when the gate never ran — on the enrichment lane that second question is DERIVED instead, via `mirror_index`, by copying it off whichever sentinels already feed that write's own terminal, so a hand-listed set of ~30 names cannot go stale;
+- `<write> All Refused Sentinel` is the mirror image, newly required now that refused rows keep their real action past the routing IFs: the routing sentinels correctly stay silent when rows ARE heading for the write, yet the gate can refuse every one and starve the terminal's input;
+- ingest's `Associate Lane Sentinel` gains the gate predicate itself, because its marker shares the association lane's input with a real delivery and the two must be exclusive.
+
+Pinned permanently by an armed-mixed walker case asserting the permitted row keeps `association: "associated"`, the refused row reports `write_blocked`, and `Ingest Merge Response` fires exactly once (a second run would double every reported row).
 
 ## Task Commits
 
-1. **Task 1: One canonical write request, emitted once, fallback ladder deleted** — `12866c8` (feat)
-2. **Rule 1 fix (found post-commit by advisor review): review precheck domain agreement** — `e0a35aa` (fix)
-3. **Task 2, sub-step 2a: the write gate becomes IF-shaped, refusal stamped not dropped** — `d87eef1` (feat)
+1. **Task 1: One canonical write request, emitted once, fallback ladder deleted** — `12866c8` (feat) + `e0a35aa` (fix)
+2. **Task 2: The gate becomes IF-shaped, and the enrichment lane finally has one** — `d87eef1` (2a) + `2a8370e`/`2c75e90` (2b RED/GREEN) + `71ec850`/`d90fdba` (2c RED/GREEN) + `45cbd50` (Rule 1: refusal lanes get their own merge inputs)
+3. **Task 3: One verdict covers an update and its association** — `d90fdba` (landed with 2c; the two changes are one graph edit) + `43b0d70` (plugin arming-surface counts) + `841c1ec`/`3c7b16e` (acceptance-criteria and recompute-lane pins)
 
-Task 1's `tdd="true"` RED/GREEN cycle was collapsed into a single feat commit (implementation preceded the dedicated test files; no `gsd-tools check tdd-red-evidence` run) — see Deviations. Task 2's 2a sub-step similarly landed implementation and its test fixes in one commit; the RED case (`writeGateShape.test.mjs`'s "still filters" test, asserting length 0 on a fully-refused batch) was the PRE-EXISTING Task-1 test this dispatch flipped to GREEN (asserting length 2, both `write_blocked`) rather than a freshly-authored failing test run before the implementation — same disclosed deviation class as Task 1's.
+**Plan metadata:** `9bbe7d7`, `393b398`, `72a6a3f`, `6427f46` (partial checkpoints across dispatches 1-3), plus this dispatch's completion commit.
 
 ## Files Created/Modified
 
-- `scripts/build_cloud_workflows.py` — `_write_request_js()`/`WRITE_REQUEST_JS`, rewritten `_write_gate_js`, new `assert_write_request_emitters`/`_write_request_source_names`, `write_request` emission added to `DECIDE_CLOUD`, `BUILD_ASSOCIATION_REQUEST`, `REVIEW_BUILD_DECISION`, `ENRICH_EXTRACT_SEARCH_ROWS`, `SJ2_CO_GATE`, `ENRICH_DEDUPE_SWEEP`, `ENRICH_APPLY_REVIEW`; the Rule-1 precheck fix in `REVIEW_BUILD_DECISION`
-- `n8n/wf_contact_ingest_cloud.json`, `n8n/wf_review_decision_cloud.json`, `n8n/wf_scheduled_maintenance_cloud.json` — regenerated; node counts unchanged (45/43/39) against 70-04's baseline — this task only rewrote jsCode strings inside existing nodes
-- `n8n/wf_enrichment_cloud.json` (and its local/local_live siblings) — **untouched** in this task (202 nodes, unchanged); Task 2 is what adds a spliced gate there
-- `tests/n8n/writeGateShape.test.mjs` — new, 15 tests
-- `tests/n8n/ingestUpdateGateDomainFallback.test.mjs`, `tests/n8n/companyAssociationFlow.test.mjs`, `tests/n8n/contactCreateGateFlow.test.mjs`, `tests/n8n/reviewDecisionEndpoint.test.mjs`, `tests/n8n/reviewWriteFlagSeparation.test.mjs` — updated to build rows carrying `write_request` instead of the deleted ladder's legacy fields
-- `tests/test_write_gate_coverage.py` — three new tests for `assert_write_request_emitters`
-- **(2a, commit `d87eef1`)** `scripts/build_cloud_workflows.py` — `_write_gate_js` rewritten from `.filter()` to `.map()` (stamps `write_allowed`/`action: "write_blocked"`/`write_blocked_reason`, never drops); `splice_write_gates` now emits a paired `<write_name> Write Gate IF` node (via `_if_bool_node`) and rewires the write node behind it, with the false branch deliberately left unwired (see Next Phase Readiness)
-- **(2a)** `n8n/wf_contact_ingest_cloud.json` (45→48 nodes), `n8n/wf_review_decision_cloud.json` (43→45), `n8n/wf_scheduled_maintenance_cloud.json` (39→43) — regenerated; `n8n/wf_enrichment_cloud.json` untouched (still 202, still no spliced gate)
-- **(2a)** `tests/n8n/companyAssociationFlow.test.mjs`, `contactCreateGateFlow.test.mjs`, `dedupeSweepWiring.test.mjs`, `ingestUpdateGateDomainFallback.test.mjs`, `reviewAllowlistRefusal.test.mjs`, `reviewDecisionEndpoint.test.mjs`, `reviewWriteFlagSeparation.test.mjs`, `sjPredicates.test.mjs`, `writeGateShape.test.mjs` — every assertion that read a gate's output `.length === 0` as "refused" now reads `.length` unchanged (gate never drops) plus `write_allowed === false`/`action === "write_blocked"`; every assertion that a gate fed a write node directly now expects one more hop through the paired IF node
+- `scripts/build_cloud_workflows.py` — `_write_request_js()`/`WRITE_REQUEST_JS`; rewritten `_write_gate_js` (map, never filter); `assert_write_request_emitters`/`_write_request_source_names`; two-node `splice_write_gates`; new `wire_gate_refusal_lane`; `write_request` emission in `DECIDE_CLOUD`, `ENRICH_DECIDE_CLOUD`, `ENRICH_DECIDE_CO_CLOUD`, `BUILD_ASSOCIATION_REQUEST`, `REVIEW_BUILD_DECISION`, `ENRICH_EXTRACT_SEARCH_ROWS`, `SJ2_CO_GATE`, `ENRICH_DEDUPE_SWEEP`, `ENRICH_APPLY_REVIEW`; the ingest precheck deleted; `BUILD_INGEST_RESPONSE`'s verdict overlay; `Associate Lane Sentinel` rewritten
+- `n8n/wf_enrichment_cloud.json` — 202 → **218** nodes (4 gates + 4 gate IFs + 10 refusal sentinels); `Build Response Merge` 11 → 15 inputs
+- `n8n/wf_contact_ingest_cloud.json` — 45 → **50** nodes (2 gates + 2 gate IFs + 4 refusal sentinels, minus the association's removed gate pair); `Ingest Merge Response` 3 → 5 inputs
+- `n8n/wf_review_decision_cloud.json` — 43 → **45** nodes (2 gate IFs)
+- `n8n/wf_scheduled_maintenance_cloud.json` — 39 → **43** nodes (4 gate IFs), the moved pin Task 3 asks to record against 39
+- `tests/n8n/writeGateShape.test.mjs` — 28 tests: canonical shape and empty-allowlist denial on all four lanes; the enrichment lane's four gates and their own refusal inputs; the ingest precheck's absence and the single update+association verdict; and four walker-driven cases (fully-refused enrichment batch, fully-refused ingest batch, no-company ingest batch, armed-mixed ingest batch)
+- `tests/test_write_gate_coverage.py`, `tests/test_cloud_write_path.py`, `tests/test_merge_helpers.py`, `tests/test_remaining_credits_response.py` — the gate/merge inventories and the moved predicate, retargeted from the Decide nodes to the gates
+- `operator-claude-plugin/tests/test_control_flag_parity.py` — the ingest lane's arming-surface counts: `ALLOW_HUBSPOT_RECORD_WRITES` 4 → 3, `ALLOW_HUBSPOT_CREATE` 4 → 4
+- 18 further `tests/n8n/*.test.mjs` files — rewritten where they asserted a gate DROPPED a row, or that `Decide Action` stamped `write_blocked`, or that the association had its own gate
+- `.planning/phases/70-.../70-DEFERRED-GATES.md` — Gate 70-05-A, the first armed mixed-verdict batch
 
 ## Decisions Made
 
-See `key-decisions` in the frontmatter — in short: D-70-13's null-domain rule was implemented literally and applies to companies as well as contacts (single emitter node feeds both write paths); scheduled-maintenance actually gates four writes, not three (Task 3's plan text is off by one); `ENRICH_EXTRACT_SEARCH_ROWS`'s shared body now carries an unused `write_request` on three lanes that don't need it (harmless); TDD RED/GREEN was collapsed under context-budget pressure.
+See `key-decisions` in the frontmatter. The four an operator or a later phase must actually act on:
+
+1. **The refusal lane must never share the write path's merge input** — with the measured evidence, so no future change re-derives the "reuse the index, touch no sentinel" shortcut.
+2. **D-70-13's null-domain rule is lane-wide** — companies lose their domain-allowlist path on review writebacks. Flagged, not silently accepted.
+3. **`Associate Lane Sentinel` is now an arming surface.** Any arming run (or hand-rolled test helper) that rewrites the gates but not the sentinel reproduces the dropped-association bug on a real batch. `n8n_arming.set_write_safety` does rewrite all declaring nodes, so the tool is correct; the risk is a manual arm.
+4. **`association: "none"` kept over the plan's `not_attempted`** — behaviour matches D-70-15 exactly; the rename would break `preingest.py`'s live reader for no gain.
 
 ## Deviations from Plan
 
 ### Auto-fixed Issues
 
 **1. [Rule 1 - Bug] Review precheck disagreed with the gate it precedes, reachable hang on a company**
-- **Found during:** post-Task-1 advisor review (before Task 2 started)
-- **Issue:** see Accomplishments above for the full mechanism
-- **Fix:** `Build Review Decision`'s precheck now passes `null` for domain, matching the gate
-- **Files modified:** `scripts/build_cloud_workflows.py`, `n8n/wf_review_decision_cloud.json`
-- **Verification:** full node + pytest suites green; confirmed no existing test arms a company review approval via `TEST_RECORD_DOMAINS` (all use `TEST_RECORD_IDS`)
+- **Found during:** post-Task-1 advisor review
+- **Issue:** `Build Review Decision`'s BUG-30 precheck passed the record's real domain while the gate downstream now sees `write_request.domain === null` unconditionally. Under an armed domain-only window a company submit would report `applied`, be refused at the gate, never reach `Review Verify Fetch`, and starve `Build Review Response Merge`.
+- **Fix:** the precheck passes `null` too, matching the gate.
+- **Files:** `scripts/build_cloud_workflows.py`, `n8n/wf_review_decision_cloud.json`
+- **Verification:** full node + pytest suites; confirmed no existing test arms a company review approval via `TEST_RECORD_DOMAINS`
 - **Commit:** `e0a35aa`
 
-### Process Deviation (not a Rule 1-4 category)
+**2. [Rule 1 - Bug] Carry merges paired with the wrong source once a gate could refuse a subset**
+- **Found during:** Task 2b
+- **Issue:** `splice_carry_merge_after`'s `carry_source` was the gate CODE node (ingest, latent since 2a) and `IF Company Create` (enrichment). Both deliver a different item count than the write node on any partially-refused batch, so `combineByPosition` would pair row i of the HTTP response with row i of the wrong wave.
+- **Fix:** `carry_source` is the gate IF's TRUE output on all four affected carries.
+- **Files:** `scripts/build_cloud_workflows.py`, both regenerated workflows
+- **Verification:** `tests/n8n/writeGateShape.test.mjs::"the enrichment lane's carry merges pair with the gate IF's TRUE output"`
+- **Commit:** `2c75e90`
 
-**TDD RED/GREEN collapsed into one commit.** Task 1 carries `tdd="true"`, but under this dispatch's context-budget pressure the implementation (gate rewrite, emitters, assertion) was written before the dedicated test files (`writeGateShape.test.mjs`, the three `test_write_gate_coverage.py` additions). No separate RED commit exists, and `gsd-tools check tdd-red-evidence` was never run. All resulting tests pass green against the implementation as committed; nothing is untested, but the RED-before-GREEN ordering itself is not evidenced by commit history for this task.
+**3. [Rule 1 - Bug] A gate's refusal sharing the write path's merge input drops the permitted row's real arrival on an armed mixed batch**
+- **Found during:** advisor review after 2b and 2c were both committed
+- **Issue:** the full mechanism is in Accomplishments above. Not hypothetical: measured with the walker over the committed graph.
+- **Fix:** `wire_gate_refusal_lane` — one merge input per refusal lane plus three sentinels per gate; `Associate Lane Sentinel` gains the gate predicate.
+- **Files:** `scripts/build_cloud_workflows.py`, all four cloud workflows, `tests/n8n/writeGateShape.test.mjs`, `tests/n8n/ingestCarryMerge.test.mjs`, `tests/n8n/ingestTracerFlow.test.mjs`, `tests/test_merge_helpers.py`, `operator-claude-plugin/tests/test_control_flag_parity.py`
+- **Verification:** the permanent armed-mixed walker case, RED before the fix (`association: "not_confirmed"`) and GREEN after (`"associated"`), plus `Ingest Merge Response` asserted to fire exactly once
+- **Commit:** `45cbd50`
 
-**Total deviations:** 1 auto-fixed Rule 1 bug + 2 process deviations (TDD ordering, ×2 — Task 1 and 2a) + 1 plan-scope split (Task 2 divided into 2a/2b/2c sub-steps, none of which is in the plan's own task boundaries, to keep each dispatch's committed work green under context-budget pressure — advisor-directed, not a Rule 1-4 category).
-**Impact on plan:** The Rule 1 fix closes a real, previously-shippable hang; no scope creep (stayed inside the file the bug was found in). The TDD ordering deviations have no correctness impact given the full green suites, but are disclosed rather than silently normalized. The 2a/2b/2c split changes nothing about the plan's acceptance criteria or `must_haves` — it only sequences Task 2's single large action block into three separately-committable, independently-verified increments; Task 2 as a whole is not complete until 2b and 2c both land.
+### Plan-text corrections (off-by-one and file-name)
+
+- **"three scheduled-maintenance gates" is FOUR:** `SJ-1 Set Requested`, `SJ-2 Set Requested`, `Dedupe Set Needs Review`, `Review Apply Update`.
+- **"a gate in front of `HubSpot Create`, `HubSpot Update` and `HubSpot Company Update`" is FOUR:** `HubSpot Company Create` is the same class of omission.
+- **Emitter-assert ordering:** `assert_write_request_emitters` runs INSIDE `splice_write_gates`, so the two enrichment Decide nodes had to stamp `write_request` BEFORE the splice call was added.
+- **Task 2's `<action>` says to make the false branch "always fire on a fully permitted batch, at the `alwaysOutputData` placement 70-02's disarmed probe established".** Not done, and moot: the builder's own comment above `Associate Lane Sentinel` records that per-routing-IF `alwaysOutputData` was tried and REJECTED in 70-02 for precisely the race this plan then hit anyway. The obligation is met by the sentinel mechanism instead — `<write> No Refusal Sentinel` is exactly "the false branch's input is fed on a fully permitted batch".
+- **Task 2's acceptance criterion names `tests/test_write_gate_coverage.py` for the "Decide nodes no longer compute write permission" case.** Asserted in BOTH that file and `tests/test_cloud_write_path.py` (where the superseded assertion lived).
+
+### Behavioural changes worth naming
+
+- **An enrichment-lane contact create now reports `review` rather than `write_blocked` disarmed.** The association hold was always unconditional and upstream of the gate; the inline check masked it. Stronger, not weaker: an armed gate cannot land the create either, because the row never reaches `IF Create`'s true branch.
+- **Ingest arming surfaces fall from four declaring nodes to three** for `ALLOW_HUBSPOT_RECORD_WRITES` (two gates + `Associate Lane Sentinel`), and stay at four for `ALLOW_HUBSPOT_CREATE` (those three + `Decide Action`'s standalone create-vs-review const).
+
+### Process deviations
+
+- **TDD RED/GREEN was collapsed into one commit for Task 1 and 2a** (dispatches 1-2, under context-budget pressure; no `gsd-tools check tdd-red-evidence` run). 2b and 2c were done properly: a RED commit with the failing count recorded in its message, then the GREEN implementation.
+- **`d90fdba` was committed with the plugin suite red** — the ingest arming-surface counts were stale. Found by running the plugin suite immediately after, fixed in `43b0d70`. Disclosed rather than folded into an amend.
+- **Task 2 was split into 2a/2b/2c**, none of which is a boundary the plan draws, to keep each dispatch's committed work green. No acceptance criterion or `must_have` changed.
+
+**Total deviations:** 3 auto-fixed Rule 1 bugs + 5 plan-text corrections + 2 named behavioural changes + 3 process deviations.
+**Impact on plan:** the three Rule 1 fixes each close a real, previously-shippable failure — two hangs and one silent data loss on the primary armed path. No scope creep: every fix stayed inside this plan's `files_modified`.
 
 ## Issues Encountered
 
-None beyond the deviations above.
+`Build Response Merge` now declares **15** inputs and `Ingest Merge Response` **5**. n8n's own `numberInputs` property is documented as 2-10. The repo already shipped 11 before this plan (D-70-07's `Build Refusal Row`), so this crosses no new line, but it widens an existing exposure: a `numberInputs` above the documented ceiling has never been observed rendering or validating on the live instance. Worth a look during the first deploy of this build — noted here rather than filed, since it is a property of the pre-existing design this plan extended, not a defect this plan introduced.
 
 ## User Setup Required
 
-None — no external service configuration required. Nothing deployed, nothing armed (both write flags remain `"false"` in every committed workflow, verified via `test_committed_write_safety_constants_are_all_disabled` and a direct grep over all `n8n/wf_*.json`).
+None — no external service configuration required. Nothing deployed, nothing bounced, nothing armed. Every `ALLOW_HUBSPOT_*` flag reads `"false"` in every committed workflow (verified by direct grep: zero `"true"` occurrences across all `n8n/wf_*.json`).
 
-## Next Phase Readiness — for Task 2's continuation dispatch (resume at 2b)
+## Next Phase Readiness
 
-Task 2 ("The gate becomes IF-shaped, and the enrichment lane finally has one") is split into three
-sub-steps for budget safety; **2a is done (commit `d87eef1`), 2b and 2c remain.** Task 3 ("One
-verdict covers an update and its association") remains entirely, after 2b/2c. Read
-`.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-05-PLAN.md` in full before
-resuming — this section is a supplement, not a replacement.
+Ready for **70-06** (client side, file-disjoint from this plan).
 
-**2b — give the enrichment lane its first-ever spliced gate.** `assert_write_request_emitters`'s
-walker stops at the **nearest** upstream Code node on each path and checks it for the literal
-`_buildWriteRequest(` in its jsCode. Before calling `splice_write_gates` on the enrichment lane for
-the first time, `ENRICH_DECIDE_CLOUD` and `ENRICH_DECIDE_CO_CLOUD` (`scripts/build_cloud_workflows.py`,
-the inline `_writeSafetyAllows` calls at ~L2085/L4076) must themselves be edited to call
-`_buildWriteRequest(...)` and stamp `write_request` on their output, and their OWN inline
-`_writeSafetyAllows`/`action = "write_blocked"` computation removed — that authorization decision
-moves to the new gate. `WRITE_REQUEST_JS` is already available module-wide (composed near the top
-of the file) — concatenate it into those two constants and add a `write_request` field, the same
-pattern this task already applied four times. **Read the surrounding ~30 lines of
-`ENRICH_DECIDE_CLOUD` around L2085 first**: the `action = "write_blocked"` reassignment sits
-between two OTHER unconditional reassignments (`returnOnly`→`"proposed"`, medium-match→
-`"needs_match_review"`) and is immediately followed by an unconditional `if (action === "create")
-{ action = "review"; ... }` (the association-hold rule, Phase 61 Plan 06 Task 1) — removing the
-write-safety check changes what value reaches that immediately-following check, and needs
-tracing through, not just deleting in isolation.
+Carried forward:
 
-**2b's OWN hazard, found THIS dispatch (the third), not yet fixed — read before touching
-`splice_write_gates` again.** A continuation dispatch's advisor call correctly identified three
-things this SUMMARY's previous revision missed (gate `HubSpot Company Create` too — the plan's
-"three" is the identical off-by-one class already caught for scheduled-maintenance; a
-`false_target` kwarg wiring the IF's false lane to `Build Response`; and the carry-merge
-`carry_source` for `HubSpot Company Create` must become the new gate IF's TRUE output, not `IF
-Company Create` directly, mirroring the exact count-mismatch class already latent at ingest
-L1336-1338). But that advisor call also said "no Merge on this lane" for `Build Response` — **that
-is wrong, and tracing it revealed a fourth, larger problem the advice never surfaced:**
-
-`Build Response` has been behind a real `mode="append"` Merge (`Build Response Merge`) since Phase
-70 Plan 03/04 (D-70-01), sized at splice time to its then-existing inbound edges and backed by a
-~30-entry starved-lane sentinel network (`_add_starved_lane_sentinel` calls, ~L7574-7990) that
-feeds a marker `{}` into every declared Merge input whenever that input's real producer will not
-run this execution. `HubSpot Create`/`HubSpot Update`/`HubSpot Company Update`/`Adapt Company
-Create` (which is what actually feeds the Merge for the create path, downstream of the create
-carry-merge) are ALREADY declared inputs, covered by an existing family of sentinels keyed on
-`row.action` as `Decide Action`/`Decide Company Action` computed it — e.g. `Contacts None Create
-Sentinel`: `!rows.some(r => r.action === "create")` feeds `br("HubSpot Create")`; its mirror
-`Contacts All Create Sentinel` feeds `br("HubSpot Update")`/`br("IF Enrich", 1)`; and the four
-Companies-branch mirrors of both.
-
-**These existing sentinels' conditions silently break once the write-safety check moves out of
-`Decide Action`/`Decide Company Action` and into the new gate.** Today, in the COMMITTED
-(unconditionally disarmed — `ALLOW_HUBSPOT_RECORD_WRITES` is a baked JS `const`, not a runtime
-`$env` read) build, a create/enrich row is ALREADY converted to `action: "write_blocked"` INSIDE
-`Decide Action`/`Decide Company Action`, before it ever reaches `IF Create`/`IF Enrich` — so
-`rows.some(r => r.action === "create")` is ALREADY false for every disarmed batch, and
-`Contacts None Create Sentinel` ALREADY fires 100% of the time in the committed build (this is not
-new — Task 2b would not change today's disarmed behaviour if it stopped there). The moment the
-inline check is removed from `ENRICH_DECIDE_CLOUD`/`ENRICH_DECIDE_CO_CLOUD` (2b's own action item),
-`row.action` stays `"create"`/`"enrich"` all the way to `IF Create`/`IF Enrich`, REGARDLESS of
-whether the new downstream gate will refuse it — so `Contacts None Create Sentinel`'s condition
-flips to FALSE whenever any create-type row exists, EVEN THOUGH THE GATE WILL STILL REFUSE IT
-(disarmed default). Its target (`br("HubSpot Create")`, the write node's own unchanged direct edge
-into `Build Response Merge`) then never receives a delivery — the write node genuinely never runs,
-because the gate's TRUE branch is empty — and `Build Response Merge` hangs forever on that input.
-This reproduces on EVERY disarmed execution that contains so much as one create/enrich-typed row,
-which is the overwhelmingly common case, not an edge case; it is strictly worse than the D-70-06
-ingest hazard 2c documents below, which needs a specific all-refused batch to trigger.
-
-The fix has to touch BOTH sides of the Merge, not just the new gate's false branch:
-
-1. **The pre-existing `br(<write-node>)` sentinel family must be re-keyed on the gate's verdict,
-   not on `row.action`.** Each condition (`Contacts None/All Create Sentinel`, `Contacts NonCreate
-   None/All Enrich Sentinel`, and the four Companies mirrors) needs to ask "will ANY/NO row
-   actually reach the write node", which after 2b means re-implementing the SAME
-   `_writeSafetyAllows`-shaped predicate inside the sentinel's own `condition_js` — the identical
-   "duplicate for graph-plumbing, never a second authorization" pattern 2c's own fix (below)
-   already needs for the ingest sentinels, generalised to a THIRD site. A sentinel evaluating this
-   predicate needs the same `ALLOW_HUBSPOT_RECORD_WRITES`/`ALLOW_HUBSPOT_CREATE`/allowlist inputs
-   the gate itself closes over — either inline the same baked constants into the sentinel's
-   `condition_js` (this module already re-embeds `WRITE_SAFETY_GATE_JS`-shaped bodies verbatim at
-   more than one call site, so this is consistent with the existing style) or read the row's own
-   `write_allowed`/`write_blocked_reason` field once the GATE has already stamped it — the latter
-   requires sourcing the sentinel from the GATE's own Code node output (a single producer, exactly
-   like every other sentinel source in this network) rather than from `Decide Action`, which is
-   almost certainly the cleaner fix since it needs no predicate duplication at all: `!rows.some(r
-   => r.write_allowed === true && r.action === "create")` fed from `"HubSpot Create Write Gate"`.
-2. **The new gate-false-branch Merge input needs its OWN sentinel**, firing whenever the gate ran
-   but refused at least one row of the matching action, feeding whichever Merge input
-   `false_target="Build Response"` produces (resolved via `_merge_input_index` after
-   `splice_merge_before` runs, exactly like every other `br(...)`/`cg(...)`/`eg(...)` target in the
-   file) — the mirror-image condition of (1), sourced from the SAME gate Code node output.
-3. Both of these must be figured out and wired for FOUR gates (contacts create, contacts update,
-   companies create, companies update) — eight new/rewritten sentinel entries in total, not four.
-
-**This dispatch did not implement any of 2b** (no file was edited this session — `git status` was
-clean at both the start and end) precisely because attempting the mechanical gate-splice-plus-
-false-target change alone, without first solving this sentinel re-keying, would have shipped code
-that passes the plan's OWN listed acceptance criteria references superficially (the two Decide
-nodes would genuinely stop computing write permission, and a fully-refused two-row batch WOULD
-produce two rows at a response builder in a hand-built unit test that never exercises the real
-`Build Response Merge`) while introducing a live hang on every disarmed batch containing a single
-create/enrich row when driven through the FULL committed graph (`node --test tests/n8n/*.test.mjs`
-would very likely have caught this via `enrichmentBatchRefusal.test.mjs`'s walker-driven cases or
-`enrichmentConvergenceMerge.test.mjs`, if either drives a create/enrich-shaped row through — check
-that BEFORE writing any implementation, since a green suite that never actually exercises this path
-would be a false all-clear). Read the ~30 existing sentinel entries at `scripts/build_cloud_workflows.py`
-~L7574-7990 in full before writing the eight new/changed ones — the exact `br()`/`_merge_input_index`
-idiom and `sx, sy` canvas-placement convention must be followed, not reinvented.
-
-**2c — the hazard this dispatch found and did NOT fix.** Do not skip this trace; it is the reason
-2a stopped short of wiring any false branch anywhere.
-
-The ingest lane's `Decide Action` currently has an OLD precheck (predates this plan) that
-reassigns `action = "write_blocked"` for a refused write BEFORE the row ever reaches `IF
-Update`/`IF Create` — so today, a refused row never reaches the new gate at all; it falls through
-both IFs' false lanes straight to `Set Review`, which already has a robust, sentinel-backed path
-to `Build Ingest Response` (via `Review Lane Sentinel`). D-70-06 requires removing this precheck.
-Once removed, a refused write-type row WILL reach the real gate, take the IF's false branch, and
-need a new path to the response — but simply wiring that false branch into `Ingest Merge Response`
-(a NEW Merge input) reintroduces exactly the class of hang this whole plan exists to close, via a
-mechanism the plan text never mentions and this dispatch had to trace by hand:
-
-1. `Ingest Merge Response`'s write-lane input is only guaranteed to deliver because
-   `Associate Lane Sentinel` fires a marker directly into `Associate Carry Merge` whenever
-   `anyWrite = rows.some(r => r.action === "update" || r.action === "create")` is FALSE — computed
-   from `Decide Action`'s row set, i.e. **before the gate has run**.
-2. Once the precheck is removed, a row that Decide Action labels `"update"`/`"create"` can still be
-   REFUSED by the real gate. `anyWrite` stays true (the row IS action update/create), so the
-   sentinel stays silent — but if EVERY write-type row in the batch gets refused, the real chain
-   (`HubSpot Update`/`Create` → `Build Association Request` → `HubSpot Associate Company`) never
-   runs at all this execution (an n8n node with zero delivered input does not fire — confirmed by
-   this sentinel's own existence, which was built to cover exactly that "zero real rows" case for
-   the pre-gate-refusal-unaware condition it currently tests). `Associate Carry Merge` then never
-   receives ANY input on either of its two indices → hangs → `Ingest Merge Response` never fires →
-   the whole execution hangs.
-3. `n8n/wf_contact_ingest_cloud.json`'s `Associate Lane Sentinel`/`Review Lane Sentinel` (built
-   Phase 70 Plan 02, D-70-01) are GLOBAL, single-producer checks fed directly off `Decide Action`'s
-   fan-out — chosen specifically to avoid racing a real chain's slower multi-hop delivery (see
-   `scripts/build_cloud_workflows.py`'s own comment above their call site, ~L1211: a per-branch
-   `alwaysOutputData` on the routing IFs "was tried first and rejected" for this exact reason). This
-   is the placement the plan's Task 2 action text refers to when it says "at the alwaysOutputData
-   placement 70-02's disarmed probe established — do not re-decide it" — but that line is about
-   whether `alwaysOutputData` itself is the right primitive (it is NOT, per this comment), not
-   about the sentinel's CONDITION, which is what actually needs to change here. **This dispatch did
-   not have budget to also read 70-02-SUMMARY.md/70-03-SUMMARY.md's own `alwaysOutputData` sections
-   in full — do that first in 2c**, specifically to confirm this reading before touching the
-   sentinel.
-4. The fix is almost certainly: change `Associate Lane Sentinel`'s condition from "any row is
-   action update/create" to "any row is action update/create AND would pass the gate" — i.e.
-   duplicate `_writeSafetyAllows` into the sentinel's OWN jsCode (like the review lane's existing
-   BUG-30 precheck already does, for the identical reason: this is graph-plumbing to guarantee
-   Merge delivery, never a second AUTHORIZATION decision — the real gate remains the sole place
-   that actually permits a write). Flag this as a decision when implementing it: a reviewer could
-   misread a second `_writeSafetyAllows` call as the precheck pattern sneaking back in, when it is
-   structurally the same accepted pattern the review lane already uses for the same reason.
-   `Review Lane Sentinel`'s condition (`anyNonWrite`) needs the mirror-image fix for the same
-   reason, in the opposite direction.
-5. Only once that sentinel fix is in place does wiring the write gates' IF-false branches to
-   `Ingest Merge Response` (via `_append_merge_input`, which already exists at
-   `scripts/build_cloud_workflows.py` ~L9262 and is documented for exactly this "genuinely new
-   producer discovered after `splice_merge_before`" use) become safe. The review lane does NOT
-   need this: its own precheck (BUG-30, kept — not removed by this plan) already diverts a refused
-   row to the no-write response path before the gate ever runs, so the review gate's false branch
-   can stay unwired indefinitely without a hang; only ingest's D-70-06 precheck removal creates the
-   new hazard.
-
-**Task 3.** Also carried forward: the true gate count in scheduled-maintenance is **four**
-(`SJ-1 Set Requested`, `SJ-2 Set Requested`, `Dedupe Set Needs Review`, `Review Apply Update`), not
-the plan's stated three — read Task 3's "finish scheduled-maintenance adoption" section against
-four gates. Scheduled-maintenance has NO response-builder node and NO webhook response at all (no
-`Respond to Webhook`/equivalent in `build_scheduled_maintenance_cloud`), so its four gates' false
-branches have nowhere to be usefully wired — leaving them unconnected (as 2a already did) is
-correct and final for that lane, not a placeholder.
-
-No blockers. Both write flags stay disarmed; nothing in this task changed that. Node counts after
-2a: ingest 48 (was 45), review 45 (was 43), scheduled-maintenance 43 (was 39), enrichment
-unchanged at 202.
+- **Gate 70-05-A** in `70-DEFERRED-GATES.md` — the first armed, mixed-verdict batch must be observed on the real engine. The walker proved the fix; the walker's own comment says its Merge model is a spec, not n8n's multi-wave behaviour, and this phase's thesis is runtime truth.
+- **The committed JSON is ahead of the live instance again.** Per CLAUDE.md §13.0.2's running record: the instance was level as of the 2026-09-09 disarmed deploy; this plan's four regenerated workflows are committed and NOT deployed.
+- **D-70-13 lane-wide** — companies lose their domain-allowlist path on review writebacks. An operator decision, flagged not resolved.
+- **`Associate Lane Sentinel` is an arming surface.** Any manual arm must rewrite it with the gates.
 
 ## Self-Check: PASSED
 
+- Every file in `key-files.modified` exists on disk (`[ -f ]` over all 30 paths).
+- `git log --oneline --all --grep="70-05"` returns 15 commits from `0350531..HEAD`; `commits: 15` is measured via `git rev-list --count 0350531..HEAD`, not narrated.
+- Acceptance criteria re-run at close: `node --test tests/n8n/*.test.mjs` → 1032 pass / 0 fail; `.venv/bin/python -m pytest tests/ -q` → 1795 passed, 149 skipped; `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` → 2849 passed, 5 skipped; generation is idempotent (regenerate → byte-identical JSON); zero `ALLOW_HUBSPOT_* = "true"` across every committed workflow.
+
 ---
 *Phase: 70-one-merge-one-result-channel-n8n-runtime-truth*
-*Completed (Task 1 of 3): 2026-09-10*
+*Completed: 2026-09-10*
