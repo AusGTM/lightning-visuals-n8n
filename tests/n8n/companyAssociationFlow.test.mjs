@@ -87,22 +87,26 @@ test("an UPDATE with no resolved company is not held — it simply has nothing t
   assert.equal(updated.company_id, null);
 });
 
-test("Build Association Request joins by value: update by id, create by email", () => {
-  const decided = [
-    { action: "update", hs_object_id: "555", company_id: "900", company_domain: "club.example", properties: {} },
-    { action: "create", hs_object_id: null, company_id: "901", company_domain: "other.example",
-      properties: { email: "jo@other.example" } },
-    { action: "update", hs_object_id: "777", company_id: null, properties: {} },
+test("Build Association Request reads the carried fields directly off $input", () => {
+  // Phase 70 Plan 02 Task 3 (D-70-04): this node's own direct predecessor is now a
+  // carry merge (combineByPosition) spliced after "HubSpot Update"/"HubSpot Create" —
+  // each item below is what THAT merge would already have produced: the write's own
+  // HTTP response (`id`/`properties`) shallow-merged with the pre-write row Decide
+  // Action stamped (`company_id`/`company_domain`/`hs_object_id`/`email`), the carried
+  // row wired LAST so its identity fields win any key clash. No separate
+  // "Decide Action" list to join against.
+  const merged = [
+    { id: "555", properties: {}, action: "update", hs_object_id: "555",
+      company_id: "900", company_domain: "club.example" },
+    { id: "12345", properties: { email: "JO@other.example" }, action: "create",
+      hs_object_id: null, email: "jo@other.example", company_id: "901", company_domain: "other.example" },
+    { id: "777", properties: {}, action: "update", hs_object_id: "777", company_id: null },
+    // A write that failed (no `id` at all) — defensive case only: `on_error=None` on
+    // every write node in this lane means this never reaches here live (a rejected
+    // write fails the whole execution instead), but the function stays fail-closed.
+    { error: "HubSpot rejected the write", action: "create", hs_object_id: null, company_id: null },
   ];
-  const writeResponses = [
-    { id: "555", properties: {} },                                   // update response
-    { id: "12345", properties: { email: "JO@other.example" } },      // create response
-    { id: "777", properties: {} },                                   // update, no company
-    { error: "HubSpot rejected the write" },                         // failed write
-  ];
-  const out = runCode(jsCodeOf("Build Association Request"), writeResponses, {
-    "Decide Action": decided,
-  });
+  const out = runCode(jsCodeOf("Build Association Request"), merged);
   assert.equal(out.length, 2, "only rows with a resolved company and a real id are requested");
   assert.deepEqual(
     out.map((r) => [r.contact_id, r.company_id, r.domain]),
@@ -142,22 +146,22 @@ test("the association PUT is a gated write node reading only fields its gate emi
 test("Build Ingest Response reports every decided row, associated or not", () => {
   const decided = [
     { action: "create", outcome: "net_new", hs_object_id: null, company_id: "901",
-      company_match: "domain", properties: { email: "jo@other.example" } },
+      company_match: "domain", properties: { email: "jo@other.example" }, _decided_snapshot: true },
     { action: "review", outcome: "net_new", hs_object_id: null, company_id: null,
-      reason: "no company in HubSpot matched domain club.example", properties: {} },
+      reason: "no company in HubSpot matched domain club.example", properties: {},
+      _decided_snapshot: true },
   ];
-  // D-70-01/D-70-04 (Phase 70 Plan 02): "Build Ingest Response" now reads $input.all()
-  // (fed by "Ingest Merge Response", the explicit convergence Merge) instead of the
-  // three by-name reads it used before this plan. This item is the shape
-  // "Associate Carry Merge" delivers for a real association attempt — the write
-  // response's own fields plus the row's carried contact_id/email/company_id.
+  // Phase 70 Plan 02 Task 3 (D-70-04): "Build Ingest Response" now reads $input.all()
+  // (fed by "Ingest Merge Response", a THREE-input Merge) exclusively — this item is
+  // the shape "Associate Carry Merge" delivers for a real association attempt (the
+  // write response's own fields plus the row's carried contact_id/email/company_id),
+  // and `decided` above carries `_decided_snapshot: true` (from "Decide Action
+  // Snapshot") on the SAME item stream, never a separate `$('Decide Action')` lookup.
   const arrived = [
     { action: "enrich", contact_id: "12345", email: "jo@other.example", company_id: "901",
       status: "ok" },
   ];
-  const out = runCode(jsCodeOf("Build Ingest Response"), arrived, {
-    "Decide Action": decided,
-  });
+  const out = runCode(jsCodeOf("Build Ingest Response"), [...arrived, ...decided]);
   assert.equal(out.length, 2);
   assert.equal(out[0].association, "associated");
   assert.equal(out[0].contact_id, "12345", "the created row reports the id HubSpot minted");

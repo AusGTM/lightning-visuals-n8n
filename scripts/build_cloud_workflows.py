@@ -107,6 +107,11 @@ for (const it of rows) {
   out.push({ json: {
     ...mapped,
     allow_create: raw.allow_create === true,
+    // Phase 70 Plan 02 (D-70-04): mapRow() drops every key outside its own alias
+    // table, same reason `allow_create` above is re-added explicitly — `source_by_field`
+    // (broadcast onto every row by the "combineAll" merge between "Extract From File"
+    // and this node) would otherwise be lost here, before "Merge Contacts" ever reads it.
+    source_by_field: raw.source_by_field || {},
     reject: !ok,
     ...(ok ? {} : {
       outcome: "rejected",
@@ -129,6 +134,12 @@ return $input.all().map((it) => {
 BUILD_VERIFY_BATCH = inline("normalizeEmail.js") + r"""
 
 // --- n8n wrapper: collapse rows -> ONE item {emails:[...]} for the batch API ---
+// Phase 70 Plan 02 (D-70-04): `_rows` carries the N pre-collapse rows THROUGH the
+// batch call as a NESTED field on this same one-item output — "Verify Emails (batch)"'s
+// own jsonBody sends only `$json.emails` (HTTP_VERIFY), so `_rows` never reaches the
+// external API. The carry-merge spliced after that HTTP node re-attaches this item
+// (still 1-item, matching the HTTP response's own 1-item count) so "Apply Email" reads
+// both the verifier's `results` and its own N rows back via $input, never by name.
 const rows = $input.all();
 const emails = [];
 const seen = new Set();
@@ -136,18 +147,20 @@ for (const it of rows) {
   const e = normalizeEmailBasic(it.json.email);
   if (e && !seen.has(e)) { seen.add(e); emails.push(e); }
 }
-return [{ json: { emails } }];
+return [{ json: { emails, _rows: rows.map((it) => it.json) } }];
 """
 
 APPLY_EMAIL = inline("normalizeEmail.js") + r"""
 
 // --- n8n wrapper: merge the batch verifier response back onto every row ---
-// Rebuilds N rows from the pre-batch node (Normalize Phone) and matches each
-// row's email to the verifier result by address. If the verifier is
-// unreachable / dropped an entry, fall NON-GATING to PROBABLY_VALID + review.
-const rows = $('Normalize Phone').all();
-let results = [];
-try { results = ($('Verify Emails (batch)').first().json.results) || []; } catch (e) { results = []; }
+// Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now the carry
+// merge spliced after "Verify Emails (batch)" — $input's ONE item carries BOTH
+// `_rows` (the N pre-collapse rows "Build Verify Batch" nested through the API call)
+// and `results` (the verifier's own response), so both reads are $input, never a
+// by-name lookup of an upstream node.
+const carried = ($input.first() && $input.first().json) || {};
+const rows = (carried._rows || []).map((json) => ({ json }));
+const results = carried.results || [];
 const byEmail = {};
 for (const r of results) { if (r && r.email) byEmail[String(r.email).toLowerCase()] = r; }
 
@@ -216,29 +229,38 @@ ADAPT_SEARCH_RESULTS = r"""// Adapt Search Results — CLOUD variant.
 // manufacture this flag, the scope is deliberate: it can only be set by a genuine
 // HubSpot search failure, where fail-closed on the whole batch is the correct answer.
 // This scope is intentionally NOT narrowed to per-row here — out of scope for this fix.
-const rows = $('Normalize Phone').all();
-const search = $('HubSpot Search by Email').all();
+//
+// Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now the carry
+// merge spliced after "HubSpot Search by Email" — each of $input's N items is already
+// {...searchResponse_i, ...applyEmailRow_i} (the row wired last, per merge_node's
+// resolveClash: "preferLast"), so both the search envelope and the row ride the SAME
+// item. carry_source = "Apply Email" (not "Normalize Phone", the by-name read this
+// replaces): "Apply Email" is this hop's OWN literal predecessor AND carries the
+// richer, later row (email_status/email_valid) that "Normalize Phone" never had — the
+// old by-name read silently dropped those fields before they ever reached "Decide
+// Action" (Rule 1 bug, fixed as a side effect of retiring the read, not a separate
+// change).
+const merged = $input.all().map((it) => it.json);
 const candidates = [];
 let lookup_failed = false;
-for (const s of search) {
-  const res = s && s.json;
-  if (!res) continue;
+for (const m of merged) {
   // onError:continueRegularOutput puts a failed search in the ITEM (the Lusha/ZoomInfo
   // masking mechanism). Treating an errored search as "no hits" would read as net_new and
   // duplicate-create once creates are armed — the enrichment lanes' lookup_failed pattern
   // applies here identically.
-  if (s.error || res.error || res.status === "error") { lookup_failed = true; continue; }
-  if (Array.isArray(res.results)) {                        // CRM v3 search envelope
-    for (const c of res.results) if (c && c.id) candidates.push(c);
-  } else if (res.id) {                                     // single-object result (fixtures)
-    candidates.push(res);
+  if (m.error || m.status === "error") { lookup_failed = true; continue; }
+  if (Array.isArray(m.results)) {                          // CRM v3 search envelope
+    for (const c of m.results) if (c && c.id) candidates.push(c);
+  } else if (m.id) {                                        // single-object result (fixtures)
+    candidates.push(m);
   }
 }
 function candidateEmail(c) {
   return normalizeEmailBasicSafe((c.properties && c.properties.email) || c.email);
 }
-return rows.map((it) => {
-  const row = it.json;
+return merged.map((m) => {
+  const row = { ...m };
+  delete row.results; delete row.total; delete row.error; delete row.status;
   const rowEmail = normalizeEmailBasicSafe(row.email_normalized || row.email);
   const hits = [];
   if (rowEmail) {
@@ -279,32 +301,20 @@ MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 // MERGE CANDIDATE / canonical field key is lv_linkedin_url. `row.linkedin_url` (the raw
 // mapped-column name from columnMap.js) stays unprefixed on the READ side — only the
 // write-side candidate key renames.
-// Phase 62 Plan 04 (D-62-17): a round-level per-field source map, read from the request
-// ENVELOPE by NODE NAME — never off the row. D-16b: a row-seeded value does not survive
-// Extract From File's fresh-item parse, so this reads 'Set Config' (the node
-// immediately before Extract From File that still spreads the webhook's own body)
-// rather than $json. Wrapped in try/catch, matching ENRICH_BUILD_RESPONSE's own
-// nodeAll() idiom: 'Set Config' does not exist in build_local()'s workflow at all, and
-// no envelope carries source_by_field on every existing caller (a plain CSV upload),
-// so both cases fall through to {} -> the flat "csv" source, byte-identical to today.
-// A multipart form field with no filename (dispatch.py's source_by_field part) arrives
-// as a JSON STRING on $json.body, hence the JSON.parse fallback below.
-function _sourceByFieldFromEnvelope() {
-  try {
-    const cfg = $('Set Config').first();
-    const body = (cfg && cfg.json && (cfg.json.body ?? cfg.json)) || {};
-    let map = (body && typeof body === 'object') ? body.source_by_field : null;
-    if (typeof map === 'string') {
-      try { map = JSON.parse(map); } catch (e) { map = null; }
-    }
-    return (map && typeof map === 'object' && !Array.isArray(map)) ? map : {};
-  } catch (e) {
-    return {};
-  }
-}
-const sourceByField = _sourceByFieldFromEnvelope();
+// Phase 62 Plan 04 (D-62-17): a round-level per-field source map, originally sourced
+// by a NODE-NAME read of 'Set Config' — D-16b's reason still holds (a row-seeded value
+// does not survive Extract From File's fresh-item parse), but Phase 70 Plan 02
+// (D-70-04) closes it differently: a "combineAll" broadcast merge (cartesian, 1 config
+// item x N csv rows) spliced between "Extract From File" and "Map Columns" stamps
+// `source_by_field` onto every row BEFORE the fresh-item parse can drop it, and
+// "Map Columns" re-adds it explicitly (mapRow drops any key outside its own alias
+// table, the same reason it already re-adds `allow_create`). Reading `row.source_by_field`
+// here is therefore just $json, never a by-name lookup — and degrades to {} exactly as
+// before on any row that never carries the key at all (build_local()'s workflow has no
+// "Set Config" node and no caller has ever sent this field on a plain CSV upload).
 return $input.all().map((it) => {
   const row = it.json;
+  const sourceByField = row.source_by_field || {};
   const candidate = {};
   for (const f of ["email", "firstname", "lastname", "jobtitle", "company"]) {
     if (row[f] != null && String(row[f]).trim() !== "") candidate[f] = row[f];
@@ -420,106 +430,117 @@ CO_LINK_DOMAIN_SEARCH_BODY = (
     'properties: ["name","domain"], limit: 5 }) }}'
 )
 
-# Reads its key from "Build Company Link" BY NODE NAME, not $json: this node is chained
-# after the domain search, whose HTTP response has already replaced $json (the same hop
-# that makes every provider node in the enrichment lane recover its identity by node
-# reference). `.item` is the paired-item form already used by "IF Company Bare Event".
+# Phase 70 Plan 02 (D-70-04): this hop's OWN direct predecessor after the carry merge
+# spliced behind "HubSpot Company Search by Domain" is "Stash Domain Search" — the row
+# rides $json directly now, never a $() lookup of "Build Company Link" (whose response
+# would no longer even be this node's own predecessor once a hop sits between them).
 CO_LINK_NAME_SEARCH_BODY = (
     '={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "name", '
-    'operator: "EQ", value: $(\'Build Company Link\').item.json.company_search_name } ] } ], '
+    'operator: "EQ", value: $json.company_search_name } ] } ], '
     'properties: ["name","domain"], limit: 5 }) }}'
 )
+
+# Phase 70 Plan 02 (D-70-04): spliced immediately after "HubSpot Company Search by
+# Domain"'s carry merge. Both that search's response and the Name search's own response
+# (spliced after IT) are `{total, results}` envelopes — combining them by position on
+# the SAME item would let the second clash-overwrite the first (merge_node's
+# resolveClash: "preferLast"). Nesting the domain response under
+# `_company_domain_search` here, BEFORE the name search runs, is what keeps the two
+# separate all the way to "Adapt Company Link".
+STASH_DOMAIN_SEARCH = r"""// Stash Domain Search — see build_cloud_workflows.py's own
+// comment at this node's call site for why the domain search's response is nested
+// rather than left at the top level.
+return $input.all().map((it) => {
+  const { results, total, error, ...row } = it.json;
+  return { json: { ...row, _company_domain_search: { results, total, error } } };
+});
+"""
 
 ADAPT_COMPANY_LINK = inline("companyLink.js") + r"""
 
 // --- n8n wrapper: resolve each row's company id from the two searches ---
-// Index alignment is safe here and only here: both search nodes run once per input item
-// on an UNBRANCHED chain, so search[i] is row i's own answer. (Downstream of the write
-// IFs that stops being true — which is why Build Association Request joins by value.)
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const rows = $('Build Company Link').all();
-const byDomain = nodeAll('HubSpot Company Search by Domain');
-const byName = nodeAll('HubSpot Company Search by Name');
-return rows.map((it, i) => {
-  const row = it.json;
-  const link = resolveCompanyLink(
-    row,
-    byDomain[i] && byDomain[i].json,
-    byName[i] && byName[i].json,
-  );
+// Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now the carry
+// merge spliced after "HubSpot Company Search by Name" — every $input item already
+// carries the row's own fields, the NAME search's response at the top level
+// (results/total/error), and the DOMAIN search's response nested under
+// `_company_domain_search` ("Stash Domain Search" put it there for exactly this
+// reason). No $() lookup, no index alignment against a separately-fetched list.
+return $input.all().map((it) => {
+  const { results, total, error, _company_domain_search, ...row } = it.json;
+  const byName = { results, total, ...(error !== undefined ? { error } : {}) };
+  const byDomain = _company_domain_search || {};
+  const link = resolveCompanyLink(row, byDomain, byName);
   return { json: { ...row, ...link } };
 });
 """
 
 BUILD_ASSOCIATION_REQUEST = inline("companyLink.js") + r"""
 
-// --- n8n wrapper: written contact -> association request (join by VALUE, not index) ---
-// Input is the create/update HTTP response, downstream of the write IFs, so this node's
-// item i is NOT Decide Action's row i. Join instead on what the response actually
-// carries: an update response's `id` IS the row's hs_object_id; a create response has no
-// upstream id, but its `properties.email` is the identity seed the create branch wrote.
-// A response with no id at all (a write that failed) is dropped — fail closed, never
-// associate a record we cannot name.
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const decided = nodeAll('Decide Action').map((it) => it.json);
-const out = [];
-for (const it of $input.all()) {
-  const res = it.json || {};
-  const contactId = res.id != null ? String(res.id) : null;
-  if (!contactId) continue;
-  const email = String((res.properties && res.properties.email) || "").toLowerCase();
-  let row = decided.find((r) => r.hs_object_id && String(r.hs_object_id) === contactId) || null;
-  if (!row && email) {
-    row = decided.find(
-      (r) => String((r.properties && r.properties.email) || "").toLowerCase() === email
-    ) || null;
-  }
-  const company_id = row && row.company_id ? String(row.company_id) : null;
+// --- n8n wrapper: written contact -> association request ---
+// Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now a carry merge
+// spliced after "HubSpot Update"/"HubSpot Create" (carry_source = each write's own
+// Write Gate) — every $input item already carries BOTH the write's HTTP response
+// (`id`, `properties`) AND the pre-write row Decide Action stamped (`company_id`,
+// `company_domain`, `company_match`, `row_id`, `email`), combined by position with the
+// carried row wired LAST (merge_node's resolveClash: "preferLast"). No by-name read of
+// "Decide Action", no separate join-by-value search over a fetched list — the pairing
+// already happened at the merge, and item count/order agree by construction (a literal
+// fan-out of the same delivery feeds both the HTTP node and this node's other input).
+return $input.all().map((it) => {
+  const row = it.json || {};
+  // `row.id` is what HubSpot minted/confirmed for THIS write; `row.hs_object_id` is the
+  // pre-write value the carried row already had (null for a create — the contact did
+  // not exist before this write — kept only as a defensive fallback).
+  const contactId = row.id != null ? String(row.id) : (row.hs_object_id ? String(row.hs_object_id) : null);
+  if (!contactId) return null;
+  const email = String(row.email || (row.properties && row.properties.email) || "").toLowerCase();
+  const company_id = row.company_id ? String(row.company_id) : null;
   // An UPDATE with no resolved company is not held (the contact already exists, and it
   // may already carry an association this lane cannot see) — it simply has nothing to
   // associate. Only creates are held, at Decide Action.
-  if (!company_id) continue;
-  out.push({ json: {
+  if (!company_id) return null;
+  return { json: {
     action: "enrich",
     hs_object_id: contactId,
     contact_id: contactId,
-    email: email || (row && row.email) || null,
-    domain: (row && row.company_domain) || null,
+    email: email || null,
+    domain: row.company_domain || null,
     company_id,
-    company_match: (row && row.company_match) || null,
+    company_match: row.company_match || null,
     assoc_url: associationUrl(contactId, company_id),
     // Phase 70 Plan 02 (D-70-01/D-70-04): carried so "Build Ingest Response" can join
-    // this association attempt back to its row BY VALUE once it stops reading this
-    // node by name — the same join key Decide Action already emits pre-write.
-    row_id: (row && row.row_id) ?? null,
-  }});
-}
-return out;
+    // this association attempt back to its row BY VALUE — the same join key Decide
+    // Action already emits pre-write.
+    row_id: row.row_id ?? null,
+  }};
+}).filter(Boolean);
 """
 
 BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row report, now read from the settled
 // execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.
-// Phase 70 Plan 02 (D-70-01): this node now sits behind "Ingest Merge Response", an
-// explicit append-mode Merge combining the association lane and the review lane, so it
-// runs ONCE over every row instead of once per inbound edge (the F5 collapse shape).
+// Phase 70 Plan 02 (D-70-01/D-70-04): sits behind "Ingest Merge Response", a
+// THREE-input append-mode Merge: the association lane, the review lane, and
+// "Decide Action Snapshot" — a tagged, literal fan-out of "Decide Action"'s own full
+// row set (a single-producer node, safe to fan out further; this is the full ground
+// truth this node needs even for a row that was written but never reached the
+// association lane at all, e.g. an update with no company to associate, dropped at
+// "Build Association Request"). No node is read by name any more — every input
+// arrives on $input, distinguished by the `_decided_snapshot` tag "Decide Action
+// Snapshot" stamps (a real association attempt never carries it; a starved lane's
+// harmless sentinel marker carries neither the tag nor an `action` field at all).
 //
-// "Decide Action" is still read BY NAME for the full row set: it is not a fan-in
-// convergence (one inbound edge, one run per execution), so this read is safe under the
-// same rule the detector exists to enforce (D-70-03/D-70-04) — and it is what keeps a
-// row visible here even when its association attempt never reached the write gate at
-// all (F1/F10/F11/F12: a response that silently omits held/gated rows is the defect
-// this lane exists to not repeat).
-//
-// $input.all() (fed by the Merge) carries every row that reached EITHER lane this
-// execution, real or a harmless marker from a starved lane's sentinel (see
-// "Associate Lane Sentinel" / "Review Lane Sentinel" in build_cloud_workflows.py) — a
-// marker carries no `action` field at all and is dropped as this node's first line,
-// never treated as a row. The join is BY VALUE (row_id, then hs_object_id, then email —
-// never by index into a named node), preserving the F1 alignment property: an
-// association response still pairs with the row that requested it.
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const decided = nodeAll('Decide Action').map((it) => it.json);
-const arrived = $input.all().map((it) => it.json).filter((row) => row && row.action !== undefined);
+// [Rule 1 - Bug, found writing this task's own carry-merge test] `arrived` used to be
+// "any item with an `action` field" — but "Set Review" ALSO feeds this Merge (D-70-01),
+// and its contribution is the row's OWN ORIGINAL decided action/email/company_id
+// untouched. A review row that DOES resolve a company (association: "not_confirmed" is
+// the correct report — nothing ever tried to associate it) self-matched against its
+// OWN Set-Review contribution by email, misreporting "associated". `action: "enrich"`
+// is the literal, unique stamp only "Build Association Request" ever writes — never a
+// value Decide Action itself produces — so filtering on it (not merely "has an action")
+// admits a real association attempt and nothing else.
+const allItems = $input.all().map((it) => it.json).filter(Boolean);
+const decided = allItems.filter((row) => row._decided_snapshot === true);
+const arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === "enrich");
 const byRowId = {};
 const byContactId = {};
 const byEmail = {};
@@ -561,6 +582,36 @@ return decided.map((row) => {
     row_id: row.row_id ?? null,
   }};
 });
+"""
+
+# Phase 70 Plan 02 (D-70-04): fed directly from "Set Config" — the ONE place the JSON
+# STRING form of the multipart `source_by_field` field (dispatch.py's `filename=None`
+# idiom, D-62-17) gets parsed. Its single output item is broadcast onto every CSV row
+# by a "combineAll" merge spliced between "Extract From File" and "Map Columns", so the
+# value survives Extract From File's fresh-item parse (D-16b) without any downstream
+# node reading "Set Config" by name.
+SET_CONFIG_FIELDS = r"""// Set Config Fields — parses the round-level source map once, for the "combineAll"
+// broadcast merge to fan onto every row.
+function _sourceByFieldFromEnvelope(cfg) {
+  const body = (cfg && (cfg.body ?? cfg)) || {};
+  let map = (body && typeof body === 'object') ? body.source_by_field : null;
+  if (typeof map === 'string') {
+    try { map = JSON.parse(map); } catch (e) { map = null; }
+  }
+  return (map && typeof map === 'object' && !Array.isArray(map)) ? map : {};
+}
+const cfg = ($input.first() && $input.first().json) || {};
+return [{ json: { source_by_field: _sourceByFieldFromEnvelope(cfg) } }];
+"""
+
+# Phase 70 Plan 02 (D-70-01/D-70-04): fed directly from "Decide Action" — a literal
+# fan-out of a single-producer node (one inbound edge, one run per execution), safe
+# under the same rule detect_by_name_reads exists to enforce. Tags every row so
+# "Build Ingest Response" can split its $input into "the full decided set" vs "a real
+# lane contribution" without a by-name read of either.
+DECIDE_ACTION_SNAPSHOT = r"""// Decide Action Snapshot — see build_cloud_workflows.py's
+// own comment at this node's call site.
+return $input.all().map((it) => ({ json: { ...it.json, _decided_snapshot: true } }));
 """
 
 DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
@@ -830,11 +881,18 @@ def build_local():
     }
     nodes.append(note)
 
+    conns = chain(order)
+    # Phase 70 Plan 02 (D-70-04): the same carry merge as build_cloud() — APPLY_EMAIL
+    # is a SHARED Code body between the two workflows, and it now reads `_rows`/
+    # `results` off $input rather than by name, so this hop needs the merge here too.
+    splice_carry_merge_after(nodes, conns, "Verify Emails (batch)", "Build Verify Batch",
+                             merge_name="Verify Email Carry Merge")
+
     return {
         "id": "LVcontactIngest01",
         "name": "LV Contact Ingest (local replica)",
         "nodes": nodes,
-        "connections": chain(order),
+        "connections": conns,
         "settings": {},
     }
 
@@ -925,6 +983,12 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     }
     nodes.append(respond)
 
+    # Phase 70 Plan 02 (D-70-04): a THIRD fan-out off "Set Config" (alongside "Extract
+    # From File" and "Build Ingest Ack") — parses `source_by_field` once. Its one output
+    # item is broadcast onto every CSV row by a "combineAll" merge spliced right after
+    # "Extract From File", below.
+    nodes.append(code_node("Set Config Fields", SET_CONFIG_FIELDS, x, y + 360))
+
     x += 220
     extract = {
         "parameters": {"operation": "csv", "binaryPropertyName": "data", "options": {}},
@@ -1014,6 +1078,11 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
         "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
         auth="hubspot", json_body=CO_LINK_DOMAIN_SEARCH_BODY))
     x += 220
+    # Phase 70 Plan 02 (D-70-04): nests the domain search's own response so the carry
+    # merge spliced after "HubSpot Company Search by Name" (below) never clashes the
+    # two searches' identically-shaped `{total, results}` envelopes onto one key.
+    nodes.append(code_node("Stash Domain Search", STASH_DOMAIN_SEARCH, x, y))
+    x += 220
     nodes.append(_http_node(
         "HubSpot Company Search by Name",
         "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
@@ -1023,6 +1092,12 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
                      ("Decide Action", decide_action_js)]:
         x += 220
         nodes.append(code_node(name, js, x, y))
+
+    # Phase 70 Plan 02 (D-70-01/D-70-04): a fan-out off "Decide Action" (single
+    # producer, safe to read further downstream without a by-name lookup) feeding
+    # "Ingest Merge Response" as its third input — the full ground truth "Build Ingest
+    # Response" needs for a row that never reached either lane terminal at all.
+    nodes.append(code_node("Decide Action Snapshot", DECIDE_ACTION_SNAPSHOT, x, y + 460))
 
     # IF Update -> HubSpot Update ; else IF Create -> HubSpot Create ; else Set Review
     x += 220
@@ -1110,44 +1185,45 @@ return anyNonWrite ? [] : [{}];
     nodes.append(code_node("Associate Lane Sentinel", associate_sentinel_js, x + 220, y - 260))
     nodes.append(code_node("Review Lane Sentinel", review_sentinel_js, x + 220, y + 320))
 
-    # "Associate Carry Merge" (D-70-02/D-70-04): re-attaches the association write
-    # response to the row that requested it, across the "HubSpot Associate Company" HTTP
-    # hop — Combine by Position, the carried row (input 1, the write gate's own output —
-    # the SAME delivery that feeds the HTTP node, a literal fan-out, so count and order
-    # always agree) wired LAST so its identity fields win any key clash.
-    nodes.append(merge_node("Associate Carry Merge", x + 1100, y - 20,
-                            inputs=2, mode="combine", combine_by="combineByPosition"))
-
     conns = chain([
         "Webhook Trigger", "Set Config", "Extract From File", "Map Columns",
         "Normalize Phone", "Build Verify Batch", "Verify Emails (batch)", "Apply Email",
         "HubSpot Search by Email", "Adapt Search Results", "Resolve Identity",
         "Merge Contacts", "Build Company Link", "HubSpot Company Search by Domain",
-        "HubSpot Company Search by Name", "Adapt Company Link",
+        # Phase 70 Plan 02 (D-70-04): "Stash Domain Search" sits between the two company
+        # searches now — see its own call-site comment above.
+        "Stash Domain Search", "HubSpot Company Search by Name", "Adapt Company Link",
         "Decide Action", "IF Update",
     ])
     # D-70-07: "Set Config" fans to "Extract From File" (the existing pipeline,
-    # unchanged) AND "Build Ingest Ack" (the immediate response) — both receive the
-    # SAME items; the ack does not delay or gate the pipeline.
+    # unchanged), "Build Ingest Ack" (the immediate response), AND "Set Config Fields"
+    # (D-70-04's source_by_field parse) — all three receive the SAME items; neither
+    # delays or gates the pipeline.
     conns["Set Config"]["main"][0].append({"node": "Build Ingest Ack", "type": "main", "index": 0})
+    conns["Set Config"]["main"][0].append({"node": "Set Config Fields", "type": "main", "index": 0})
     conns.update(chain(["Build Ingest Ack", "Respond to Webhook"]))
-    # D-70-01: "Decide Action" fans to "IF Update" (the existing pipeline, unchanged)
-    # AND both sentinels — all three receive the SAME complete row set from Decide
-    # Action's single run.
+    # D-70-01: "Decide Action" fans to "IF Update" (the existing pipeline, unchanged),
+    # both sentinels, AND "Decide Action Snapshot" (D-70-04's tagged full-row-set fan-out,
+    # "Ingest Merge Response"'s third input) — all four receive the SAME complete row
+    # set from Decide Action's single run.
     conns["Decide Action"]["main"][0].append(
         {"node": "Associate Lane Sentinel", "type": "main", "index": 0})
     conns["Decide Action"]["main"][0].append(
         {"node": "Review Lane Sentinel", "type": "main", "index": 0})
+    conns["Decide Action"]["main"][0].append(
+        {"node": "Decide Action Snapshot", "type": "main", "index": 0})
+    conns["Decide Action Snapshot"] = {
+        "main": [[{"node": "Build Ingest Response", "type": "main", "index": 0}]]}
 
-    conns.update(chain(["Build Association Request", "HubSpot Associate Company"]))
-    conns["HubSpot Associate Company"] = {
-        "main": [[{"node": "Associate Carry Merge", "type": "main", "index": 0}]]}
+    conns.update(chain(["Build Association Request", "HubSpot Associate Company", "Build Ingest Response"]))
+    # "Associate Carry Merge" itself is created by `splice_carry_merge_after` below
+    # (Task 3 generalises Task 2's hand-wired version into that one reusable
+    # mechanism) — this sentinel edge only needs the NAME, not the node object, to
+    # already exist yet.
     conns["Associate Lane Sentinel"] = {"main": [[
         {"node": "Associate Carry Merge", "type": "main", "index": 0},
         {"node": "Associate Carry Merge", "type": "main", "index": 1},
     ]]}
-    conns["Associate Carry Merge"] = {
-        "main": [[{"node": "Build Ingest Response", "type": "main", "index": 0}]]}
     for write_node in ("HubSpot Update", "HubSpot Create"):
         conns[write_node] = {"main": [
             [{"node": "Build Association Request", "type": "main", "index": 0}]
@@ -1199,16 +1275,38 @@ return anyNonWrite ? [] : [{}];
         "HubSpot Associate Company": "enrich",
     })
 
-    # D-70-02/D-70-04: "HubSpot Associate Company Write Gate" (just spliced in above) is
-    # the carry_source for "Associate Carry Merge"'s input 1 — the SAME delivery that
-    # feeds the HTTP node, fanned to the Merge as well, so count and order always agree
-    # with input 0 (no by-name read of the pre-hop node).
-    conns["HubSpot Associate Company Write Gate"]["main"][0].append(
-        {"node": "Associate Carry Merge", "type": "main", "index": 1})
+    # D-70-02/D-70-04 (Phase 70 Plan 02 Task 3): every carry merge on this lane, via the
+    # one generalised helper. Each `carry_source` is the SAME delivery that feeds the
+    # HTTP node it follows — either that node's own direct predecessor, or (for the
+    # three write nodes) the write gate `splice_write_gates` just spliced in front of it
+    # — so item count and order always agree between a merge's two inputs. Task 2's
+    # hand-wired "Associate Carry Merge" is refactored onto this mechanism rather than
+    # left as a second, driftable one-off.
+    splice_carry_merge_after(nodes, conns, "HubSpot Update", "HubSpot Update Write Gate",
+                             merge_name="Update Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Create", "HubSpot Create Write Gate",
+                             merge_name="Create Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Associate Company",
+                             "HubSpot Associate Company Write Gate",
+                             merge_name="Associate Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Verify Emails (batch)", "Build Verify Batch",
+                             merge_name="Verify Email Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Search by Email", "Apply Email",
+                             merge_name="Search By Email Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Search by Domain", "Build Company Link",
+                             merge_name="Company Domain Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Search by Name", "Stash Domain Search",
+                             merge_name="Company Name Carry Merge")
+    # combineAll (cartesian, never combineByPosition): one "Set Config Fields" item
+    # broadcast onto every one of "Extract From File"'s N rows — a genuine 1-to-N
+    # relationship, not a per-item HTTP hop.
+    splice_carry_merge_after(nodes, conns, "Extract From File", "Set Config Fields",
+                             merge_name="Source By Field Broadcast", combine_by="combineAll")
 
-    # D-70-01: the two inbound edges into "Build Ingest Response" ("Associate Carry
-    # Merge", "Set Review") become one explicit, append-mode Merge — the converged node
-    # runs ONCE over every row instead of once per inbound edge.
+    # D-70-01: the three inbound edges into "Build Ingest Response" ("Associate Carry
+    # Merge", "Set Review", "Decide Action Snapshot") become one explicit, append-mode
+    # Merge — the converged node runs ONCE over every row instead of once per inbound
+    # edge.
     splice_merge_before(nodes, conns, "Build Ingest Response", merge_name="Ingest Merge Response")
 
     # Pre-probe placement (Task 2's human-check settles this live): "Set Review" is a
@@ -7979,6 +8077,45 @@ def set_always_output_data(nodes, names):
             raise ValueError(f"set_always_output_data: no node named {name!r}")
         node["alwaysOutputData"] = True
     return nodes
+
+
+def splice_carry_merge_after(nodes, conns, http_name, carry_source, *,
+                              merge_name=None, combine_by="combineByPosition"):
+    """D-70-04's carry mechanism, generalised: inserts a `mode="combine"` Merge
+    immediately after `http_name` — input 0 is `http_name`'s own existing output edge
+    (re-pointed, unchanged destination), input 1 is a NEW literal fan-out edge from
+    `carry_source`. `carry_source` must already be the SAME delivery feeding `http_name`
+    (its direct predecessor, or another node fed by that same predecessor) — that is
+    what guarantees input 0 and input 1 always agree on item count and order, since
+    they are two edges off the one wave that entered `http_name`. Every existing
+    consumer of `http_name` is re-pointed to the new Merge; `http_name` itself is left
+    otherwise untouched (this is Task 2's hand-wired "Associate Carry Merge" pattern,
+    generalised into one reusable mechanism rather than left as a one-off — Phase 70
+    Plan 02 Task 3).
+
+    `combine_by` defaults to "combineByPosition" (pairs item i of each input into one
+    shallow-merged object, carried-row-last winning any key clash per `merge_node`'s own
+    docstring) — the shape every per-item HTTP hop on this lane needs. Pass
+    `combine_by="combineAll"` for a genuine 1-to-N broadcast (a single config item onto
+    every row), never for a per-item HTTP hop."""
+    nodes_by_name = {n["name"]: n for n in nodes}
+    if http_name not in nodes_by_name:
+        raise ValueError(f"splice_carry_merge_after: no node named {http_name!r}")
+    if carry_source not in nodes_by_name:
+        raise ValueError(f"splice_carry_merge_after: no carry_source node named {carry_source!r}")
+
+    name = merge_name or f"{http_name} Carry Merge"
+    target = nodes_by_name[http_name]
+    mx, my = target["position"][0] + 110, target["position"][1]
+    nodes.append(merge_node(name, mx, my, inputs=2, mode="combine", combine_by=combine_by))
+
+    old_spec = conns.get(http_name) or {"main": [[]]}
+    old_first_output = (old_spec.get("main") or [[]])[0] or []
+    conns[http_name] = {"main": [[{"node": name, "type": "main", "index": 0}]]}
+    conns[name] = {"main": [old_first_output]}
+    conns.setdefault(carry_source, {"main": [[]]})
+    conns[carry_source]["main"][0].append({"node": name, "type": "main", "index": 1})
+    return name
 
 
 def build_scheduled_maintenance_cloud():

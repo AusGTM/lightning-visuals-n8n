@@ -114,14 +114,14 @@ test("a batch of three rows: resolved create, unresolved create, and an update �
 
   // Downstream of the two write IFs: only the RESOLVED create's write response ever
   // reaches "Build Association Request" — the held row never reached a write node at
-  // all, so there is no response for it to join against. Joined BY VALUE (email),
-  // never by position, mirroring companyAssociationFlow.test.mjs's own proof.
-  const writeResponses = [
-    { id: "12345", properties: { email: "JO@resolved.example" } },
-  ];
-  const requested = runCode(jsCodeOf("Build Association Request"), writeResponses, {
-    "Decide Action": decided,
-  });
+  // all, so there is no response for it to join against. Phase 70 Plan 02 Task 3
+  // (D-70-04): this node's own direct predecessor is now a carry merge
+  // (combineByPosition) — the item below is what that merge already produced: the
+  // write's own HTTP response (`id`) shallow-merged with the pre-write decided row
+  // (wired LAST, its identity fields win any clash), mirroring
+  // companyAssociationFlow.test.mjs's own proof.
+  const merged = [{ id: "12345", ...decided[0] }];
+  const requested = runCode(jsCodeOf("Build Association Request"), merged);
   assert.equal(requested.length, 1, "only the resolved create's write is an association request");
   assert.equal(requested[0].contact_id, "12345");
   assert.equal(requested[0].company_id, "9600000001");
@@ -132,14 +132,14 @@ test("a batch of three rows: resolved create, unresolved create, and an update �
 
   // Build Ingest Response reports all three rows, associated or not — a held row is
   // still visible in the batch's own report, never silently dropped.
-  // D-70-01/D-70-04 (Phase 70 Plan 02): "Build Ingest Response" now reads $input.all()
-  // (fed by "Ingest Merge Response") instead of the three by-name reads it used
-  // before — "requested" (Build Association Request's own real output, already
-  // carrying contact_id/email/company_id) is exactly the shape "Associate Carry Merge"
-  // delivers for a real association attempt.
-  const report = runCode(jsCodeOf("Build Ingest Response"), requested, {
-    "Decide Action": decided,
-  });
+  // Phase 70 Plan 02 Task 3 (D-70-04): "Build Ingest Response" now reads $input.all()
+  // (fed by "Ingest Merge Response", a THREE-input Merge) exclusively — "requested"
+  // (Build Association Request's own real output, already carrying
+  // contact_id/email/company_id) is exactly the shape "Associate Carry Merge" delivers
+  // for a real association attempt, and the decided rows carry `_decided_snapshot:
+  // true` (from "Decide Action Snapshot") on the SAME item stream.
+  const snapshotted = decided.map((row) => ({ ...row, _decided_snapshot: true }));
+  const report = runCode(jsCodeOf("Build Ingest Response"), [...requested, ...snapshotted]);
   assert.equal(report.length, 3);
   assert.equal(report[0].association, "associated");
   assert.equal(report[1].action, "review");

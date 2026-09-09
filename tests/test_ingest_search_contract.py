@@ -83,19 +83,23 @@ def test_adapter_behavior_arbitrary_contacts_produce_zero_hits():
     import subprocess
 
     js = _node("Adapt Search Results")["parameters"]["jsCode"]
+    # Phase 70 Plan 02 Task 3 (D-70-04): this node's own direct predecessor is now the
+    # carry merge spliced after "HubSpot Search by Email" — one $input item per row,
+    # already the row's own fields shallow-merged with the search's own `{results}`
+    # envelope (the real CRM v3 shape, one item whether it matched or not).
     harness = """
-const rows = [{ json: { email: "ingest-canary@lv-canary-delete-me.example",
-                        email_normalized: "ingest-canary@lv-canary-delete-me.example" } }];
-const search = [
-  { json: { id: "341450293725", properties: { email: "someone.real@example.com" } } },
-  { json: { id: "340482729442", properties: { email: "another.real@example.com" } } },
+const row = { email: "ingest-canary@lv-canary-delete-me.example",
+              email_normalized: "ingest-canary@lv-canary-delete-me.example" };
+const results = [
+  { id: "341450293725", properties: { email: "someone.real@example.com" } },
+  { id: "340482729442", properties: { email: "another.real@example.com" } },
 ];
-const $ = (name) => ({ all: () => (name === 'Normalize Phone' ? rows : search) });
+const $input = { all: () => [{ json: { ...row, results } }] };
 const out = (function () { %s })();
 const srk = out[0].json.searchResultsByKey;
 if (Object.keys(srk).length !== 0) { throw new Error("matched: " + JSON.stringify(srk)); }
 // and the positive direction: an actual email match still resolves
-search.push({ json: { id: "777", properties: { email: "ingest-canary@lv-canary-delete-me.example" } } });
+results.push({ id: "777", properties: { email: "ingest-canary@lv-canary-delete-me.example" } });
 const out2 = (function () { %s })();
 const srk2 = out2[0].json.searchResultsByKey;
 if (JSON.stringify(srk2.email) !== JSON.stringify(["777"])) { throw new Error("miss: " + JSON.stringify(srk2)); }

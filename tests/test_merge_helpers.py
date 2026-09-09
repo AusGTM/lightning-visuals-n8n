@@ -125,14 +125,79 @@ def test_set_always_output_data_flags_named_nodes_and_raises_on_a_missing_one():
         b.set_always_output_data(nodes, ["Missing"])
 
 
-def test_ingest_workflow_carries_exactly_one_merge_named_ingest_merge_response():
+def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_response():
+    """D-70-01/D-70-04 (Phase 70 Plan 02 Task 3): "Ingest Merge Response" is still the
+    ONE append-mode convergence Merge in front of "Build Ingest Response" — every OTHER
+    Merge on this lane is a `combine`-mode carry merge across a specific HTTP hop
+    (D-70-04), never a second fan-in convergence."""
     wf = b.build_cloud()
     merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
-    assert sorted(n["name"] for n in merges) == ["Associate Carry Merge", "Ingest Merge Response"]
+    append_merges = [n for n in merges if n["parameters"]["mode"] == "append"]
+    assert [n["name"] for n in append_merges] == ["Ingest Merge Response"]
 
-    ingest_merge = next(n for n in merges if n["name"] == "Ingest Merge Response")
-    assert ingest_merge["parameters"]["mode"] == "append"
+    ingest_merge = append_merges[0]
+    # Task 3: a THIRD input — "Decide Action Snapshot" — alongside "Associate Carry
+    # Merge"'s output and "Set Review".
+    assert ingest_merge["parameters"]["numberInputs"] == 3
 
-    carry_merge = next(n for n in merges if n["name"] == "Associate Carry Merge")
-    assert carry_merge["parameters"]["mode"] == "combine"
-    assert carry_merge["parameters"]["combineBy"] == "combineByPosition"
+    combine_merges = {n["name"]: n for n in merges if n["parameters"]["mode"] == "combine"}
+    # Every per-item HTTP hop this lane carries a row across — Task 3's full inventory.
+    assert set(combine_merges) == {
+        "Update Carry Merge", "Create Carry Merge", "Associate Carry Merge",
+        "Verify Email Carry Merge", "Search By Email Carry Merge",
+        "Company Domain Carry Merge", "Company Name Carry Merge",
+        "Source By Field Broadcast",
+    }
+    for name, node in combine_merges.items():
+        if name == "Source By Field Broadcast":
+            assert node["parameters"]["combineBy"] == "combineAll", name
+        else:
+            assert node["parameters"]["combineBy"] == "combineByPosition", name
+
+
+def test_splice_carry_merge_after_reroutes_the_http_node_and_fans_the_carry_source():
+    http_node = _code_node("HTTP Hop", 300, 0)
+    carry_source = _code_node("Carry Source", 100, 0)
+    consumer = _code_node("Consumer", 500, 0)
+    nodes = [carry_source, http_node, consumer]
+    conns = {
+        "Carry Source": {"main": [[{"node": "HTTP Hop", "type": "main", "index": 0}]]},
+        "HTTP Hop": {"main": [[{"node": "Consumer", "type": "main", "index": 0}]]},
+    }
+    merge_name = b.splice_carry_merge_after(nodes, conns, "HTTP Hop", "Carry Source",
+                                            merge_name="Test Carry Merge")
+    assert merge_name == "Test Carry Merge"
+
+    merges = [n for n in nodes if n["type"] == "n8n-nodes-base.merge"]
+    assert len(merges) == 1
+    assert merges[0]["parameters"]["mode"] == "combine"
+    assert merges[0]["parameters"]["combineBy"] == "combineByPosition"
+
+    # HTTP Hop's own edge now targets the merge's input 0, unchanged consumer inherited
+    # by the merge's own output, and Carry Source fans an EXTRA edge to input 1 —
+    # its original edge into HTTP Hop is untouched.
+    assert conns["HTTP Hop"]["main"][0] == [{"node": "Test Carry Merge", "type": "main", "index": 0}]
+    assert conns["Test Carry Merge"]["main"][0] == [{"node": "Consumer", "type": "main", "index": 0}]
+    assert conns["Carry Source"]["main"][0] == [
+        {"node": "HTTP Hop", "type": "main", "index": 0},
+        {"node": "Test Carry Merge", "type": "main", "index": 1},
+    ]
+
+
+def test_splice_carry_merge_after_accepts_combine_all_for_a_broadcast():
+    http_node = _code_node("Fan Node", 300, 0)
+    carry_source = _code_node("Config Source", 100, 0)
+    nodes = [carry_source, http_node]
+    conns = {"Fan Node": {"main": [[]]}}
+    b.splice_carry_merge_after(nodes, conns, "Fan Node", "Config Source",
+                               merge_name="Broadcast Merge", combine_by="combineAll")
+    merges = [n for n in nodes if n["type"] == "n8n-nodes-base.merge"]
+    assert merges[0]["parameters"]["combineBy"] == "combineAll"
+
+
+def test_splice_carry_merge_after_raises_on_missing_nodes():
+    nodes = [_code_node("Only Node")]
+    with pytest.raises(ValueError, match="no node named"):
+        b.splice_carry_merge_after(nodes, {}, "Missing", "Only Node")
+    with pytest.raises(ValueError, match="no carry_source"):
+        b.splice_carry_merge_after(nodes, {}, "Only Node", "Missing")

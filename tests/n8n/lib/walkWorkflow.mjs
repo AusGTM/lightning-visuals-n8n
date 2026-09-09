@@ -333,9 +333,16 @@ export function walkWorkflow(wf, opts) {
       // mode this repo uses (absent, or explicit "append") keeps the original
       // concatenation behaviour; existing 70-01 fixtures never set `mode` at all, so
       // this is additive, not a change to their semantics.
-      const isCombineByPosition = node.parameters
-        && node.parameters.mode === "combine"
-        && (node.parameters.combineBy || "combineByFields") === "combineByPosition";
+      const combineByValue = node.parameters && node.parameters.mode === "combine"
+        ? (node.parameters.combineBy || "combineByFields")
+        : null;
+      const isCombineByPosition = combineByValue === "combineByPosition";
+      // Phase 70 Plan 02 Task 3 (D-70-04): "combineAll" — the cartesian product across
+      // every input, used for a genuine 1-to-N broadcast (one config item onto every
+      // row), never for a per-item HTTP hop (that stays combineByPosition). n8n's own
+      // Merge node exposes this as a third `combineBy` value alongside the two above
+      // (merge_node's own docstring, Task 2's source citation).
+      const isCombineAll = combineByValue === "combineAll";
       const state = mergeState[node.name] || (mergeState[node.name] = { buffers: {}, fired: false });
       if (state.fired) continue; // fires ONCE per replay (spec — not n8n's real multi-wave behaviour)
       state.buffers[delivery.inputIndex] = (state.buffers[delivery.inputIndex] || []).concat(delivery.items);
@@ -360,6 +367,18 @@ export function walkWorkflow(wf, opts) {
           for (let inp = 0; inp < numberInputs; inp += 1) combined = { ...combined, ...state.buffers[inp][i] };
           merged.push(combined);
         }
+      } else if (isCombineAll) {
+        // Cartesian product across all configured inputs, same last-input-wins clash
+        // rule as combineByPosition above.
+        let combos = [{}];
+        for (let inp = 0; inp < numberInputs; inp += 1) {
+          const next = [];
+          for (const base of combos) {
+            for (const it of state.buffers[inp]) next.push({ ...base, ...it });
+          }
+          combos = next;
+        }
+        merged = combos;
       } else {
         merged = [];
         for (let i = 0; i < numberInputs; i += 1) merged.push(...state.buffers[i]);

@@ -68,6 +68,10 @@ test("Set Review's output reaches Build Ingest Response — a review-only batch 
 });
 
 test("Build Ingest Response reports a review-only decided row correctly when it IS given the chance to run (the JS logic itself was never the bug)", () => {
+  // Phase 70 Plan 02 Task 3 (D-70-04): "Build Ingest Response" now reads $input.all()
+  // exclusively (fed by "Ingest Merge Response") — the decided row arrives tagged
+  // `_decided_snapshot: true` (from "Decide Action Snapshot") on the SAME item stream,
+  // never via a separate `$('Decide Action')` lookup.
   const jsCode = node("Build Ingest Response").parameters.jsCode;
   const decided = [{
     action: "review",
@@ -78,19 +82,11 @@ test("Build Ingest Response reports a review-only decided row correctly when it 
             "enrich the company first, or name its record id on the row",
     properties: {},
     row_id: "row-1",
+    _decided_snapshot: true,
   }];
-  const $input = { all: () => [] };
-  const $ = (name) => {
-    const table = {
-      "Decide Action": decided,
-      "Build Association Request": [],
-      "HubSpot Associate Company Write Gate": [],
-    };
-    if (!(name in table)) throw new Error(`no node named ${name}`);
-    return { all: () => table[name].map((j) => ({ json: j })) };
-  };
-  const fn = new Function("$input", "$", `"use strict";\n${jsCode}`);
-  const out = fn($input, $).map((it) => it.json);
+  const $input = { all: () => decided.map((j) => ({ json: j })) };
+  const fn = new Function("$input", `"use strict";\n${jsCode}`);
+  const out = fn($input).map((it) => it.json);
   assert.equal(out.length, 1);
   assert.equal(out[0].action, "review");
   assert.match(out[0].reason, /no company in HubSpot matched name/);

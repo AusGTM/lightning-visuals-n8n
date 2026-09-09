@@ -57,12 +57,14 @@ const SUGGESTION_ROW = {
   phone_normalized: "+61491570156",
 };
 
-test("a suggested row's provenance carries claude_web for the fields research named and the waterfall's own source for email/phone, from one map present on 'Set Config'", () => {
+test("a suggested row's provenance carries claude_web for the fields research named and the waterfall's own source for email/phone, from one map carried on the row", () => {
+  // Phase 70 Plan 02 Task 3 (D-70-04): the round-level source map is no longer read
+  // from 'Set Config' by name — "Set Config Fields" parses it once and a "combineAll"
+  // broadcast merge stamps `source_by_field` onto every row before 'Merge Contacts'
+  // ever runs. 'Merge Contacts' itself just reads `row.source_by_field` off $json.
   const sourceMap = { firstname: "claude_web", lastname: "claude_web", jobtitle: "claude_web",
     email: "lusha", phone: "lusha" };
-  const [out] = runCode(mergeContactsJs, [SUGGESTION_ROW], {
-    "Set Config": [{ body: { source_by_field: sourceMap } }],
-  });
+  const [out] = runCode(mergeContactsJs, [{ ...SUGGESTION_ROW, source_by_field: sourceMap }]);
   const provenance = out.merge.provenance;
   for (const field of ["firstname", "lastname", "jobtitle"]) {
     assert.equal(provenance[field].source, "claude_web", `${field} carries claude_web`);
@@ -71,11 +73,16 @@ test("a suggested row's provenance carries claude_web for the fields research na
   assert.equal(provenance.phone.source, "lusha");
 });
 
-test("the source map arrives as a JSON string on the multipart form field (dispatch.py's filename=None shape) and still parses", () => {
+test("'Set Config Fields' parses the source map off the multipart form field's JSON string (dispatch.py's filename=None shape) before it ever reaches a row", () => {
+  const setConfigFieldsJs = nodeOf(ingestWf, "Set Config Fields").parameters.jsCode;
   const sourceMap = { jobtitle: "claude_web" };
-  const [out] = runCode(mergeContactsJs, [SUGGESTION_ROW], {
-    "Set Config": [{ body: { source_by_field: JSON.stringify(sourceMap) } }],
-  });
+  const seed = [{ json: { body: { source_by_field: JSON.stringify(sourceMap) } } }];
+  const $input = { all: () => seed, first: () => seed[0] };
+  const fn = new Function("$input", `"use strict";\n${setConfigFieldsJs}`);
+  const [parsed] = fn($input).map((it) => it.json);
+  assert.deepEqual(parsed.source_by_field, sourceMap);
+
+  const [out] = runCode(mergeContactsJs, [{ ...SUGGESTION_ROW, source_by_field: parsed.source_by_field }]);
   assert.equal(out.merge.provenance.jobtitle.source, "claude_web");
   // A field the map did not name still falls back to the flat "csv" default.
   assert.equal(out.merge.provenance.email.source, "csv");

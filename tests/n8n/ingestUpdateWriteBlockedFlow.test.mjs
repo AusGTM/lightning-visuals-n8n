@@ -100,14 +100,11 @@ test("full flow: a write_blocked row reaches Build Ingest Response with NO revie
   // "create") matches "write_blocked" — this row falls through both to Set Review,
   // exactly the same false-lane routing a genuine review row takes. Nothing on the
   // association chain ever ran for this batch (no HubSpot write, no association
-  // request, no association gate) — proven by feeding Build Ingest Response only the
-  // empty node outputs a batch with zero write attempts would actually produce.
-  const report = runCode(jsCodeOf("Build Ingest Response"), [], {
-    "Decide Action": [decided],
-    "Build Association Request": [],
-    "HubSpot Associate Company Write Gate": [],
-    "HubSpot Associate Company": [],
-  });
+  // request, no association gate) — proven by feeding "Build Ingest Response" only
+  // the tagged decided row (D-70-04: it reads $input.all() exclusively now, fed by
+  // "Ingest Merge Response"; a batch with zero write attempts produces no OTHER
+  // arrival for this row at all).
+  const report = runCode(jsCodeOf("Build Ingest Response"), [{ ...decided, _decided_snapshot: true }]);
   assert.equal(report.length, 1, "the blocked row must still be reported, not silently dropped");
   assert.equal(report[0].action, "write_blocked", "never the pre-block decided action (\"update\")");
   assert.equal(report[0].hs_object_id, "35551");

@@ -26,15 +26,17 @@ const node = (name) => {
 };
 const jsCode = node("Build Ingest Response").parameters.jsCode;
 
-function runCode(seedItems, nodeOutputs = {}) {
+// Phase 70 Plan 02 Task 3 (D-70-04): "Build Ingest Response" now reads $input.all()
+// exclusively (fed by "Ingest Merge Response") — the `decided` rows arrive tagged
+// `_decided_snapshot: true` (from "Decide Action Snapshot") on the SAME item stream as
+// any real arrival, never via a separate `$('Decide Action')` lookup.
+function runCode(seedItems) {
   const $input = { all: () => seedItems.map((j) => ({ json: j })) };
-  const $ = (name) => {
-    if (!(name in nodeOutputs)) throw new Error(`no node named ${name}`);
-    return { all: () => nodeOutputs[name].map((j) => ({ json: j })) };
-  };
-  const fn = new Function("$input", "$", `"use strict";\n${jsCode}`);
-  return (fn($input, $) || []).map((it) => (it && it.json !== undefined ? it.json : it));
+  const fn = new Function("$input", `"use strict";\n${jsCode}`);
+  return (fn($input) || []).map((it) => (it && it.json !== undefined ? it.json : it));
 }
+
+const snapshot = (row) => ({ ...row, _decided_snapshot: true });
 
 test("Build Ingest Response's field list names row_id, and every field it named before this task", () => {
   // "association" is a shorthand property (`{ ..., association, ... }`), never
@@ -53,24 +55,16 @@ test("Build Ingest Response's field list names row_id, and every field it named 
 });
 
 test("a row carrying row_id echoes it through unchanged", () => {
-  const decided = [{ action: "review", hs_object_id: null, row_id: "row-42" }];
-  const report = runCode([], {
-    "Decide Action": decided,
-    "Build Association Request": [],
-    "HubSpot Associate Company Write Gate": [],
-  });
+  const decided = [snapshot({ action: "review", hs_object_id: null, row_id: "row-42" })];
+  const report = runCode(decided);
 
   assert.equal(report.length, 1);
   assert.equal(report[0].row_id, "row-42");
 });
 
 test("a row with no row_id (the pair pipeline's final ingest leg, REVIEW-57-H7) reports null, never crashes", () => {
-  const decided = [{ action: "update", hs_object_id: "123" }];
-  const report = runCode([], {
-    "Decide Action": decided,
-    "Build Association Request": [],
-    "HubSpot Associate Company Write Gate": [],
-  });
+  const decided = [snapshot({ action: "update", hs_object_id: "123" })];
+  const report = runCode(decided);
 
   assert.equal(report.length, 1);
   assert.equal(report[0].row_id, null);
@@ -78,14 +72,10 @@ test("a row with no row_id (the pair pipeline's final ingest leg, REVIEW-57-H7) 
 
 test("a batch mixing a row_id-carrying row and a row_id-less row reports both independently", () => {
   const decided = [
-    { action: "enrich", hs_object_id: "1", row_id: "r1" },
-    { action: "create", hs_object_id: null },
+    snapshot({ action: "enrich", hs_object_id: "1", row_id: "r1" }),
+    snapshot({ action: "create", hs_object_id: null }),
   ];
-  const report = runCode([], {
-    "Decide Action": decided,
-    "Build Association Request": [],
-    "HubSpot Associate Company Write Gate": [],
-  });
+  const report = runCode(decided);
 
   assert.equal(report.length, 2);
   assert.equal(report[0].row_id, "r1");
