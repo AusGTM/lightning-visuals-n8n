@@ -858,3 +858,6 @@ files_changed:
     the exact contamination class already found and fixed at "ZoomInfo Token Gate", one
     node later in the chain. **This is why the checkpoint below asks the operator to
     verify per-run row_id identity, not just that all 4 rows came back.**
+
+## executionOrder (2026-09-09, read via the plugin key)
+`settings.executionOrder` is absent on both the committed `wf_enrichment_cloud.json`/`wf_contact_ingest_cloud.json` and the live `950HPb7a1GgSAIyZ`/`AwbBeShdPgV48eiY` bodies — n8n therefore runs the legacy `v0` order. Live enrichment `updatedAt` was `2026-09-09T03:04:48Z`, after the 01:33Z bounce and before the F5 deploy; source of that touch unknown (operator-Claude probes ran 02:57–03:00Z).
