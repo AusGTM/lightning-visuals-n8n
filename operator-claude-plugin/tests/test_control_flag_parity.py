@@ -115,12 +115,13 @@ def test_a_declaration_the_plugin_writes_is_read_back_by_phase_27s_reader():
     observed = n8n_read.read_write_safety(armed, "ALLOW_HUBSPOT_RECORD_WRITES")
     assert observed["value"] == "true"
     assert observed["disagreement"] is None
-    # 4 declaring nodes since F12 (uat-batch-review-row-reads-failed, 2026-09-09): the
-    # update and create gates and the association gate (2026-08-25), plus "Decide
-    # Action" itself, which now pre-computes an update's write-safety verdict so a row
-    # the downstream gate would refuse can still reach "Build Ingest Response" via
-    # "Set Review"'s edge instead of dead-ending with no path at all.
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 4
+    # 2 declaring nodes since Phase 70 Plan 05 Task 2/3 (2026-09-10): the update gate and
+    # the create gate, and nothing else. F12's "Decide Action" precheck is deleted
+    # (D-70-06 — it predicted the gate's verdict rather than reporting it) and the
+    # association's own second gate is removed (D-70-15 — one write_request, one verdict,
+    # taken at the write it runs downstream of). Fewer declaring nodes is the point: the
+    # predicate has ONE home per lane, so an armed window has one surface, not four.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 2
 
     allowlist = n8n_read.read_write_safety(armed, "TEST_RECORD_IDS")
     assert allowlist["value"] == "12345,67890"
@@ -139,14 +140,17 @@ def test_maintenance_workflow_rewrite_counts():
 
 
 def test_contact_ingest_rewrite_counts_create_leads_by_one():
-    """RECORD_WRITES rose to 4 by F12 (2026-09-09): "Decide Action" now declares it too
-    (see the test above). CREATE stays 4 — "Decide Action" already declared it alone
-    before F12; F12 folded that single const into the same shared write-safety blob
-    the three gates embed, so the CREATE count does not change."""
+    """CREATE still leads RECORD_WRITES by one, for the reason the test name says — but
+    both fell by two in Phase 70 Plan 05 Task 2/3 (2026-09-10). RECORD_WRITES is declared
+    by the two write gates only: F12's "Decide Action" precheck is deleted (D-70-06) and
+    the association's own second gate is removed (D-70-15). CREATE is declared by those
+    same two gates PLUS "Decide Action", which still bakes that one constant alone — it
+    routes create-vs-review, a decision about WHAT the row is, never whether it may be
+    written."""
     workflow = _workflow("wf_contact_ingest_cloud.json")
     _, counts = n8n_arming.set_write_safety(
         workflow, {"ALLOW_HUBSPOT_RECORD_WRITES": True, "ALLOW_HUBSPOT_CREATE": True})
-    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 4, "ALLOW_HUBSPOT_CREATE": 4}
+    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 2, "ALLOW_HUBSPOT_CREATE": 3}
 
 
 def test_rewrite_counts_are_derived_across_every_committed_cloud_workflow():
@@ -213,8 +217,8 @@ def test_an_armed_workflow_can_be_set_back_and_the_rescan_passes():
 
     assert n8n_read.read_write_safety(disarmed, "ALLOW_HUBSPOT_RECORD_WRITES")["value"] == "false"
     assert n8n_read.read_write_safety(disarmed, "TEST_RECORD_IDS")["value"] == ""
-    # 4 declaring nodes since F12 (2026-09-09) — see the round-trip test above.
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 4
+    # 2 declaring nodes since Phase 70 Plan 05 Task 2/3 — see the round-trip test above.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 2
 
 
 def test_the_input_workflow_is_never_mutated():
