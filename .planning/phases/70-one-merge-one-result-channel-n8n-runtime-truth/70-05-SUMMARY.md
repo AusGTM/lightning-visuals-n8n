@@ -19,7 +19,7 @@ affects: [70-06, 70-07]
 actuals:
   tokens: 690000
   tasks: 3
-  commits: 15
+  commits: 18
   plan_head_before: 0350531
 
 tech-stack:
@@ -172,7 +172,7 @@ status: complete
 
 ## Performance
 
-- **Duration:** ~6h across four dispatches · **Started:** 2026-09-09 · **Completed:** 2026-09-10 · **Tasks:** 3 (Task 2 executed as sub-steps 2a/2b/2c) · **Commits:** 15 · **Files modified:** 28
+- **Duration:** ~6h across four dispatches · **Started:** 2026-09-09 · **Completed:** 2026-09-10 · **Tasks:** 3 (Task 2 executed as sub-steps 2a/2b/2c) · **Commits:** 18 · **Files modified:** 28
 
 ## Accomplishments
 
@@ -319,7 +319,7 @@ Carried forward:
 ## Self-Check: PASSED
 
 - Every file in `key-files.modified` exists on disk (`[ -f ]` over all 30 paths).
-- `git log --oneline --all --grep="70-05"` returns 15 commits from `0350531..HEAD`; `commits: 15` is measured via `git rev-list --count 0350531..HEAD`, not narrated.
+- `commits: 18` is MEASURED via `git rev-list --count 0350531..HEAD` at close (12 production/test commits, 4 partial checkpoints across dispatches 1-3, and 2 close-out docs commits), not narrated. `plan_head_before: 0350531` is the ledger base so `/gsd-verify-work` re-measures on the same instrument.
 - Acceptance criteria re-run at close: `node --test tests/n8n/*.test.mjs` → 1032 pass / 0 fail; `.venv/bin/python -m pytest tests/ -q` → 1795 passed, 149 skipped; `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` → 2849 passed, 5 skipped; generation is idempotent (regenerate → byte-identical JSON); zero `ALLOW_HUBSPOT_* = "true"` across every committed workflow.
 
 ---
