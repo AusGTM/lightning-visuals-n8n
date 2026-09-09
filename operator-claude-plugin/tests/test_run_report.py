@@ -889,3 +889,41 @@ def test_config_load_composed_with_prune_durable_state_respects_the_operators_co
     deleted = run_report.prune_durable_state(cfg)
 
     assert deleted == ["run_audit-abc.json"]
+
+
+# =====================================================================================
+# Phase 70 Plan 06 Task 1 (D-70-08a) — settlement comes from the EXECUTION's status,
+# never from manifest verdicts. `enrich-records`' id-less spec forms write no verdicts
+# at all, so a verdict-derived progress read reports them running forever; that is the
+# exact reason its exception existed and the exact thing this replaces.
+# =====================================================================================
+
+import run_state  # noqa: E402
+
+
+def test_an_id_less_spec_form_settles_from_the_execution_status(tmp_path):
+    run_state.start_run("run-70-06-idless", ["r1", "r2"])
+    run_state.mark_dispatched("run-70-06-idless", ["r1", "r2"])
+
+    still_going = run_state.read_progress("run-70-06-idless")
+    assert still_going.running == 2, "no verdicts were written — the rows read as running"
+    assert still_going.settled is False
+
+    settled = run_state.read_progress("run-70-06-idless", execution_status="success")
+
+    assert settled.settled is True, (
+        "the execution finished; a verdict-less row must not report running forever"
+    )
+    assert settled.running == 2, (
+        "settlement is a RUN-level fact — it never promotes a verdict-less row to done"
+    )
+
+
+def test_an_unsettled_execution_status_leaves_the_progress_read_unchanged():
+    run_state.start_run("run-70-06-running", ["r1"])
+    run_state.mark_dispatched("run-70-06-running", ["r1"])
+
+    progress = run_state.read_progress("run-70-06-running", execution_status="running")
+
+    assert progress.settled is False
+    assert progress.running == 1

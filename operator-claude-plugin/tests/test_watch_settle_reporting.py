@@ -349,3 +349,110 @@ def test_remaining_credits_from_response_unchanged_by_a_two_run_build_response()
 
     credits = report_enrichment.remaining_credits_from_response(execution)
     assert credits == {"lusha": 41}, "must read run 0's item 0 only, ignoring the second run entirely"
+
+
+# =====================================================================================
+# Phase 70 Plan 06 Task 1 (D-70-05/D-70-08a/D-70-10) — runData is the ONLY result
+# channel: scale-up children included, a missing executions-API key refuses before the
+# send starts, and the time-proximity lookup is unreachable from any result path.
+# =====================================================================================
+
+_CHILD_DISPATCH_NODE = "Dispatch Self"
+
+
+def _scale_up_parent_execution(run_id, child_ids, *, execution_id="exec-parent"):
+    """A `scale_up` parent: it answers for its own rows AND names each dispatched child
+    through `metadata.subExecution.executionId` — the exact key path the phase-61
+    premise probe measured live (parent `12036` -> child `12037`,
+    `61-PREMISE-PROBE-VERDICT.json` P-13, CLAUDE.md 13.0.3)."""
+    return {
+        "id": execution_id, "status": "success",
+        "data": {"resultData": {"runData": {
+            "Parse HubSpot Event": [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+            "Build Response": [{"data": {"main": [[{"json": {"row_id": "row-parent",
+                                                             "action": "write_blocked"}}]]}}],
+            _CHILD_DISPATCH_NODE: [{"data": {"main": [[
+                {"json": {"dispatched": True},
+                 "metadata": {"subExecution": {"workflowId": "wf", "executionId": cid}}}
+                for cid in child_ids
+            ]]}}],
+        }}},
+    }
+
+
+def _scale_up_child_execution(run_id, execution_id, row_id, *, status="success"):
+    return {
+        "id": execution_id, "status": status,
+        "data": {"resultData": {"runData": {
+            "Parse HubSpot Event": [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+            "Build Response": [{"data": {"main": [[{"json": {"row_id": row_id,
+                                                             "action": "write_blocked"}}]]}}],
+        }}},
+    }
+
+
+_FAKE_CONFIG = {"n8n_url": "https://fake.n8n.cloud", "n8n_api_key": "fake"}
+
+
+def test_recover_dispatch_folds_in_the_rows_of_a_scale_up_child_execution(
+        stub_get_transport_factory):
+    """A fanned-out batch's rows live in the CHILDREN, one execution each, all carrying
+    the same client-minted run id. Reading the parent alone loses every fanned row."""
+    run_id = "run-70-06-scale-up"
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-parent"}]},                       # list_executions
+        _scale_up_parent_execution(run_id, ["9001"]),            # get_execution (parent)
+        _scale_up_child_execution(run_id, "9001", "row-child"),  # get_execution (child)
+    ])
+
+    recovery = watch.recover_dispatch(
+        _FAKE_CONFIG, run_id, expected_chunk_count=1, workflow_id="wf-enrichment-cloud",
+        transport=get_transport, now=lambda: 0.0, sleep=lambda seconds: None,
+    )
+
+    assert recovery["recovered"] is True
+    assert [row["row_id"] for row in recovery["responses"]] == ["row-parent", "row-child"]
+
+
+def test_recover_dispatch_does_not_settle_while_a_scale_up_child_is_still_running(
+        stub_get_transport_factory):
+    """The parent detaches and settles at once; a child that has not settled still owes
+    rows. Returning on the parent alone is exactly how a fanned batch loses them."""
+    run_id = "run-70-06-child-running"
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-parent"}]},
+        _scale_up_parent_execution(run_id, ["9002"]),
+        _scale_up_child_execution(run_id, "9002", "row-child", status="running"),
+    ])
+
+    recovery = watch.recover_dispatch(
+        _FAKE_CONFIG, run_id, expected_chunk_count=1, workflow_id="wf-enrichment-cloud",
+        transport=get_transport, now=lambda: 0.0, sleep=lambda seconds: None,
+        bound_seconds=0,
+    )
+
+    assert recovery["recovered"] is False
+    assert recovery["responses"] == []
+
+
+def test_require_executions_api_refuses_a_config_with_no_key():
+    import config_gate
+
+    try:
+        watch.require_executions_api({"n8n_url": "https://fake.n8n.cloud"})
+    except config_gate.ConfigError as refusal:
+        assert "n8n_api_key" in str(refusal)
+        assert "fake" not in str(refusal)
+    else:
+        raise AssertionError("a config with no executions-API key must refuse")
+
+
+def test_require_executions_api_never_names_the_key_value():
+    import config_gate
+
+    try:
+        watch.require_executions_api({"n8n_url": "u", "n8n_api_key": ""})
+    except config_gate.ConfigError as refusal:
+        assert "secret-value-xyz" not in str(refusal)
+    else:
+        raise AssertionError("an empty executions-API key must refuse")

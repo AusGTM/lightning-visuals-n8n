@@ -1432,3 +1432,98 @@ def test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_
         "of the `providers` variable itself, so a hardcoded literal reaching the wire "
         "would fail this assertion, not merely echo itself back -- must reach the wire"
     )
+
+
+# =====================================================================================
+# Phase 70 Plan 06 Task 1 (D-70-05/D-70-08/D-70-10) — one result channel: the send
+# refuses before it starts without an executions-API key, and no result path can reach
+# the time-proximity lookup.
+# =====================================================================================
+
+def _scale_up_free_execution(run_id, rows):
+    return {
+        "id": "exec-1", "status": "success",
+        "data": {"resultData": {"runData": {
+            "Parse HubSpot Event": [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+            "Build Response": [{"data": {"main": [[{"json": row} for row in rows]]}}],
+        }}},
+    }
+
+
+def _recovering_get_transport(stub_get_transport_factory, run_id, rows):
+    return stub_get_transport_factory([
+        {"data": [{"id": "exec-1"}]},
+        _scale_up_free_execution(run_id, rows),
+    ])
+
+
+def test_dispatch_plan_refuses_before_any_send_when_the_executions_api_key_is_missing(
+    fake_config, stub_module_transport_factory
+):
+    """D-70-10: runData is the only result channel, so a config that cannot read it
+    cannot honestly report on a send — the refusal comes BEFORE the send, never after
+    the money is spent."""
+    transport = stub_module_transport_factory()
+    keyless = {k: v for k, v in fake_config.items() if k != "n8n_api_key"}
+
+    with pytest.raises(config_gate.ConfigError) as refusal:
+        chunking.dispatch_plan(three_chunk_plan(), PROVIDERS, True, keyless,
+                               transport=transport)
+
+    assert "n8n_api_key" in str(refusal.value)
+    assert transport.calls == [], "nothing may be sent once the refusal has fired"
+
+
+@pytest.mark.parametrize("spec_form,expected_write", [
+    ({"record_ids": ["1", "2"], "object_type": "companies"}, True),
+    ({"rows": [{"row_id": "r1", "email": "a@b.com"}], "object_type": "contacts"}, False),
+])
+def test_dispatch_and_recover_completes_without_the_time_proximity_lookup(
+    spec_form, expected_write, fake_config, stub_module_transport_factory,
+    stub_get_transport_factory, monkeypatch
+):
+    """D-70-10: correlation is exact-match on the client-minted run id. The
+    time-proximity guess is patched to raise — every mode must still complete, which
+    is only possible if no result path reaches it."""
+    def _never(*args, **kwargs):
+        raise AssertionError("the time-proximity lookup is not a correlation path")
+
+    monkeypatch.setattr(executions_client, "find_execution_for_dispatch", _never)
+
+    run_id = "run-70-06-modes"
+    plan = chunking.plan_chunks(spec_form, 5)
+    result = chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, fake_config, run_id=run_id,
+        transport=stub_module_transport_factory(),
+        get_transport=_recovering_get_transport(
+            stub_get_transport_factory, run_id,
+            [{"row_id": "r1", "action": "update", "hs_object_id": "1"}]),
+        workflow_id="wf-enrichment-cloud", now=lambda: 0.0, sleep=lambda s: None,
+    )
+
+    assert result["recovered"] is True
+    assert [row["row_id"] for row in result["rows"]] == ["r1"]
+    assert result["can_write"] is expected_write
+
+
+def test_dispatch_and_recover_reads_rows_from_rundata_never_from_the_ack(
+    fake_config, stub_module_transport_factory, stub_get_transport_factory
+):
+    """The ack carries `{run_id, accepted, row_ids}` and nothing else. A row outcome
+    that appears in the result can only have come from the settled execution."""
+    run_id = "run-70-06-ack"
+    post_transport = stub_module_transport_factory(
+        [{"run_id": run_id, "accepted": True, "row_ids": []}])
+    plan = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 5)
+
+    result = chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, fake_config, run_id=run_id, transport=post_transport,
+        get_transport=_recovering_get_transport(
+            stub_get_transport_factory, run_id,
+            [{"row_id": "only", "action": "update", "hs_object_id": "77"}]),
+        workflow_id="wf-enrichment-cloud", now=lambda: 0.0, sleep=lambda s: None,
+    )
+
+    assert [row["row_id"] for row in result["rows"]] == ["only"]
+    assert result["outcome"].responses == ({"run_id": run_id, "accepted": True,
+                                            "row_ids": []},)
