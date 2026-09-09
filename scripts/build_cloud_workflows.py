@@ -581,6 +581,22 @@ BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row repo
 const allItems = $input.all().map((it) => it.json).filter(Boolean);
 const decided = allItems.filter((row) => row._decided_snapshot === true);
 const arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === "enrich");
+// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the write gates now EMIT the rows they
+// refuse (D-70-14) straight onto this Merge, carrying `action: "write_blocked"` plus a
+// reason. The decided snapshot still says "update"/"create" for those rows — reporting
+// it unchanged is exactly the misreport execution 12181 showed (Greg Purcell's blocked
+// update reported as landed). The gate's verdict is the write node's own answer, so it
+// wins here. This is what replaces the pre-write precheck: a report, not a prediction.
+const blocked = allItems.filter((row) =>
+  row._decided_snapshot !== true && row.action === "write_blocked");
+const blockedByRowId = {};
+const blockedByContactId = {};
+const blockedByEmail = {};
+for (const row of blocked) {
+  if (row.row_id) blockedByRowId[String(row.row_id)] = row;
+  if (row.hs_object_id) blockedByContactId[String(row.hs_object_id)] = row;
+  if (row.email) blockedByEmail[String(row.email).toLowerCase()] = row;
+}
 const byRowId = {};
 const byContactId = {};
 const byEmail = {};
@@ -595,6 +611,9 @@ return decided.map((row) => {
                 (row.hs_object_id && byContactId[String(row.hs_object_id)]) ||
                 (email && byEmail[email]) || null;
   const contactId = (assoc && assoc.contact_id) || row.hs_object_id || row.contact_id || null;
+  const block = (row.row_id && blockedByRowId[String(row.row_id)]) ||
+                (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||
+                (email && blockedByEmail[email]) || null;
   let association;
   if (!row.company_id) {
     association = "none";
@@ -604,15 +623,17 @@ return decided.map((row) => {
     association = "not_confirmed";  // never reached the write gate, or HubSpot refused it
   }
   return { json: {
-    action: row.action,
-    outcome: row.outcome || null,
+    action: block ? "write_blocked" : row.action,
+    outcome: block ? "write_blocked" : (row.outcome || null),
     contact_id: contactId,
     hs_object_id: contactId,
     email: email || null,
     company_id: row.company_id || null,
     company_match: row.company_match || null,
-    association,
-    reason: row.reason || null,
+    // A refused write never reached the association lane either — one verdict covers
+    // both (D-70-15), so it cannot report "associated".
+    association: block && association === "associated" ? "not_confirmed" : association,
+    reason: (block && block.write_blocked_reason) || row.reason || null,
     email_status: row.email_status || null,
     // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`
     // pre-write. Closes the join for every lane whose rows carry `row_id` into the
@@ -731,26 +752,18 @@ return $input.all().map((it) => {
   // Gate" (downstream, spliced by splice_write_gates) filters its input to nothing
   // when the allowlist refuses a row — a Code node emitting [] never fires its own
   // outgoing connection (the same "wave dropping" semantics as "IF Company Skip"'s
-  // true lane elsewhere in this lane), so a batch of update-only rows the gate refuses
-  // in full would leave "Build Ingest Response" with no path to run at all (no review
-  // row exists to reach it via "Set Review"). Greg Purcell's row (execution 12181) hit
-  // the narrower half of this: the gate refused him, "HubSpot Update" never ran, yet
-  // "Build Ingest Response" (reconstructing every row from THIS node by name) still
-  // reported his pre-block `action: "update"` as if it had landed. Pre-computing the
-  // SAME verdict here — mirroring ENRICH_DECIDE_CLOUD's own precedent — routes a
-  // blocked row through "Set Review"'s already-wired edge (F1) instead, with no new
-  // wiring and no dependence on any node downstream of the IF Update/IF Create split.
-  // The downstream gate stays in place unchanged (test_write_gate_coverage.py,
-  // defense-in-depth). CREATE rows are NOT covered here: "HubSpot Create Write Gate"
-  // derives its own allowlist domain from the row's OWN email when no domain resolves
-  // (BUG 27, live-canary-proven) — reproducing that fallback here risks a false
-  // "write_blocked" precheck disagreeing with the real gate's verdict, an unevidenced
-  // regression this fix does not need to take on to close what execution 12181 actually
-  // showed. Filed as a follow-up:
-  // .planning/todos/pending/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md
-  if (action === "update" && !_writeSafetyAllows(action, id.contact_id || null, row.company_domain || null)) {
-    action = "write_blocked";
-  }
+  // Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the pre-write refusal PRECHECK that
+  // used to sit here — a second copy of `_writeSafetyAllows`, added 2026-09-09 after
+  // execution 12181 reported Greg Purcell's blocked update as if it had landed — is
+  // GONE. It predicted the gate's verdict instead of reporting it, which is a copy that
+  // can disagree (its own comment admitted as much: create rows were deliberately left
+  // uncovered precisely because reproducing the create gate's email-domain derivation
+  // here risked a false "write_blocked"). The row's outcome of record is now the write
+  // node's own output: "HubSpot Update/Create Write Gate" EMITS a refused row (D-70-14)
+  // carrying `action: "write_blocked"` and a reason, and "Build Ingest Response"
+  // overlays that verdict onto the decided snapshot. Create rows are covered by
+  // construction, closing the follow-up the precheck filed
+  // (.planning/todos/pending/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md).
   return { json: {
     action,
     outcome,
@@ -1104,14 +1117,16 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     # this module, so calling it at definition time would raise NameError. Prepending it
     # to this one node's jsCode (not Set Config, not the other three chain nodes) keeps
     # Decide Action the single Cloud-only place this lane reads the baked constant.
-    # F12: WRITE_SAFETY_GATE_JS (not just the one ALLOW_HUBSPOT_CREATE const) — Decide
-    # Action now pre-computes an update's write-safety verdict itself (see the
-    # `action = "write_blocked"` block inside DECIDE_CLOUD), so it needs
-    # `_writeSafetyAllows` and the allowlist consts too, the same way ENRICH_DECIDE_CLOUD
-    # already does for the enrichment lane.
+    # F12 added the WHOLE of WRITE_SAFETY_GATE_JS here so this node could pre-compute an
+    # update's write-safety verdict itself. Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06)
+    # deleted that precheck, so the node is back to needing exactly ONE baked constant:
+    # ALLOW_HUBSPOT_CREATE, which routes create-vs-review — a decision about WHAT the row
+    # is, not whether it may be written. `_writeSafetyAllows` and the allowlists live in
+    # the spliced gates now, which is also where arming happens.
     # D-70-12 (Phase 70 Plan 05 Task 1): also needs `_buildWriteRequest` — DECIDE_CLOUD's
     # own return object stamps `write_request` on every row it emits.
-    decide_action_js = WRITE_SAFETY_GATE_JS + WRITE_REQUEST_JS + DECIDE_CLOUD
+    decide_action_js = (_write_safety_const("ALLOW_HUBSPOT_CREATE") + "\n"
+                        + WRITE_REQUEST_JS + DECIDE_CLOUD)
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),
@@ -1223,8 +1238,18 @@ return $input.all().map((it) => ({ json: { ...it.json, queue: "needs_review" } }
 // node's call site for why this is a global, single-producer check rather than a
 // per-IF alwaysOutputData flag.
 const rows = $input.all().map((it) => it.json);
-const anyWrite = rows.some((r) => r && (r.action === "update" || r.action === "create"));
-return anyWrite ? [] : [{}];
+// Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With
+// the pre-write refusal precheck removed (D-70-06) a row can be action update/create and
+// still never reach "HubSpot Associate Company": "Build Association Request" drops any
+// row with no resolved company (CLAUDE.md §13.0.1 — an update is never HELD for lack of
+// a company, it simply has nothing to associate). A batch of updates that all resolve no
+// company would otherwise leave "Associate Carry Merge" with zero deliveries on both
+// inputs and hang "Ingest Merge Response" forever. This stays a pre-gate check on
+// purpose: a row the GATE refuses is covered by the gate's own false branch, which
+// delivers to the very same "Ingest Merge Response" input this lane feeds.
+const anyAssoc = rows.some((r) => r &&
+  (r.action === "update" || r.action === "create") && r.company_id);
+return anyAssoc ? [] : [{}];
 """
     review_sentinel_js = r"""// Review Lane Sentinel — the review-side twin of "Associate Lane Sentinel". Fires
 // only when EVERY row this execution decided is update/create (so "Set Review" would
@@ -1316,14 +1341,17 @@ return anyNonWrite ? [] : [{}];
     }
     nodes.append(note)
 
+    # Phase 70 Plan 05 Task 3 (D-70-15): ONE verdict covers an update and its
+    # association. The association PUT used to carry its own second `_writeSafetyAllows`
+    # call, which could disagree with the verdict that already permitted the write it
+    # runs downstream of (different action string, different domain source). It now runs
+    # off that same permitted output, conditioned only on a resolved company id — which
+    # "Build Association Request" already applies by dropping any row without one, per
+    # CLAUDE.md §13.0.1: an update is NEVER held for lack of a company, it simply has
+    # nothing to associate, and "Build Ingest Response" reports `association: "none"`.
     splice_write_gates(nodes, conns, {
         "HubSpot Update": "enrich",
         "HubSpot Create": "create",
-        # The association PUT is a HubSpot write and is gated like one, even though it
-        # only ever runs downstream of a write that already passed a gate. "enrich": it
-        # touches an EXISTING contact record (the one just created or updated), and the
-        # row carries both its id and the company domain the allowlist can match on.
-        "HubSpot Associate Company": "enrich",
     })
 
     # D-70-02/D-70-04 (Phase 70 Plan 02 Task 3): every carry merge on this lane, via the
@@ -1338,7 +1366,7 @@ return anyNonWrite ? [] : [{}];
     splice_carry_merge_after(nodes, conns, "HubSpot Create", "HubSpot Create Write Gate IF",
                              merge_name="Create Carry Merge")
     splice_carry_merge_after(nodes, conns, "HubSpot Associate Company",
-                             "HubSpot Associate Company Write Gate IF",
+                             "Build Association Request",
                              merge_name="Associate Carry Merge")
     splice_carry_merge_after(nodes, conns, "Verify Emails (batch)", "Build Verify Batch",
                              merge_name="Verify Email Carry Merge")
@@ -1358,7 +1386,20 @@ return anyNonWrite ? [] : [{}];
     # Merge", "Set Review", "Decide Action Snapshot") become one explicit, append-mode
     # Merge — the converged node runs ONCE over every row instead of once per inbound
     # edge.
-    splice_merge_before(nodes, conns, "Build Ingest Response", merge_name="Ingest Merge Response")
+    ingest_merge_response = splice_merge_before(
+        nodes, conns, "Build Ingest Response", merge_name="Ingest Merge Response")
+
+    # Phase 70 Plan 05 Task 2 sub-step 2c (D-70-14): each write gate's REFUSAL lane lands
+    # on the SAME "Ingest Merge Response" input the association lane already feeds. Same
+    # reasoning as the enrichment lane's four gates: reusing the existing index means no
+    # NEW merge input is created, so no sentinel needs re-keying, and a refusal and a
+    # success arrive on one channel. With the D-70-06 precheck gone this is the ONLY path
+    # a refused row has to the response — and it is what lets "Build Ingest Response"
+    # report the gate's actual verdict rather than the pre-write intention.
+    _assoc_input = _merge_input_index(conns, "Associate Carry Merge", ingest_merge_response)
+    for _gate_write in ("HubSpot Update", "HubSpot Create"):
+        conns[f"{_gate_write} Write Gate IF"]["main"][1] = [
+            {"node": ingest_merge_response, "type": "main", "index": _assoc_input}]
 
     # Pre-probe placement (Task 2's human-check settles this live): "Set Review" is a
     # Code node and takes the flag directly per the plan's own literal suggestion; the

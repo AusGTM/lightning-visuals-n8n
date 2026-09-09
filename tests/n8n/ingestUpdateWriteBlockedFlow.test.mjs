@@ -47,8 +47,8 @@ function runCode(jsCode, seedItems, nodeOutputs = {}) {
   return (fn($input, $) || []).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
-function armDecideAction(constants) {
-  let js = jsCodeOf("Decide Action");
+function armGate(constants, gateName = "HubSpot Update Write Gate") {
+  let js = jsCodeOf(gateName);
   for (const [name, value] of Object.entries(constants)) {
     const fromEmpty = `const ${name} = "";`;
     const fromFalse = `const ${name} = "false";`;
@@ -72,40 +72,63 @@ function gregRow() {
   };
 }
 
-test("Decide Action: the COMMITTED (disarmed) build reports write_blocked for an update, never update", () => {
+// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the precheck this file was written for
+// is GONE. It predicted the gate's verdict inside "Decide Action" instead of reporting
+// it — a second copy of the predicate that could disagree with the first (its own
+// comment conceded create rows were left uncovered for exactly that reason). The
+// discriminating case quoted in this file's header is answered differently now, and
+// better: the gate no longer FILTERS a refused row away (D-70-14), it EMITS it onto
+// "Ingest Merge Response" directly, so a batch of nothing but refused writes still
+// reaches "Build Ingest Response" — with no dependence on "Set Review" and no precheck.
+
+test("Decide Action: the committed build reports the row's REAL action; permission is not its call any more", () => {
   const [decided] = runCode(jsCodeOf("Decide Action"), [gregRow()]);
   assert.equal(decided.outcome, "match", "seed row reached Decide Action as a match");
-  assert.equal(decided.action, "write_blocked",
-    "the disarmed build (ALLOW_HUBSPOT_RECORD_WRITES=false) must never report a live action");
-});
-
-test("Decide Action: armed but the domain is NOT on the allowlist -> still write_blocked", () => {
-  const js = armDecideAction({ ALLOW_HUBSPOT_RECORD_WRITES: "true", TEST_RECORD_DOMAINS: "some-other-domain.example" });
-  const [decided] = runCode(js, [gregRow()]);
-  assert.equal(decided.action, "write_blocked");
-});
-
-test("Decide Action: armed AND the domain IS on the allowlist -> update (regression pin, F11)", () => {
-  const js = armDecideAction({ ALLOW_HUBSPOT_RECORD_WRITES: "true", TEST_RECORD_DOMAINS: "wyongraceclub.com.au" });
-  const [decided] = runCode(js, [gregRow()]);
   assert.equal(decided.action, "update");
-  assert.equal(decided.hs_object_id, "35551");
+  assert.equal(decided.write_request.hs_object_id, "35551");
+  assert.equal(decided.write_request.domain, "wyongraceclub.com.au",
+    "F11's fix survives: the gate's allowlist domain is emitted, not re-derived");
 });
 
-test("full flow: a write_blocked row reaches Build Ingest Response with NO review row and NO write chain at all", () => {
+test("HubSpot Update Write Gate: the COMMITTED (disarmed) build refuses, and EMITS the refusal", () => {
   const [decided] = runCode(jsCodeOf("Decide Action"), [gregRow()]);
-  assert.equal(decided.action, "write_blocked");
+  const [gated] = runCode(jsCodeOf("HubSpot Update Write Gate"), [decided]);
+  assert.equal(gated.write_allowed, false,
+    "the disarmed build (ALLOW_HUBSPOT_RECORD_WRITES=false) must never permit a write");
+  assert.equal(gated.action, "write_blocked");
+  assert.ok(gated.write_blocked_reason);
+});
 
-  // Neither IF Update ($json.action === "update") nor IF Create ($json.action ===
-  // "create") matches "write_blocked" — this row falls through both to Set Review,
-  // exactly the same false-lane routing a genuine review row takes. Nothing on the
-  // association chain ever ran for this batch (no HubSpot write, no association
-  // request, no association gate) — proven by feeding "Build Ingest Response" only
-  // the tagged decided row (D-70-04: it reads $input.all() exclusively now, fed by
-  // "Ingest Merge Response"; a batch with zero write attempts produces no OTHER
-  // arrival for this row at all).
-  const report = runCode(jsCodeOf("Build Ingest Response"), [{ ...decided, _decided_snapshot: true }]);
-  assert.equal(report.length, 1, "the blocked row must still be reported, not silently dropped");
+test("HubSpot Update Write Gate: armed but the domain is NOT on the allowlist -> still write_blocked", () => {
+  const [decided] = runCode(jsCodeOf("Decide Action"), [gregRow()]);
+  const js = armGate({ ALLOW_HUBSPOT_RECORD_WRITES: "true", TEST_RECORD_DOMAINS: "some-other-domain.example" });
+  assert.equal(runCode(js, [decided])[0].action, "write_blocked");
+});
+
+test("HubSpot Update Write Gate: armed AND the domain IS on the allowlist -> permitted (regression pin, F11)", () => {
+  const [decided] = runCode(jsCodeOf("Decide Action"), [gregRow()]);
+  const js = armGate({ ALLOW_HUBSPOT_RECORD_WRITES: "true", TEST_RECORD_DOMAINS: "wyongraceclub.com.au" });
+  const [gated] = runCode(js, [decided]);
+  assert.equal(gated.write_allowed, true);
+  assert.equal(gated.action, "update");
+  assert.equal(gated.hs_object_id, "35551");
+});
+
+test("full flow: a refused row reaches Build Ingest Response reported as write_blocked, with no review row and no write chain at all", () => {
+  // The gate's false branch is wired straight onto "Ingest Merge Response" (the same
+  // input the association lane feeds), so "Build Ingest Response" sees TWO items for
+  // this one row: the tagged decided snapshot (which still says "update" — that is the
+  // pre-write intention, and reporting it unchanged is exactly execution 12181's
+  // misreport) and the gate's own emitted refusal. The gate's verdict wins.
+  const [decided] = runCode(jsCodeOf("Decide Action"), [gregRow()]);
+  const [gated] = runCode(jsCodeOf("HubSpot Update Write Gate"), [decided]);
+
+  const report = runCode(jsCodeOf("Build Ingest Response"),
+    [{ ...decided, _decided_snapshot: true }, gated]);
+  assert.equal(report.length, 1, "the blocked row must still be reported, exactly once");
   assert.equal(report[0].action, "write_blocked", "never the pre-block decided action (\"update\")");
   assert.equal(report[0].hs_object_id, "35551");
+  assert.ok(report[0].reason, "the gate's own reason reaches the operator");
+  assert.notEqual(report[0].association, "associated",
+    "one verdict covers both (D-70-15) — a refused write never associated anything");
 });

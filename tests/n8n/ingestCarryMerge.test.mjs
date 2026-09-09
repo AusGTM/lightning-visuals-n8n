@@ -45,11 +45,11 @@ const ROW4_COMPANY_ID = "9003";
 
 function loadArmedWorkflow({ testRecordIds = "" } = {}) {
   const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
-  const armNames = [
-    "Decide Action",
-    "HubSpot Update Write Gate",
-    "HubSpot Associate Company Write Gate",
-  ];
+  // Phase 70 Plan 05 Task 2/3: "Decide Action" no longer bakes the write-safety
+  // allowlist (its D-70-06 precheck is gone) and the association no longer has a gate of
+  // its own (D-70-15 — one verdict, taken at the update gate). The update gate is the
+  // single arming surface for this whole lane now.
+  const armNames = ["HubSpot Update Write Gate"];
   for (const name of armNames) {
     const node = wf.nodes.find((n) => n.name === name);
     assert.ok(node, `node present: ${name}`);

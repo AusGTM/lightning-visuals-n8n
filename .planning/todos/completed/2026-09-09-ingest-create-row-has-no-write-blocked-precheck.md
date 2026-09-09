@@ -1,6 +1,8 @@
 ---
 created: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-10
+resolved: 2026-09-10
+resolved_by: phase 70 plan 05 task 2 sub-step 2c (D-70-06)
 title: ingest lane's Decide Action has no write_blocked precheck for CREATE rows (update-only, by design, per F12)
 area: n8n-workflows
 severity: minor
@@ -47,3 +49,19 @@ per-action the same way `_write_gate_js("create")` does. Test against BUG 27's o
 scenario (`contactCreateGateFlow.test.mjs`'s `netNewRow()` + email override) as the
 regression pin: a precheck that disagrees with the live-canary-proven gate behavior
 must fail loudly, not silently ship.
+
+
+---
+
+## Resolution (2026-09-10, phase 70 plan 05 task 2 sub-step 2c, D-70-06)
+
+Closed **by construction, not by extending the precheck**. The precheck itself is
+deleted from `DECIDE_CLOUD`. Its whole premise — that a refused row must be relabelled
+BEFORE the routing IFs, because a Code node filtering to zero would leave
+"Build Ingest Response" with nothing to run off — stopped holding when the gate became
+IF-shaped (D-70-14): `HubSpot Update/Create Write Gate` no longer filters a refused row
+away, it EMITS it with `action: "write_blocked"` and a reason onto `Ingest Merge
+Response` directly (the same input the association lane feeds). `Build Ingest Response`
+overlays that verdict onto the decided snapshot, so the report is the gate's actual
+answer rather than a prediction of it — for creates and updates alike, with no
+per-action derivation to get wrong.

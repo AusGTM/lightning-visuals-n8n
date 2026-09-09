@@ -130,28 +130,33 @@ test("the association PUT is a gated write node reading only fields its gate emi
     .filter(([, spec]) =>
       (spec.main || []).some((outs) => (outs || []).some((c) => c.node === "HubSpot Associate Company")))
     .map(([src]) => src);
-  // D-70-14 (Phase 70 Plan 05 Task 2): the gate is now two nodes — the Code node stamps
-  // a verdict, the paired IF routes. "HubSpot Associate Company" sits behind the IF's
-  // TRUE output now, not the Code node directly.
-  assert.deepEqual(feeders, ["HubSpot Associate Company Write Gate IF"]);
+  // D-70-15 (Phase 70 Plan 05 Task 3): the association's OWN second allowlist gate is
+  // gone. It ran downstream of a write that had already passed a gate, so a second
+  // verdict could only ever disagree with the first (different action string, different
+  // domain source). One write_request, one verdict — taken at "HubSpot Update Write
+  // Gate"/"HubSpot Create Write Gate" upstream — and the association's only remaining
+  // condition is a resolved company id, which "Build Association Request" applies by
+  // dropping any row without one (CLAUDE.md §13.0.1: an update is NEVER held for lack of
+  // a company; it simply has nothing to associate).
+  assert.deepEqual(feeders, ["Build Association Request"]);
+  assert.ok(!wf.nodes.some((n) => n.name === "HubSpot Associate Company Write Gate"));
 
-  const gateJs = jsCodeOf("HubSpot Associate Company Write Gate");
-  assert.match(gateJs, /_writeSafetyAllows/);
-  // D-70-12 (Phase 70 Plan 05 Task 1): the gate reads ONLY `write_request` now.
-  const row = { action: "enrich", hs_object_id: "12345", domain: "club.example", assoc_url: "u",
-    write_request: { action: "enrich", hs_object_id: "12345", domain: "club.example", email: null } };
-  // D-70-14: the Code node stamps a verdict, never drops — length stays 1 either way.
-  const disarmed = runCode(gateJs, [row]);
-  assert.equal(disarmed.length, 1, "disarmed: still one row (D-70-14, no filtering)");
-  assert.equal(disarmed[0].write_allowed, false, "disarmed: the association is refused");
-  assert.equal(disarmed[0].action, "write_blocked");
-  const armed = ARM(gateJs).replace(
-    'const TEST_RECORD_DOMAINS = "";',
-    'const TEST_RECORD_DOMAINS = "club.example";'
-  );
-  const permitted = runCode(armed, [row]);
-  assert.equal(permitted.length, 1, "armed with a matching domain: it passes");
-  assert.equal(permitted[0].write_allowed, true);
+  // The row a refused write would have produced never gets here at all: the update gate
+  // emits it as `write_blocked` onto "Ingest Merge Response" directly, so neither the
+  // write nor the association runs.
+  const buildAssocJs = jsCodeOf("Build Association Request");
+  const noCompany = runCode(buildAssocJs, [
+    { id: "12345", email: "solo@club.example", company_id: null, row_id: "r1" },
+  ]);
+  assert.equal(noCompany.length, 0,
+    "no resolved company -> nothing to associate (the update itself already ran)");
+  const withCompany = runCode(buildAssocJs, [
+    { id: "12345", email: "solo@club.example", company_id: "77", company_domain: "club.example",
+      row_id: "r1" },
+  ]);
+  assert.equal(withCompany.length, 1);
+  assert.equal(withCompany[0].company_id, "77");
+
 });
 
 test("Build Ingest Response reports every decided row, associated or not", () => {

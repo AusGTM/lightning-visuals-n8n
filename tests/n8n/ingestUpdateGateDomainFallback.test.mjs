@@ -65,22 +65,18 @@ function matchedUpdateRow() {
   };
 }
 
-// F12 (uat-batch-review-row-reads-failed): Decide Action now ALSO pre-computes an
-// update's write-safety verdict (scripts/build_cloud_workflows.py), so it must be armed
-// with the SAME allowlist the gate tests below use, or it reports `write_blocked`
-// before the row ever reaches the gate — arming both here proves the gate is still an
-// independent, second check (defense-in-depth), not a dead one Decide Action now
-// bypasses.
-function armedDecideAction(wf) {
-  return armConstants(jsCodeOf(wf, "Decide Action"), {
-    ALLOW_HUBSPOT_RECORD_WRITES: "true",
-    TEST_RECORD_DOMAINS: "wyongraceclub.com.au",
-  });
+// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): F12's pre-write precheck inside
+// "Decide Action" is GONE, and with it the arming surface that used to live there. The
+// node now decides WHAT the row is and emits the canonical `write_request`; the gate is
+// the ONE place that decides whether it may be written. Nothing to arm here any more —
+// which is precisely the "one home per lane" property D-70-13 asked for.
+function decideAction(wf) {
+  return jsCodeOf(wf, "Decide Action");
 }
 
 test("Decide Action (ingest, cloud): an update row's write_request carries the company domain (D-70-12)", () => {
   const wf = loadWorkflow();
-  const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
+  const [decided] = runCode(decideAction(wf), [matchedUpdateRow()]);
   assert.equal(decided.action, "update", "seed row must actually reach Decide Action as an update");
   assert.equal(decided.company_domain, "wyongraceclub.com.au");
   // The case this file used to protect via the (now-deleted) gate-side fallback: the
@@ -94,7 +90,7 @@ test("Decide Action (ingest, cloud): an update row's write_request carries the c
 
 test("HubSpot Update Write Gate: a domain-only allowlist admits an update Decide Action produced", () => {
   const wf = loadWorkflow();
-  const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
+  const [decided] = runCode(decideAction(wf), [matchedUpdateRow()]);
 
   const gateJs = armConstants(jsCodeOf(wf, "HubSpot Update Write Gate"), {
     ALLOW_HUBSPOT_RECORD_WRITES: "true",
@@ -106,9 +102,9 @@ test("HubSpot Update Write Gate: a domain-only allowlist admits an update Decide
   assert.equal(gated[0].hs_object_id, "35551");
 });
 
-test("HubSpot Update Write Gate: still denies when the domain is not on the allowlist (defense-in-depth, independent of Decide Action's own precheck)", () => {
+test("HubSpot Update Write Gate: still denies when the domain is not on the allowlist (the ONE home for the predicate)", () => {
   const wf = loadWorkflow();
-  const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
+  const [decided] = runCode(decideAction(wf), [matchedUpdateRow()]);
 
   const gateJs = armConstants(jsCodeOf(wf, "HubSpot Update Write Gate"), {
     ALLOW_HUBSPOT_RECORD_WRITES: "true",

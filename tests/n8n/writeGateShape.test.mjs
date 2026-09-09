@@ -44,7 +44,6 @@ const REVIEW = loadWorkflow("wf_review_decision_cloud.json");
 const GATES = [
   ["wf_contact_ingest_cloud.json", INGEST, "HubSpot Update Write Gate"],
   ["wf_contact_ingest_cloud.json", INGEST, "HubSpot Create Write Gate"],
-  ["wf_contact_ingest_cloud.json", INGEST, "HubSpot Associate Company Write Gate"],
   ["wf_scheduled_maintenance_cloud.json", MAINTENANCE, "SJ-1 Set Requested Write Gate"],
   ["wf_scheduled_maintenance_cloud.json", MAINTENANCE, "SJ-2 Set Requested Write Gate"],
   ["wf_scheduled_maintenance_cloud.json", MAINTENANCE, "Dedupe Set Needs Review Write Gate"],
@@ -154,7 +153,6 @@ test("every spliced write gate's Code node preserves item count on a mixed permi
   const gateCases = [
     [INGEST, "HubSpot Update Write Gate"],
     [INGEST, "HubSpot Create Write Gate"],
-    [INGEST, "HubSpot Associate Company Write Gate"],
     [MAINTENANCE, "SJ-1 Set Requested Write Gate"],
     [MAINTENANCE, "SJ-2 Set Requested Write Gate"],
     [MAINTENANCE, "Dedupe Set Needs Review Write Gate"],
@@ -241,8 +239,11 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
      "HubSpot Company Create Write Gate IF"],
     ["wf_contact_ingest_cloud.json", INGEST, "Update Carry Merge", "HubSpot Update Write Gate IF"],
     ["wf_contact_ingest_cloud.json", INGEST, "Create Carry Merge", "HubSpot Create Write Gate IF"],
+    // "Associate Carry Merge" carries from "Build Association Request": Task 3 (D-70-15)
+    // removed the association's own second gate, so its direct predecessor IS the carry
+    // source again — one verdict, taken at the update/create gate upstream.
     ["wf_contact_ingest_cloud.json", INGEST, "Associate Carry Merge",
-     "HubSpot Associate Company Write Gate IF"],
+     "Build Association Request"],
   ];
   for (const [file, wf, mergeName, expectedSource] of carries) {
     const feeders = Object.entries(wf.connections).flatMap(([src, spec]) =>
@@ -252,8 +253,10 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
     // is the gate's Code node, whose item count includes the refused rows.
     assert.ok(feeders.some(([src, idx]) => src === expectedSource && idx === 0),
       `${file}: ${mergeName}'s carry input must come from ${expectedSource}'s true output`);
-    assert.ok(!feeders.some(([src]) => src === expectedSource.replace(/ IF$/, "")),
-      `${file}: ${mergeName} must not be carried from the gate Code node (count mismatch)`);
+    if (expectedSource.endsWith(" Write Gate IF")) {
+      assert.ok(!feeders.some(([src]) => src === expectedSource.slice(0, -3)),
+        `${file}: ${mergeName} must not be carried from the gate Code node (count mismatch)`);
+    }
   }
 });
 
@@ -298,8 +301,15 @@ test("enrichment lane: a fully refused two-row batch produces exactly two rows a
 // update and its association share ONE write_request and ONE allowlist verdict.
 // =============================================================================================
 
+/** jsCode with `//` comment lines dropped — a node's prose may legitimately NAME a
+ * function it no longer calls. */
+function codeOf(wf, name) {
+  return jsCodeOf(wf, name)
+    .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+}
+
 test("ingest: the pre-write refusal precheck is gone from Decide Action (D-70-06)", () => {
-  const js = jsCodeOf(INGEST, "Decide Action");
+  const js = codeOf(INGEST, "Decide Action");
   assert.ok(!js.includes("_writeSafetyAllows("),
     "the row's outcome of record is the write node's own output — a precheck that " +
     "PREDICTS the gate's verdict is a second copy of the predicate that can disagree");
@@ -346,4 +356,58 @@ test("ingest: Build Ingest Response reports the GATE's verdict, not the pre-writ
     "with the precheck gone, the decided snapshot still says 'update' for a row the gate " +
     "refused — F11/execution 12181's exact misreport unless the gate's own emitted row " +
     "overrides it here");
+});
+
+// --- walker-driven: the ingest lane's two newly-reachable starvation shapes -----------
+//
+// Both become reachable only once the D-70-06 precheck is removed. Before that, every
+// refused row was relabelled "write_blocked" inside "Decide Action" and fell through both
+// routing IFs to "Set Review", so neither case could occur.
+async function walkIngest({ triggerItems, httpStubs }) {
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems } =
+    await import("./lib/walkWorkflow.mjs");
+  const wf = loadWf(path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json"));
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger", triggerItems, httpStubs,
+  });
+  return { trace, rows: nodeItems(runData, "Build Ingest Response") };
+}
+
+const INGEST_EMAIL = "solo@wyongraceclub.com.au";
+
+test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest Response, one row, reported blocked", async () => {
+  const { trace, rows } = await walkIngest({
+    triggerItems: [{ email: INGEST_EMAIL, firstname: "Solo", lastname: "Person", company: "Wyong Race Club" }],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [{ id: "35551", properties: { email: INGEST_EMAIL } }] }],
+      "HubSpot Company Search by Domain": [
+        { results: [{ id: "9600000001", properties: { domain: "wyongraceclub.com.au" } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+    },
+  });
+  assert.equal(trace.stalled.filter((s) => s.node === "Ingest Merge Response").length, 0,
+    "Ingest Merge Response must never stall — the gate's refusal lane feeds it directly");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].action, "write_blocked",
+    "the gate's verdict, not the pre-write intention (F11 / execution 12181)");
+  assert.notEqual(rows[0].association, "associated");
+});
+
+test("ingest: a batch of updates that resolve NO company does not stall — an update is never held for lack of a company", async () => {
+  // Task 3 / CLAUDE.md §13.0.1. "Build Association Request" drops a row with no company,
+  // so on this batch the association lane delivers nothing at all — which is why
+  // "Associate Lane Sentinel" has to ask about company_id, not just row.action.
+  const { trace, rows } = await walkIngest({
+    triggerItems: [{ email: INGEST_EMAIL, firstname: "Solo", lastname: "Person", company: "Nowhere Pty" }],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [{ id: "35551", properties: { email: INGEST_EMAIL } }] }],
+      "HubSpot Company Search by Domain": [{ results: [] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+    },
+  });
+  assert.equal(trace.stalled.filter((s) => s.node === "Ingest Merge Response").length, 0);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].association, "none", "nothing to associate, and nothing held");
 });
