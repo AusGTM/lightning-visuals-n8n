@@ -1,21 +1,21 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: "Checkpoint: Phase 70 Plan 03 Task 1 committed (8171d2a, 024cb03); Tasks 2/3 not started"
-last_updated: "2026-09-09T16:13:26.893Z"
+stopped_at: Completed 70-03-PLAN.md (Tasks 1-3, across two dispatches)
+last_updated: "2026-09-09T17:23:10.613Z"
 last_activity: 2026-09-09
 last_activity_desc: Phase 70 execution started
-state_head: 024cb03a85fc62ef6d53a9a9e58f960b227bfee3
+state_head: a23cd2330c2074df0fed9a7e2f693fcde8342d3d
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 6
   total_plans: 23
   completed_plans: 19
-  percent: 29
+  percent: 83
 ---
 
 # Project State
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-09-09 — Phase 70 execution started
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███░░░░░░░] 29% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [████████░░] 83% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,12 +501,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-09T16:13:26.688Z
-**Stopped at:** Checkpoint: Phase 70 Plan 03 Task 1 committed (8171d2a, 024cb03); Tasks 2/3 not started
+**Last session:** 2026-09-09T17:23:09.640Z
+**Stopped at:** Completed 70-03-PLAN.md (Tasks 1-3, across two dispatches)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-03-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -645,6 +645,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 70 P01 | 45min | 3 tasks | 5 files |
 | Phase 70 P02 | 2h | 3 tasks | 13 files |
 | Phase 70 P03 | 4.5h | 1 tasks | 19 files |
+| Phase 70 P03 | 7h (across two dispatches) | 3 tasks | 40 files |
 
 ## Decisions
 
@@ -783,6 +784,9 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 70]: Operator answer to Task 1 (70-02): "proceed" — publish the ack-only webhook contract (D-70-07) and the runData-only result channel (D-70-05), retiring the two-channel design behind the F1/F5/F5b/F10/F11/F12 defect class.
 - [Phase 70]: 70-02 Task 3: splice_carry_merge_after generalizes the D-70-04 carry mechanism into one reusable helper; every carry merge on the ingest lane uses combineByPosition except the source_by_field broadcast (combineAll); the ingest lane now has zero by-name reads (detect_by_name_reads == 0).
 - [Phase 70]: 70-03 Task 1: 6 real enrichment-lane convergences now behind explicit Merge nodes with a starved-lane sentinel network; Tasks 2/3 (ack-only webhook, review-lane merges) deferred - plan estimate covered only Task 1's scope
+- [Phase 70]: 70-03 Task 2: Build Ack is now the sole responder input; body-borne refusals become runData rows via Build Refusal Row (D-70-07).
+- [Phase 70]: 70-03 Task 3: review-decision lane's 3 convergences merged using single-producer sentinels, not the plan's literal NoOp+alwaysOutputData wording (verified via the walker to leak markers into live HubSpot calls otherwise).
+- [Phase 70]: 70-03: chunking.dispatch_plan's written_records flush deleted whole (body is always the ack now); run_report.py's read of that artifact is a deferred, documented gap (D-70-08 scope).
 
 ### Roadmap Evolution
 
