@@ -1,0 +1,26 @@
+{
+  "triggerItems": [
+    {"email": "existing@example.com", "firstname": "Existing", "lastname": "Contact", "company": "Existing Co"},
+    {"email": "newperson@example.com", "firstname": "New", "lastname": "Person", "company": "New Co"}
+  ],
+  "httpStubs": {
+    "Verify Emails (batch)": [
+      {"results": [
+        {"email": "existing@example.com", "status": "VALID"},
+        {"email": "newperson@example.com", "status": "VALID"}
+      ]}
+    ],
+    "HubSpot Search by Email": [
+      {"results": [{"id": "111", "properties": {"email": "existing@example.com"}}]},
+      {"results": []}
+    ],
+    "HubSpot Company Search by Domain": [
+      {"results": []},
+      {"results": []}
+    ],
+    "HubSpot Company Search by Name": [
+      {"results": []},
+      {"results": []}
+    ]
+  }
+}
