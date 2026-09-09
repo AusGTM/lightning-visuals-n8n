@@ -95,21 +95,28 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
     files = {"data": ("contacts.csv", csv_bytes, "text/csv")}
     # D-70-05 (Phase 70 Plan 02): the caller's own client-minted `run_id`, sent as a
-    # plain multipart form FIELD (the SAME `filename=None` idiom `source_by_field`
-    # already proves — no filename, so n8n parses it into `$json.body.run_id` rather
-    # than `$binary`). "Set Config" (scripts/build_cloud_workflows.py) echoes it back
-    # as its own output field; that echo is what the recovery poll below correlates on.
-    files["run_id"] = (None, run_id, "text/plain")
+    # plain multipart form FIELD. "Set Config" (scripts/build_cloud_workflows.py) echoes
+    # it back as its own output field; that echo is what the recovery poll below
+    # correlates on.
+    #
+    # OBSERVED LIVE 2026-09-10 (Phase 70 UAT Gate 1, executions 12200 vs 12201): the
+    # load-bearing fact is the ABSENT Content-Type, not `filename=None`. n8n's multipart
+    # parser treats any part carrying a Content-Type header as a FILE — a 3-tuple
+    # `(None, value, "text/plain")` landed in `$binary.run_id` with `$json.body == {}`,
+    # so the echo was null and every recovery poll ran to its 600s bound. A 2-tuple
+    # `(None, value)` makes `requests` omit the header and n8n parses it into
+    # `$json.body.run_id`. Never add a content type to these two parts.
+    files["run_id"] = (None, run_id)
     # Phase 62 Plan 04 (D-62-17, CLAUDE.md 13.0.2 idiom): describes the REQUEST, not a
     # row — write_dispatch_csv raises on any non-canonical row key, so a per-row
-    # `origin` column cannot travel this channel. `filename=None` is load-bearing: it
-    # makes `requests` emit a plain multipart form FIELD (no Content-Disposition
-    # filename), which n8n's webhook parses into `$json.body.source_by_field` rather
-    # than `$binary` — a filename would land it in binary instead, invisible to the
-    # `Merge Contacts` node's envelope read. Absent/empty leaves `files` byte-identical
-    # to every existing caller (no `data=` kwarg added, no second send-shaped function).
+    # `origin` column cannot travel this channel. Same 2-tuple rule as `run_id` above:
+    # no filename AND no Content-Type, or n8n files it under `$binary` and the
+    # `Set Config Fields` envelope read never sees it (the 3-tuple form shipped by
+    # Phase 62 was never observed live before 2026-09-10). Absent/empty leaves `files`
+    # byte-identical to every existing caller (no `data=` kwarg added, no second
+    # send-shaped function).
     if source_by_field:
-        files["source_by_field"] = (None, json.dumps(source_by_field), "application/json")
+        files["source_by_field"] = (None, json.dumps(source_by_field))
 
     try:
         response = transport(url, headers=headers, files=files, timeout=30)
@@ -174,6 +181,10 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
         "body": ack,
         "rows": rows,
         "recovered": bool(recovery.get("recovered")),
+        # Phase 70 UAT (2026-09-10): the settled execution ids the rows were read from,
+        # so a caller (scripts/prove_phase70_runtime.py) can cite them without a second
+        # poll. `matched_executions` is a COUNT, not an id list.
+        "execution_ids": list(recovery.get("execution_ids") or []),
         "run_id": run_id,
         "written_records_failures": written_records_failures,
     }

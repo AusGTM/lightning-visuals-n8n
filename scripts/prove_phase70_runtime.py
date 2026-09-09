@@ -408,24 +408,38 @@ def run_predict_only() -> dict:
 
 def run_live() -> dict:
     require_gates()
+    import csv
+    import requests
     import chunking          # noqa: E402 — plugin modules; see prove_async_recovery.py
     import config_gate       # noqa: E402
+    import dispatch          # noqa: E402
     import executions_client  # noqa: E402
     import run_state         # noqa: E402
+    import scheduled_arm     # noqa: E402
     import watch             # noqa: E402
     import tempfile
 
     cfg = config_gate.load_config()
 
     # --- gate 3: read the LIVE bodies back and refuse unless every flag is "false" -----
+    # Workflow names come from the SAME constants the recovery poll resolves by
+    # (`watch._LANE_RECOVERY_CONFIG`), never a literal of this driver's own — a literal
+    # here drifted from the live name ("... (Cloud)" vs "... (Cloud template)") and was
+    # found only when the driver first ran, 2026-09-10.
     live_bodies = {}
     execution_order = {}
-    for wf_name in ("LV Enrichment (Cloud template)", "LV Contact Ingest (Cloud)"):
+    for wf_name in (scheduled_arm.ENRICHMENT_WORKFLOW_NAME, watch.INGEST_WORKFLOW_NAME):
         wf_id = executions_client.resolve_workflow_id(cfg, workflow_name=wf_name)
-        body = executions_client.get_workflow(cfg, wf_id)
+        if wf_id is None:
+            print(f"REFUSED — no live workflow named {wf_name!r}. Nothing was sent.",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        body = executions_client._get_json(
+            cfg, f"{executions_client._base_url(cfg)}/api/v1/workflows/{wf_id}", None,
+            requests.get)
         live_bodies[wf_name] = body
         # D-70-02's observed-live upgrade: record what it ACTUALLY is, not what it was
-        # expected to be.
+        # expected to be. An absent key is recorded as None — the engine default.
         execution_order[wf_name] = (body.get("settings") or {}).get("executionOrder")
     flag_reading = require_disarmed(live_bodies)
 
@@ -434,13 +448,30 @@ def run_live() -> dict:
         for send in SENDS:
             predicted = predict(send, tmp_dir=tmp)
             run_id = run_state.new_run_id()  # minted BEFORE any HTTP call
-            spec = {"rows": list(send["rows"]),
-                    "object_type": "contacts"}
-            plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
-            chunking.dispatch_plan(plan, [], True, cfg, run_id=run_id)
-            recovery = watch.recover_dispatch(cfg, run_id, plan.chunk_count,
-                                              lane=send["lane"])
-            recovered = recovery.get("responses") or []
+            if send["lane"] == "ingest":
+                # The ingest lane is a multipart CSV POST to the contact-upload webhook
+                # (`dispatch.dispatch`), which recovers its own rows from runData on the
+                # ingest lane (D-70-05). Routing these rows through `chunking.dispatch_plan`
+                # would post an enrichment envelope to the enrichment webhook and then poll
+                # the ingest workflow for a run id it never saw.
+                csv_path = Path(tmp) / f"{send['name']}.csv"
+                with csv_path.open("w", newline="") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=list(send["rows"][0]))
+                    writer.writeheader()
+                    writer.writerows(send["rows"])
+                result = dispatch.dispatch(str(csv_path), True, cfg, run_id=run_id)
+                recovered = result.get("rows") or []
+                settled = bool(result.get("recovered"))
+                execution_ids = list(result.get("execution_ids") or [])
+            else:
+                spec = {"rows": list(send["rows"]), "object_type": "contacts"}
+                plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
+                chunking.dispatch_plan(plan, [], True, cfg, run_id=run_id)
+                recovery = watch.recover_dispatch(cfg, run_id, plan.chunk_count,
+                                                  lane=send["lane"])
+                recovered = recovery.get("responses") or []
+                settled = bool(recovery.get("recovered"))
+                execution_ids = list(recovery.get("execution_ids") or [])
             per_send.append({
                 "name": send["name"],
                 "lane": send["lane"],
@@ -451,8 +482,9 @@ def run_live() -> dict:
                 "predicted_shapes": [row_shape(r) for r in predicted],
                 "recovered_shapes": [row_shape(r) for r in recovered],
                 "shapes_equal": shapes_equal(predicted, recovered),
-                "execution_id": (recovery.get("matched_executions") or [None])[0],
-                "settled": bool(recovery.get("recovered")),
+                "execution_id": execution_ids[0] if execution_ids else None,
+                "execution_ids": execution_ids,
+                "settled": settled,
             })
 
     return build_verdict(per_send=per_send, live_execution_order=execution_order,

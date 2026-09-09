@@ -222,6 +222,32 @@ Six existing `tests/n8n/*.test.mjs` files and two `tests/test_*.py` files constr
 
 None beyond the two Rule-1 bugs above, both auto-fixed and covered by new test assertions.
 
+### Gate 1 — observed live 2026-09-10 (deferred from Task 2, run at end-of-phase UAT)
+
+Deployed + bounced disarmed (five PUTs at 200; live node counts 30/50/218/45/43 equal the
+committed JSON; both write flags `"false"` everywhere). One single-lane ingest batch (two
+`.invalid` emails, association path starved, review path carrying both rows).
+
+- **Settled, not stuck.** Execution `12200`: `status: success`, 6.1s wall. Re-run through the
+  fixed client path, execution `12202`: `success`, 3.7s, recovery settled in 26s.
+- **Every Merge fired exactly once**, including `Ingest Merge Response` (7 items in from all
+  lanes, `Build Ingest Response` 2 rows out — never 4). No Merge waited on an input that never
+  fired.
+- **Live `settings.executionOrder`: ABSENT** — `settings: {}` on all five workflows. The engine
+  default applies; nothing here can be read as `v1` or `v0`.
+- **Zero writes.** HubSpot contact search on both emails: `total: 0`.
+- **Mechanism: the lane sentinels, not `alwaysOutputData`.** `Associate Lane Sentinel` emitted 1
+  item and satisfied the starved association input; `HubSpot Associate Company` never ran at
+  all (absent from runData), so its `alwaysOutputData` contributed nothing. `Set Review` carried
+  the 2 review rows; `Review Lane Sentinel` emitted 0. The IF-based flags did nothing observable.
+- **Merge node shape accepted by the live engine:** `typeVersion 3.2`, `combineByPosition` carry
+  Merges and the `combineAll` broadcast all ran as the committed JSON declares.
+- **Finding (client, not n8n):** `dispatch.py` sent `run_id` as a multipart part WITH a
+  Content-Type; n8n filed it under `$binary`, `$json.body` was `{}`, `Set Config` echoed
+  `run_id: null`, and the recovery poll ran to its 600s bound. The same idiom carried
+  `source_by_field` since Phase 62 — never observed live until now. Fixed in-session (2-tuple
+  parts, no Content-Type; test pin inverted) — see 70-UAT.md gap `G-70-1`.
+
 ## User Setup Required
 
 None — no external service configuration required. Nothing armed; the disarmed Task 2 probe (Gate 1) remains deferred to end-of-phase UAT.

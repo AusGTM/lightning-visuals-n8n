@@ -225,13 +225,16 @@ def test_dispatch_with_source_by_field_adds_exactly_one_extra_multipart_part_no_
     assert set(call["files"].keys()) == {"data", "source_by_field", "run_id"}
     assert "data" not in call, "no data= kwarg was added to the transport call"
 
-    filename, body, content_type = call["files"]["source_by_field"]
-    # filename=None is load-bearing: it is what makes requests emit a plain multipart
-    # FORM FIELD rather than a file part, so n8n's webhook parses it into
-    # $json.body.source_by_field instead of $binary.
+    part = call["files"]["source_by_field"]
+    # A 2-tuple (no filename AND no Content-Type) is load-bearing: n8n's multipart
+    # parser files any part carrying a Content-Type header under $binary, not
+    # $json.body (observed live 2026-09-10, Phase 70 UAT Gate 1). A third element
+    # here would silently break the envelope read again.
+    assert len(part) == 2, "no content type on a multipart form FIELD"
+    filename, body = part
     assert filename is None
     assert json.loads(body) == source_map
-    assert content_type == "application/json"
+    assert len(call["files"]["run_id"]) == 2 and call["files"]["run_id"][0] is None
 
 
 def test_missing_webhook_secret_refuses_before_the_transport_is_touched_even_when_armed(

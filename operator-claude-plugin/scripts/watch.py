@@ -627,6 +627,7 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
                 return {
                     "recovered": True, "responses": responses,
                     "matched_executions": len(settled) + len(children),
+                    "execution_ids": [e.get("id") for e in list(settled) + children],
                     "run_data": merged_run_data,
                 }
 
@@ -634,6 +635,7 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
         if elapsed >= bound:
             return {
                 "recovered": False, "responses": [], "matched_executions": len(settled),
+                "execution_ids": [e.get("id") for e in settled],
                 "elapsed_seconds": elapsed, "bound_seconds": bound,
             }
         wait = backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
