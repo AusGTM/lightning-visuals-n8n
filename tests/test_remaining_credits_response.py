@@ -57,13 +57,19 @@ def _reachable_from(doc, start):
 # --- (a) once-per-run structural proof (reviews C1) -----------------------------------
 
 def test_credit_request_is_a_single_item_node_fed_only_by_parse_hubspot_event():
+    """Phase 70 Plan 04 (D-70-04): "Credit Request" gained a SECOND source —
+    "IF List Expanded"'s false (refusal) lane, index 1 — since "Parse HubSpot Event"
+    never runs on that path and "Build Credits Summary" must still deliver exactly
+    once for "Credits Broadcast" (a combineAll merge) to never starve."""
     doc = _load()
-    assert _inbound_edges(doc, "Credit Request") == [("Parse HubSpot Event", 0)]
+    assert set(_inbound_edges(doc, "Credit Request")) == {
+        ("Parse HubSpot Event", 0), ("IF List Expanded", 1),
+    }
     code = _node(doc, "Credit Request")["parameters"]["jsCode"]
-    # Deliberately does NOT read $input — its output cardinality can never track the row
-    # count upstream, so it always emits exactly one item.
-    assert "$input" not in code
-    assert "return [{ json: { providers_requested } }];" in code
+    # Deliberately does NOT read $input.all() for cardinality — it always emits exactly
+    # one item, reading $input.first() to identify THIS execution's delivery.
+    assert "$input.first()" in code
+    assert "providers_requested" in code
 
 
 def test_each_credit_gate_is_fed_only_by_credit_request_not_a_terminal_or_row_node():
@@ -106,16 +112,22 @@ def test_each_credit_http_nodes_only_inbound_is_its_own_gate_true_lane():
     }
 
 
-def test_credit_gates_false_lane_is_a_dead_end_no_rejoin_needed():
-    """Unlike the enabled-provider gate chain, credit gates do NOT rejoin at a shared
-    exit — Build Response reads each credit node independently by name (guarded nodeAll),
-    so a not-requested provider's gate false lane simply dead-ends."""
+def test_credit_gates_false_lane_feeds_its_own_skip_sentinel():
+    """Phase 70 Plan 04 (D-70-04): a not-requested provider's gate false lane no longer
+    dead-ends — it feeds a static "... Credit Skipped" marker, so "Collect Credits"
+    (append, 3 inputs) still receives exactly one {provider, requested, credits} item
+    per provider every execution, real or skipped."""
     doc = _load()
-    for gate in ("IF Lusha Credit Requested", "IF Apollo Credit Requested",
-                 "IF ZoomInfo Credit Requested"):
-        false_targets = _node(doc, gate)  # sanity: node exists
+    expected_skip = {
+        "IF Lusha Credit Requested": "Lusha Credit Skipped",
+        "IF Apollo Credit Requested": "Apollo Credit Skipped",
+        "IF ZoomInfo Credit Requested": "ZoomInfo Credit Skipped",
+    }
+    for gate, skip_node in expected_skip.items():
         conns = doc["connections"][gate]["main"]
-        assert conns[1] == [], f"{gate} false lane should dead-end (got {conns[1]})"
+        assert conns[1] == [{"node": skip_node, "type": "main", "index": 0}], (
+            f"{gate} false lane must feed {skip_node} (got {conns[1]})"
+        )
 
 
 # --- (b) credit HTTP node shape: onError, credential-bound, ZoomInfo Accept header ------
@@ -192,11 +204,22 @@ def test_build_response_is_reachable_from_every_terminal_branch():
     ALSO feed Build Response.
 
     Phase 70 Plan 03 (D-70-01): all eleven terminals now converge on "Build Response
-    Merge" first, which is "Build Response"'s own sole inbound edge — the eleven real
-    sources are checked one level further back, against the Merge, rather than against
-    "Build Response" directly."""
+    Merge" first. Phase 70 Plan 04 (D-70-04): "Credits Broadcast" (a combineAll merge)
+    sits between that Merge and "Build Response" — broadcasting "Build Credits
+    Summary"'s single `remaining_credits` item onto every row — so "Build Response"'s
+    own sole inbound edge is now that broadcast merge, one hop further back. The eleven
+    real sources are checked another level further back, against "Build Response
+    Merge" itself."""
     doc = _load()
-    assert _inbound_edges(doc, "Build Response") == [("Build Response Merge", 0)]
+    assert _inbound_edges(doc, "Build Response") == [("Credits Broadcast", 0)]
+    # "Filter Build Response Rows" drops the starved-lane sentinel markers BEFORE the
+    # combineAll broadcast — otherwise the cartesian product would make every one of
+    # those 10 empty `{}` items non-empty too (broadcasting `remaining_credits` onto
+    # them), defeating Build Response's own non-empty filter.
+    assert set(_inbound_edges(doc, "Credits Broadcast")) == {
+        ("Filter Build Response Rows", 0), ("Build Credits Summary", 0),
+    }
+    assert _inbound_edges(doc, "Filter Build Response Rows") == [("Build Response Merge", 0)]
     merge_edges = {(src, idx) for (src, idx) in _inbound_edges(doc, "Build Response Merge")
                    if "Sentinel" not in src}
     assert merge_edges == BUILD_RESPONSE_SOURCES, (
@@ -234,25 +257,57 @@ def test_unsupported_terminal_reaches_build_response_not_dead_ended():
     assert "Build Response" in reachable
 
 
-# --- (d) Build Response reads remaining_credits via the guarded nodeAll idiom ----------
+# --- (d) Build Response reads remaining_credits off the row, never by name -------------
 
-def test_build_response_uses_guarded_nodeall_and_references_the_expected_fields():
+def test_build_response_reads_remaining_credits_off_the_row_never_by_name():
+    """Phase 70 Plan 04 (D-70-04): "Credits Broadcast" precomputes `remaining_credits`
+    (via "Build Credits Summary") and merges it onto every row before "Build Response"
+    ever runs — no nodeAll, no by-name lookup of any usage node."""
     doc = _load()
     code = _node(doc, "Build Response")["parameters"]["jsCode"]
-    assert "function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }" in code
-    assert "remaining_credits" in code
-    assert "providers_requested" in code
-    assert "extractCredits(" in code
-    # providers none/blank/absent -> providers_requested [] -> .map() -> remaining_credits [].
-    assert "providers_requested.map(" in code
+    assert "$('" not in code and '$("' not in code
+    assert "row.remaining_credits" in code
 
 
-def test_build_response_maps_credit_node_names_to_all_three_providers():
+def test_build_credits_summary_filters_to_requested_providers_only():
+    """The membership test `providers_requested.map(...)` used to apply now lives on
+    each provider's own lane (the `requested` flag "IF <provider> Credit Requested"
+    already computed) — "Build Credits Summary" filters on it, never re-deriving
+    providers_requested itself."""
     doc = _load()
-    code = _node(doc, "Build Response")["parameters"]["jsCode"]
-    for provider, node_name in (("lusha", "Lusha Usage"), ("apollo", "Apollo Usage"),
-                                 ("zoominfo", "ZoomInfo Usage")):
-        assert f'{provider}: "{node_name}"' in code
+    code = _node(doc, "Build Credits Summary")["parameters"]["jsCode"]
+    assert "$('" not in code and '$("' not in code
+    assert "$input.all()" in code
+    assert "filter((r) => r && r.requested)" in code
+
+
+def test_collect_credits_has_one_input_per_provider_real_or_skipped():
+    doc = _load()
+    for adapt_node, skip_node in (
+        ("Adapt Lusha Usage", "Lusha Credit Skipped"),
+        ("Adapt Apollo Usage", "Apollo Credit Skipped"),
+        ("Adapt ZoomInfo Usage", "ZoomInfo Credit Skipped"),
+    ):
+        adapt_targets = [e["node"] for b in doc["connections"][adapt_node]["main"] for e in b]
+        skip_targets = [e["node"] for b in doc["connections"][skip_node]["main"] for e in b]
+        assert adapt_targets == ["Collect Credits"]
+        assert skip_targets == ["Collect Credits"]
+        # Both mutually-exclusive lanes for the SAME provider must land on the SAME
+        # merge input index, or "Collect Credits" would starve on whichever branch
+        # fires this run.
+        adapt_idx = doc["connections"][adapt_node]["main"][0][0]["index"]
+        skip_idx = doc["connections"][skip_node]["main"][0][0]["index"]
+        assert adapt_idx == skip_idx
+
+
+def test_adapt_usage_nodes_tag_provider_identity_statically():
+    doc = _load()
+    for node_name, provider in (("Adapt Lusha Usage", "lusha"), ("Adapt Apollo Usage", "apollo"),
+                                 ("Adapt ZoomInfo Usage", "zoominfo")):
+        code = _node(doc, node_name)["parameters"]["jsCode"]
+        assert f"provider: {provider!r}" in code
+        assert "extractCredits(" in code
+        assert "$('" not in code
 
 
 # --- determinism -------------------------------------------------------------------------

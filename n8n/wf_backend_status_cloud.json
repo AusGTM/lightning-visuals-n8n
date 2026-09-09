@@ -55,6 +55,20 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'lusha_result': it.json } }));\n"
+      },
+      "id": "c00040000-0000-4000-8000-000000000000",
+      "name": "Wrap Lusha Usage Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.apollo.io/api/v1/usage_stats/api_usage_stats",
         "options": {
@@ -63,7 +77,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth"
       },
-      "id": "h00040000-0000-4000-8000-000000000000",
+      "id": "h00050000-0000-4000-8000-000000000000",
       "name": "Apollo Usage",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -76,9 +90,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'apollo_result': it.json } }));\n"
+      },
+      "id": "c00060000-0000-4000-8000-000000000000",
+      "name": "Wrap Apollo Usage Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: ZoomInfo token cache gate (CLOUD split-code-node, secret-free) ---\n// Never reads client_id/client_secret \u2014 only the credential-bound \"ZoomInfo Mint\" HTTP\n// node touches those (Task 2 decision).\nconst sd = $getWorkflowStaticData(\"global\");\nreturn $input.all().map((item) => {\n  const row = item.json || {};\n  const cached = sd.zoominfo;\n  const needs_mint = needsMint(cached, Date.now());\n  return { json: { ...row, zoom_needs_mint: needs_mint,\n                   zoom_token: needs_mint ? null : cached.access_token } };\n});\n"
       },
-      "id": "c00050000-0000-4000-8000-000000000000",
+      "id": "c00070000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Usage Token Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -98,7 +126,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00060000-0000-4000-8000-000000000000",
+              "id": "i00080000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.zoom_needs_mint }}",
               "rightValue": true,
               "operator": {
@@ -109,7 +137,7 @@
           ]
         }
       },
-      "id": "if00070000-0000-4000-8000-000000000000",
+      "id": "if00090000-0000-4000-8000-000000000000",
       "name": "IF ZoomInfo Usage Needs Mint",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -138,7 +166,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth"
       },
-      "id": "h00080000-0000-4000-8000-000000000000",
+      "id": "h00100000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Usage Mint",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -153,7 +181,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: cache the freshly-minted ZoomInfo token (CLOUD split-code-node) ---\nconst sd = $getWorkflowStaticData(\"global\");\nreturn $input.all().map((item) => {\n  const merged = item.json || {};\n  const { access_token: _a, expires_in: _e, token_type: _t, ...row } = merged;\n  let zoom_token = null;\n  try {\n    const parsed = parseTokenResponse(merged, Date.now());\n    sd.zoominfo = parsed;\n    zoom_token = parsed.access_token;\n  } catch (e) {\n    zoom_token = null;   // mint response malformed -> Enrich below sees no usable token\n  }\n  return { json: { ...row, zoom_token } };\n});\n"
       },
-      "id": "c00090000-0000-4000-8000-000000000000",
+      "id": "c00110000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Usage Cache Token",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -167,7 +195,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: ZoomInfo usage/credit check via Bearer token (CLOUD split-code-node) ---\nconst USAGE_URL = \"https://api.zoominfo.com/gtm/data/v1/users/usage\";\nconst sd = $getWorkflowStaticData(\"global\");\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const token = item.json.zoom_token;\n  if (!token) { out.push({ json: { error: \"no zoominfo token available (mint failed or missing)\" } }); continue; }\n  let res;\n  try {\n    res = await this.helpers.httpRequest({\n      method: \"GET\", url: USAGE_URL,\n      headers: { Authorization: \"Bearer \" + token, Accept: \"application/vnd.api+json\" },\n    });\n  } catch (e) {\n    if (isAuthError(extractErrorStatus(e))) {\n      delete sd.zoominfo;  // token rejected -> clear cache so the NEXT run re-mints\n    }\n    res = { error: String((e && e.message) || e) };\n  }\n  out.push({ json: res });\n}\nreturn out;\n"
       },
-      "id": "c00100000-0000-4000-8000-000000000000",
+      "id": "c00120000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Usage",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -179,9 +207,9 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/providerSelection.js \u2014 pure-JS provider-selection cost gate for n8n Code nodes.\n//\n// Phase 16.1: the caller-supplied `providers` webhook field is the PRIMARY burn gate\n// (CONTEXT Locked Decision 1 \u2014 no global build-time kill-switch). This module is pure,\n// deterministic, and carries NO n8n globals \u2014 mirrors enrichmentGate.js exactly, inlined\n// into Code nodes via the builder's inline() (Code nodes cannot require() siblings).\n//\n// parseWebhookBody(body)\n//   -> { events, providers, mode }\n//   Explicit payload contract (reviews A4): a bare HubSpot event array carries no\n//   top-level `providers` slot; an envelope `{ providers, events: [...] }` object carries\n//   the caller's selection at the envelope level. A single bare event object (neither an\n//   array nor an envelope with `.events`) is treated as the one event, and its own\n//   `.providers` field (if any) IS the envelope-level providers value here \u2014 the n8n\n//   wrapper additionally falls back to `event.providers` per-event when this returns\n//   undefined (`parsed.providers ?? event.providers`), covering the same single-event case\n//   without double logic.\n//   `mode` (Phase 36-03, 36-CONTEXT.md sec6): read at the envelope level with the IDENTICAL\n//   idiom as `providers` \u2014 absent means today's behaviour byte-identically, `\"write\"` means\n//   today's behaviour explicitly, and any other value is return-only (a typo can never\n//   write). Two states, never an allow-list: `mode != null && String(mode).toLowerCase()\n//   !== \"write\"`. That predicate is applied downstream at Decide Action, not here.\n//\n// resolveEnabledProviders(raw, allNames)\n//   -> { provider_enabled: { <name>: boolean, ... }, providers_requested: [...] }\n//   \"all\"                    -> every name in allNames enabled\n//   \"none\" / \"\" / null / undefined / anything else (absent/unrecognized) -> none enabled\n//   an array                 -> exactly those names (lowercased, intersected with\n//                                allNames; unknown names dropped)\n//\n// extractCredits(provider, raw)\n//   -> number | null\n//   Three null-safe per-provider credit extractors (RESEARCH.md Task 1, live-curl-\n//   validated). Forward-provisioned here for Plan 02 (16.1 does not call this at\n//   runtime); unit-tested now so Plan 02 can consume it with zero further verification.\n//   Every extractor returns null on ANY shape mismatch \u2014 never throws, never fails the run.\n\nfunction parseWebhookBody(body) {\n  const events = Array.isArray(body)\n    ? body\n    : (body && Array.isArray(body.events) ? body.events : [body]);\n  const providers = (body && !Array.isArray(body)) ? body.providers : undefined;\n  const mode = (body && !Array.isArray(body)) ? body.mode : undefined;\n  return { events, providers, mode };\n}\n\nfunction resolveEnabledProviders(raw, allNames) {\n  const all = Array.isArray(allNames) ? allNames : [];\n  const allLower = all.map((n) => String(n).toLowerCase());\n  let enabledLower;\n\n  if (raw === \"all\") {\n    enabledLower = allLower.slice();\n  } else if (Array.isArray(raw)) {\n    const requestedLower = raw.map((n) => String(n).toLowerCase());\n    enabledLower = allLower.filter((n) => requestedLower.indexOf(n) !== -1);\n  } else {\n    // \"none\" | \"\" | null | undefined | any other unrecognized value -> nothing enabled\n    // (CONTEXT Locked Decision 2 \u2014 safe default, explicit opt-in required).\n    enabledLower = [];\n  }\n\n  const enabledSet = new Set(enabledLower);\n  const provider_enabled = {};\n  const providers_requested = [];\n  for (const name of all) {\n    const lower = String(name).toLowerCase();\n    const isEnabled = enabledSet.has(lower);\n    provider_enabled[name] = isEnabled;\n    if (isEnabled) providers_requested.push(name);\n  }\n\n  return { provider_enabled, providers_requested };\n}\n\nfunction extractCredits(provider, raw) {\n  const p = String(provider || \"\").toLowerCase();\n\n  if (p === \"lusha\") {\n    // 200 body -> { credits: { total, used, remaining } } [VERIFIED: live curl 200]\n    return (raw && raw.credits && typeof raw.credits.remaining === \"number\")\n      ? raw.credits.remaining : null;\n  }\n\n  if (p === \"apollo\") {\n    // THIS account's key 403s (non-master) [VERIFIED: live curl 403] -> raw carries no\n    // `remaining` field -> null. A master key's usage_stats body (undocumented shape for\n    // this account) is read defensively: only a top-level numeric `remaining` is trusted.\n    return (raw && typeof raw.remaining === \"number\") ? raw.remaining : null;\n  }\n\n  if (p === \"zoominfo\") {\n    // JSON:API: data[0].attributes.usage[] keyed by limitType. [VERIFIED: live curl 200]\n    // The real redeemable-records balance lives under limitType === \"uniqueIdLimit\";\n    // fall back to the first entry with a non-zero totalLimit before giving up (Open\n    // Question #1 \u2014 a different ZoomInfo plan may report its balance under another key).\n    const usage = (raw && raw.data && raw.data[0] && raw.data[0].attributes\n      && raw.data[0].attributes.usage) || [];\n    if (!Array.isArray(usage)) return null;\n    let entry = usage.find((u) => u && u.limitType === \"uniqueIdLimit\");\n    if (!entry) entry = usage.find((u) => u && typeof u.totalLimit === \"number\" && u.totalLimit > 0);\n    return (entry && typeof entry.usageRemaining === \"number\") ? entry.usageRemaining : null;\n  }\n\n  return null;\n}\n\n// --- n8n wrapper: Build Credit Status (Phase 25 Plan 02) ---\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\nconst first = $('Status Credit Request').first();\nconst providers_requested = (first && first.json && first.json.providers_requested) || [];\nconst CREDIT_NODE_BY_PROVIDER = { lusha: \"Lusha Usage\", apollo: \"Apollo Usage\", zoominfo: \"ZoomInfo Usage\" };\nconst balances = providers_requested.map((provider) => {\n  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];\n  const rows = nodeName ? nodeAll(nodeName) : [];\n  const row = rows[0];\n  const raw = row && row.json;\n  const status = httpStatus(raw);\n  let credits = null;\n  let error = null;\n  if (!row) {\n    error = \"not_executed\";\n  } else if (raw && raw.error) {\n    error = status ? (\"http_\" + status) : \"provider_error\";\n  } else {\n    credits = extractCredits(provider, raw);\n    if (credits === null) error = \"unrecognized_response_shape\";\n  }\n  return { provider, configured: true, credits, unreadable: credits === null, error, status };\n});\nreturn [{ json: { balances, checked_at: new Date().toISOString() } }];\n"
+        "jsCode": "// n8n/code/providerSelection.js \u2014 pure-JS provider-selection cost gate for n8n Code nodes.\n//\n// Phase 16.1: the caller-supplied `providers` webhook field is the PRIMARY burn gate\n// (CONTEXT Locked Decision 1 \u2014 no global build-time kill-switch). This module is pure,\n// deterministic, and carries NO n8n globals \u2014 mirrors enrichmentGate.js exactly, inlined\n// into Code nodes via the builder's inline() (Code nodes cannot require() siblings).\n//\n// parseWebhookBody(body)\n//   -> { events, providers, mode }\n//   Explicit payload contract (reviews A4): a bare HubSpot event array carries no\n//   top-level `providers` slot; an envelope `{ providers, events: [...] }` object carries\n//   the caller's selection at the envelope level. A single bare event object (neither an\n//   array nor an envelope with `.events`) is treated as the one event, and its own\n//   `.providers` field (if any) IS the envelope-level providers value here \u2014 the n8n\n//   wrapper additionally falls back to `event.providers` per-event when this returns\n//   undefined (`parsed.providers ?? event.providers`), covering the same single-event case\n//   without double logic.\n//   `mode` (Phase 36-03, 36-CONTEXT.md sec6): read at the envelope level with the IDENTICAL\n//   idiom as `providers` \u2014 absent means today's behaviour byte-identically, `\"write\"` means\n//   today's behaviour explicitly, and any other value is return-only (a typo can never\n//   write). Two states, never an allow-list: `mode != null && String(mode).toLowerCase()\n//   !== \"write\"`. That predicate is applied downstream at Decide Action, not here.\n//\n// resolveEnabledProviders(raw, allNames)\n//   -> { provider_enabled: { <name>: boolean, ... }, providers_requested: [...] }\n//   \"all\"                    -> every name in allNames enabled\n//   \"none\" / \"\" / null / undefined / anything else (absent/unrecognized) -> none enabled\n//   an array                 -> exactly those names (lowercased, intersected with\n//                                allNames; unknown names dropped)\n//\n// extractCredits(provider, raw)\n//   -> number | null\n//   Three null-safe per-provider credit extractors (RESEARCH.md Task 1, live-curl-\n//   validated). Forward-provisioned here for Plan 02 (16.1 does not call this at\n//   runtime); unit-tested now so Plan 02 can consume it with zero further verification.\n//   Every extractor returns null on ANY shape mismatch \u2014 never throws, never fails the run.\n\nfunction parseWebhookBody(body) {\n  const events = Array.isArray(body)\n    ? body\n    : (body && Array.isArray(body.events) ? body.events : [body]);\n  const providers = (body && !Array.isArray(body)) ? body.providers : undefined;\n  const mode = (body && !Array.isArray(body)) ? body.mode : undefined;\n  return { events, providers, mode };\n}\n\nfunction resolveEnabledProviders(raw, allNames) {\n  const all = Array.isArray(allNames) ? allNames : [];\n  const allLower = all.map((n) => String(n).toLowerCase());\n  let enabledLower;\n\n  if (raw === \"all\") {\n    enabledLower = allLower.slice();\n  } else if (Array.isArray(raw)) {\n    const requestedLower = raw.map((n) => String(n).toLowerCase());\n    enabledLower = allLower.filter((n) => requestedLower.indexOf(n) !== -1);\n  } else {\n    // \"none\" | \"\" | null | undefined | any other unrecognized value -> nothing enabled\n    // (CONTEXT Locked Decision 2 \u2014 safe default, explicit opt-in required).\n    enabledLower = [];\n  }\n\n  const enabledSet = new Set(enabledLower);\n  const provider_enabled = {};\n  const providers_requested = [];\n  for (const name of all) {\n    const lower = String(name).toLowerCase();\n    const isEnabled = enabledSet.has(lower);\n    provider_enabled[name] = isEnabled;\n    if (isEnabled) providers_requested.push(name);\n  }\n\n  return { provider_enabled, providers_requested };\n}\n\nfunction extractCredits(provider, raw) {\n  const p = String(provider || \"\").toLowerCase();\n\n  if (p === \"lusha\") {\n    // 200 body -> { credits: { total, used, remaining } } [VERIFIED: live curl 200]\n    return (raw && raw.credits && typeof raw.credits.remaining === \"number\")\n      ? raw.credits.remaining : null;\n  }\n\n  if (p === \"apollo\") {\n    // THIS account's key 403s (non-master) [VERIFIED: live curl 403] -> raw carries no\n    // `remaining` field -> null. A master key's usage_stats body (undocumented shape for\n    // this account) is read defensively: only a top-level numeric `remaining` is trusted.\n    return (raw && typeof raw.remaining === \"number\") ? raw.remaining : null;\n  }\n\n  if (p === \"zoominfo\") {\n    // JSON:API: data[0].attributes.usage[] keyed by limitType. [VERIFIED: live curl 200]\n    // The real redeemable-records balance lives under limitType === \"uniqueIdLimit\";\n    // fall back to the first entry with a non-zero totalLimit before giving up (Open\n    // Question #1 \u2014 a different ZoomInfo plan may report its balance under another key).\n    const usage = (raw && raw.data && raw.data[0] && raw.data[0].attributes\n      && raw.data[0].attributes.usage) || [];\n    if (!Array.isArray(usage)) return null;\n    let entry = usage.find((u) => u && u.limitType === \"uniqueIdLimit\");\n    if (!entry) entry = usage.find((u) => u && typeof u.totalLimit === \"number\" && u.totalLimit > 0);\n    return (entry && typeof entry.usageRemaining === \"number\") ? entry.usageRemaining : null;\n  }\n\n  return null;\n}\n\n// --- n8n wrapper: Build Credit Status (Phase 25 Plan 02) ---\n// Phase 70 Plan 04 (D-70-04): fed by \"ZoomInfo Usage Result Carry Merge\" \u2014 the merged\n// item carries `providers_requested` (stamped on the row at \"Status Credit Request\")\n// and `lusha_result`/`apollo_result`/`zoominfo_result` (each nested by its own Wrap\n// node earlier in this straight-line chain \u2014 ZoomInfo's is nested too, deliberately,\n// so a never-executed probe (`zoominfo_result` absent) stays distinguishable from one\n// that ran but returned an unrecognizable body; leaving it unwrapped at top level\n// would have made `raw` always truthy, since it would be the merged item itself). No\n// by-name read of any usage node.\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\nconst merged = ($input.first() && $input.first().json) || {};\nconst providers_requested = merged.providers_requested || [];\nconst RAW_BY_PROVIDER = { lusha: merged.lusha_result, apollo: merged.apollo_result, zoominfo: merged.zoominfo_result };\nconst balances = providers_requested.map((provider) => {\n  const raw = RAW_BY_PROVIDER[provider];\n  const status = httpStatus(raw);\n  let credits = null;\n  let error = null;\n  if (!raw) {\n    error = \"not_executed\";\n  } else if (raw.error) {\n    error = status ? (\"http_\" + status) : \"provider_error\";\n  } else {\n    credits = extractCredits(provider, raw);\n    if (credits === null) error = \"unrecognized_response_shape\";\n  }\n  return { provider, configured: true, credits, unreadable: credits === null, error, status };\n});\nreturn [{ json: { balances, checked_at: new Date().toISOString() } }];\n"
       },
-      "id": "c00110000-0000-4000-8000-000000000000",
+      "id": "c00130000-0000-4000-8000-000000000000",
       "name": "Build Credit Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -203,7 +231,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00120000-0000-4000-8000-000000000000",
+      "id": "h00140000-0000-4000-8000-000000000000",
       "name": "HS Requested Search (Companies)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -212,6 +240,20 @@
         300
       ],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'hs_requested_companies_result': it.json } }));\n"
+      },
+      "id": "c00150000-0000-4000-8000-000000000000",
+      "name": "Wrap HS Requested Companies Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -226,7 +268,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00130000-0000-4000-8000-000000000000",
+      "id": "h00160000-0000-4000-8000-000000000000",
       "name": "HS Review Search (Companies)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -235,6 +277,20 @@
         300
       ],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'hs_review_companies_result': it.json } }));\n"
+      },
+      "id": "c00170000-0000-4000-8000-000000000000",
+      "name": "Wrap HS Review Companies Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
     },
     {
       "parameters": {
@@ -249,7 +305,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00140000-0000-4000-8000-000000000000",
+      "id": "h00180000-0000-4000-8000-000000000000",
       "name": "HS Requested Search (Contacts)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -258,6 +314,20 @@
         300
       ],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'hs_requested_contacts_result': it.json } }));\n"
+      },
+      "id": "c00190000-0000-4000-8000-000000000000",
+      "name": "Wrap HS Requested Contacts Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        300
+      ]
     },
     {
       "parameters": {
@@ -272,7 +342,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00150000-0000-4000-8000-000000000000",
+      "id": "h00200000-0000-4000-8000-000000000000",
       "name": "HS Review Search (Contacts)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -285,9 +355,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/backendStatus.js \u2014 pure-JS null-safe extraction and credential-health\n// derivation for the `hubspot/backend-status` endpoint's full-health slice (Phase 27).\n//\n// Mirrors providerSelection.js exactly: no n8n globals, no require() of siblings, every\n// exported function total and non-throwing. Inlined into Code nodes via the builder's\n// inline() (Code nodes cannot require() siblings).\n//\n// extractSearchTotal(raw)\n//   -> number | null\n//   Reads a HubSpot CRM v3 search response's `.total` field. Every shape mismatch\n//   (non-object, missing field, non-numeric, boolean) yields null \u2014 a genuine numeric\n//   zero is the ONLY input that returns 0 (D-08: unknown is never zero).\n//\n// deriveSourceHealth(probe)\n//   -> { state: \"ok\" | \"refused\" | \"unknown\", status: number|null, reason: string|null }\n//   `probe` is `{configured, status, value}` for one credential-bearing source. A non-2xx\n//   status can NEVER produce \"ok\" (T-27-04); an unconfigured/unreachable source produces\n//   \"unknown\", distinct from \"refused\" (D-08 \u2014 an absent credential is not a refusal).\n//\n// buildStatusBody(parts)\n//   -> { counts: {...}, credential_health: [...], checked_at }\n//   Assembles the response, preserving `null` counts as JSON null (STATUS-06) \u2014 never 0,\n//   never an omitted key. Never throws; every malformed branch degrades to unknown/null.\n\nfunction extractSearchTotal(raw) {\n  if (!raw || typeof raw !== \"object\" || Array.isArray(raw)) return null;\n  const total = raw.total;\n  if (typeof total !== \"number\" || !Number.isFinite(total)) return null;\n  return total;\n}\n\nfunction deriveSourceHealth(probe) {\n  const p = probe && typeof probe === \"object\" ? probe : {};\n  const configured = p.configured === true;\n  const status = typeof p.status === \"number\" && Number.isFinite(p.status) ? p.status : null;\n\n  if (!configured) {\n    // No credential to probe with at all \u2014 cannot-tell, never \"refused\" (D-08).\n    return { state: \"unknown\", status: null, reason: \"not_configured\" };\n  }\n  if (status === null) {\n    // Configured but no usable status came back (timeout, not executed, malformed shape).\n    return { state: \"unknown\", status: null, reason: \"no_response\" };\n  }\n  if (status >= 200 && status < 300) {\n    if (p.value === null || p.value === undefined) {\n      // A 2xx with no usable value is still a \"can't tell,\" never a false \"ok\".\n      return { state: \"unknown\", status, reason: \"unrecognized_response_shape\" };\n    }\n    return { state: \"ok\", status, reason: null };\n  }\n  // Any non-2xx (401/403/429/5xx/...) is reachable-but-refused \u2014 never \"ok\".\n  return { state: \"refused\", status, reason: \"http_\" + status };\n}\n\nfunction buildStatusBody(parts) {\n  const safe = parts && typeof parts === \"object\" && parts !== null ? parts : {};\n  const counts = safe.counts && typeof safe.counts === \"object\" ? safe.counts : {};\n  const health = Array.isArray(safe.health) ? safe.health : [];\n\n  const normCount = (v) => (typeof v === \"number\" && Number.isFinite(v) ? v : null);\n\n  return {\n    counts: {\n      companies_requested_unresolved: normCount(counts.companies_requested_unresolved),\n      companies_awaiting_review: normCount(counts.companies_awaiting_review),\n      contacts_requested_unresolved: normCount(counts.contacts_requested_unresolved),\n      contacts_awaiting_review: normCount(counts.contacts_awaiting_review),\n    },\n    credential_health: health.map((h) => {\n      const entry = h && typeof h === \"object\" ? h : {};\n      const state = entry.state === \"ok\" || entry.state === \"refused\" ? entry.state : \"unknown\";\n      return {\n        source: typeof entry.source === \"string\" ? entry.source : \"unknown\",\n        state,\n        status: typeof entry.status === \"number\" ? entry.status : null,\n        reason: typeof entry.reason === \"string\" ? entry.reason : null,\n      };\n    }),\n    checked_at: typeof safe.checked_at === \"string\" ? safe.checked_at : new Date().toISOString(),\n  };\n}\n\n// --- n8n wrapper: Build Status (Phase 27 Plan 01) ---\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\n// A search node's own probe outcome IS its credential-health signal (Pitfall 1) \u2014\n// independent of whether any enrichment run happened recently.\nfunction searchProbe(name) {\n  const rows = nodeAll(name);\n  const row = rows[0];\n  const raw = row && row.json;\n  if (!row) return { configured: true, status: null, value: null };\n  if (raw && raw.error) return { configured: true, status: httpStatus(raw), value: null };\n  return { configured: true, status: 200, value: extractSearchTotal(raw) };\n}\n\nconst creditRows = nodeAll(\"Build Credit Status\");\nconst creditBody = (creditRows[0] && creditRows[0].json) || {};\nconst balances = Array.isArray(creditBody.balances) ? creditBody.balances : [];\nconst balanceByProvider = {};\nfor (const b of balances) balanceByProvider[b.provider] = b;\n\nconst companiesRequested = searchProbe(\"HS Requested Search (Companies)\");\nconst companiesReview = searchProbe(\"HS Review Search (Companies)\");\nconst contactsRequested = searchProbe(\"HS Requested Search (Contacts)\");\nconst contactsReview = searchProbe(\"HS Review Search (Contacts)\");\n\nconst health = [\"lusha\", \"apollo\", \"zoominfo\"].map((provider) => {\n  const b = balanceByProvider[provider] || {};\n  return { source: provider,\n    ...deriveSourceHealth({ configured: b.configured === true, status: b.status, value: b.credits }) };\n});\n// HubSpot's own credential health: the requested-companies probe is the canonical\n// signal \u2014 same credential as all four searches, so a refusal there IS the HubSpot\n// credential-health finding (D-08).\nhealth.push({ source: \"hubspot\", ...deriveSourceHealth(companiesRequested) });\n\nconst body = buildStatusBody({\n  counts: {\n    companies_requested_unresolved: companiesRequested.value,\n    companies_awaiting_review: companiesReview.value,\n    contacts_requested_unresolved: contactsRequested.value,\n    contacts_awaiting_review: contactsReview.value,\n  },\n  health,\n  checked_at: creditBody.checked_at,\n});\n\nreturn [{ json: { ...body, balances } }];\n"
+        "jsCode": "return $input.all().map((it) => ({ json: { 'zoominfo_result': it.json } }));\n"
       },
-      "id": "c00160000-0000-4000-8000-000000000000",
+      "id": "c00210000-0000-4000-8000-000000000000",
+      "name": "Wrap ZoomInfo Usage Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/backendStatus.js \u2014 pure-JS null-safe extraction and credential-health\n// derivation for the `hubspot/backend-status` endpoint's full-health slice (Phase 27).\n//\n// Mirrors providerSelection.js exactly: no n8n globals, no require() of siblings, every\n// exported function total and non-throwing. Inlined into Code nodes via the builder's\n// inline() (Code nodes cannot require() siblings).\n//\n// extractSearchTotal(raw)\n//   -> number | null\n//   Reads a HubSpot CRM v3 search response's `.total` field. Every shape mismatch\n//   (non-object, missing field, non-numeric, boolean) yields null \u2014 a genuine numeric\n//   zero is the ONLY input that returns 0 (D-08: unknown is never zero).\n//\n// deriveSourceHealth(probe)\n//   -> { state: \"ok\" | \"refused\" | \"unknown\", status: number|null, reason: string|null }\n//   `probe` is `{configured, status, value}` for one credential-bearing source. A non-2xx\n//   status can NEVER produce \"ok\" (T-27-04); an unconfigured/unreachable source produces\n//   \"unknown\", distinct from \"refused\" (D-08 \u2014 an absent credential is not a refusal).\n//\n// buildStatusBody(parts)\n//   -> { counts: {...}, credential_health: [...], checked_at }\n//   Assembles the response, preserving `null` counts as JSON null (STATUS-06) \u2014 never 0,\n//   never an omitted key. Never throws; every malformed branch degrades to unknown/null.\n\nfunction extractSearchTotal(raw) {\n  if (!raw || typeof raw !== \"object\" || Array.isArray(raw)) return null;\n  const total = raw.total;\n  if (typeof total !== \"number\" || !Number.isFinite(total)) return null;\n  return total;\n}\n\nfunction deriveSourceHealth(probe) {\n  const p = probe && typeof probe === \"object\" ? probe : {};\n  const configured = p.configured === true;\n  const status = typeof p.status === \"number\" && Number.isFinite(p.status) ? p.status : null;\n\n  if (!configured) {\n    // No credential to probe with at all \u2014 cannot-tell, never \"refused\" (D-08).\n    return { state: \"unknown\", status: null, reason: \"not_configured\" };\n  }\n  if (status === null) {\n    // Configured but no usable status came back (timeout, not executed, malformed shape).\n    return { state: \"unknown\", status: null, reason: \"no_response\" };\n  }\n  if (status >= 200 && status < 300) {\n    if (p.value === null || p.value === undefined) {\n      // A 2xx with no usable value is still a \"can't tell,\" never a false \"ok\".\n      return { state: \"unknown\", status, reason: \"unrecognized_response_shape\" };\n    }\n    return { state: \"ok\", status, reason: null };\n  }\n  // Any non-2xx (401/403/429/5xx/...) is reachable-but-refused \u2014 never \"ok\".\n  return { state: \"refused\", status, reason: \"http_\" + status };\n}\n\nfunction buildStatusBody(parts) {\n  const safe = parts && typeof parts === \"object\" && parts !== null ? parts : {};\n  const counts = safe.counts && typeof safe.counts === \"object\" ? safe.counts : {};\n  const health = Array.isArray(safe.health) ? safe.health : [];\n\n  const normCount = (v) => (typeof v === \"number\" && Number.isFinite(v) ? v : null);\n\n  return {\n    counts: {\n      companies_requested_unresolved: normCount(counts.companies_requested_unresolved),\n      companies_awaiting_review: normCount(counts.companies_awaiting_review),\n      contacts_requested_unresolved: normCount(counts.contacts_requested_unresolved),\n      contacts_awaiting_review: normCount(counts.contacts_awaiting_review),\n    },\n    credential_health: health.map((h) => {\n      const entry = h && typeof h === \"object\" ? h : {};\n      const state = entry.state === \"ok\" || entry.state === \"refused\" ? entry.state : \"unknown\";\n      return {\n        source: typeof entry.source === \"string\" ? entry.source : \"unknown\",\n        state,\n        status: typeof entry.status === \"number\" ? entry.status : null,\n        reason: typeof entry.reason === \"string\" ? entry.reason : null,\n      };\n    }),\n    checked_at: typeof safe.checked_at === \"string\" ? safe.checked_at : new Date().toISOString(),\n  };\n}\n\n// --- n8n wrapper: Build Status (Phase 27 Plan 01) ---\n// Phase 70 Plan 04 (D-70-04): fed by \"HS Review Contacts Carry Merge\" \u2014 the merged item\n// carries `balances`/`checked_at` (from \"Build Credit Status\", never wrapped since it\n// seeded this leg of the chain rather than being a hop across it), three nested\n// `hs_*_result` search responses (wrapped by earlier hops in this straight-line chain),\n// and the LAST search's raw response unwrapped at top level. No by-name read.\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\n// A search node's own probe outcome IS its credential-health signal (Pitfall 1) \u2014\n// independent of whether any enrichment run happened recently.\nfunction searchProbe(raw) {\n  if (!raw) return { configured: true, status: null, value: null };\n  if (raw.error) return { configured: true, status: httpStatus(raw), value: null };\n  return { configured: true, status: 200, value: extractSearchTotal(raw) };\n}\n\nconst merged = ($input.first() && $input.first().json) || {};\nconst balances = Array.isArray(merged.balances) ? merged.balances : [];\nconst balanceByProvider = {};\nfor (const b of balances) balanceByProvider[b.provider] = b;\n\nconst companiesRequested = searchProbe(merged.hs_requested_companies_result);\nconst companiesReview = searchProbe(merged.hs_review_companies_result);\nconst contactsRequested = searchProbe(merged.hs_requested_contacts_result);\nconst contactsReview = searchProbe(merged);\n\nconst health = [\"lusha\", \"apollo\", \"zoominfo\"].map((provider) => {\n  const b = balanceByProvider[provider] || {};\n  return { source: provider,\n    ...deriveSourceHealth({ configured: b.configured === true, status: b.status, value: b.credits }) };\n});\n// HubSpot's own credential health: the requested-companies probe is the canonical\n// signal \u2014 same credential as all four searches, so a refusal there IS the HubSpot\n// credential-health finding (D-08).\nhealth.push({ source: \"hubspot\", ...deriveSourceHealth(companiesRequested) });\n\nconst body = buildStatusBody({\n  counts: {\n    companies_requested_unresolved: companiesRequested.value,\n    companies_awaiting_review: companiesReview.value,\n    contacts_requested_unresolved: contactsRequested.value,\n    contacts_awaiting_review: contactsReview.value,\n  },\n  health,\n  checked_at: merged.checked_at,\n});\n\nreturn [{ json: { ...body, balances } }];\n"
+      },
+      "id": "c00220000-0000-4000-8000-000000000000",
       "name": "Build Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -301,7 +385,7 @@
         "respondWith": "allIncomingItems",
         "options": {}
       },
-      "id": "rw00170000-0000-4000-8000-000000000000",
+      "id": "rw00230000-0000-4000-8000-000000000000",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -312,11 +396,165 @@
     },
     {
       "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00240000-0000-4000-8000-000000000000",
+      "name": "Lusha Usage Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        770,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00250000-0000-4000-8000-000000000000",
+      "name": "Apollo Usage Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        990,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00260000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage Result Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00270000-0000-4000-8000-000000000000",
+      "name": "HS Requested Companies Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2310,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00280000-0000-4000-8000-000000000000",
+      "name": "HS Review Companies Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2530,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00290000-0000-4000-8000-000000000000",
+      "name": "HS Requested Contacts Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00300000-0000-4000-8000-000000000000",
+      "name": "HS Review Contacts Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2970,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "content": "## LV Backend Status \u2014 full health (Phase 25 Plan 02 + Phase 27 Plan 01, D-14)\n`hubspot/backend-status`: three provider usage probes, then four HubSpot count searches, all run SEQUENTIALLY (never fanned out) so every probe \u2014 provider AND HubSpot alike \u2014 has completed before the single `Respond to Webhook` fires.\n\nAn unreadable balance (Apollo's non-master key 403s by design on this account) renders as an explicit `unreadable: true` / `credits: null` marker, never as zero (D-10/D-08). The two HubSpot counts (requested-unresolved, awaiting-review) are reported for companies AND contacts; a count the backend could not read is `null`, never `0` (STATUS-06). Reads only \u2014 zero write nodes anywhere in this chain.\n\n**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` credential the enrichment trigger uses \u2014 one operator secret works against both endpoints with no new provisioning.",
         "height": 320,
         "width": 520
       },
-      "id": "s00180000-0000-4000-8000-000000000000",
+      "id": "s00310000-0000-4000-8000-000000000000",
       "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -345,6 +583,11 @@
             "node": "Lusha Usage",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Lusha Usage Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -353,7 +596,18 @@
       "main": [
         [
           {
-            "node": "Apollo Usage",
+            "node": "Wrap Lusha Usage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Lusha Usage Result": {
+      "main": [
+        [
+          {
+            "node": "Lusha Usage Carry Merge",
             "type": "main",
             "index": 0
           }
@@ -364,7 +618,18 @@
       "main": [
         [
           {
-            "node": "ZoomInfo Usage Token Gate",
+            "node": "Wrap Apollo Usage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Apollo Usage Result": {
+      "main": [
+        [
+          {
+            "node": "Apollo Usage Carry Merge",
             "type": "main",
             "index": 0
           }
@@ -378,6 +643,11 @@
             "node": "IF ZoomInfo Usage Needs Mint",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "ZoomInfo Usage Result Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -426,7 +696,7 @@
       "main": [
         [
           {
-            "node": "Build Credit Status",
+            "node": "Wrap ZoomInfo Usage Result",
             "type": "main",
             "index": 0
           }
@@ -448,7 +718,18 @@
       "main": [
         [
           {
-            "node": "HS Review Search (Companies)",
+            "node": "Wrap HS Requested Companies Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap HS Requested Companies Result": {
+      "main": [
+        [
+          {
+            "node": "HS Requested Companies Carry Merge",
             "type": "main",
             "index": 0
           }
@@ -459,7 +740,18 @@
       "main": [
         [
           {
-            "node": "HS Requested Search (Contacts)",
+            "node": "Wrap HS Review Companies Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap HS Review Companies Result": {
+      "main": [
+        [
+          {
+            "node": "HS Review Companies Carry Merge",
             "type": "main",
             "index": 0
           }
@@ -470,7 +762,18 @@
       "main": [
         [
           {
-            "node": "HS Review Search (Contacts)",
+            "node": "Wrap HS Requested Contacts Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap HS Requested Contacts Result": {
+      "main": [
+        [
+          {
+            "node": "HS Requested Contacts Carry Merge",
             "type": "main",
             "index": 0
           }
@@ -481,7 +784,7 @@
       "main": [
         [
           {
-            "node": "Build Status",
+            "node": "HS Review Contacts Carry Merge",
             "type": "main",
             "index": 0
           }
@@ -493,6 +796,119 @@
         [
           {
             "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lusha Usage Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Apollo Usage",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Apollo Usage Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Apollo Usage Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Token Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap ZoomInfo Usage Result": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Result Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Usage Result Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Build Credit Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HS Requested Companies Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HS Requested Companies Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "HS Review Search (Companies)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HS Review Companies Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HS Review Companies Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "HS Requested Search (Contacts)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HS Requested Contacts Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HS Requested Contacts Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "HS Review Search (Contacts)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HS Review Contacts Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HS Review Contacts Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Build Status",
             "type": "main",
             "index": 0
           }

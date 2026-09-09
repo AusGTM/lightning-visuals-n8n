@@ -178,6 +178,11 @@ function runLane({ existingRecord, recompute, identity_keys }) {
     existingRecord,
     lookup_failed: false,
     mode: parsed[0].mode,
+    // Phase 70 Plan 04 (D-70-04): "recompute" now rides the row itself (Company Gate
+    // reads bare `row.recompute`, never `$('Parse HubSpot Event')`) — mirrored here
+    // exactly like `mode` already is, since a real "Parse HubSpot Event" -> "Company
+    // Gate" edge carries the whole parsed row forward.
+    recompute: parsed[0].recompute,
   };
 
   const gated = runCode(byName["Company Gate"], [seedRow], outputs);

@@ -257,10 +257,12 @@ const TWO_FLAGGED = envelope([
   },
 ], 7);
 
-const PARSED_COMPANIES = { [PARSE]: [{ object_type: "companies", limit: 2 }] };
-
+// Phase 70 Plan 04 (D-70-04): "Review Queue Rows" no longer reads `$('Parse Review
+// Queue Request')` — a carry merge re-attaches `object_type` onto the search envelope
+// before this node runs, so these fixtures merge it directly onto the seed item
+// instead of mocking a `$()` accessor this node no longer calls.
 test("Review Queue Rows: one envelope item carrying every row, the page size and the WHOLE total", () => {
-  const out = runNode(jsCodeOf(ROWS), [TWO_FLAGGED], PARSED_COMPANIES);
+  const out = runNode(jsCodeOf(ROWS), [{ ...TWO_FLAGGED, object_type: "companies" }], {});
   assert.equal(out.length, 1, "one item out — never one per row (D-22/D-24)");
   const [env] = out;
   assert.equal(env.object_type, "companies");
@@ -273,7 +275,7 @@ test("Review Queue Rows: one envelope item carrying every row, the page size and
 });
 
 test("Review Queue Rows: stored strings reach the client UNPARSED and unmodified (D-11)", () => {
-  const [env] = runNode(jsCodeOf(ROWS), [TWO_FLAGGED], PARSED_COMPANIES);
+  const [env] = runNode(jsCodeOf(ROWS), [{ ...TWO_FLAGGED, object_type: "companies" }], {});
   const row = env.rows[0];
   // Strict equality on the string: any parse-and-reserialize inside the node fails here,
   // even a byte-identical round trip through a differently-ordered JSON.stringify.
@@ -288,7 +290,7 @@ test("Review Queue Rows: stored strings reach the client UNPARSED and unmodified
 });
 
 test("Review Queue Rows: an EMPTY queue still answers — zero rows, zero total, search_ok", () => {
-  const out = runNode(jsCodeOf(ROWS), [envelope([], 0)], PARSED_COMPANIES);
+  const out = runNode(jsCodeOf(ROWS), [{ ...envelope([], 0), object_type: "companies" }], {});
   assert.equal(out.length, 1,
     "zero items here would reach no responder and hang the caller ~100s until "
     + "Cloudflare 524s (D-22) — and an empty queue is this phase's normal end state");
@@ -303,20 +305,20 @@ test("Review Queue Rows: a FAILED search is not reported as an empty queue", () 
   // item with no `results` array. Rendered as an envelope it would read "0 flagged
   // records" and tell the operator their backlog was clear when it was never read.
   const out = runNode(jsCodeOf(ROWS),
-    [{ error: { message: "Request failed with status code 401" } }], PARSED_COMPANIES);
+    [{ error: { message: "Request failed with status code 401" }, object_type: "companies" }], {});
   assert.equal(out.length, 1);
   assert.equal(out[0].search_ok, false);
   assert.deepEqual(out[0].rows, []);
 });
 
 test("Review Queue Rows: the contacts lane stamps its own object_type", () => {
-  const [env] = runNode(jsCodeOf(ROWS), [envelope([{
+  const [env] = runNode(jsCodeOf(ROWS), [{ ...envelope([{
     id: "42",
     properties: {
       email: "a@example.com", firstname: "A", lastname: "B",
       [P_NEEDS_REVIEW]: "true", [P_CONTACT_PROVENANCE]: "{}", [P_CANDIDATE_JSON]: "",
     },
-  }], 1)], { [PARSE]: [{ object_type: "contacts", limit: 100 }] });
+  }], 1), object_type: "contacts" }], {});
   assert.equal(env.object_type, "contacts");
   assert.equal(env.rows[0].hs_object_id, "42");
   assert.equal(env.rows[0].email, "a@example.com");
@@ -330,7 +332,7 @@ test("Review Queue Rows: a search node's own single-record shape still adapts", 
   // Defensive, mirroring REVIEW_EXTRACT_RECORD: an item that IS a record rather than an
   // envelope must not be read as a failed search.
   const [env] = runNode(jsCodeOf(ROWS),
-    [{ id: "1", properties: { name: "Solo" } }], PARSED_COMPANIES);
+    [{ id: "1", properties: { name: "Solo" }, object_type: "companies" }], {});
   assert.equal(env.search_ok, true);
   assert.equal(env.returned, 1);
   assert.equal(env.rows[0].name, "Solo");

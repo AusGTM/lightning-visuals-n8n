@@ -437,6 +437,13 @@ const REJECT_BODY = {
 
 /** webhook item -> Parse Review Decision -> Build Review Decision. Returns both.
  *
+ * Phase 70 Plan 04 (D-70-04): "Build Review Decision" no longer reads `$('Parse Review
+ * Decision')` — "Review Extract Record Carry Merge" re-attaches the parsed request
+ * onto the refetched row BEFORE this node runs, so this harness merges them the SAME
+ * way the real carry merge does (parsed fields last, though the two objects share no
+ * keys so order is moot here) rather than mocking a `$()` accessor this node no longer
+ * calls.
+ *
  * `precheckConstants`, if given, arms `Build Review Decision`'s OWN write-safety
  * constants first (Phase 31 Plan 02, BUG 30 — the pre-check now declares and consults the
  * same constants the write gate does, so a live deploy's ENABLE_BAKED_FLAGS rewrites BOTH
@@ -449,8 +456,8 @@ function drive(body, row, precheckConstants) {
   const precheckJs = precheckConstants
     ? armConstants(jsCodeOf("Build Review Decision"), precheckConstants)
     : jsCodeOf("Build Review Decision");
-  const [built] = runNode(precheckJs, [row || flaggedRow()],
-    { "Parse Review Decision": [parsed] });
+  const merged = { ...(row || flaggedRow()), ...parsed };
+  const [built] = runNode(precheckJs, [merged], {});
   return { parsed, built };
 }
 
@@ -566,9 +573,16 @@ function verifyEnvelope(properties) {
   return { results: [{ id: "789", properties }] };
 }
 
+// Phase 70 Plan 04 (D-70-04): "Build Review Response" no longer reads `$('Build Review
+// Decision')` — on the write branch, "Review Verify Fetch Carry Merge" (or its contacts
+// twin) re-attaches `built`'s row onto the raw verify envelope BEFORE this node runs
+// (preferLast: `built`'s fields win any clash, though none exists here); on the
+// dry-run branch $input already IS `built` directly (no verify envelope at all). This
+// harness merges the same way rather than mocking a `$()` accessor this node no longer
+// calls.
 function respond(built, verifyItem) {
-  return runNode(jsCodeOf("Build Review Response"), [verifyItem],
-    { "Build Review Decision": [built] })[0];
+  const merged = { ...verifyItem, ...built };
+  return runNode(jsCodeOf("Build Review Response"), [merged], {})[0];
 }
 
 // Phase 31 Plan 02: these two response-contract tests exercise a WRITTEN decision, which
@@ -637,15 +651,18 @@ test("the verify refetch is reachable ONLY from the write branch, and both branc
   // Phase 70 Plan 03 Task 3 (D-70-01): "Build Review Response" now sits behind a real
   // Merge — the three original sources (plus two starved-lane sentinels) feed the
   // Merge, not the Code node directly; checked one level further back below.
-  assert.deepEqual(feeders("Review Verify Fetch"), ["Review Decision Update"],
+  // Phase 70 Plan 04 (D-70-04): a carry merge now sits between each PATCH and its
+  // verify fetch, re-attaching "Build Review Decision"'s row across the PATCH hop.
+  assert.deepEqual(feeders("Review Verify Fetch"), ["Review Decision Update Carry Merge"],
     "a dry run must never pay for the refetch, and the refetch must follow the PATCH");
-  assert.deepEqual(feeders("Review Contact Verify Fetch"), ["Review Contact Decision Update"],
+  assert.deepEqual(feeders("Review Contact Verify Fetch"),
+    ["Review Contact Decision Update Carry Merge"],
     "the contacts lane reads back too — a write with no read-back reports null forever");
   assert.deepEqual(feeders("Build Review Response"), ["Build Review Response Merge"]);
   const mergeFeeders = feeders("Build Review Response Merge")
     .filter((src) => !src.includes("Sentinel")).sort();
   assert.deepEqual(mergeFeeders,
-    ["Review Contact Verify Fetch", "Review IF Dry Run", "Review Verify Fetch"]);
+    ["Review Contact Verify Fetch Carry Merge", "Review IF Dry Run", "Review Verify Fetch Carry Merge"]);
   assert.deepEqual(feeders("Respond Review Decision"), ["Build Review Response"],
     "one node shapes the response body on both branches");
 
@@ -699,8 +716,11 @@ test("(g2) the write branch re-splits on object type, and BOTH PATCHes sit behin
   assert.deepEqual(contactWrite.map((c) => c.node), [CONTACT_GATE],
     "the contacts PATCH is reachable only through a write gate");
   assert.deepEqual(companyWrite.map((c) => c.node), [GATE]);
+  // Phase 70 Plan 04 (D-70-04): the gate's real edge to the PATCH is untouched; a SECOND
+  // fan edge to "Review Contact Decision Update Carry Merge" is additive (carries the
+  // gate's own row across the PATCH hop for the verify-fetch lane downstream).
   assert.deepEqual(WF.connections[CONTACT_GATE].main[0].map((c) => c.node),
-    ["Review Contact Decision Update"]);
+    ["Review Contact Decision Update", "Review Contact Decision Update Carry Merge"]);
 
   const patch = WF.nodes.find((n) => n.name === "Review Contact Decision Update");
   assert.match(patch.parameters.url, /objects\/contacts\//);

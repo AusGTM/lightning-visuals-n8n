@@ -24,20 +24,25 @@ function loadJsCode(nodeName) {
 
 // outputs: { "Lusha Usage": [{...}], "Apollo Usage": [], ... } — one raw body per node
 // name; an absent key or an empty array simulates a probe node that never executed.
+//
+// Phase 70 Plan 04 (D-70-04): "Build Credit Status" no longer reads any usage node by
+// name — it reads `$input.first()`, a merged item carrying `providers_requested`,
+// `lusha_result`/`apollo_result` (nested by the Wrap nodes on this straight-line
+// chain) and the raw ZoomInfo response unwrapped at top level (the last hop). This
+// helper builds that SAME merged shape rather than mocking a `$()` accessor this node
+// no longer calls.
 function runBuildCreditStatus(jsCode, { providersRequested, outputs }) {
-  const nodeOutputs = { ...outputs, "Status Credit Request": [{ providers_requested: providersRequested }] };
-  const $ = (name) => ({
-    all: () => (nodeOutputs[name] || []).map((j) => ({ json: j })),
-    first: () => {
-      const rows = nodeOutputs[name] || [];
-      return rows.length ? { json: rows[0] } : undefined;
-    },
-  });
-  const $input = { all: () => [], get item() { return { json: undefined }; } };
+  const merged = {
+    providers_requested: providersRequested,
+    lusha_result: (outputs["Lusha Usage"] || [])[0],
+    apollo_result: (outputs["Apollo Usage"] || [])[0],
+    zoominfo_result: (outputs["ZoomInfo Usage"] || [])[0],
+  };
+  const $input = { first: () => ({ json: merged }) };
   const $now = new Date("2026-07-31T00:00:00Z");
-  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+  const fn = new Function("$input", "$json", "$node", "$now", "$today",
     `"use strict";\n${jsCode}`);
-  const out = fn($, $input, undefined, {}, $now, $now) || [];
+  const out = fn($input, undefined, {}, $now, $now) || [];
   return (out[0] && out[0].json) || {};
 }
 

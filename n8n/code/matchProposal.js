@@ -9,10 +9,10 @@
 // inline() (Code nodes cannot import sibling modules at runtime).
 //
 // laneOf(row) -> "fetch_by_id" | "email" | "linkedin" | "name" | "none"
-//   The `fetch_by_id` branch mirrors `IF Bare Event`'s boolean expression exactly
-//   (scripts/build_cloud_workflows.py, `IF Bare Event` node build):
-//     !!$('Build Identity').item.json.object_id &&
-//     !$('Build Identity').item.json.identity_keys.email
+//   The `fetch_by_id` branch mirrors "IF Bare Event"'s boolean expression exactly
+//   (scripts/build_cloud_workflows.py, "IF Bare Event" node build): object_id present
+//   AND identity_keys.email absent, both read off the row's own json (bare $json since
+//   Phase 70 Plan 04's carry merges, D-70-04).
 //   If the two predicates ever drift, a row is routed to one lane and filtered into
 //   another and silently disappears (36-CONTEXT.md key_links).
 //

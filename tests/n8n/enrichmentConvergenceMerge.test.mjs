@@ -98,9 +98,13 @@ test("the enrichment workflow's D-70-01 fan_in convergence Merges are exactly th
   // mode, asserted by count in the next test, so this test keeps testing exactly what
   // it always tested.
   const convergenceMerges = merges.filter((m) => m.parameters.mode === "append");
+  // Phase 70 Plan 04 (D-70-04) added a SEVENTH append-mode Merge — "Collect Credits"
+  // (3 inputs, one per provider's real-or-skipped credit lane) — a new, genuinely
+  // optional-lane convergence this plan introduced, not one of the original six.
   const expectedNames = [
     "Build Response Merge", "Enrichment Gate Merge", "Company Gate Merge",
     "Merge Winners Fan-In", "Merge Company Fan-In", "Decide Company Action Merge",
+    "Collect Credits",
   ];
   assert.deepEqual(convergenceMerges.map((m) => m.name).sort(), expectedNames.sort());
 });
@@ -121,6 +125,10 @@ test("the enrichment workflow's D-70-04 carry merges (mode: combine) are exactly
     "Lusha Company Result Carry Merge", "Apollo Org Result Carry Merge",
     "ZoomInfo Mint Company Carry Merge",
     "ZoomInfo Usage Mint Carry Merge",
+    // Phase 70 Plan 04 (D-70-04) Task 2 additions: the list-expansion chain's two
+    // chained HTTP hops, the company-create id-capture hop, and the credits broadcast.
+    "List By Name Carry Merge", "List Memberships Carry Merge",
+    "HubSpot Company Create Carry Merge", "Credits Broadcast",
   ];
   assert.deepEqual(carryMerges.map((m) => m.name).sort(), expectedNames.sort());
 });

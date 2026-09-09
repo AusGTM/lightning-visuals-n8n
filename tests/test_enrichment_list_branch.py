@@ -87,25 +87,40 @@ def assert_branch_wiring(doc):
     # The trigger no longer edges straight into the parser — it edges into the list IF.
     assert _outbound(doc, "Webhook Trigger") == [["IF List Input"]]
 
-    # true -> resolve the list; false -> EXACTLY the edge the trigger used to carry, and
-    # nothing else. This is the "additive, not a re-route" property.
+    # true -> resolve the list (PLUS, Phase 70 Plan 04's carry-merge fan, "List By Name
+    # Carry Merge" — the row this node delivers is what that merge re-attaches after
+    # the List-By-Name HTTP hop); false -> EXACTLY the edge the trigger used to carry,
+    # and nothing else. This is the "additive, not a re-route" property.
     assert _outbound(doc, "IF List Input") == [
-        ["HubSpot List By Name"],
+        ["HubSpot List By Name", "List By Name Carry Merge"],
         ["Parse HubSpot Event"],
     ]
 
-    assert _outbound(doc, "HubSpot List By Name") == [["HubSpot List Memberships"]]
-    assert _outbound(doc, "HubSpot List Memberships") == [["Expand List To Events"]]
+    # Phase 70 Plan 04 (D-70-04): "HubSpot List By Name"'s response is nested under
+    # `list_by_name_result` before it crosses the SECOND HTTP hop, then a carry merge
+    # re-attaches the row on each side — so the direct successor of each HTTP node is
+    # now a Wrap or a carry-Merge node, never the next HTTP node directly.
+    assert _outbound(doc, "HubSpot List By Name") == [["Wrap List By Name Result"]]
+    assert _outbound(doc, "Wrap List By Name Result") == [["List By Name Carry Merge"]]
+    # This merge is ALSO the carry_source fanned into the NEXT hop's own carry merge
+    # (the same additive-fan shape as "IF List Input" above).
+    assert _outbound(doc, "List By Name Carry Merge") == [
+        ["HubSpot List Memberships", "List Memberships Carry Merge"],
+    ]
+    assert _outbound(doc, "HubSpot List Memberships") == [["List Memberships Carry Merge"]]
+    assert _outbound(doc, "List Memberships Carry Merge") == [["Expand List To Events"]]
     assert _outbound(doc, "Expand List To Events") == [["IF List Expanded"]]
 
     # Success re-enters the ordinary path; a refusal (Phase 70 Plan 03 Task 2, D-70-07)
-    # now reaches the caller via TWO parallel targets instead of a direct answer:
+    # now reaches the caller via THREE parallel targets instead of a direct answer:
     # "Build Ack" (the sole responder input — "Parse HubSpot Event" never ran this
-    # execution, so this is the only producer that can answer it) and "Build Refusal
-    # Row" (so the reason lands as a ROW at "Build Response" rather than the body).
+    # execution, so this is the only producer that can answer it), "Build Refusal
+    # Row" (so the reason lands as a ROW at "Build Response" rather than the body), and
+    # (Phase 70 Plan 04, D-70-04) "Credit Request" — so "Build Credits Summary" still
+    # delivers exactly once and "Credits Broadcast" never starves on a refusal.
     assert _outbound(doc, "IF List Expanded") == [
         ["Parse HubSpot Event"],
-        ["Build Ack", "Build Refusal Row"],
+        ["Build Ack", "Build Refusal Row", "Credit Request"],
     ]
 
     # The parser is fed by exactly these three lanes and nothing else. fix(40) /
@@ -207,14 +222,15 @@ def test_the_expansion_gate_admits_only_a_nonempty_events_array():
 
 # --- the expansion node's own reads --------------------------------------------------------
 
-def test_expansion_reads_the_body_and_both_responses_by_node_name_not_bare_json():
-    """An upstream HTTP response has already replaced $json by the time this Code node runs
-    — the same identity-loss class the provider request bodies fix."""
+def test_expansion_reads_the_merged_row_never_by_node_name():
+    """Phase 70 Plan 04 (D-70-04): the by-name reads this test used to pin are retired.
+    "List Memberships Carry Merge" re-attaches the trigger body and the wrapped
+    List-By-Name response onto the raw Memberships response — one merged item, read
+    off `$input.first()`, never a by-name lookup of an upstream HTTP node."""
     code = _node(_load(), "Expand List To Events")["parameters"]["jsCode"]
-    for name in ('"Webhook Trigger"', '"HubSpot List By Name"', '"HubSpot List Memberships"'):
-        assert f"nodeFirstJson({name})" in code
-    # Guarded: a node that failed or never executed degrades to a refusal, never a throw.
-    assert "catch (e) { return null; }" in code
+    assert "$('" not in code and '$("' not in code
+    assert "$input.first()" in code
+    assert "merged.list_by_name_result" in code
 
 
 def test_expansion_carries_the_provider_selection_through_unchanged():

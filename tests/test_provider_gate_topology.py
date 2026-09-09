@@ -141,11 +141,15 @@ def test_contacts_provider_request_bodies_read_identity_off_bare_json():
     assert "$('Enrichment Gate')" not in apollo_body
 
 
-def test_provider_gates_read_provider_enabled_by_node_name_not_bare_json():
+def test_provider_gates_read_provider_enabled_off_the_row_never_by_name():
+    """Phase 70 Plan 04 (D-70-04): reads bare $json.provider_enabled — "Parse HubSpot
+    Event" stamps that field on every row it emits, and Task 1's carry merges keep it
+    present across every HTTP hop, so no gate needs a by-name lookup."""
     doc = _load()
     for gate in CONTACTS_GATES:
         left = _node(doc, gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
-        assert "$('Parse HubSpot Event').item.json.provider_enabled." in left
+        assert "$json.provider_enabled." in left
+        assert "$('" not in left
 
 
 def test_shared_provider_gate_bypass_chain_helper_is_called_not_hand_wired():
@@ -355,11 +359,12 @@ def test_company_provider_requests_read_identity_off_bare_json():
         assert "$('Build Company Requests')" not in expr, (name, expr)
 
 
-def test_company_provider_gates_read_provider_enabled_by_node_name_not_bare_json():
+def test_company_provider_gates_read_provider_enabled_off_the_row_never_by_name():
     doc = _load()
     for gate in COMPANY_GATES:
         left = _node(doc, gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
-        assert "$('Parse HubSpot Event').item.json.provider_enabled." in left
+        assert "$json.provider_enabled." in left
+        assert "$('" not in left
 
 
 def test_unsupported_object_type_cannot_reach_any_company_gate_either():
@@ -391,12 +396,12 @@ def test_contacts_and_companies_gate_chains_are_isomorphic_modulo_provider_set_a
         assert len(c_conns[0]) == len(co_conns[0]) == expected_true_targets, (
             contacts_gate, company_gate, c_conns[0], co_conns[0])
         assert len(c_conns[1]) == len(co_conns[1]) == 1  # exactly one false/bypass target each
-        # Both gates test a provider_enabled boolean read from the SAME root node
-        # (Parse HubSpot Event), by-node-name, never bare $json.
+        # Both gates test a provider_enabled boolean read off their own row (Phase 70
+        # Plan 04, D-70-04) — never a by-name lookup.
         c_left = _node(doc, contacts_gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
         co_left = _node(doc, company_gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
-        assert "$('Parse HubSpot Event').item.json.provider_enabled." in c_left
-        assert "$('Parse HubSpot Event').item.json.provider_enabled." in co_left
+        assert "$json.provider_enabled." in c_left
+        assert "$json.provider_enabled." in co_left
 
 
 # reviews LOW-5's Track B item (Lusha Company method/contract mismatch, flagged but not

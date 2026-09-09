@@ -589,26 +589,33 @@ def test_exactly_one_node_in_the_built_workflow_assigns_each_veto_field():
 
 
 def test_recompute_intent_is_read_at_request_level_and_never_carried_in_mode():
-    """Two anti-patterns 47.5-RESEARCH.md found in source and the plan forbids outright.
+    """One anti-pattern 47.5-RESEARCH.md found in source and the plan forbids outright,
+    plus Phase 70 Plan 04's (D-70-04) own retirement of the OTHER one.
 
     (1) `mode`: isReturnOnly() (n8n/code/matchProposal.js) returns true for EVERY string
         that is not "write", so a mode:"recompute" request would set action:"proposed",
         write nothing, and report success -- the exact silent-success class this phase
         exists to remove.
-    (2) per-row: the predicate must be `.first()`, never `.item`. `.first()` makes the lane
-        a whole-REQUEST decision, so exactly one of the two lanes carries data per
-        execution. That is the property Decide Company Action's now-second inbound edge
-        relies on, and the one every existing multi-inbound convergence in this graph shares.
+    (2) Phase 70 Plan 04 (D-70-04) retires the `$('Parse HubSpot Event').first()`
+        by-name read this test used to pin. "Parse HubSpot Event" stamps `recompute`
+        on EVERY row it emits (`event.recompute === true`, per-event, unchanged since
+        Phase 47.5) — `IF Company Recompute` now reads that SAME field bare, off the
+        row directly (`$json.recompute`), never a node lookup. This makes recompute a
+        genuinely PER-ROW predicate rather than a request-wide one forced uniform via
+        `.first()` — the shift the plan's own read_first names explicitly ("request-
+        level flags are carried on the row"). A caller sending one recompute intent for
+        its whole batch (the only documented usage) sees byte-identical routing.
     """
     doc = _load()
     node = next(n for n in doc["nodes"] if n["name"] == "IF Company Recompute")
     expr = node["parameters"]["conditions"]["conditions"][0]["leftValue"]
-    assert expr == "={{ $('Parse HubSpot Event').first().json.recompute === true }}", expr
-    assert ".item" not in expr, "a per-row predicate breaks the mutual exclusivity of the lanes"
+    assert expr == "={{ $json.recompute === true }}", expr
+    assert ".item" not in expr
 
     gate = next(n for n in doc["nodes"] if n["name"] == "Company Gate")
     code = gate["parameters"]["jsCode"]
-    assert "$('Parse HubSpot Event').first()" in code
+    assert "row.recompute === true" in code
+    assert "$('" not in code, "Company Gate must read recompute off its own row, never by name"
     assert 'action = "recompute_refused"' in code, (
         "the gate must refuse a recompute that resolved to no company (BUG-19 shape), "
         "never promote it to enrich"
@@ -631,10 +638,12 @@ def test_recompute_intent_is_read_at_request_level_and_never_carried_in_mode():
 
 
 def test_every_path_into_company_gate_runs_parse_hubspot_event_first():
-    """IF Company Recompute's expression reads $('Parse HubSpot Event') WITHOUT a try/catch
-    -- an IF node cannot carry one. n8n throws on $() for a node that exists but did not
-    execute on this run, so if any entry point could reach Company Gate without running
-    Parse HubSpot Event, every company enrichment on that path would die at the new IF.
+    """Phase 70 Plan 04 (D-70-04): `IF Company Recompute` now reads bare `$json.recompute`
+    (no by-name lookup, so it degrades to `undefined`/false rather than throwing) — but
+    the underlying invariant this test guards is still real: `recompute` is stamped onto
+    a row ONLY by "Parse HubSpot Event". A path that reached Company Gate without running
+    it would silently treat every row as non-recompute, never refuse loudly, which is a
+    softer but still real failure mode this test still catches.
     Neither the chain-flow tests (which never evaluate IF expressions against a partial run)
     nor the edge assertions above would catch it.
 
@@ -673,6 +682,6 @@ def test_every_path_into_company_gate_runs_parse_hubspot_event_first():
     unguarded = [p for p in paths if "Parse HubSpot Event" not in p]
     assert not unguarded, (
         "path(s) reach Company Gate without running Parse HubSpot Event, so "
-        "IF Company Recompute's $() read would throw: "
+        "IF Company Recompute's row would never have a real `recompute` value: "
         + "; ".join(" -> ".join(p) for p in unguarded)
     )

@@ -2341,9 +2341,10 @@ return rows.map((r) => ({ json: r }));
 ENRICH_BUILD_REQUESTS = inline("lushaRequest.js") + r"""
 
 // --- n8n wrapper: Build Live Provider Requests — LOCAL-LIVE variant. ---
-// Turns identity_keys into the concrete per-provider request shapes the LIVE HTTP nodes
-// reference by name (HTTP nodes replace $json with their response, so downstream nodes read
-// requests via $('Build Requests').item). Lusha v3 = POST /v3/contacts/search-and-enrich
+// Turns identity_keys into the concrete per-provider request shapes the LIVE HTTP nodes'
+// own jsonBody expressions read off bare $json (HTTP nodes replace $json with their
+// response, so a carry merge re-attaches this node's row afterward — see the "Build
+// Requests" carry-merge wiring, Phase 70 Plan 04, D-70-04). Lusha v3 = POST /v3/contacts/search-and-enrich
 // JSON body (retired v2 GET querystring — see docs/LUSHA-V3-CONTRACT.md), built by the
 // shared lushaContactBody() with the reveal list derived from the gate's missingFields.
 // Plan 04 Task 2b: when the record already carries a stored lusha_contact_id,
@@ -2695,32 +2696,23 @@ const POLICY = {
   lv_produces_content: { stale_after_days: 180 },
 };
 const NOW = new Date().toISOString();
-// Phase 47.5 (RECOMP-01): the on-demand veto-recompute intent, read at REQUEST level by
-// node name from the ROOT `Parse HubSpot Event` — never bare $json, and never `.item`.
-// `.first()` makes this a WHOLE-REQUEST decision, which is what keeps the two lanes of
-// `IF Company Recompute` mutually exclusive for a whole execution — the property every
-// existing multi-inbound convergence in this graph relies on, and the reason none of them
-// has ever mis-fired. Hoisted out of the per-row map for the same reason.
-//
-// The try/catch is the SAME idiom ENRICH_NORMALIZE_SCORE_CO's nodeAll() uses, and it is
-// load-bearing, not decorative: this constant is shared by two workflows and only the
-// enrichment webhook one HAS a `Parse HubSpot Event` node. n8n throws on $() for a node
-// that does not exist in the current workflow, so `wf_enrichment_local_live`'s
-// "Company Gate" would throw on every row without it. Failing to false is the fail-closed
-// direction: that workflow keeps exactly the behaviour it has today.
+// Phase 70 Plan 04 Task 2 (D-70-03): reads the request-level `recompute` intent off the
+// ROW itself, never a by-name lookup of `Parse HubSpot Event`. "Parse HubSpot Event"
+// stamps `recompute` onto every row it emits (Phase 47.5's own normalisation, unchanged
+// in placement — see ENRICH_PARSE_EVENT_CLOUD's own comment); Task 1's carry merges
+// (splice_carry_merge_after) re-attach the row after every HTTP hop between there and
+// here, so the field survives untouched. `wf_enrichment_local_live`'s "Company Gate"
+// shares this SAME constant but has no `Parse HubSpot Event` node at all — its rows
+// simply never carry the field, so `row.recompute === true` is `false` there exactly as
+// the old try/catch's fail-closed default was, with no special-casing needed.
 // (Phase 66 REVIEW-FIX, WR-02: `wf_scheduled_maintenance_cloud`'s "SJ-2 Company Gate" no
-// longer reuses this constant — see SJ2_CO_GATE below, which keeps this same idiom for
-// the same reason even though SJ-2 never has a recompute intent to read.)
-let RECOMPUTE_REQUESTED = false;
-try {
-  const _first = $('Parse HubSpot Event').first();
-  RECOMPUTE_REQUESTED = !!(_first && _first.json && _first.json.recompute === true);
-} catch (e) { RECOMPUTE_REQUESTED = false; }
+// longer reuses this constant — see SJ2_CO_GATE below.)
 // Phase 70 Plan 03 (D-70-01): this node sits behind a real Merge (Company Gate's 2
 // identity lanes) with a starved-lane sentinel on any input that could otherwise never
 // fire; drop an identity-less sentinel marker before it is treated as a real row.
 return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
+  const RECOMPUTE_REQUESTED = row.recompute === true;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
   let action = gate.action;
   // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
@@ -2786,13 +2778,10 @@ const POLICY = {
 };
 const NOW = new Date().toISOString();
 // SJ-2 is a scheduled job, never a webhook — no `Parse HubSpot Event` node exists in this
-// workflow, so recompute intent can never be requested here. Same fail-to-false idiom
-// ENRICH_CO_GATE uses, kept for consistency even though it is always a no-op on this lane.
-let RECOMPUTE_REQUESTED = false;
-try {
-  const _first = $('Parse HubSpot Event').first();
-  RECOMPUTE_REQUESTED = !!(_first && _first.json && _first.json.recompute === true);
-} catch (e) { RECOMPUTE_REQUESTED = false; }
+// workflow, so recompute intent can never be requested here. Phase 70 Plan 04 (D-70-04):
+// was a guarded by-name lookup that could only ever catch and fall back to false (no such
+// node to find); replaced with the constant it always evaluated to.
+const RECOMPUTE_REQUESTED = false;
 return $input.all().map((it) => {
   const row = it.json;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
@@ -4092,20 +4081,22 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
 # planning row named — no second search, no correlation id invented. Wired straight
 # into "Build Response", whose `...row` projection (Phase 61 Plan 04 Task 1) carries
 # both fields to the client for free.
+#
+# Phase 70 Plan 04 (D-70-04): fed by "HubSpot Company Create Carry Merge", which
+# re-attaches the pre-hop row (the same single "Decide Company Action" item that
+# requested this create — the create branch never batches, one planning row per create
+# request) onto the HTTP response. The old `nodeAll('Decide Company Action')` cross-row
+# `.find()` by domain is retired: the planning row IS this item, so its own fields are
+# already on `merged` — no by-name lookup, no second search.
 ADAPT_COMPANY_CREATE = r"""// Adapt Company Create — Phase 61 Plan 06 Task 2 (REVIEW-C17).
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-const decided = nodeAll('Decide Company Action').map((it) => it.json);
 return $input.all().map((it) => {
-  const res = it.json || {};
-  const companyId = res.id != null ? String(res.id) : null;
-  const domain = (res.properties && res.properties.domain) || null;
-  const row = domain
-    ? decided.find((r) => r.properties && r.properties.domain === domain)
-    : null;
+  const merged = it.json || {};
+  const companyId = merged.id != null ? String(merged.id) : null;
+  const domain = (merged.properties && merged.properties.domain) || null;
   const companyDependencyId = domain ||
-    (row && row.properties && row.properties.name) || null;
+    (merged.properties && merged.properties.name) || null;
   return { json: {
-    ...res,
+    ...merged,
     company_dependency_id: companyDependencyId,
     company_id: companyId,
   }};
@@ -4149,11 +4140,11 @@ def _if_bool_node(name, field, x, y):
 
 def _if_bool_expr_node(name, expr, x, y):
     """IF node testing an arbitrary boolean n8n EXPRESSION (not just a bare `$json.<field>`
-    lookup) for `true`. Phase 16.1: the per-provider `IF <provider> Enabled` gates read
-    `provider_enabled.<name>` BY NODE NAME (`$('Parse HubSpot Event').item.json...`), never
-    bare `$json`, because an upstream provider's HTTP response may already have replaced
-    `$json` by the time a LATER gate in the chain evaluates (closes the same identity-loss
-    bug class the provider request bodies also fix — see _provider_gate_bypass_chain)."""
+    lookup) for `true`. Phase 70 Plan 04 Task 2 (D-70-03): the per-provider `IF <provider>
+    Enabled` gates now read `provider_enabled.<name>` off bare `$json` — Task 1's carry
+    merges (splice_carry_merge_after) re-attach the row after every provider HTTP hop, so
+    `provider_enabled` (stamped once, on the row, by "Parse HubSpot Event") survives to
+    every later gate without a by-name lookup."""
     return {
         "parameters": {"options": {}, "conditions": {
             "options": {"caseSensitive": True, "typeValidation": "strict"},
@@ -4220,10 +4211,10 @@ def _provider_gate_bypass_chain(providers, exit_node, x, y):
 
 
 def _provider_enabled_expr(name):
-    """The by-node-name provider_enabled read every gate uses — reads the ROOT
-    `Parse HubSpot Event` node (never bare $json, which an upstream provider's HTTP
-    response may have replaced by the time a later gate evaluates)."""
-    return f"$('Parse HubSpot Event').item.json.provider_enabled.{name}"
+    """Phase 70 Plan 04 Task 2 (D-70-03): bare $json — every provider HTTP hop's carry
+    merge (Task 1) re-attaches the row, so `provider_enabled` (stamped once by "Parse
+    HubSpot Event") rides every row to every later gate, never a by-name lookup."""
+    return f"$json.provider_enabled.{name}"
 
 
 def build_enrichment_local_live():
@@ -5354,30 +5345,35 @@ ENRICH_LIST_BY_NAME_URL = (
 
 # Asks for ONE MORE than the ceiling, so an oversize list comes back detectable rather than
 # invisible: at exactly `limit` a caller cannot tell "the whole list" from "the first page".
+# Phase 70 Plan 04 (D-70-04): reads the listId off "Wrap List By Name Result"'s own nested
+# key (`list_by_name_result.listId`) — the carry merge after that Wrap node re-attaches the
+# pre-hop row, so by the time THIS node's expression runs, $json is that merged item, never
+# the bare List-By-Name response the pre-carry-merge expression assumed.
 ENRICH_LIST_MEMBERSHIPS_URL = (
     f"={_HS_LISTS_BASE}/"
-    '{{ encodeURIComponent(String(($json.list || $json).listId || "")) }}'
+    '{{ encodeURIComponent(String(($json.list_by_name_result || {}).listId || "")) }}'
     f"/memberships?limit={ENRICH_MAX_LIST_RECORDS + 1}"
 )
 
-# Reads the caller's body and both HubSpot responses BY NODE NAME (never bare $json — an
-# upstream HTTP response has already replaced $json by the time this Code node runs, the
-# same identity-loss class the provider request bodies fix). Every read is guarded, so a
-# node that failed or never executed degrades to a refusal instead of throwing.
+# Phase 70 Plan 04 (D-70-04): reads the caller's body and both HubSpot responses off the
+# ONE merged item "HubSpot List Memberships Carry Merge" (wired below) hands this node —
+# never a by-name lookup. The chain is two Wrap+carry-merge hops (mirrors the provider
+# waterfall's own multi-hop pattern): "Wrap List By Name Result" nests the first response
+# under `list_by_name_result` before it crosses the Memberships hop, and the trailing carry
+# merge re-attaches that row (trigger body + `list_by_name_result`) onto the raw Memberships
+# response, unwrapped, since nothing downstream needs it to survive a THIRD hop.
 ENRICH_EXPAND_LIST_TO_EVENTS = (
     inline("listExpansion.js")
     + r"""
 
 // --- n8n wrapper: Expand List To Events (Phase 25 Plan 03) ---
-function nodeFirstJson(name) {
-  try { const row = $(name).first(); return (row && row.json) || null; } catch (e) { return null; }
-}
 const MAX_LIST_RECORDS = __MAX_LIST_RECORDS__;
-const trigger = nodeFirstJson("Webhook Trigger") || {};
+const merged = ($input.first() && $input.first().json) || {};
+const trigger = merged.body || merged;
 const result = expandListToEvents({
-  body: trigger.body || trigger,
-  listResult: nodeFirstJson("HubSpot List By Name"),
-  membershipsResult: nodeFirstJson("HubSpot List Memberships"),
+  body: trigger,
+  listResult: merged.list_by_name_result || null,
+  membershipsResult: merged,
   maxRecords: MAX_LIST_RECORDS,
 });
 if (result.refused) {
@@ -5405,9 +5401,58 @@ return [{ json: envelope }];
 # prevents). Deliberately does NOT read $input — its output cardinality can never track
 # the row count upstream.
 ENRICH_CREDIT_REQUEST = r"""// Credit Request — Phase 16.1 Plan 02 (reviews C1).
-const first = $('Parse HubSpot Event').first();
+// Phase 70 Plan 04 Task 2 (D-70-03): fed directly by "Parse HubSpot Event" (a fan-out
+// edge, never an HTTP node) — $input.first() IS that same delivery's first item,
+// never a by-name lookup.
+const first = $input.first();
 const providers_requested = (first && first.json && first.json.providers_requested) || [];
 return [{ json: { providers_requested } }];
+"""
+
+# Phase 70 Plan 04 (D-70-04): retires Build Response's `nodeAll('Lusha Usage', ...)`
+# by-name reads. Each provider's credit lane now normalises itself to a common
+# `{provider, requested, credits}` shape BEFORE it reaches "Collect Credits" (an
+# append-mode Merge, one input per provider) — the TRUE lane through the real HTTP
+# call, the FALSE lane through a static skip marker — so all 3 inputs always deliver
+# exactly one item per execution regardless of provider selection (no starved-lane
+# sentinel needed: a routing IF's true/false lanes converging on the SAME input are
+# mutually exclusive by construction, `classify_convergence`'s "mutually_exclusive"
+# class). "Build Credits Summary" then filters to `requested` only, in the same
+# provider identity `extractCredits` already keys on — no providers_requested lookup
+# needed there at all.
+def _credit_adapt_js(provider):
+    return inline("providerSelection.js") + f"""
+// Adapt {provider.title()} Usage — Phase 70 Plan 04 (D-70-04). Reads its own HTTP
+// response via bare $json (no by-name); the provider identity is static per lane.
+return $input.all().map((it) => ({{ json: {{
+  provider: {provider!r},
+  requested: true,
+  credits: extractCredits({provider!r}, it.json),
+}} }}));
+"""
+
+
+def _credit_skip_js(provider):
+    return f"""// {provider.title()} Credit Skipped — Phase 70 Plan 04 (D-70-04).
+// "IF {provider.title()} Credit Requested"'s false lane: this provider was not
+// requested this run. Still delivers exactly one item so "Collect Credits" (append,
+// 3 inputs) never starves on a partial provider selection.
+return [{{ json: {{ provider: {provider!r}, requested: false, credits: null }} }}];
+"""
+
+
+ENRICH_BUILD_CREDITS_SUMMARY = r"""// Build Credits Summary — Phase 70 Plan 04 (D-70-04).
+// Fed by "Collect Credits" (append, 3 inputs: one {provider, requested, credits} item
+// per provider, real or skipped). Filters to requested providers only — the same
+// membership test `providers_requested.map(...)` used to apply — and emits ONE item,
+// broadcast onto every terminal row by "Credits Broadcast" (combineAll), never a
+// by-name read of the credit-check HTTP nodes.
+return [{ json: {
+  remaining_credits: $input.all()
+    .map((it) => it.json)
+    .filter((r) => r && r.requested)
+    .map((r) => ({ provider: r.provider, credits: r.credits })),
+} }];
 """
 
 # Bug A fix (live 2026-07-28): the credit branch's ZoomInfo usage check used to mint its
@@ -5469,21 +5514,10 @@ return out;
 ENRICH_BUILD_RESPONSE = inline("providerSelection.js") + r"""
 
 // --- n8n wrapper: Build Response (Phase 16.1 Plan 02) ---
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
-// Phase 70 Plan 03 Task 2 (D-70-07): wrapped in try/catch — "Build Refusal Row" now
-// also reaches this node's Merge on a list-expansion refusal, where "Parse HubSpot
-// Event" never ran this execution at all; every OTHER existing path to this node
-// already guaranteed it had run, so this line never needed the guard before.
-let first = null;
-try { first = $('Parse HubSpot Event').first(); } catch (e) { first = null; }
-const providers_requested = (first && first.json && first.json.providers_requested) || [];
-const CREDIT_NODE_BY_PROVIDER = { lusha: "Lusha Usage", apollo: "Apollo Usage", zoominfo: "ZoomInfo Usage" };
-const remaining_credits = providers_requested.map((provider) => {
-  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];
-  const rows = nodeName ? nodeAll(nodeName) : [];
-  const raw = rows[0] && rows[0].json;
-  return { provider, credits: extractCredits(provider, raw) };
-});
+// Phase 70 Plan 04 (D-70-04): `remaining_credits` is precomputed by "Build Credits
+// Summary" and broadcast onto every row by "Credits Broadcast" (combineAll, spliced
+// between "Build Response Merge" and this node) — read straight off the row below,
+// never a by-name lookup of the credit-check nodes.
 
 // Phase 61 Plan 04 Task 1 (REVIEW-05): the per-row OUTCOME CONTRACT. Build Response
 // already spreads the whole row (`...row` below) to every terminal (skip, proposed,
@@ -5565,7 +5599,7 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   const contactability = _contactability(row);
   return { json: {
     ...row,
-    remaining_credits,
+    remaining_credits: row.remaining_credits || [],
     outcome_contract_version: OUTCOME_CONTRACT_VERSION,
     candidate_count,
     provider_agreement: row.scored ? _agreementByField(row.scored) : null,
@@ -5978,6 +6012,13 @@ def build_enrichment_cloud():
     nodes.append(_http_node("HubSpot List By Name", ENRICH_LIST_BY_NAME_URL, lx, ly,
                             auth="hubspot", method="GET"))
     lx += 220
+    # Phase 70 Plan 04 (D-70-04): nests the raw List-By-Name response under a distinct key
+    # before it crosses the SECOND HTTP hop below — same "Wrap ... Result" precedent the
+    # provider waterfall uses, needed because "Expand List To Events" must see this response
+    # AND the Memberships response AND the original trigger body all at once.
+    nodes.append(code_node("Wrap List By Name Result",
+                            _wrap_provider_result_js("list_by_name_result"), lx, ly))
+    lx += 220
     nodes.append(_http_node("HubSpot List Memberships", ENRICH_LIST_MEMBERSHIPS_URL, lx, ly,
                             auth="hubspot", method="GET"))
     lx += 220
@@ -6097,8 +6138,10 @@ def build_enrichment_cloud():
     fby = y + 200
     if_bare_event = _if_bool_expr_node(
         "IF Bare Event",
-        "!!$('Build Identity').item.json.object_id && "
-        "!$('Build Identity').item.json.identity_keys.email",
+        # Phase 70 Plan 04 Task 2 (D-70-03): bare $json — fed directly by "Build
+        # Identity" (a Code node, never an HTTP node), so $json IS its own row.
+        "!!$json.object_id && "
+        "!$json.identity_keys.email",
         build_identity_x, fby,
     )
     # Conservative by construction: true ONLY when we have an id to fetch AND the
@@ -6140,13 +6183,15 @@ def build_enrichment_cloud():
         # Routes on the SAME `lane` field "Build Identity" stamped (Plan 01's laneOf) —
         # never a re-derived predicate. Two spellings of one routing decision is how a row
         # gets routed to one lane and filtered into another (36-CONTEXT.md key_links).
-        '$(\'Build Identity\').item.json.lane === "email"',
+        # Phase 70 Plan 04 Task 2 (D-70-03): bare $json — fed by "IF Bare Event"'s FALSE
+        # lane, a routing IF never an HTTP node, so $json IS "Build Identity"'s own row.
+        '$json.lane === "email"',
         build_identity_x, mby,
     )
     nodes.append(if_has_email)
     if_name_searchable = _if_bool_expr_node(
         "IF Name Searchable",
-        '$(\'Build Identity\').item.json.lane === "name"',
+        '$json.lane === "name"',
         build_identity_x + 220, mby,
     )
     nodes.append(if_name_searchable)
@@ -6210,7 +6255,7 @@ def build_enrichment_cloud():
     lby = mby + 200
     if_linkedin_searchable = _if_bool_expr_node(
         "IF Linkedin Searchable",
-        '$(\'Build Identity\').item.json.lane === "linkedin"',
+        '$json.lane === "linkedin"',
         build_identity_x, lby,
     )
     nodes.append(if_linkedin_searchable)
@@ -6581,8 +6626,10 @@ def build_enrichment_cloud():
     cfby = cy + 200
     if_company_bare_event = _if_bool_expr_node(
         "IF Company Bare Event",
-        "!!$('Build Company Identity').item.json.object_id && "
-        "!$('Build Company Identity').item.json.identity_keys.domain",
+        # Phase 70 Plan 04 Task 2 (D-70-03): bare $json — fed directly by "Build
+        # Company Identity" (a Code node, never an HTTP node).
+        "!!$json.object_id && "
+        "!$json.identity_keys.domain",
         build_company_identity_x, cfby,
     )
     nodes.append(if_company_bare_event)
@@ -6603,19 +6650,18 @@ def build_enrichment_cloud():
     # Phase 47.5 Plan 01 (RECOMP-01/RECOMP-02): the request-level recompute lane. Emitted on
     # a second free row below the fetch-by-id lane so no existing node's `position` moves.
     #
-    # `IF Company Recompute` reads the intent BY NODE NAME from the ROOT Parse HubSpot Event
-    # with `.first()` — never `.item`, never bare $json. `.first()` makes it a WHOLE-REQUEST
-    # decision, so exactly one of the two lanes carries data per execution; that is the
-    # property Decide Company Action's now-second inbound edge relies on, and the same one
-    # _provider_gate_bypass_chain's convergence already depends on. A per-row predicate would
-    # break it.
+    # Phase 70 Plan 04 Task 2 (D-70-03): `IF Company Recompute` reads bare `$json.recompute`
+    # — fed directly by "Company Gate" (a Code node), whose own row already carries
+    # `recompute` unchanged (stamped once, request-wide, by "Parse HubSpot Event";
+    # identical on every row in the batch, so a per-row read is equivalent to the old
+    # per-request `.first()` read — never a by-name lookup).
     #
     # `IF Company Skip` reads bare `$json.action` — correct HERE and only here: its immediate
     # upstream is a Code node, with no HTTP hop in between that could have replaced the item.
     crby = cfby + 200
     nodes.append(_if_bool_expr_node(
         "IF Company Recompute",
-        "$('Parse HubSpot Event').first().json.recompute === true",
+        "$json.recompute === true",
         build_company_identity_x, crby,
     ))
     nodes.append(_if_bool_expr_node(
@@ -6831,6 +6877,22 @@ return $input.all().map((it) => {
     nodes.extend(zoom_usage_nodes)
     bx += 880
 
+    # Phase 70 Plan 04 (D-70-04): each provider's real HTTP result and its "not
+    # requested" skip marker normalise to the SAME {provider, requested, credits}
+    # shape before "Collect Credits" — see _credit_adapt_js/_credit_skip_js's own
+    # comment above.
+    nodes.append(code_node("Adapt Lusha Usage", _credit_adapt_js("lusha"), bx, by - 160))
+    nodes.append(code_node("Lusha Credit Skipped", _credit_skip_js("lusha"), bx, by - 80))
+    nodes.append(code_node("Adapt Apollo Usage", _credit_adapt_js("apollo"), bx, by))
+    nodes.append(code_node("Apollo Credit Skipped", _credit_skip_js("apollo"), bx, by + 80))
+    nodes.append(code_node("Adapt ZoomInfo Usage", _credit_adapt_js("zoominfo"), bx, by + 160))
+    nodes.append(code_node("ZoomInfo Credit Skipped", _credit_skip_js("zoominfo"), bx, by + 240))
+    bx += 220
+    nodes.append(merge_node("Collect Credits", bx, by, inputs=3, mode="append"))
+    bx += 220
+    nodes.append(code_node("Build Credits Summary", ENRICH_BUILD_CREDITS_SUMMARY, bx, by))
+    bx += 220
+
     credit_conns = {
         "Credit Request": {"main": [[
             {"node": "IF Lusha Credit Requested", "type": "main", "index": 0},
@@ -6838,19 +6900,34 @@ return $input.all().map((it) => {
             {"node": "IF ZoomInfo Credit Requested", "type": "main", "index": 0},
         ]]},
         "IF Lusha Credit Requested": {"main": [
-            [{"node": "Lusha Usage", "type": "main", "index": 0}], [],  # false: bypass (dead-end)
+            [{"node": "Lusha Usage", "type": "main", "index": 0}],
+            [{"node": "Lusha Credit Skipped", "type": "main", "index": 0}],
         ]},
         "IF Apollo Credit Requested": {"main": [
-            [{"node": "Apollo Usage", "type": "main", "index": 0}], [],
+            [{"node": "Apollo Usage", "type": "main", "index": 0}],
+            [{"node": "Apollo Credit Skipped", "type": "main", "index": 0}],
         ]},
         "IF ZoomInfo Credit Requested": {"main": [
-            [{"node": zoom_usage_entry, "type": "main", "index": 0}], [],
+            [{"node": zoom_usage_entry, "type": "main", "index": 0}],
+            [{"node": "ZoomInfo Credit Skipped", "type": "main", "index": 0}],
         ]},
         **zoom_usage_conns,
+        "Lusha Usage": {"main": [[{"node": "Adapt Lusha Usage", "type": "main", "index": 0}]]},
+        "Apollo Usage": {"main": [[{"node": "Adapt Apollo Usage", "type": "main", "index": 0}]]},
+        zoom_usage_exit: {"main": [[{"node": "Adapt ZoomInfo Usage", "type": "main", "index": 0}]]},
+        "Adapt Lusha Usage": {"main": [[{"node": "Collect Credits", "type": "main", "index": 0}]]},
+        "Lusha Credit Skipped": {"main": [[{"node": "Collect Credits", "type": "main", "index": 0}]]},
+        "Adapt Apollo Usage": {"main": [[{"node": "Collect Credits", "type": "main", "index": 1}]]},
+        "Apollo Credit Skipped": {"main": [[{"node": "Collect Credits", "type": "main", "index": 1}]]},
+        "Adapt ZoomInfo Usage": {"main": [[{"node": "Collect Credits", "type": "main", "index": 2}]]},
+        "ZoomInfo Credit Skipped": {"main": [[{"node": "Collect Credits", "type": "main", "index": 2}]]},
+        "Collect Credits": {"main": [[{"node": "Build Credits Summary", "type": "main", "index": 0}]]},
     }
 
     # Build Response / Respond to Webhook — the convergence every terminal branch feeds
-    # (wired below); reads the credit nodes above BY NAME (guarded nodeAll).
+    # (wired below). "Build Credits Summary"'s single item is broadcast onto every row
+    # by "Credits Broadcast" (a combineAll merge spliced in further below) — Build
+    # Response no longer reads any credit-check node by name.
     nodes.append(code_node("Build Response", ENRICH_BUILD_RESPONSE, bx + 660, (y + cy) // 2))
     nodes.append({
         "parameters": {"respondWith": "allIncomingItems", "options": {}},
@@ -6884,19 +6961,27 @@ return $input.all().map((it) => {
     # it does not fork the envelope contract.
     #
     # False (a refusal): Phase 70 Plan 03 Task 2 (D-70-07) re-points this from a direct
-    # answer at "Respond to Webhook" to TWO parallel targets — "Build Ack" (so the caller
-    # still gets its ack; "Parse HubSpot Event" never ran this execution, so this is the
-    # ONLY producer that can reach the responder here) and "Build Refusal Row" (so the
-    # refusal reason lands as a ROW at "Build Response" instead of the body). Never
-    # "Build Response" directly, and never through "Build Response Merge"'s original ten
-    # inputs — that node's first statement reads $('Parse HubSpot Event'), which on a
-    # refusal never executed; "Build Refusal Row" is a NEW, eleventh Merge input, added
-    # below via `_append_merge_input`, precisely so this stays additive to the pin
-    # tests/test_remaining_credits_response.py already carries for the original ten.
+    # answer at "Respond to Webhook" to THREE parallel targets — "Build Ack" (so the
+    # caller still gets its ack; "Parse HubSpot Event" never ran this execution, so this
+    # is the ONLY producer that can reach the responder here), "Build Refusal Row" (so
+    # the refusal reason lands as a ROW at "Build Response" instead of the body), and
+    # (Phase 70 Plan 04, D-70-04) "Credit Request" — since "Parse HubSpot Event" never
+    # ran, its own fan-out to "Credit Request" never fired either, and "Credits
+    # Broadcast" (a combineAll merge) needs "Build Credits Summary" to deliver exactly
+    # once per execution regardless of path or it hangs. Credit Request's own
+    # `providers_requested` read already defaults to `[]` when its input carries none,
+    # so this refusal row degrades to `remaining_credits: []` exactly like the pre-70-04
+    # by-name lookup did. Never "Build Response" directly, and never through "Build
+    # Response Merge"'s original ten inputs — that node's first statement reads
+    # $('Parse HubSpot Event'), which on a refusal never executed; "Build Refusal Row"
+    # is a NEW, eleventh Merge input, added below via `_append_merge_input`, precisely
+    # so this stays additive to the pin tests/test_remaining_credits_response.py already
+    # carries for the original ten.
     conns["IF List Expanded"] = {"main": [
         [{"node": "Parse HubSpot Event", "type": "main", "index": 0}],  # true: expanded
         [{"node": "Build Ack", "type": "main", "index": 0},             # false: refused
-         {"node": "Build Refusal Row", "type": "main", "index": 0}],
+         {"node": "Build Refusal Row", "type": "main", "index": 0},
+         {"node": "Credit Request", "type": "main", "index": 0}],
     ]}
     # Phase 16.1 Plan 02 (reviews C1): Parse HubSpot Event ALSO forks to the single-item
     # credit branch (Credit Request) — a parallel fan-out from the SAME output, not a
@@ -7287,6 +7372,15 @@ return $input.all().map((it) => {
     # unblocks is rewritten to read $input directly (see each JS constant's own
     # Phase 70 Plan 04 comment) — this is purely the WIRING half of that fix.
     #
+    # --- List expansion (Phase 25 Plan 03's two chained HubSpot GETs) ---
+    _list_by_name_old_target = conns["HubSpot List By Name"]["main"][0][0]["node"]
+    conns["HubSpot List By Name"] = {"main": [[{"node": "Wrap List By Name Result", "type": "main", "index": 0}]]}
+    conns["Wrap List By Name Result"] = {"main": [[{"node": _list_by_name_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap List By Name Result", "IF List Input",
+                              merge_name="List By Name Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HubSpot List Memberships", "List By Name Carry Merge",
+                              merge_name="List Memberships Carry Merge")
+
     # --- CONTACTS identity-lane searches ---
     splice_carry_merge_after(nodes, conns, "HubSpot Fetch By Id", "IF Bare Event",
                               merge_name="HubSpot Fetch By Id Carry Merge")
@@ -7350,6 +7444,10 @@ return $input.all().map((it) => {
 
     splice_carry_merge_after(nodes, conns, "ZoomInfo Mint Company", "IF ZoomInfo Company Needs Mint",
                               merge_name="ZoomInfo Mint Company Carry Merge")
+
+    # --- COMPANIES create (Phase 61 Plan 06 Task 2's id-capture hop) ---
+    splice_carry_merge_after(nodes, conns, "HubSpot Company Create", "IF Company Create",
+                              merge_name="HubSpot Company Create Carry Merge")
 
     # --- Shared credit-check lane (contacts + companies) ---
     splice_carry_merge_after(nodes, conns, "ZoomInfo Usage Mint", "IF ZoomInfo Usage Needs Mint",
@@ -7823,6 +7921,38 @@ return $input.all().map((it) => {
     )
     sy += 120
 
+    # Phase 70 Plan 04 (D-70-04): broadcasts "Build Credits Summary"'s single
+    # `remaining_credits` item onto every row "Build Response Merge" delivers —
+    # combineAll (cartesian, mirrors "Source By Field Broadcast" in build_cloud()).
+    # "Credit Request" is now fed from all three mutually-exclusive per-execution
+    # entry points (Parse HubSpot Event / IF List Expanded false / the scale-up path
+    # already covered via Parse HubSpot Event), so "Build Credits Summary" always
+    # delivers exactly once — this cannot starve.
+    #
+    # "Filter Build Response Rows" sits BETWEEN the two: "Build Response Merge" is
+    # append-mode with 11 inputs, most of them starved-lane sentinels emitting a bare
+    # `{}` on every execution where their own real terminal did not fire — Build
+    # Response's OWN `.filter(non-empty)` used to drop those before ever computing
+    # anything. combineAll is a cartesian product: broadcasting a NON-empty
+    # `{remaining_credits: [...]}` item onto EVERY one of those 10 empty sentinels
+    # would make each of them non-empty too, defeating that filter and reaching Build
+    # Response as 11 rows instead of 1 (found by node --test). Filtering here, BEFORE
+    # the broadcast, keeps the cartesian product 1-to-1.
+    nodes.append(code_node(
+        "Filter Build Response Rows",
+        "// Filter Build Response Rows — Phase 70 Plan 04 (D-70-04).\n"
+        "// Drops starved-lane sentinel markers BEFORE the credits broadcast — see this "
+        "splice's own comment.\n"
+        "return $input.all().filter((it) => Object.keys(it.json || {}).length > 0);\n",
+        0, 0,
+    ))
+    _old_brm_target = conns["Build Response Merge"]["main"][0][0]["node"]
+    conns["Build Response Merge"] = {
+        "main": [[{"node": "Filter Build Response Rows", "type": "main", "index": 0}]]}
+    conns["Filter Build Response Rows"] = {"main": [[{"node": _old_brm_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Filter Build Response Rows", "Build Credits Summary",
+                              merge_name="Credits Broadcast", combine_by="combineAll")
+
     return {
         "id": "LVenrichmentCloud01",
         "name": "LV Enrichment (Cloud template)",
@@ -7868,7 +7998,14 @@ return [{ json: { providers_requested: __PROVIDER_NAMES__ } }];
 ENRICH_STATUS_BUILD_RESPONSE = inline("providerSelection.js") + r"""
 
 // --- n8n wrapper: Build Credit Status (Phase 25 Plan 02) ---
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+// Phase 70 Plan 04 (D-70-04): fed by "ZoomInfo Usage Result Carry Merge" — the merged
+// item carries `providers_requested` (stamped on the row at "Status Credit Request")
+// and `lusha_result`/`apollo_result`/`zoominfo_result` (each nested by its own Wrap
+// node earlier in this straight-line chain — ZoomInfo's is nested too, deliberately,
+// so a never-executed probe (`zoominfo_result` absent) stays distinguishable from one
+// that ran but returned an unrecognizable body; leaving it unwrapped at top level
+// would have made `raw` always truthy, since it would be the merged item itself). No
+// by-name read of any usage node.
 function httpStatus(raw) {
   if (!raw) return null;
   const candidates = [raw.statusCode, raw.httpCode, raw.status,
@@ -7881,20 +8018,17 @@ function httpStatus(raw) {
   }
   return null;
 }
-const first = $('Status Credit Request').first();
-const providers_requested = (first && first.json && first.json.providers_requested) || [];
-const CREDIT_NODE_BY_PROVIDER = { lusha: "Lusha Usage", apollo: "Apollo Usage", zoominfo: "ZoomInfo Usage" };
+const merged = ($input.first() && $input.first().json) || {};
+const providers_requested = merged.providers_requested || [];
+const RAW_BY_PROVIDER = { lusha: merged.lusha_result, apollo: merged.apollo_result, zoominfo: merged.zoominfo_result };
 const balances = providers_requested.map((provider) => {
-  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];
-  const rows = nodeName ? nodeAll(nodeName) : [];
-  const row = rows[0];
-  const raw = row && row.json;
+  const raw = RAW_BY_PROVIDER[provider];
   const status = httpStatus(raw);
   let credits = null;
   let error = null;
-  if (!row) {
+  if (!raw) {
     error = "not_executed";
-  } else if (raw && raw.error) {
+  } else if (raw.error) {
     error = status ? ("http_" + status) : "provider_error";
   } else {
     credits = extractCredits(provider, raw);
@@ -7916,7 +8050,11 @@ return [{ json: { balances, checked_at: new Date().toISOString() } }];
 ENRICH_STATUS_BUILD_STATUS = inline("backendStatus.js") + r"""
 
 // --- n8n wrapper: Build Status (Phase 27 Plan 01) ---
-function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+// Phase 70 Plan 04 (D-70-04): fed by "HS Review Contacts Carry Merge" — the merged item
+// carries `balances`/`checked_at` (from "Build Credit Status", never wrapped since it
+// seeded this leg of the chain rather than being a hop across it), three nested
+// `hs_*_result` search responses (wrapped by earlier hops in this straight-line chain),
+// and the LAST search's raw response unwrapped at top level. No by-name read.
 function httpStatus(raw) {
   if (!raw) return null;
   const candidates = [raw.statusCode, raw.httpCode, raw.status,
@@ -7931,25 +8069,21 @@ function httpStatus(raw) {
 }
 // A search node's own probe outcome IS its credential-health signal (Pitfall 1) —
 // independent of whether any enrichment run happened recently.
-function searchProbe(name) {
-  const rows = nodeAll(name);
-  const row = rows[0];
-  const raw = row && row.json;
-  if (!row) return { configured: true, status: null, value: null };
-  if (raw && raw.error) return { configured: true, status: httpStatus(raw), value: null };
+function searchProbe(raw) {
+  if (!raw) return { configured: true, status: null, value: null };
+  if (raw.error) return { configured: true, status: httpStatus(raw), value: null };
   return { configured: true, status: 200, value: extractSearchTotal(raw) };
 }
 
-const creditRows = nodeAll("Build Credit Status");
-const creditBody = (creditRows[0] && creditRows[0].json) || {};
-const balances = Array.isArray(creditBody.balances) ? creditBody.balances : [];
+const merged = ($input.first() && $input.first().json) || {};
+const balances = Array.isArray(merged.balances) ? merged.balances : [];
 const balanceByProvider = {};
 for (const b of balances) balanceByProvider[b.provider] = b;
 
-const companiesRequested = searchProbe("HS Requested Search (Companies)");
-const companiesReview = searchProbe("HS Review Search (Companies)");
-const contactsRequested = searchProbe("HS Requested Search (Contacts)");
-const contactsReview = searchProbe("HS Review Search (Contacts)");
+const companiesRequested = searchProbe(merged.hs_requested_companies_result);
+const companiesReview = searchProbe(merged.hs_review_companies_result);
+const contactsRequested = searchProbe(merged.hs_requested_contacts_result);
+const contactsReview = searchProbe(merged);
 
 const health = ["lusha", "apollo", "zoominfo"].map((provider) => {
   const b = balanceByProvider[provider] || {};
@@ -7969,7 +8103,7 @@ const body = buildStatusBody({
     contacts_awaiting_review: contactsReview.value,
   },
   health,
-  checked_at: creditBody.checked_at,
+  checked_at: merged.checked_at,
 });
 
 return [{ json: { ...body, balances } }];
@@ -8031,10 +8165,15 @@ def build_backend_status_cloud():
     x += 220
     nodes.append(_credit_http_node(
         "Lusha Usage", lusha_credit["url"], lusha_credit["method"], x, y, auth="header"))
+    # Phase 70 Plan 04 (D-70-04): straight-line chain, so each HTTP hop's response is
+    # nested under a distinct key (mirrors the enrichment lane's provider waterfall)
+    # and re-attached to the row by a carry merge — never a by-name read downstream.
+    nodes.append(code_node("Wrap Lusha Usage Result", _wrap_provider_result_js("lusha_result"), x, y))
 
     x += 220
     nodes.append(_credit_http_node(
         "Apollo Usage", apollo_credit["url"], apollo_credit["method"], x, y, auth="header"))
+    nodes.append(code_node("Wrap Apollo Usage Result", _wrap_provider_result_js("apollo_result"), x, y))
 
     # ZoomInfo: the SAME 5-node Token Gate/IF Needs Mint/Mint/Cache Token/Usage subgraph
     # the enrichment lane's credit branch uses, sharing the identical sd.zoominfo cache key
@@ -8067,18 +8206,24 @@ def build_backend_status_cloud():
         "HS Requested Search (Companies)", "company", x, y,
         filter_groups=REQUESTED_UNRESOLVED_GROUPS, properties_csv="hs_object_id", limit=1)
     nodes.append(hs_req_co)
+    nodes.append(code_node("Wrap HS Requested Companies Result",
+                            _wrap_provider_result_js("hs_requested_companies_result"), x, y))
 
     x += 220
     hs_review_co = _hs_http_search_node(
         "HS Review Search (Companies)", "company", x, y,
         filter_groups=AWAITING_REVIEW_GROUPS, properties_csv="hs_object_id", limit=1)
     nodes.append(hs_review_co)
+    nodes.append(code_node("Wrap HS Review Companies Result",
+                            _wrap_provider_result_js("hs_review_companies_result"), x, y))
 
     x += 220
     hs_req_ct = _hs_http_search_node(
         "HS Requested Search (Contacts)", "contact", x, y,
         filter_groups=REQUESTED_UNRESOLVED_GROUPS, properties_csv="hs_object_id", limit=1)
     nodes.append(hs_req_ct)
+    nodes.append(code_node("Wrap HS Requested Contacts Result",
+                            _wrap_provider_result_js("hs_requested_contacts_result"), x, y))
 
     x += 220
     hs_review_ct = _hs_http_search_node(
@@ -8086,6 +8231,12 @@ def build_backend_status_cloud():
         filter_groups=AWAITING_REVIEW_GROUPS, properties_csv="hs_object_id", limit=1)
     nodes.append(hs_review_ct)
 
+    # Phase 70 Plan 04 (D-70-04): nests the raw ZoomInfo response under its own key too
+    # (was left unwrapped at top level, which made a genuinely-never-executed probe
+    # indistinguishable from "ran, but the merged item itself has no `.data[...]`
+    # usage entries" — `raw` was always the truthy merged object either way).
+    nodes.append(code_node("Wrap ZoomInfo Usage Result",
+                            _wrap_provider_result_js("zoominfo_result"), x, y))
     x += 220
     nodes.append(code_node("Build Status", ENRICH_STATUS_BUILD_STATUS, x, y))
 
@@ -8098,15 +8249,43 @@ def build_backend_status_cloud():
     })
 
     conns = chain([
-        "Status Webhook Trigger", "Status Credit Request", "Lusha Usage", "Apollo Usage",
+        "Status Webhook Trigger", "Status Credit Request", "Lusha Usage",
+        "Wrap Lusha Usage Result", "Apollo Usage", "Wrap Apollo Usage Result",
         zoom_usage_entry,
     ])
     conns.update(zoom_usage_conns)
     conns.update(chain([
         zoom_usage_exit, "Build Credit Status",
-        hs_req_co["name"], hs_review_co["name"], hs_req_ct["name"], hs_review_ct["name"],
+        hs_req_co["name"], "Wrap HS Requested Companies Result",
+        hs_review_co["name"], "Wrap HS Review Companies Result",
+        hs_req_ct["name"], "Wrap HS Requested Contacts Result",
+        hs_review_ct["name"],
         "Build Status", "Respond to Webhook",
     ]))
+    # Phase 70 Plan 04 (D-70-04): re-attaches each hop's row across the chain — carry_source
+    # for each merge is the node whose EXISTING single edge already fed the next hop before
+    # this rewire, so item counts always agree (this whole chain is single-item, D-14).
+    splice_carry_merge_after(nodes, conns, "Wrap Lusha Usage Result", "Status Credit Request",
+                              merge_name="Lusha Usage Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Wrap Apollo Usage Result", "Lusha Usage Carry Merge",
+                              merge_name="Apollo Usage Carry Merge")
+    _zoom_usage_old_target = conns["ZoomInfo Usage"]["main"][0][0]["node"]
+    conns["ZoomInfo Usage"] = {"main": [[{"node": "Wrap ZoomInfo Usage Result", "type": "main", "index": 0}]]}
+    conns["Wrap ZoomInfo Usage Result"] = {"main": [[{"node": _zoom_usage_old_target, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "Wrap ZoomInfo Usage Result", "ZoomInfo Usage Token Gate",
+                              merge_name="ZoomInfo Usage Result Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Wrap HS Requested Companies Result",
+                              "ZoomInfo Usage Result Carry Merge",
+                              merge_name="HS Requested Companies Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Wrap HS Review Companies Result",
+                              "HS Requested Companies Carry Merge",
+                              merge_name="HS Review Companies Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Wrap HS Requested Contacts Result",
+                              "HS Review Companies Carry Merge",
+                              merge_name="HS Requested Contacts Carry Merge")
+    splice_carry_merge_after(nodes, conns, "HS Review Search (Contacts)",
+                              "HS Requested Contacts Carry Merge",
+                              merge_name="HS Review Contacts Carry Merge")
 
     notes = [{
         "content": (
@@ -9488,10 +9667,12 @@ REVIEW_QUEUE_ROWS = r"""// Review Queue Rows — the search envelope becomes ONE
 // `onError: continueRegularOutput`, so a 401 or a 429 arrives here as an item with no
 // `results` array — which, treated as an envelope, would render as "0 flagged records" and
 // tell the operator their backlog was clear when it was never read.
-// Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge ("Review Queue
-// Search" / "Review Queue Contact Search" — exactly one ever runs per request) with a
-// starved-lane sentinel on whichever side would otherwise never fire; drop an
-// identity-less sentinel marker before reading the one real search envelope.
+// Phase 70 Plan 03 Task 3 (D-70-01) + Phase 70 Plan 04 (D-70-04): this node sits behind
+// a real Merge ("Review Queue Search" / "Review Queue Contact Search" — exactly one
+// ever runs per request) with a starved-lane sentinel on whichever side would
+// otherwise never fire. Each real search is now ALSO carry-merged with "Parse Review
+// Queue Request" (D-70-04), so `object_type` rides the same merged item as the search
+// envelope — drop an identity-less sentinel marker first, then read the one real item.
 const items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);
 const item = items[0];
 const res = (item && item.json) || {};
@@ -9500,7 +9681,7 @@ const rows = search_ok ? res.results : (res.properties ? [res] : []);
 const total = typeof res.total === "number" ? res.total : rows.length;
 
 return [{ json: {
-  object_type: $('Parse Review Queue Request').first().json.object_type,
+  object_type: res.object_type,
   search_ok: search_ok || Boolean(res.properties),
   total,
   returned: rows.length,
@@ -9599,9 +9780,14 @@ REVIEW_BUILD_DECISION = inline(
 // future contacts candidate producer would exercise the promote branch here for real.
 // Contacts REJECT works exactly as companies does.
 """ + WRITE_SAFETY_GATE_JS + r"""
-const parsed = $('Parse Review Decision').first().json;
+// Phase 70 Plan 04 (D-70-04): fed by "Review Extract Record Carry Merge" — the merged
+// item carries BOTH the original parsed request (object_type/record_id/decision/
+// reason/reviewed_by/dry_run, from "Parse Review Decision") and the refetched record
+// (hs_object_id/record_found/...properties, from "Review Extract Record"). No by-name
+// lookup of a node several hops upstream.
 const first = $input.first();
 const row = (first && first.json) || {};
+const parsed = row;
 
 // ALLOWLIST PRE-CHECK (Phase 31 Plan 02, BUG 30). Same authority the committed gate uses,
 // same two input fields the spliced non-create gate resolves to on THIS lane: `Review
@@ -9672,23 +9858,25 @@ REVIEW_BUILD_RESPONSE = r"""// Build Review Response — the SINGLE node that sh
 // `verified_properties` null is a FAILURE for the client to report, never a success to
 // assume — which is why nothing here ever defaults `verified` to true. The client
 // re-derives the comparison itself; `verified` is a convenience, never the authority.
-const d = $('Build Review Decision').first().json;
+//
+// Phase 70 Plan 03 Task 3 (D-70-01) + Phase 70 Plan 04 (D-70-04): this node sits behind
+// a real Merge (3 inputs — "Review IF Dry Run"'s true lane, "Review Verify Fetch",
+// "Review Contact Verify Fetch" — exactly ONE ever fires per request) with a
+// starved-lane sentinel on whichever OTHER two would otherwise never fire. The two
+// write-branch inputs are now ALSO carry-merged (D-70-04) so "Build Review Decision"'s
+// own row (would_write/outcome/message/dry_run) rides alongside each verify envelope —
+// filter identity-less sentinel markers first, then take the one real item, which
+// carries EVERYTHING this node needs; no by-name lookup of a node upstream.
+const items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);
+const first = items[0];
+const d = (first && first.json) || {};
 const wouldWrite = d.would_write || {};
 
 let verified_properties = null;
 let verified = null;
 
 if (d.dry_run !== true) {
-  // Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge (3 inputs —
-  // "Review IF Dry Run"'s true lane, "Review Verify Fetch", "Review Contact Verify
-  // Fetch" — exactly ONE ever fires per request) with a starved-lane sentinel on
-  // whichever OTHER two would otherwise never fire; `$input.first()` used to grab
-  // WHATEVER happened to land at merge input index 0, which could silently be a
-  // sentinel marker instead of the real verify-fetch envelope depending on splice
-  // order — filter identity-less markers first, then take the one real item.
-  const items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);
-  const first = items[0];
-  const env = (first && first.json) || {};
+  const env = d;
   const rows = Array.isArray(env.results) ? env.results : (env.properties ? [env] : []);
   const props = rows.length ? (rows[0].properties || {}) : null;
   if (props) {
@@ -9765,10 +9953,13 @@ def build_review_decision_cloud():
     x += 220
     nodes.append(code_node("Parse Review Decision", REVIEW_PARSE_DECISION, x, y))
 
-    # Read by NODE NAME, never bare $json: this filter is evaluated on the item the parse
-    # node emitted, and the verify fetch below sits downstream of an HTTP response that
-    # has already replaced $json.
-    record_id_expr = "={{ $('Parse Review Decision').first().json.record_id }}"
+    # Phase 70 Plan 04 (D-70-04): the FIRST hop off "Review IF Contacts" reads bare
+    # $json.record_id — "Parse Review Decision" fed it directly, no HTTP hop has run
+    # yet. The verify fetches (AFTER a PATCH hop) read `$json.hs_object_id` instead —
+    # the SAME identity, carried across that hop by a carry merge (spliced near the
+    # write gates below), never a by-name lookup of a node several hops upstream.
+    record_id_expr = "={{ $json.record_id }}"
+    verify_id_expr = "={{ $json.hs_object_id }}"
 
     # One IF, two fetch lanes, ONE extract + ONE decision node. The extract body is
     # resource-independent (it unwraps a HubSpot search envelope), so duplicating it per
@@ -9777,7 +9968,7 @@ def build_review_decision_cloud():
     x += 220
     nodes.append(_if_bool_expr_node(
         "Review IF Contacts",
-        "$('Parse Review Decision').first().json.object_type === \"contacts\"", x, y))
+        '$json.object_type === "contacts"', x, y))
 
     x += 220
     nodes.append(_hs_http_search_node(
@@ -9809,7 +10000,7 @@ def build_review_decision_cloud():
     # there is no shared gate and no path to either write that skips one.
     nodes.append(_if_bool_expr_node(
         "Review IF Contact Write",
-        "$('Parse Review Decision').first().json.object_type === \"contacts\"",
+        '$json.object_type === "contacts"',
         x + 220, wy))
     nodes.append(_hs_http_patch_node("Review Decision Update", "companies", wx, wy))
     nodes.append(_hs_http_patch_node("Review Contact Decision Update", "contacts",
@@ -9822,7 +10013,7 @@ def build_review_decision_cloud():
     nodes.append(_hs_http_search_node(
         "Review Verify Fetch", "company", wx + 220, wy,
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
-                         "value": record_id_expr}]],
+                         "value": verify_id_expr}]],
         properties_csv=REVIEW_DECISION_PROPERTIES_CSV, limit=1))
 
     # The contacts twin. Without it a contacts write would reach the responder with
@@ -9831,7 +10022,7 @@ def build_review_decision_cloud():
     nodes.append(_hs_http_search_node(
         "Review Contact Verify Fetch", "contact", wx + 220, wy + 200,
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
-                         "value": record_id_expr}]],
+                         "value": verify_id_expr}]],
         properties_csv=REVIEW_CONTACT_DECISION_PROPERTIES_CSV, limit=1))
 
     rx = wx + 440
@@ -9905,11 +10096,13 @@ def build_review_decision_cloud():
     qx += 220
     nodes.append(_if_bool_expr_node(
         "Review Queue IF Contacts",
-        "$('Parse Review Queue Request').first().json.object_type === \"contacts\"", qx, qy))
+        '$json.object_type === "contacts"', qx, qy))
 
     # Page size is read from the parse node, where it was clamped to 100 — never from the
-    # request body, which this expression never touches.
-    queue_limit_expr = "={{ $('Parse Review Queue Request').first().json.limit }}"
+    # request body, which this expression never touches. Phase 70 Plan 04 (D-70-04):
+    # bare $json — "Parse Review Queue Request" fed this node directly, no HTTP hop has
+    # run yet.
+    queue_limit_expr = "={{ $json.limit }}"
 
     # AWAITING_REVIEW_GROUPS, the module-level constant Phase 27's status surface COUNTS
     # with. The list and the count must mean the same thing by construction: an operator
@@ -10127,6 +10320,47 @@ def build_review_decision_cloud():
     # slip through by being forgotten here.
     splice_write_gates(nodes, conns, {"Review Decision Update": "review",
                                       "Review Contact Decision Update": "review"})
+
+    # Phase 70 Plan 04 (D-70-04): re-attaches "Build Review Decision"'s own row (which
+    # carries `hs_object_id`, `would_write`, `outcome`, `message`, `dry_run`,
+    # `object_type` — everything "Build Review Response" needs) across the write
+    # branch's TWO HTTP hops (PATCH, then the independent verify refetch). carry_source
+    # for each merge is the node whose EXISTING single edge already fed the next hop,
+    # so item counts always agree (one decision, never a batch, D-19/D-70-08).
+    splice_carry_merge_after(nodes, conns, "Review Decision Update",
+                              "Review Decision Update Write Gate",
+                              merge_name="Review Decision Update Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Review Verify Fetch",
+                              "Review Decision Update Carry Merge",
+                              merge_name="Review Verify Fetch Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Review Contact Decision Update",
+                              "Review Contact Decision Update Write Gate",
+                              merge_name="Review Contact Decision Update Carry Merge")
+    splice_carry_merge_after(nodes, conns, "Review Contact Verify Fetch",
+                              "Review Contact Decision Update Carry Merge",
+                              merge_name="Review Contact Verify Fetch Carry Merge")
+
+    # "Review Extract Record" (fed by whichever fetch lane ran) never carried the
+    # ORIGINAL parsed request (decision/reason/reviewed_by/dry_run) — only the
+    # refetched record. "Parse Review Decision" is a single producer that always runs
+    # exactly once, before either fetch lane, so its fan agrees on item count with
+    # Extract Record's own guaranteed-exactly-one-item output.
+    splice_carry_merge_after(nodes, conns, "Review Extract Record", "Parse Review Decision",
+                              merge_name="Review Extract Record Carry Merge")
+
+    # Same idiom for the queue lane: "Review Queue Rows" needs `object_type` off
+    # "Parse Review Queue Request", which never survives the search HTTP hop.
+    # carry_source is "Review Queue IF Contacts" — its BRANCH output, never the
+    # pre-fork "Parse Review Queue Request" directly: only ONE search ever runs per
+    # request, and a carry_source that fires unconditionally on BOTH branches would
+    # permanently starve input0 of whichever carry merge belongs to the branch that
+    # did not run this request (found via node --test: "merge_input_never_fired").
+    splice_carry_merge_after(nodes, conns, "Review Queue Search", "Review Queue IF Contacts",
+                              merge_name="Review Queue Search Carry Merge", source_out_idx=1)
+    splice_carry_merge_after(nodes, conns, "Review Queue Contact Search",
+                              "Review Queue IF Contacts",
+                              merge_name="Review Queue Contact Search Carry Merge",
+                              source_out_idx=0)
 
     return {
         "id": "LVReviewDecisionCloud01",

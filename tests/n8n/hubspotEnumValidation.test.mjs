@@ -212,14 +212,18 @@ function industryFlaggedRow() {
  * constants first (Phase 31 Plan 02, BUG 30 — the pre-check now runs the SAME allowlist
  * check the write gate does, so a real submit must clear it before the enum guard below it
  * is ever reached; omitted leaves the pre-check disarmed, which now refuses with
- * `not_allowlisted` before any enum-specific outcome can surface). */
+ * `not_allowlisted` before any enum-specific outcome can surface).
+ *
+ * Phase 70 Plan 04 (D-70-04): "Build Review Decision" no longer reads `$('Parse Review
+ * Decision')` — merges the parsed request onto `row` directly, matching the real carry
+ * merge that now sits in front of this node. */
 function driveDecision(body, row, precheckConstants) {
   const [parsed] = runNode(jsCodeOf(WF_DECISION, "Parse Review Decision"), [{ body }], {});
   const precheckJs = precheckConstants
     ? armConstants(jsCodeOf(WF_DECISION, "Build Review Decision"), precheckConstants)
     : jsCodeOf(WF_DECISION, "Build Review Decision");
-  const [built] = runNode(precheckJs, [row],
-    { "Parse Review Decision": [parsed] });
+  const merged = { ...row, ...parsed };
+  const [built] = runNode(precheckJs, [merged], {});
   return { parsed, built };
 }
 

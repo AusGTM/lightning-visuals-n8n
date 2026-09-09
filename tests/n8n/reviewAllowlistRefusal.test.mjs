@@ -119,11 +119,17 @@ const APPROVE_BODY = {
 };
 
 /** webhook item -> Parse Review Decision -> Build Review Decision (optionally an ARMED
- * copy of the pre-check's jsCode). Returns both. */
+ * copy of the pre-check's jsCode). Returns both.
+ *
+ * Phase 70 Plan 04 (D-70-04): "Build Review Decision" no longer reads `$('Parse Review
+ * Decision')` — "Review Extract Record Carry Merge" re-attaches the parsed request
+ * onto the refetched row before this node runs, so this harness merges them the same
+ * way (the two objects share no keys, so order is moot) rather than mocking a `$()`
+ * accessor this node no longer calls. */
 function drive(body, row, precheckJs) {
   const [parsed] = runNode(jsCodeOf("Parse Review Decision"), [{ body }], {});
-  const [built] = runNode(precheckJs || jsCodeOf(PRECHECK), [row || flaggedRow()],
-    { "Parse Review Decision": [parsed] });
+  const merged = { ...(row || flaggedRow()), ...parsed };
+  const [built] = runNode(precheckJs || jsCodeOf(PRECHECK), [merged], {});
   return { parsed, built };
 }
 

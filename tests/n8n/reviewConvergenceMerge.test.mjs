@@ -39,12 +39,20 @@ function contactRecord(id, extra) {
 // Structural: Merge count matches classify_convergence's own verdict, never a magic number.
 // =============================================================================================
 
-test("the review-decision workflow has exactly 3 Merge nodes", () => {
+test("the review-decision workflow has exactly 10 Merge nodes", () => {
+  // Phase 70 Plan 04 (D-70-04) added 7 carry merges (one per HTTP hop needing its
+  // pre-hop row re-attached) on top of Plan 03 Task 3's original 3 fan-in convergences.
   const wf = load();
   const merges = wf.nodes.filter((n) => n.type === "n8n-nodes-base.merge");
   assert.deepEqual(
     merges.map((m) => m.name).sort(),
-    ["Build Review Response Merge", "Review Extract Record Merge", "Review Queue Rows Merge"].sort(),
+    [
+      "Build Review Response Merge", "Review Extract Record Merge", "Review Queue Rows Merge",
+      "Review Extract Record Carry Merge",
+      "Review Decision Update Carry Merge", "Review Verify Fetch Carry Merge",
+      "Review Contact Decision Update Carry Merge", "Review Contact Verify Fetch Carry Merge",
+      "Review Queue Search Carry Merge", "Review Queue Contact Search Carry Merge",
+    ].sort(),
   );
 });
 
@@ -61,10 +69,12 @@ test("the review responder's inbound edge count is unchanged from before this ta
   assert.deepEqual(inbound, ["Build Review Response"]);
 });
 
-test("backend-status has zero Merge nodes — no change needed on that workflow", () => {
+test("backend-status has 7 carry-merge nodes (Phase 70 Plan 04, D-70-04)", () => {
+  // Was zero at Plan 03 Task 3 time; Plan 04 threaded a carry merge across every HTTP
+  // hop in this workflow's two straight-line chains (credit probes, HubSpot counts).
   const wf = loadWorkflow(path.join(ROOT, "n8n", "wf_backend_status_cloud.json"));
   const merges = wf.nodes.filter((n) => n.type === "n8n-nodes-base.merge");
-  assert.equal(merges.length, 0);
+  assert.equal(merges.length, 7);
 });
 
 // =============================================================================================
@@ -147,21 +157,23 @@ test("Build Review Response picks the real verify-fetch envelope over a starved-
   // envelope depending on splice order. Drives the repo's OWN committed jsCode via
   // `new Function` (the same mechanism n8n's Code node uses) with the marker BEFORE
   // the real item — the exact ordering that would have broken `$input.first()`.
+  //
+  // Phase 70 Plan 04 (D-70-04): "Build Review Response" no longer reads `$('Build
+  // Review Decision')` — "Review Verify Fetch Carry Merge" re-attaches those fields
+  // onto the real verify envelope BEFORE this node runs, so the real item here already
+  // carries both. The starved-lane marker stays a bare `{}`, exactly as a real
+  // sentinel would (it never crosses a carry merge).
   const wf = load();
   const node = wf.nodes.find((n) => n.name === "Build Review Response");
   assert.ok(node, "Build Review Response present in the built workflow");
 
   const decision = { outcome: "applied", message: "applied", would_write: { lv_org_type: "content_producer" }, dry_run: false };
-  const $ = (name) => {
-    assert.equal(name, "Build Review Decision");
-    return { first: () => ({ json: decision }) };
-  };
   const $input = { all: () => [
     { json: {} },  // the starved-lane marker, deliberately FIRST
-    { json: { results: [{ id: "123", properties: { lv_org_type: "content_producer" } }] } },
+    { json: { ...decision, results: [{ id: "123", properties: { lv_org_type: "content_producer" } }] } },
   ] };
-  const fn = new Function("$", "$input", `"use strict";\n${node.parameters.jsCode}`);
-  const [out] = fn($, $input);
+  const fn = new Function("$input", `"use strict";\n${node.parameters.jsCode}`);
+  const [out] = fn($input);
 
   assert.deepEqual(out.json.verified_properties, { lv_org_type: "content_producer" });
   assert.equal(out.json.verified, true);

@@ -97,10 +97,13 @@ def test_the_three_probe_entries_each_have_exactly_one_inbound_source():
     exactly one source, and (checked below) no single output carries edges to two
     different probe nodes."""
     doc = _load()
+    # Phase 70 Plan 04 (D-70-04): each hop's raw response is nested by a "Wrap ...
+    # Result" Code node, then re-attached to the row by a carry Merge (never a by-name
+    # read downstream) — so the NEXT probe's direct predecessor is that carry Merge.
     expected_source = {
         "Lusha Usage": "Status Credit Request",
-        "Apollo Usage": "Lusha Usage",
-        "ZoomInfo Usage Token Gate": "Apollo Usage",
+        "Apollo Usage": "Lusha Usage Carry Merge",
+        "ZoomInfo Usage Token Gate": "Apollo Usage Carry Merge",
     }
     for probe, source in expected_source.items():
         edges = _inbound_edges(doc, probe)
@@ -151,11 +154,11 @@ def test_zoominfo_usage_mint_is_credential_bound_basic_auth():
 
 def test_build_credit_status_only_inbound_is_the_last_probe_in_the_chain():
     doc = _load()
+    # Phase 70 Plan 04 (D-70-04): "ZoomInfo Usage Result Carry Merge" re-attaches the
+    # row across the ZoomInfo hop before Build Credit Status reads it — never the bare
+    # "ZoomInfo Usage" HTTP response.
     edges = _inbound_edges(doc, "Build Credit Status")
-    # ZoomInfo Usage is fed by BOTH the mint-then-cache lane and the cache-hit bypass lane
-    # (the shared token-cache subgraph's own internal shape — not a second probe branch),
-    # so both its outputs converging on Build Credit Status is expected and correct.
-    assert {src for src, _ in edges} == {"ZoomInfo Usage"}
+    assert {src for src, _ in edges} == {"ZoomInfo Usage Result Carry Merge"}
 
 
 def test_build_credit_status_only_outbound_feeds_the_hubspot_count_search_chain():
@@ -174,14 +177,18 @@ def test_build_status_only_outbound_is_respond_to_webhook():
     assert node["type"] == "n8n-nodes-base.respondToWebhook"
 
 
-def test_build_credit_status_uses_guarded_nodeall_and_never_reads_input():
+def test_build_credit_status_reads_the_merged_row_never_by_name():
+    """Phase 70 Plan 04 (D-70-04): no by-name read of any usage probe — the merged
+    item off "ZoomInfo Usage Result Carry Merge" carries `providers_requested`,
+    `lusha_result`, `apollo_result` (nested by the Wrap nodes) and the raw ZoomInfo
+    response unwrapped at top level."""
     doc = _load()
     code = _node(doc, "Build Credit Status")["parameters"]["jsCode"]
-    assert "function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }" in code
     assert "extractCredits(" in code
-    for provider, node_name in (("lusha", "Lusha Usage"), ("apollo", "Apollo Usage"),
-                                 ("zoominfo", "ZoomInfo Usage")):
-        assert f'{provider}: "{node_name}"' in code
+    assert "$('" not in code and "$(\"" not in code
+    assert "merged.lusha_result" in code
+    assert "merged.apollo_result" in code
+    assert "merged.providers_requested" in code
 
 
 def test_webhook_uses_response_node_mode_not_last_node():

@@ -7,25 +7,25 @@
 # literal-substring scan to catch), and `n8n/code/nodeRunRecovery.js` being inlined at
 # all.
 #
-# This is the detector's own RED proof (mirrors D-70-18's requirement for the walker): a
-# detector that found nothing today would pass plan 70-04's "flip to zero" gate
-# vacuously, proving nothing. Starting inventory, re-derived from the detector itself
-# (not the research doc's separately-counted "25 distinct literal targets" — a different
-# unit of counting, one match per string vs one target name) at authoring time
-# (2026-09-09):
+# Plan 70-04 Task 2 retires every remaining by-name read across all six built cloud
+# workflows (the request-parsing/config-node reads, the review-decision/backend-status
+# parse nodes, and the two straight-line credit/status chains) via the SAME
+# splice_carry_merge_after carry-merge mechanism Task 1 used for the enrichment lane's
+# HTTP hops. Starting inventory at Task 1 authoring time (2026-09-09), re-derived from
+# the detector itself:
 #
-#   build_cloud()                 -> 10 violations
-#   build_enrichment_cloud()      -> 119 violations
-#   build_review_decision_cloud() -> 12 violations
+#   build_cloud()                       -> 10  violations (retired Plan 02 Task 3)
+#   build_enrichment_cloud()            -> 119 violations (Task 1: -> 36; Task 2: -> 0)
+#   build_enrichment_local_live()       -> 1   violation  (Task 2: -> 0, comment-only)
+#   build_review_decision_cloud()       -> 12  violations (Task 2: -> 0)
+#   build_backend_status_cloud()        -> 3   violations (Task 2: -> 0)
+#   build_scheduled_maintenance_cloud() -> 1   violation  (Task 2: -> 0, dead-code by-name)
 #
-# Plan 70-02 Task 3 retires every by-name read on the ingest lane (build_cloud() below is
-# the FIRST of the three to flip). build_enrichment_cloud()/build_review_decision_cloud()
-# are plan 70-04's job — still non-zero here, still RED, so a real regression on those
-# two workflows cannot silently hide behind this file's own edit.
+# Every one of the six workflows `main()` writes now reports zero. Task 3's job is the
+# ENFORCEMENT half — deleting nodeRunRecovery.js and wiring `assert_no_by_name_reads`
+# into `main()` so a regression fails the build, not just this test file.
 import sys
 from pathlib import Path
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -33,51 +33,25 @@ import build_cloud_workflows as bcw  # noqa: E402
 
 REQUIRED_KEYS = {"workflow", "node", "path", "form", "excerpt"}
 
-
-def test_ingest_lane_has_zero_by_name_reads():
-    """D-70-03 (Phase 70 Plan 02 Task 3): the ingest lane's carry merges retire every
-    by-name read the detector could see — the FIRST of the three cloud workflows to
-    reach zero (build_enrichment_cloud()/build_review_decision_cloud() are plan 70-04)."""
-    violations = bcw.detect_by_name_reads(bcw.build_cloud())
-    assert violations == [], f"build_cloud() still has by-name reads: {violations}"
-
-
-@pytest.mark.parametrize(
-    "builder_name",
-    ["build_enrichment_cloud", "build_review_decision_cloud"],
-)
-def test_detector_finds_todays_violations(builder_name):
-    """The detector's own RED proof: a detector that found nothing today would pass
-    plan 70-04's zero-count gate vacuously."""
-    wf = getattr(bcw, builder_name)()
-    violations = bcw.detect_by_name_reads(wf)
-    assert len(violations) > 0, f"{builder_name}() has zero by-name reads today — detector is blind"
-    for v in violations:
-        assert REQUIRED_KEYS.issubset(v.keys()), v
+ALL_BUILDERS = [
+    "build_cloud",
+    "build_enrichment_cloud",
+    "build_enrichment_local",
+    "build_enrichment_local_live",
+    "build_review_decision_cloud",
+    "build_backend_status_cloud",
+    "build_scheduled_maintenance_cloud",
+]
 
 
-# --- Plan 70-04 Task 1: a strict upper bound below the 70-01 baseline ---------------
-#
-# Task 1 retires every provider/HubSpot/research/judge HTTP-hop by-name read in
-# build_enrichment_cloud() (119 -> 36) via splice_carry_merge_after carry merges. The
-# remaining 36 are exclusively: (a) the two matchProposal.js comment lines describing
-# "IF Bare Event"'s condition, inlined verbatim into several nodes' jsCode as
-# documentation (never live code — a false positive the detector correctly flags
-# textually but which names no real by-name lookup); and (b) the single-run
-# request-parsing/config-node reads (provider-enabled flags, recompute, list
-# expansion) Task 2 retires. build_review_decision_cloud() is untouched by this task
-# (still 12, Task 2's job per the plan's read_first).
-ENRICHMENT_BASELINE_70_01 = 119
-ENRICHMENT_UPPER_BOUND_70_04_TASK1 = 40  # measured 36; a little headroom, never the ceiling
-
-
-def test_enrichment_cloud_by_name_reads_dropped_below_70_01_baseline():
-    violations = bcw.detect_by_name_reads(bcw.build_enrichment_cloud())
-    assert 0 < len(violations) < ENRICHMENT_UPPER_BOUND_70_04_TASK1, (
-        f"build_enrichment_cloud() has {len(violations)} violations — expected strictly "
-        f"between 0 and {ENRICHMENT_UPPER_BOUND_70_04_TASK1} after Task 1's carry merges "
-        f"(was {ENRICHMENT_BASELINE_70_01} at 70-01 baseline)"
-    )
+def test_every_built_workflow_has_zero_by_name_reads():
+    """Phase 70 Plan 04 Task 2's acceptance criterion: exactly zero violations for
+    every one of the six workflows `main()` writes (plus `build_cloud()`, retired
+    earlier in Plan 02 Task 3 and re-asserted here so a regression there also fails
+    this file)."""
+    for builder_name in ALL_BUILDERS:
+        violations = bcw.detect_by_name_reads(getattr(bcw, builder_name)())
+        assert violations == [], f"{builder_name}() still has by-name reads: {violations}"
 
 
 def test_no_violation_is_a_research_or_judge_request_builder():
