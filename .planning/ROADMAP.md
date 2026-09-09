@@ -302,7 +302,7 @@ locked decisions are D-70-01..19 in
 
 Plans:
 - [ ] 70-01-PLAN.md — Wave 0: the graph walker over the committed JSON, its own RED-detection unit tests, and the by-name-read detector proven against today's violations
-- [ ] 70-02-PLAN.md — Wave 1: TRACER — one ingest row end to end (Merge at the convergence, carry Merge across the HTTP hops, ack-only webhook, runData at the client); leads with the one-way contract checkpoint
+- [ ] 70-02-PLAN.md — Wave 1: TRACER — one ingest row end to end (Merge at the convergence, carry Merge across the HTTP hops, ack-only webhook, runData at the client); leads with the one-way contract checkpoint and closes on a disarmed live Merge-semantics probe before any expansion plan runs
 - [ ] 70-03-PLAN.md — Wave 2: a Merge at every enrichment and review convergence point; the enrichment webhook answers with an ack; refusals become rows; the opt-in flag retired
 - [ ] 70-04-PLAN.md — Wave 3: carry Merges at every provider/HubSpot hop, the last parameter-expression reads retired, `nodeRunRecovery.js` deleted, and the by-name-read assertion wired into generation
 - [ ] 70-05-PLAN.md — Wave 4: one canonical `write_request`, an IF-shaped gate emitting refusals, a real gate on the enrichment lane, one verdict for an update and its association
