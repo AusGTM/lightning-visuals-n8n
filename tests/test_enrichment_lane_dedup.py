@@ -224,7 +224,8 @@ def test_refusal_reaches_build_response_via_the_existing_unsupported_object_type
     )
     conns = doc["connections"]
     assert conns["IF Object Type Supported"]["main"][1][0]["node"] == "Unsupported Object Type"
-    assert conns["Unsupported Object Type"]["main"][0][0]["node"] == "Build Response"
+    # Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge.
+    assert conns["Unsupported Object Type"]["main"][0][0]["node"] == "Build Response Merge"
 
 
 # --- Quick task 260904-5a8: Decide Company Action carries the "company" call-site literal ---

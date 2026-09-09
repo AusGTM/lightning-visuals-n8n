@@ -184,11 +184,19 @@ BUILD_RESPONSE_SOURCES = {
 def test_build_response_is_reachable_from_every_terminal_branch():
     """Fails if only the five real terminal nodes converge — the two re-pointed
     IF-enrich-false lanes, the unsupported terminal and the companies skip terminal must
-    ALSO feed Build Response."""
+    ALSO feed Build Response.
+
+    Phase 70 Plan 03 (D-70-01): all ten terminals now converge on "Build Response Merge"
+    first, which is "Build Response"'s own sole inbound edge — the ten real sources are
+    checked one level further back, against the Merge, rather than against "Build
+    Response" directly."""
     doc = _load()
-    edges = set(_inbound_edges(doc, "Build Response"))
-    assert edges == BUILD_RESPONSE_SOURCES, (
-        f"Build Response inbound edges {edges} != expected {BUILD_RESPONSE_SOURCES}"
+    assert _inbound_edges(doc, "Build Response") == [("Build Response Merge", 0)]
+    merge_edges = {(src, idx) for (src, idx) in _inbound_edges(doc, "Build Response Merge")
+                   if "Sentinel" not in src}
+    assert merge_edges == BUILD_RESPONSE_SOURCES, (
+        f"Build Response Merge inbound (non-sentinel) edges {merge_edges} != "
+        f"expected {BUILD_RESPONSE_SOURCES}"
     )
 
 

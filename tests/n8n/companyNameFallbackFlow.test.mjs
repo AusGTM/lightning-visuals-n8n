@@ -43,9 +43,12 @@ test("the name search sits between the domain adapter and the gate, on the searc
   const edge = (from) => (wf.connections[from]?.main?.[0] || []).map((c) => c.node);
   assert.deepEqual(edge("Adapt Company Search"), ["HubSpot Company Name Search"]);
   assert.deepEqual(edge("HubSpot Company Name Search"), ["Adapt Company Name Search"]);
-  assert.deepEqual(edge("Adapt Company Name Search"), ["Company Gate"]);
+  // Phase 70 Plan 03 (D-70-01): both lanes now converge on "Company Gate Merge" first —
+  // a real Merge in front of "Company Gate", not the bare 2-inbound-edge Code node this
+  // pinned before.
+  assert.deepEqual(edge("Adapt Company Name Search"), ["Company Gate Merge"]);
   // The fetch-by-id branch already holds its record and must not be re-resolved.
-  assert.deepEqual(edge("Adapt Company Fetch By Id"), ["Company Gate"]);
+  assert.deepEqual(edge("Adapt Company Fetch By Id"), ["Company Gate Merge"]);
 });
 
 test("the live HRNSW case: a domain miss resolves by exact name instead of creating a duplicate", () => {

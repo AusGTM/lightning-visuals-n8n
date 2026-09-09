@@ -58,12 +58,28 @@ function targetsOf(nodeName, branchIndex = 0) {
 test("wiring: Parse HubSpot Event's first target is now IF Scale Up Route, not IF Object Type Supported directly", () => {
   assert.deepEqual(
     new Set(targetsOf("Parse HubSpot Event")),
-    new Set(["IF Scale Up Route", "Credit Request", "Build Async Ack"]),
+    // Phase 70 Plan 03 (D-70-01): two more unconditional fan targets off this SAME
+    // single-producer node — the recompute-mode starved-lane sentinel pair, read the
+    // same request-level way "IF Company Recompute" itself reads `recompute`. Fed
+    // from "Parse HubSpot Event" (not "IF Scale Up Route") deliberately: `recompute`
+    // is a request-level flag independent of `scale_up`, so both sentinels must see
+    // every request, fanned or not.
+    new Set(["IF Scale Up Route", "Credit Request", "Build Async Ack",
+             "Recompute Not Requested Sentinel", "Recompute Requested Sentinel"]),
   );
 });
 
 test("wiring: IF Scale Up Route's FALSE lane reaches IF Object Type Supported — functionally byte-identical for every non-opted-in request", () => {
-  assert.deepEqual(targetsOf("IF Scale Up Route", 1), ["IF Object Type Supported"]);
+  // Phase 70 Plan 03 (D-70-01): three more unconditional fan targets off this SAME
+  // false-lane delivery — the pre-fork "object-type entirely absent" starved-lane
+  // sentinels, which read `object_type` off the same rows and stay silent unless a
+  // whole branch (contacts/companies/unsupported) is absent from the batch. "IF
+  // Object Type Supported" itself is untouched — same edge, same index.
+  assert.deepEqual(
+    new Set(targetsOf("IF Scale Up Route", 1)),
+    new Set(["IF Object Type Supported", "Contacts Absent Sentinel",
+             "Companies Absent Sentinel", "Unsupported Absent Sentinel"]),
+  );
 });
 
 test("wiring: IF Scale Up Route's TRUE lane feeds the fan-out chain, never the business chain", () => {

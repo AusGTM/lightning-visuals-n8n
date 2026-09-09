@@ -69,17 +69,28 @@ function unwrapJson(it) {
 // the WHOLE-STRING `{{ ... }}` shape is supported (the only shape this repo's committed
 // workflows use for IF/Set values) — ponytail: a mixed literal+`{{ }}` template string
 // would need real template splicing; add it if a workflow ever needs it.
-function evalExpr(exprStr, item) {
+// Phase 70 Plan 03 (Rule 3 — blocking issue): the enrichment lane's real IF nodes
+// (`IF Bare Event`, `IF Has Email`, `IF Name Searchable`, ...) use `$('Node').item`/
+// `.first()` inside their condition expressions — `evalExpr` only ever injected
+// `$json`, so evaluating any of them threw `$ is not defined` before a single
+// enrichment-lane test could run. `ctx` (the SAME `{runData, runIndex, ...}` `runCode`
+// already threads through) is now optional here too: `$` resolves via the SAME
+// `makeDollar` `.item`/`.first()`/`.all()` contract Code nodes get, keyed off the
+// CURRENT node's own run index — never a second, divergent resolver.
+function evalExpr(exprStr, item, ctx) {
   const m = /^\{\{([\s\S]*)\}\}$/.exec(String(exprStr).trim());
   if (!m) return exprStr;
-  const fn = new Function("$json", `"use strict"; return (${m[1]});`);
-  return fn(item || {});
+  const dollar = ctx
+    ? makeDollar(ctx.runData, ctx.runIndex)
+    : function $() { throw new Error("$(...) used in an expression evaluated with no ctx"); };
+  const fn = new Function("$json", "$", `"use strict"; return (${m[1]});`);
+  return fn(item || {}, dollar);
 }
 
-function resolveValue(raw, item) {
+function resolveValue(raw, item, ctx) {
   if (typeof raw !== "string") return raw;
   if (!raw.startsWith("=")) return raw;
-  return evalExpr(raw.slice(1), item);
+  return evalExpr(raw.slice(1), item, ctx);
 }
 
 function applyOperator(operator, left, right, caseSensitive) {
@@ -120,7 +131,7 @@ function applyOperator(operator, left, right, caseSensitive) {
   }
 }
 
-function evaluateIfConditions(conditionsParam, item) {
+function evaluateIfConditions(conditionsParam, item, ctx) {
   const combinator = (conditionsParam && conditionsParam.combinator) || "and";
   const list = (conditionsParam && conditionsParam.conditions) || [];
   const caseSensitive = conditionsParam && conditionsParam.options
@@ -128,8 +139,8 @@ function evaluateIfConditions(conditionsParam, item) {
     : undefined;
   if (list.length === 0) return true;
   const results = list.map((cond) => {
-    const left = resolveValue(cond.leftValue, item);
-    const right = resolveValue(cond.rightValue, item);
+    const left = resolveValue(cond.leftValue, item, ctx);
+    const right = resolveValue(cond.rightValue, item, ctx);
     return applyOperator(cond.operator, left, right, caseSensitive);
   });
   return combinator === "or" ? results.some(Boolean) : results.every(Boolean);
@@ -179,11 +190,19 @@ function runCode(node, items, ctx) {
   const $node = { name: node.name };
   const now = new Date();
   const $getWorkflowStaticData = () => ctx.staticData;
+  // Phase 70 Plan 03 (Rule 3 — blocking issue): `n8n/code/nodeRunRecovery.js`'s
+  // `recoverConvergedRun` (still present at several HTTP-hop carry-read sites this plan
+  // deliberately leaves alone — those are 70-04's job) reads n8n's own built-in
+  // `$runIndex` global. Never injected before because no enrichment-lane node had been
+  // walked yet. `ctx.runIndex` is the SAME value `makeDollar`'s `.item` already uses for
+  // this node's own current run.
+  const $runIndex = ctx.runIndex;
   const fn = new Function(
     "$", "$input", "$json", "$node", "$now", "$today", "$getWorkflowStaticData", "$env",
+    "$runIndex",
     `"use strict";\n${node.parameters.jsCode}`
   );
-  const out = fn($, $input, $json, $node, now, now, $getWorkflowStaticData, ctx.env || {}) || [];
+  const out = fn($, $input, $json, $node, now, now, $getWorkflowStaticData, ctx.env || {}, $runIndex) || [];
   return out.map(unwrapJson);
 }
 
@@ -229,7 +248,7 @@ export function runNode(node, items, ctx) {
     const trueItems = [];
     const falseItems = [];
     for (const item of items) {
-      const ok = evaluateIfConditions(node.parameters && node.parameters.conditions, item);
+      const ok = evaluateIfConditions(node.parameters && node.parameters.conditions, item, ctx);
       (ok ? trueItems : falseItems).push(item);
     }
     return { outputs: [trueItems, falseItems] };

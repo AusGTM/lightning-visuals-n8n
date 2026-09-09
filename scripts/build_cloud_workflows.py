@@ -1623,7 +1623,11 @@ const REQUIRED = [
 ];
 const POLICY = { jobtitle: { stale_after_days: 180 }, mobilephone: { stale_after_days: 180 } };
 const NOW = new Date().toISOString();
-return $input.all().map((it) => {
+// Phase 70 Plan 03 (D-70-01): this node now sits behind a real Merge with a starved-lane
+// sentinel on every input that could otherwise never fire (Enrichment Gate's 5 identity
+// lanes) — a sentinel's marker carries no row identity (`{}`) and must never be treated
+// as a real row.
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
   let action = gate.action;
@@ -1685,7 +1689,13 @@ ENRICH_MERGE = inline("resolveIdentity.js", "mergeContacts.js") + r"""
 // PN-1: linkedin_url is NOT HubSpot-native -> the merge candidate/canonical key is
 // lv_linkedin_url. `winners.linkedin_url` (the scoreCandidates winner key, if a provider
 // mapper ever populates it) stays unprefixed on the READ side, unrelated to this rename.
-return $input.all().map((it) => {
+// Phase 70 Plan 03 (D-70-01): this node ("Merge Winners") sits behind a real Merge with a
+// starved-lane sentinel on any of its 3 inputs (no research needed / no judge needed /
+// judge ran) that could otherwise never fire; drop an identity-less sentinel marker
+// before it is mistaken for a real row (it has no `.scored`, which would otherwise read
+// as a genuine skip-branch row, never a `merge: null` placeholder for a row that was
+// never really here).
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
   if (!row.scored) return { json: { ...row, merge: null } };  // skip branch
   const winners = row.scored.winners || {};
@@ -2722,7 +2732,10 @@ try {
   const _first = $('Parse HubSpot Event').first();
   RECOMPUTE_REQUESTED = !!(_first && _first.json && _first.json.recompute === true);
 } catch (e) { RECOMPUTE_REQUESTED = false; }
-return $input.all().map((it) => {
+// Phase 70 Plan 03 (D-70-01): this node sits behind a real Merge (Company Gate's 2
+// identity lanes) with a starved-lane sentinel on any input that could otherwise never
+// fire; drop an identity-less sentinel marker before it is treated as a real row.
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
   let action = gate.action;
@@ -3545,7 +3558,10 @@ const JUNE_RESEARCH_CACHE_KEYS = {
   lv_produces_content: "lv_produces_content_verified_at",
 };
 
-return $input.all().map((it) => {
+// Phase 70 Plan 03 (D-70-01): this node ("Merge Company") sits behind a real Merge with
+// a starved-lane sentinel on any of its 3 inputs that could otherwise never fire; drop
+// an identity-less sentinel marker before it is mistaken for a real row.
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
   if (!row.scored) return { json: { ...row, merge: null, conflicts: [] } };  // skip branch
   const best = row.scored.best || {};
@@ -3864,7 +3880,11 @@ ENRICH_DECIDE_CO_CLOUD = inline(
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
 """ + WRITE_SAFETY_GATE_JS + r"""
-return $input.all().map((it) => {
+// Phase 70 Plan 03 (D-70-01): this node sits behind a real Merge (the recompute lane's
+// direct edge + Merge Company's own output) with a starved-lane sentinel on whichever
+// side would otherwise never fire (normal mode vs. recompute mode); drop an identity-
+// less sentinel marker before it is treated as a real row.
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
   // Phase 36-04 Task 2 (36-CONTEXT.md §7 step 4): a propose envelope with
   // objectType:"company" must not write either — the same shared predicate the
@@ -4486,11 +4506,88 @@ def build_enrichment_local_live():
         "Merge Winners": {"main": [[{"node": "Decide Action", "type": "main", "index": 0}]]},
     }
 
+    conns = {**fan(chain(order), chain(co_order)), **research_conns, **contact_conns}
+
+    # Phase 70 Plan 03 (D-70-01): the SAME "Merge Winners"/"Merge Company" fan_in
+    # convergences build_enrichment_cloud() fixes, mirrored here — this standalone
+    # local-LIVE harness ("Manual Trigger" + fixed "Emit Live Identities"/"Emit Company
+    # Targets" test data, no webhook/object-type routing/recompute) shares the exact
+    # same 3-input shape and the exact same "no research needed"/"no judge needed"
+    # starved-lane risk. Deliberately NOT refactored to share build_enrichment_cloud()'s
+    # own sentinel-adding calls: those are already tested and pinned by name; a shared
+    # helper would need to be introduced there FIRST, which is more churn than this
+    # workflow's much smaller scope (2 merges, no pre-fork/recompute sentinels needed —
+    # there is no webhook, no object-type router, no recompute lane here) justifies.
+    llx, lly = 40, 2200
+    winners_merge = splice_merge_before(nodes, conns, "Merge Winners", merge_name="Merge Winners Fan-In")
+    mw2 = lambda src, idx=0: (winners_merge, _merge_input_index(conns, src, winners_merge, source_out_idx=idx))
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Research All Needed Sentinel", "Contact Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed === true)) '
+        'return [{}]; return [];',
+        [mw2("IF Contact Research Needed", 1)], llx, lly,
+    )
+    lly += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Research None Needed Sentinel", "Contact Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed !== true)) '
+        'return [{}]; return [];',
+        [mw2("IF Contact Needs Judge", 1), mw2("Apply Contact Judge Verdict")], llx, lly,
+    )
+    lly += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Judge All Needed Sentinel", "Contact Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge === true)) '
+        'return [{}]; return [];',
+        [mw2("IF Contact Needs Judge", 1)], llx, lly,
+    )
+    lly += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Judge None Needed Sentinel", "Contact Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge !== true)) '
+        'return [{}]; return [];',
+        [mw2("Apply Contact Judge Verdict")], llx, lly,
+    )
+    lly += 120
+
+    company_merge = splice_merge_before(nodes, conns, "Merge Company", merge_name="Merge Company Fan-In")
+    mc2 = lambda src, idx=0: (company_merge, _merge_input_index(conns, src, company_merge, source_out_idx=idx))
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Research All Needed Sentinel", "Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed === true)) '
+        'return [{}]; return [];',
+        [mc2("IF Research Needed", 1)], llx, lly,
+    )
+    lly += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Research None Needed Sentinel", "Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed !== true)) '
+        'return [{}]; return [];',
+        [mc2("IF Needs Judge", 1), mc2("Apply Judge Verdict")], llx, lly,
+    )
+    lly += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Judge All Needed Sentinel", "Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge === true)) '
+        'return [{}]; return [];',
+        [mc2("IF Needs Judge", 1)], llx, lly,
+    )
+    lly += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Judge None Needed Sentinel", "Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge !== true)) '
+        'return [{}]; return [];',
+        [mc2("Apply Judge Verdict")], llx, lly,
+    )
+    # No "IF Research Errored" node exists in THIS workflow at all (this harness has no
+    # "Build Research Failure Response" terminal — checked against the built node list),
+    # so no companion `set_always_output_data` call is needed here.
+
     return {
         "id": "LVenrichmentLive01",
         "name": "LV Enrichment (local LIVE)",
         "nodes": nodes,
-        "connections": {**fan(chain(order), chain(co_order)), **research_conns, **contact_conns},
+        "connections": conns,
         "settings": {},
     }
 
@@ -5370,7 +5467,11 @@ function _contactability(row) {
   else if (emailField) state = CONTACTABILITY_EMAIL_ONLY;
   return { state, fields: { email: emailField, phone: phoneField } };
 }
-return $input.all().map((item) => {
+// Phase 70 Plan 03 (D-70-01): this node ("Build Response") sits behind a real Merge with
+// a starved-lane sentinel on every one of its 10 terminal inputs that could otherwise
+// never fire on a given batch; drop an identity-less sentinel marker before it is
+// reported back to the caller as a phantom row.
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((item) => {
   const row = item.json || {};
   const match = row.match || null;
   // Meaningful for tier "medium" only (REVIEW-C9) — "high"/"none"/"unknown" already
@@ -7020,6 +7121,406 @@ return $input.all().map((it, i) => {
             "position": [n["x"], n["y"]],
         })
 
+    # =========================================================================
+    # Phase 70 Plan 03 (D-70-01): a real Merge in front of every "fan_in"
+    # convergence `classify_convergence` identifies over THIS built graph, plus a
+    # starved-lane sentinel network on every input that can otherwise never fire.
+    #
+    # `Parse HubSpot Event` (class "entry_points" — `Execute Workflow Trigger` vs. the
+    # two webhook-path branches) deliberately gets NO Merge; see
+    # tests/test_merge_helpers.py::test_parse_hubspot_event_is_entry_points_and_
+    # splice_merge_before_refuses_it. `Respond to Webhook`'s 4 inbound edges are Task
+    # 2's job, not merged here. The provider-gate bypass chains (`IF Apollo Enabled`
+    # <-> `IF ZoomInfo Enabled` <-> `Normalize + Score` <-> `ZoomInfo Enrich` and their
+    # companies twins) are class "fan_in" too (`classify_convergence` does not
+    # distinguish the plan's own class (a)/(b) — both are safe to merge, and it only
+    # refuses "entry_points") but are deliberately LEFT UNMERGED: each pair rejoins
+    # after EXACTLY one delivery per row by construction (`_provider_gate_bypass_chain`'s
+    # own docstring — "exactly one fires per row"), so a Merge there adds hang exposure
+    # (T-70-04) for zero behaviour change, and is recorded here as the "leave unmerged,
+    # record why" case the plan's own action text permits.
+    #
+    # Every OTHER "fan_in" node with >= 2 inbound edges gets a Merge:
+    build_response_merge = splice_merge_before(nodes, conns, "Build Response",
+                                                merge_name="Build Response Merge")
+    enrichment_gate_merge = splice_merge_before(nodes, conns, "Enrichment Gate",
+                                                 merge_name="Enrichment Gate Merge")
+    company_gate_merge = splice_merge_before(nodes, conns, "Company Gate",
+                                              merge_name="Company Gate Merge")
+    merge_winners_merge = splice_merge_before(nodes, conns, "Merge Winners",
+                                               merge_name="Merge Winners Fan-In")
+    merge_company_merge = splice_merge_before(nodes, conns, "Merge Company",
+                                               merge_name="Merge Company Fan-In")
+    decide_co_action_merge = splice_merge_before(nodes, conns, "Decide Company Action",
+                                                  merge_name="Decide Company Action Merge")
+
+    # --- Merge input indices, resolved AFTER every splice above (never invented) -------
+    # Each returns a ready-to-use `(merge_name, index)` target pair — never a bare index,
+    # so a target list below reads `[eg("Adapt Search"), ...]` and cannot accidentally
+    # transpose the pair `_add_starved_lane_sentinel` expects.
+    br = lambda src, idx=0: (build_response_merge, _merge_input_index(conns, src, build_response_merge, source_out_idx=idx))
+    eg = lambda src, idx=0: (enrichment_gate_merge, _merge_input_index(conns, src, enrichment_gate_merge, source_out_idx=idx))
+    cg = lambda src, idx=0: (company_gate_merge, _merge_input_index(conns, src, company_gate_merge, source_out_idx=idx))
+    mw = lambda src, idx=0: (merge_winners_merge, _merge_input_index(conns, src, merge_winners_merge, source_out_idx=idx))
+    mc = lambda src, idx=0: (merge_company_merge, _merge_input_index(conns, src, merge_company_merge, source_out_idx=idx))
+    dca = lambda src, idx=0: (decide_co_action_merge, _merge_input_index(conns, src, decide_co_action_merge, source_out_idx=idx))
+
+    sx, sy = 40, 2200  # a dedicated, empty region of the canvas for the sentinel network
+
+    # --- Pre-fork sentinels: fed from "IF Scale Up Route" false (index 1) — the single
+    # point every non-fanned request reaches with `object_type` already stamped by
+    # "Parse HubSpot Event", BEFORE "IF Object Type Supported"/"Route By Object Type"
+    # fork. Never fed from "Parse HubSpot Event" itself: that node ALSO runs on a fanned
+    # scale-up dispatch, where feeding a merge input here would satisfy it while the
+    # fanned child's OWN execution never runs the rest of the graph at all
+    # (scaleUpFanOutFlow.test.mjs would then see a half-fed merge -> false stall).
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Absent Sentinel", "IF Scale Up Route",
+        'if (rows.length > 0 && rows.every((r) => r.object_type === "companies")) '
+        'return [{}]; return [];',
+        [eg("Adapt Fetch By Id"),
+         eg("Adapt Linkedin Search"),
+         eg("IF Name Searchable", 1),
+         eg("Adapt Name Search"),
+         eg("Adapt Search"),
+         # "Enrichment Gate" (the code node) drops an all-marker wave to ZERO output —
+         # its own first-line identity filter — so the marker can never naturally
+         # cascade to "IF Provider Processing Needed"/"Decide Action" from here; feed
+         # every downstream index it would otherwise have starved directly (Rule 1 —
+         # found running the walker against a companies-only batch).
+         mw("IF Contact Research Needed", 1),
+         mw("IF Contact Needs Judge", 1),
+         mw("Apply Contact Judge Verdict"),
+         br("Skip (NoOp)"),
+         br("HubSpot Create"),
+         br("HubSpot Update"),
+         br("IF Enrich", 1)],
+        sx, sy, source_out_idx=1,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Absent Sentinel", "IF Scale Up Route",
+        'if (rows.length > 0 && rows.every((r) => r.object_type !== "companies")) '
+        'return [{}]; return [];',
+        [cg("Adapt Company Fetch By Id"),
+         cg("Adapt Company Name Search"),
+         dca("IF Company Recompute"),
+         # "Merge Company" (the code node) drops an all-marker wave to ZERO output —
+         # its own first-line identity filter — so its EMPTY result never propagates to
+         # "Decide Company Action Merge" on its own; feed that index directly too.
+         dca("Merge Company"),
+         mc("IF Research Needed", 1),
+         mc("IF Needs Judge", 1),
+         mc("Apply Judge Verdict"),
+         br("IF Company Skip"),
+         br("Build Research Failure Response"),
+         br("Adapt Company Create"),
+         br("HubSpot Company Update"),
+         br("IF Company Enrich", 1)],
+        sx, sy, source_out_idx=1,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Unsupported Absent Sentinel", "IF Scale Up Route",
+        'if (rows.length > 0 && rows.every((r) => r.object_type !== "unknown")) '
+        'return [{}]; return [];',
+        [br("Unsupported Object Type")],
+        sx, sy, source_out_idx=1,
+    )
+    sy += 120
+
+    # --- Contacts identity-lane sentinels: fed from "Build Identity" (single producer,
+    # always runs whenever any contacts row exists — either real or the pre-fork
+    # marker). "laneOf" (matchProposal.js) stamps exactly one of these 5 values per row
+    # (Build Identity's own `lane: laneOf(...)` line) — reading the SAME field the
+    # nested "IF Bare Event"/"IF Has Email"/"IF Linkedin Searchable"/"IF Name
+    # Searchable" chain routes on, never re-deriving it. This is D-70-01's "common
+    # shape and the hang case" (single-identity-lane batch) the plan names explicitly.
+    for lane, target in [
+        ("fetch_by_id", eg("Adapt Fetch By Id")),
+        ("email", eg("Adapt Search")),
+        ("linkedin", eg("Adapt Linkedin Search")),
+        ("name", eg("Adapt Name Search")),
+        ("none", eg("IF Name Searchable", 1)),
+    ]:
+        _add_starved_lane_sentinel(
+            nodes, conns, f"Contacts Lane {lane.title().replace('_', '')} Absent Sentinel",
+            "Build Identity",
+            f'if (rows.length > 0 && !rows.some((r) => r.lane === "{lane}")) '
+            'return [{}]; return [];',
+            [target], sx, sy,
+        )
+        sy += 120
+
+    # --- Companies identity-lane sentinels: the 2-way mirror ("IF Company Bare Event"),
+    # fed from "Build Company Identity", reading the identical predicate.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Lane BareEvent Absent Sentinel", "Build Company Identity",
+        'if (rows.length > 0 && !rows.some((r) => r.object_id && '
+        '!(r.identity_keys && r.identity_keys.domain))) return [{}]; return [];',
+        [cg("Adapt Company Fetch By Id")], sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Lane DomainSearch Absent Sentinel", "Build Company Identity",
+        'if (rows.length > 0 && !rows.some((r) => !(r.object_id && '
+        '!(r.identity_keys && r.identity_keys.domain)))) return [{}]; return [];',
+        [cg("Adapt Company Name Search")], sx, sy,
+    )
+    sy += 120
+
+    # --- Recompute (RECOMP-01) is a whole-REQUEST flag, read the same way
+    # "IF Company Recompute" itself reads it — `.first()` off "Parse HubSpot Event",
+    # never per-row.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Recompute Not Requested Sentinel", "Parse HubSpot Event",
+        'if (rows.length > 0 && rows[0].recompute !== true) return [{}]; return [];',
+        [dca("IF Company Recompute")],
+        sx, sy,
+    )
+    sy += 120
+    # The inverse: in recompute mode, "IF Company Skip" and everything downstream of it
+    # (the whole companies provider/research/judge waterfall) never runs at all, so
+    # "Merge Company"'s own 3 inputs are starved too. Its cascade would otherwise
+    # satisfy "Decide Company Action"'s Merge-Company-side input, EXCEPT "Merge
+    # Company"'s own first-line identity-drop filter reduces an all-marker wave to ZERO
+    # output, which never propagates on its own (Rule 1 — found running the walker
+    # against this exact scenario) — feed that index directly too, alongside the 3
+    # starved "Merge Company" inputs.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Recompute Requested Sentinel", "Parse HubSpot Event",
+        'if (rows.length > 0 && rows[0].recompute === true) return [{}]; return [];',
+        [mc("IF Research Needed", 1),
+         mc("IF Needs Judge", 1),
+         mc("Apply Judge Verdict"),
+         # "IF Company Skip" never runs in recompute mode either, so its Build Response
+         # lane (E) AND Lane F ("Build Research Failure Response", downstream of the
+         # waterfall this mode never reaches) both need a direct feed too.
+         br("IF Company Skip"),
+         br("Build Research Failure Response"),
+         dca("Merge Company")],
+        sx, sy,
+    )
+    sy += 120
+
+    # --- Contacts: fed from "Enrichment Gate" itself (single producer once its own
+    # merge above fires) — covers BOTH "contacts genuinely absent" (the pre-fork marker
+    # already makes this node fire once, with a blank-identity row that Enrichment
+    # Gate's OWN existing identity check already routes to action:"skip" — see
+    # ENRICH_GATE's `if (!ik.email && ...) action = "skip"`) and "contacts present but
+    # every real row decided skip" as the SAME condition.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Waterfall Absent Sentinel", "Enrichment Gate",
+        'if (rows.length > 0 && rows.every((r) => r.action === "skip")) return [{}]; '
+        'return [];',
+        [mw("IF Contact Research Needed", 1),
+         mw("IF Contact Needs Judge", 1),
+         mw("Apply Contact Judge Verdict"),
+         br("HubSpot Create"),
+         br("HubSpot Update"),
+         br("IF Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts None Skip Sentinel", "Enrichment Gate",
+        'if (rows.length > 0 && rows.every((r) => r.action !== "skip")) return [{}]; '
+        'return [];',
+        [br("Skip (NoOp)")],
+        sx, sy,
+    )
+    sy += 120
+
+    # --- Contacts research/judge sub-gates: NEVER `set_always_output_data` on
+    # "IF Contact Research Needed"/"IF Contact Needs Judge" themselves — their TRUE
+    # branches trigger a real (paid) Claude web-research/judge call, and forcing a
+    # marker into whichever branch happens to be empty on a given batch would burn one
+    # of those calls on a row that never asked for it. Each sentinel below reads the
+    # SAME field the corresponding IF already tests off its own single-producer
+    # predecessor, and delivers straight to the merge input — never through the IF.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Research All Needed Sentinel", "Contact Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed === true)) '
+        'return [{}]; return [];',
+        [mw("IF Contact Research Needed", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Research None Needed Sentinel", "Contact Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed !== true)) '
+        'return [{}]; return [];',
+        [mw("IF Contact Needs Judge", 1),
+         mw("Apply Contact Judge Verdict")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Judge All Needed Sentinel", "Contact Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge === true)) '
+        'return [{}]; return [];',
+        [mw("IF Contact Needs Judge", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts Judge None Needed Sentinel", "Contact Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge !== true)) '
+        'return [{}]; return [];',
+        [mw("Apply Contact Judge Verdict")],
+        sx, sy,
+    )
+    sy += 120
+
+    # --- Contacts create/enrich split: fed from "Decide Action" (single producer, and
+    # the exact field "IF Create"/"IF Enrich" already test) — never from "HubSpot
+    # Create"/"HubSpot Update" (feeding a marker to an HTTP node would fire a bogus
+    # call); every target below is a Build Response merge INPUT INDEX directly.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts None Create Sentinel", "Decide Action",
+        'if (rows.length > 0 && !rows.some((r) => r.action === "create")) '
+        'return [{}]; return [];',
+        [br("HubSpot Create")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts All Create Sentinel", "Decide Action",
+        'if (rows.length > 0 && rows.every((r) => r.action === "create")) '
+        'return [{}]; return [];',
+        [br("HubSpot Update"),
+         br("IF Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts NonCreate None Enrich Sentinel", "Decide Action",
+        'const nc = rows.filter((r) => r.action !== "create"); '
+        'if (nc.length > 0 && !nc.some((r) => r.action === "enrich")) return [{}]; '
+        'return [];',
+        [br("HubSpot Update")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contacts NonCreate All Enrich Sentinel", "Decide Action",
+        'const nc = rows.filter((r) => r.action !== "create"); '
+        'if (nc.length > 0 && nc.every((r) => r.action === "enrich")) return [{}]; '
+        'return [];',
+        [br("IF Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+
+    # --- Companies: the exact mirror of the contacts block above, one level deeper
+    # (Company Gate -> IF Company Recompute -> IF Company Skip, vs. contacts' single
+    # Enrichment Gate -> IF Provider Processing Needed). "Companies Waterfall Absent"
+    # only ever matters in normal (non-recompute) mode — RECOMPUTE_REQUESTED already
+    # forces "skip" -> "enrich" inside ENRICH_CO_GATE, so no row can read
+    # action==="skip" in recompute mode, and "Recompute Requested Sentinel" above is
+    # what covers that mode instead.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Waterfall Absent Sentinel", "Company Gate",
+        'if (rows.length > 0 && rows.every((r) => r.action === "skip")) return [{}]; '
+        'return [];',
+        [mc("IF Research Needed", 1),
+         mc("IF Needs Judge", 1),
+         mc("Apply Judge Verdict"),
+         br("Adapt Company Create"),
+         br("HubSpot Company Update"),
+         br("IF Company Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies None Skip Sentinel", "Company Gate",
+        'if (rows.length > 0 && rows.every((r) => r.action !== "skip")) return [{}]; '
+        'return [];',
+        [br("IF Company Skip")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Research All Needed Sentinel", "Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed === true)) '
+        'return [{}]; return [];',
+        [mc("IF Research Needed", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Research None Needed Sentinel", "Research Trigger Gate",
+        'if (rows.length > 0 && rows.every((r) => r.research_needed !== true)) '
+        'return [{}]; return [];',
+        [mc("IF Needs Judge", 1),
+         mc("Apply Judge Verdict"),
+         br("Build Research Failure Response")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Judge All Needed Sentinel", "Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge === true)) '
+        'return [{}]; return [];',
+        [mc("IF Needs Judge", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Judge None Needed Sentinel", "Judge Gate",
+        'if (rows.length > 0 && rows.every((r) => r.needs_judge !== true)) '
+        'return [{}]; return [];',
+        [mc("Apply Judge Verdict")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies None Create Sentinel", "Decide Company Action",
+        'if (rows.length > 0 && !rows.some((r) => r.action === "create")) '
+        'return [{}]; return [];',
+        [br("Adapt Company Create")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies All Create Sentinel", "Decide Company Action",
+        'if (rows.length > 0 && rows.every((r) => r.action === "create")) '
+        'return [{}]; return [];',
+        [br("HubSpot Company Update"),
+         br("IF Company Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies NonCreate None Enrich Sentinel", "Decide Company Action",
+        'const nc = rows.filter((r) => r.action !== "create"); '
+        'if (nc.length > 0 && !nc.some((r) => r.action === "enrich")) return [{}]; '
+        'return [];',
+        [br("HubSpot Company Update")],
+        sx, sy,
+    )
+    sy += 120
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies NonCreate All Enrich Sentinel", "Decide Company Action",
+        'const nc = rows.filter((r) => r.action !== "create"); '
+        'if (nc.length > 0 && nc.every((r) => r.action === "enrich")) return [{}]; '
+        'return [];',
+        [br("IF Company Enrich", 1)],
+        sx, sy,
+    )
+    sy += 120
+
+    # "IF Research Errored" is the ONE place `set_always_output_data` (not a bypass
+    # sentinel) is correct: whenever it runs at all, research genuinely happened for at
+    # least one row, and its OTHER branch ("Validate Research Output" -> "Judge Gate") is
+    # a cheap decision Code node, never a paid call — the SAME reasoning 70-02 accepted
+    # for "Set Review"/"HubSpot Associate Company" (a flag that can never race a
+    # co-starved input, because at most one of a routing IF's two branches is ever empty
+    # when the node ran at all). Covers "Build Research Failure Response" (Lane F) for
+    # the "research happened, no error" case; the "no research at all" case is covered
+    # by "Companies Research None Needed Sentinel" above.
+    set_always_output_data(nodes, ["IF Research Errored"])
+
     return {
         "id": "LVenrichmentCloud01",
         "name": "LV Enrichment (Cloud template)",
@@ -7999,15 +8500,22 @@ def classify_convergence(nodes_by_name, conns, target_name):
                 stack.append(pred)
         return triggers
 
+    # Phase 70 Plan 03 (Rule 1 fix): the ORIGINAL check here required ALL ancestor sets
+    # to be pairwise disjoint before returning "entry_points" — a mixed convergence (one
+    # source truly on a different trigger, two others sharing a trigger with EACH OTHER
+    # but not with the first) fell through to "fan_in" even though the first source can
+    # never co-occur with the other two, exactly the hang this function exists to catch
+    # (`Parse HubSpot Event`'s three-source case: `Execute Workflow Trigger` vs. the two
+    # webhook-path branches, which share `Webhook Trigger` with EACH OTHER but not with
+    # the sub-workflow trigger). The docstring's own contract — "if TWO OR MORE sources
+    # have disjoint ancestries" — is a pairwise ANY, not an all-pairs partition; check
+    # every pair.
     ancestor_sets = [trigger_ancestors(s) for s in sources]
-    if all(ancestor_sets):
-        seen_triggers = set()
-        for s in ancestor_sets:
-            if seen_triggers & s:
-                break
-            seen_triggers |= s
-        else:
-            return "entry_points"
+    for i in range(len(ancestor_sets)):
+        for j in range(i + 1, len(ancestor_sets)):
+            a, b = ancestor_sets[i], ancestor_sets[j]
+            if a and b and not (a & b):
+                return "entry_points"
     return "fan_in"
 
 
@@ -8115,6 +8623,49 @@ def splice_carry_merge_after(nodes, conns, http_name, carry_source, *,
     conns[name] = {"main": [old_first_output]}
     conns.setdefault(carry_source, {"main": [[]]})
     conns[carry_source]["main"][0].append({"node": name, "type": "main", "index": 1})
+    return name
+
+
+def _merge_input_index(conns, source_name, merge_name, *, source_out_idx=0):
+    """Looks up the input index `splice_merge_before` assigned `source_name` on
+    `merge_name` (Phase 70 Plan 03) — used AFTER splicing to target a starved-lane
+    sentinel's marker at the exact input a real lane's terminal already occupies, never a
+    freshly-invented index that would silently grow the merge's `numberInputs` past what
+    `splice_merge_before` actually collected."""
+    for conn in (conns.get(source_name, {}).get("main") or [[]])[source_out_idx] or []:
+        if conn.get("node") == merge_name:
+            return conn["index"]
+    raise ValueError(f"_merge_input_index: {source_name!r} (output {source_out_idx}) "
+                      f"does not feed {merge_name!r}")
+
+
+def _add_starved_lane_sentinel(nodes, conns, name, source, condition_js, targets, x, y,
+                                *, source_out_idx=0):
+    """A narrow Code-node sentinel (Phase 70 Plan 03, D-70-01's `set_always_output_data`
+    obligation applied via the global-sentinel mechanism 70-02 established, rather than
+    `alwaysOutputData` on a routing IF whose OTHER branch can be a paid provider/write
+    call — see this plan's own SUMMARY for the full per-node rationale).
+
+    Fed via an ADDITIONAL fan-out edge from `source`'s existing output (`source`'s own
+    real edges are never touched) — the SAME row set `source` delivered this run, as
+    plain `{...}` objects bound to `rows` inside `condition_js`. `condition_js` must
+    `return` an array: `[{}]` when every one of `targets` would otherwise starve this
+    execution, `[]` when real content already covers them (mutually exclusive with the
+    real lane by construction, never a race). Delivers directly to each `(node, index)`
+    pair in `targets` — bypassing every IF/HTTP/business node between `source` and the
+    merge, so a marker never re-enters a paid call or an HTTP node it would otherwise
+    have to route through. `targets` names are typically resolved via
+    `_merge_input_index` against a merge `splice_merge_before` already created."""
+    nodes.append(code_node(name, f"""// {name} — Phase 70 Plan 03 starved-lane sentinel.
+// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.
+const rows = $input.all().map((it) => it.json);
+{condition_js}
+""", x, y))
+    conns.setdefault(source, {"main": [[]]})
+    while len(conns[source]["main"]) <= source_out_idx:
+        conns[source]["main"].append([])
+    conns[source]["main"][source_out_idx].append({"node": name, "type": "main", "index": 0})
+    conns[name] = {"main": [[{"node": t, "type": "main", "index": i} for (t, i) in targets]]}
     return name
 
 

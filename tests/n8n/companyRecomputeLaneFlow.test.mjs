@@ -240,7 +240,9 @@ test("without the recompute intent a complete record terminates observably at Bu
     r.gate.gate.reason, "all required fields present, fresh and valid",
     "the gate reason rides to Build Response so the caller can tell 'complete' from 'broken'");
 
-  assert.deepEqual(targetsOf(r.wf, "IF Company Skip", 0), ["Build Response"]);
+  // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge — the
+  // true lane's sole edge is the Merge, not the Code node directly.
+  assert.deepEqual(targetsOf(r.wf, "IF Company Skip", 0), ["Build Response Merge"]);
   assert.deepEqual(targetsOf(r.wf, "IF Company Skip", 1), ["Build Company Requests"]);
 });
 
@@ -284,11 +286,18 @@ test("an enrich verdict under the recompute intent takes the same lane (request-
 test("the recompute lane is a single edge into Decide Company Action — zero provider/research/judge nodes", () => {
   const { wf } = loadWorkflow();
 
+  // Phase 70 Plan 03 (D-70-01): "Company Gate" now ALSO fans to two starved-lane
+  // sentinels (D-70-01's global-sentinel mechanism) — additive edges off this same
+  // single-producer node, never a re-point of the original "IF Company Recompute" edge.
   assert.deepEqual(
-    targetsOf(wf, "Company Gate", 0), ["IF Company Recompute"],
+    targetsOf(wf, "Company Gate", 0),
+    ["IF Company Recompute", "Companies Waterfall Absent Sentinel", "Companies None Skip Sentinel"],
     "Company Gate no longer feeds Build Company Requests directly");
+  // Phase 70 Plan 03 (D-70-01): "Decide Company Action" now sits behind a real Merge —
+  // the true lane's sole edge is that Merge, not the Code node directly; the Merge
+  // itself is free of provider/research/judge nodes exactly as this test's name says.
   assert.deepEqual(
-    targetsOf(wf, "IF Company Recompute", 0), ["Decide Company Action"],
+    targetsOf(wf, "IF Company Recompute", 0), ["Decide Company Action Merge"],
     "the true lane is ONE edge — nothing may sit between the gate and the sole veto writer");
   assert.deepEqual(targetsOf(wf, "IF Company Recompute", 1), ["IF Company Skip"]);
 

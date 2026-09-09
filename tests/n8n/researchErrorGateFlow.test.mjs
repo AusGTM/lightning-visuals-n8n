@@ -171,7 +171,8 @@ test("the wiring routes true->failure terminal, false->Validate Research Output,
   assert.deepEqual(targetsOf(wf, "Claude Web Research", 0), ["IF Research Errored"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 0), ["Build Research Failure Response"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 1), ["Validate Research Output"]);
-  assert.deepEqual(targetsOf(wf, "Build Research Failure Response", 0), ["Build Response"]);
+  // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge.
+  assert.deepEqual(targetsOf(wf, "Build Research Failure Response", 0), ["Build Response Merge"]);
 });
 
 // --- behaviour: a healthy payload still reaches Validate Research Output unchanged --------

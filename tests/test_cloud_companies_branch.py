@@ -514,15 +514,22 @@ def test_company_gate_routes_through_the_recompute_lane_and_no_longer_straight_t
     while it exists, a skipped row still reaches the waterfall's entry."""
     doc = _load()
 
-    assert _targets(doc, "Company Gate", 0) == ["IF Company Recompute"]
+    # Phase 70 Plan 03 (D-70-01): "Company Gate" also fans to two starved-lane
+    # sentinels (D-70-01's global-sentinel mechanism, guaranteeing "Build Response
+    # Merge"'s/"Merge Company Fan-In"'s inputs fire on an all-skip or absent batch) --
+    # additive edges off this same single-producer node, never a re-point.
+    assert _targets(doc, "Company Gate", 0) == [
+        "IF Company Recompute", "Companies Waterfall Absent Sentinel", "Companies None Skip Sentinel",
+    ]
     assert "Build Company Requests" not in _targets(doc, "Company Gate", 0), (
         "Company Gate still feeds Build Company Requests directly"
     )
-    assert _targets(doc, "IF Company Recompute", 0) == ["Decide Company Action"]
+    # "Decide Company Action"/"Build Response" now sit behind real Merges (D-70-01).
+    assert _targets(doc, "IF Company Recompute", 0) == ["Decide Company Action Merge"]
     assert _targets(doc, "IF Company Recompute", 1) == ["IF Company Skip"]
     # RECOMP-02: a skipped record is observable -- it terminates at Build Response carrying
     # its gate reason instead of returning today's bare 200 with no body.
-    assert _targets(doc, "IF Company Skip", 0) == ["Build Response"]
+    assert _targets(doc, "IF Company Skip", 0) == ["Build Response Merge"]
     assert _targets(doc, "IF Company Skip", 1) == ["Build Company Requests"]
 
 
@@ -535,7 +542,9 @@ def test_recompute_lane_reaches_decide_in_exactly_one_edge_with_no_intermediate_
     doc = _load()
     true_lane = _targets(doc, "IF Company Recompute", 0)
     assert len(true_lane) == 1, f"recompute true lane fans out to {true_lane}"
-    assert true_lane[0] == "Decide Company Action"
+    # Phase 70 Plan 03 (D-70-01): "Decide Company Action" now sits behind a real Merge
+    # — the sole target is that Merge, which carries no provider/research/judge node.
+    assert true_lane[0] == "Decide Company Action Merge"
 
     costly = {
         "Build Company Requests", "Lusha Company", "Apollo Org", "ZoomInfo Company",

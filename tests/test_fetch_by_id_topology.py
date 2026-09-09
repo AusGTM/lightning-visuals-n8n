@@ -57,13 +57,18 @@ def _reachable_from(doc, start):
 
 
 def _sole_outgoing_target(doc, name):
-    """The one node `name`'s single outgoing edge targets — asserts there IS exactly one
-    outgoing edge/branch/target first, so this can't silently pass on a shape it wasn't
-    written to check."""
+    """The one node `name`'s single REAL outgoing edge target — asserts there IS exactly
+    one such edge/branch/target first, so this can't silently pass on a shape it wasn't
+    written to check. Phase 70 Plan 03 (D-70-01): "Build Identity"/"Build Company
+    Identity" gained additional fan-out edges to starved-lane sentinels (an ADDITIVE
+    parallel read of the same row set, never a business-logic destination) — those are
+    filtered out here so this test keeps pinning the one edge that actually carries the
+    row forward, not the sentinel taps."""
     conns = doc["connections"].get(name, {}).get("main", [])
     assert len(conns) == 1, f"{name} does not have exactly one outgoing branch: {conns}"
-    assert len(conns[0]) == 1, f"{name}'s outgoing branch does not have exactly one edge: {conns[0]}"
-    return conns[0][0]["node"]
+    real = [e for e in conns[0] if "Sentinel" not in e["node"]]
+    assert len(real) == 1, f"{name}'s outgoing branch does not have exactly one real edge: {real}"
+    return real[0]["node"]
 
 
 def _strip_comments(js: str) -> str:
@@ -82,7 +87,7 @@ BRANCHES = {
         "fetch_node": "HubSpot Fetch By Id",
         "adapter": "Adapt Fetch By Id",
         "search_node": "HubSpot Search",
-        "existing_gate": "Enrichment Gate",
+        "existing_gate": "Enrichment Gate Merge",  # Phase 70 Plan 03 (D-70-01): real Merge in front now
         "resource": "contact",
         "properties_csv": ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
         "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
@@ -98,7 +103,7 @@ BRANCHES = {
         "fetch_node": "HubSpot Company Fetch By Id",
         "adapter": "Adapt Company Fetch By Id",
         "search_node": "HubSpot Company Search",
-        "existing_gate": "Company Gate",
+        "existing_gate": "Company Gate Merge",  # Phase 70 Plan 03 (D-70-01): real Merge in front now
         "resource": "company",
         "properties_csv": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
         "url": "https://api.hubapi.com/crm/v3/objects/companies/search",

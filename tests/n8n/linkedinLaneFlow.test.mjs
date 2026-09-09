@@ -57,10 +57,11 @@ test("the linkedin lane sits between IF Has Email and IF Name Searchable, and it
   assert.deepEqual(edge("IF Linkedin Searchable", 0), ["HubSpot Linkedin Search"]);
   assert.deepEqual(edge("IF Linkedin Searchable", 1), ["IF Name Searchable"]);
   assert.deepEqual(edge("HubSpot Linkedin Search"), ["Adapt Linkedin Search"]);
-  assert.deepEqual(edge("Adapt Linkedin Search"), ["Enrichment Gate"]);
+  // Phase 70 Plan 03 (D-70-01): "Enrichment Gate" now sits behind a real Merge.
+  assert.deepEqual(edge("Adapt Linkedin Search"), ["Enrichment Gate Merge"]);
   // "IF Name Searchable"'s own true/false targets are unchanged by this splice.
   assert.deepEqual(edge("IF Name Searchable", 0), ["HubSpot Name Search"]);
-  assert.deepEqual(edge("IF Name Searchable", 1), ["Enrichment Gate"]);
+  assert.deepEqual(edge("IF Name Searchable", 1), ["Enrichment Gate Merge"]);
 });
 
 test("HubSpot Linkedin Search is the credential-bound httpRequest transport, never the native node (BUG 23/10 lesson)", () => {

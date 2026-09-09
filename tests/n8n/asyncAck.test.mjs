@@ -50,7 +50,11 @@ test("wiring: Parse HubSpot Event fans to Build Async Ack alongside its two exis
   // opts into scale_up.
   assert.deepEqual(
     new Set(targets),
-    new Set(["IF Scale Up Route", "Credit Request", "Build Async Ack"]),
+    // Phase 70 Plan 03: two more unconditional fan targets off this same single-producer
+    // node — the recompute-mode starved-lane sentinel pair (D-70-01) — added the SAME
+    // way "Build Async Ack"/"Credit Request" were: an additive edge, never a re-point.
+    new Set(["IF Scale Up Route", "Credit Request", "Build Async Ack",
+             "Recompute Not Requested Sentinel", "Recompute Requested Sentinel"]),
     "the existing two targets must survive unmodified — this is an ADDITIVE fan-out target",
   );
 });

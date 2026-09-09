@@ -66,6 +66,31 @@ def test_classify_convergence_entry_points_for_two_disjoint_triggers():
     assert b.classify_convergence(nodes_by_name, conns, "Target") == "entry_points"
 
 
+def test_classify_convergence_entry_points_for_a_mixed_three_source_convergence():
+    """Phase 70 Plan 03 (Rule 1 fix): reproduces `Parse HubSpot Event`'s real shape —
+    THREE sources, where two (on the SAME trigger, mutually-exclusive branches) share a
+    trigger with EACH OTHER but NOT with the third (a genuinely different trigger). The
+    original pairwise-partition check returned "fan_in" here because not ALL pairs were
+    disjoint; the fix returns "entry_points" because ANY pair (the third vs. either of
+    the first two) is disjoint, and a Merge here would hang on every execution that
+    entered via "Trigger C" (the other two sources never even dispatch)."""
+    trigger_a = _trigger_node("Trigger A", "n8n-nodes-base.webhook")
+    trigger_c = _trigger_node("Trigger C", "n8n-nodes-base.executeWorkflowTrigger")
+    if_one = _code_node("IF Branch One", 0, 0)
+    if_two = _code_node("IF Branch Two", 0, 0)
+    target = _code_node("Target")
+    nodes = [trigger_a, trigger_c, if_one, if_two, target]
+    conns = {
+        "Trigger A": {"main": [[{"node": "IF Branch One", "type": "main", "index": 0},
+                                 {"node": "IF Branch Two", "type": "main", "index": 0}]]},
+        "IF Branch One": {"main": [[{"node": "Target", "type": "main", "index": 0}]]},
+        "IF Branch Two": {"main": [[{"node": "Target", "type": "main", "index": 0}]]},
+        "Trigger C": {"main": [[{"node": "Target", "type": "main", "index": 0}]]},
+    }
+    nodes_by_name = {n["name"]: n for n in nodes}
+    assert b.classify_convergence(nodes_by_name, conns, "Target") == "entry_points"
+
+
 def test_splice_merge_before_raises_on_an_alternate_entry_point_convergence():
     """The must-have this plan pins: 'splice_merge_before raises when asked to merge an
     alternate-entry-point convergence, asserted by a test over a hand-built graph with
@@ -201,3 +226,15 @@ def test_splice_carry_merge_after_raises_on_missing_nodes():
         b.splice_carry_merge_after(nodes, {}, "Missing", "Only Node")
     with pytest.raises(ValueError, match="no carry_source"):
         b.splice_carry_merge_after(nodes, {}, "Only Node", "Missing")
+
+
+def test_parse_hubspot_event_is_entry_points_and_splice_merge_before_refuses_it():
+    """Phase 70 Plan 03 acceptance: `Parse HubSpot Event` (real built graph) converges
+    `Execute Workflow Trigger` with the two webhook-path branches — an alternate-entry-
+    point convergence per D-70-01's own worked example. Must NOT get a Merge."""
+    wf = b.build_enrichment_cloud()
+    nodes_by_name = {n["name"]: n for n in wf["nodes"]}
+    conns = wf["connections"]
+    assert b.classify_convergence(nodes_by_name, conns, "Parse HubSpot Event") == "entry_points"
+    with pytest.raises(ValueError, match="(?i)entry points"):
+        b.splice_merge_before(wf["nodes"], conns, "Parse HubSpot Event")
