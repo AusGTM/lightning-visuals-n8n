@@ -36,3 +36,16 @@ pruner), run at the START of a round, never mid-run:
 - `held_queue.json`, `suggestion_declines.json`, `operator.local.json*`: never.
 Print one line naming what was pruned. Retention for the Phase 69 decline store stays
 deferred (69-CONTEXT § Deferred).
+
+## Resolved 2026-09-09
+
+Fixed in debug session `.planning/debug/uat-batch-review-row-reads-failed.md` (F2):
+`run_report.prune_durable_state(config, now)` implemented — NOT in `durable_paths.py`
+as originally proposed above (see the debug file's F2 Resolution for why:
+`test_sweep_read_only.py`'s static write-verb confinement over the unattended sweep's
+reachable module closure forced the relocation to `run_report.py`, which is outside
+that closure). Same TTL design otherwise: `run_state-*` at 7 days, the other four
+per-run families (including F3's new `run_report-*.md`) at `dashboard_artifact_ttl_days`
+(default 30), `held_queue.json`/`suggestion_declines.json`/`operator.local.json*` never
+touched. Wired into `enrich-before-ingest/SKILL.md` step 1 only; the other batch-shaped
+skills adopting the same call is a follow-on, not done here.

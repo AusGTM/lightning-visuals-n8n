@@ -101,6 +101,24 @@ whatever seven columns happened to be in the source file.
    batch's writes. The fuller end-of-run report, per-run ceilings, and the post-run allowlist
    proof are Phase 57's work (RUN-05, AFTER-01, AFTER-03) and are deliberately not built here.
 
+   **Prune stale durable state, here at the start of a round, never mid-run (F2,
+   uat-batch-review-row-reads-failed, gap-closure 2026-09-09).** Nothing in this plugin
+   deleted a per-run artifact before this — 393 files after one week on the operator's
+   own machine, 362 of them 155-byte `run_state-*.json` files. Deletes only this
+   plugin's OWN expired local bookkeeping files — no HubSpot write, no arming, no
+   grant; run it once, quietly, before any dispatch:
+
+   ```python
+   import config_gate, run_report
+
+   cfg = config_gate.load_config()
+   pruned = run_report.prune_durable_state(cfg)
+   ```
+
+   Mention it to the operator only when `pruned` is non-empty — one line naming the
+   count, e.g. "cleaned up N stale state file(s)". Silent when there is nothing to
+   prune, which is the common case.
+
 2. **Resolve rows, then match them against HubSpot — unarmed.** For a spreadsheet
    (CSV/XLSX), read it with:
 

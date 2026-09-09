@@ -59,9 +59,10 @@ Task 2 adds `build_run_report` — the join over the five primary stores plus th
 """
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import artifact_store
 import chunking
 import durable_paths
 import held_queue
@@ -172,6 +173,106 @@ def _persist_report(run_id, block, path=None) -> bool:
         return True
     except OSError:
         return False
+
+
+# =========================================================================================
+# F2 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): nothing pruned the
+# durable directory — 393 files / 1.5 MB after one week, 362 of them 155-byte
+# `run_state-*.json` files, one per `run_state.new_run_id()` including every
+# offline/preview run that never dispatched. Not a space problem for years at this
+# growth rate, but a LISTING problem now: the end-of-run report and any `glob` over the
+# directory walk hundreds of dead files. `artifact_store`'s `dashboard_artifact_ttl_days`
+# was the only TTL anywhere, and it covers exactly one file.
+#
+# Lives HERE, not in `durable_paths.py` (the design's original, more obvious home):
+# `test_sweep_read_only.py` statically verifies the unattended sweep's own module
+# import closure (`config_gate` -> `durable_paths`, among others) never reaches a
+# function that performs a filesystem WRITE — `durable_paths.py`'s own writes are
+# confined, by that test, to exactly `_atomic_write_0600`/`_migrate_once`. A pruner
+# that deletes files is a write. `run_report.py` is NOT in the sweep's reachable
+# closure (it already imports `write_grant`, `chunking`, and every store this file
+# reads/writes, none of which the sweep can reach either), so this is where a new
+# write-capable function is safe to add.
+# =========================================================================================
+
+# `run_state-*` carries only dispatched row ids for resume, and a resume attempted
+# after this many days re-runs everything anyway (Phase 61) — nothing is lost by
+# deleting it sooner than the longer TTL below.
+PRUNE_SHORT_TTL_DAYS = 7
+
+# One glob pattern per per-run artifact family, paired with which TTL applies.
+# `run_manifest-*.json`/`written_records-*.json` never match the BARE
+# `run_manifest.json`/`written_records.json` (no run id) — those are a different,
+# standing/legacy store this function must never touch (see `PRUNE_NEVER` below).
+# `run_report-*.md` is this same module's own artifact, added to the family it was
+# born into.
+_PRUNE_SHORT_TTL_GLOBS = ("run_state-*.json",)
+_PRUNE_LONG_TTL_GLOBS = (
+    "written_records-*.json", "run_audit-*.json", "run_manifest-*.json",
+    "run_report-*.md",
+)
+
+# Never pruned, named explicitly rather than "everything not otherwise matched" — a
+# glob widened later must not silently start deleting one of these. `held_queue.json`
+# and `suggestion_declines.json` carry no run attribution at all (global backlogs);
+# `operator.local.json` (and its `.example`/any backup) is the plugin's own config,
+# never a per-run artifact.
+PRUNE_NEVER = ("held_queue.json", "suggestion_declines.json")
+PRUNE_NEVER_PREFIXES = ("operator.local.json",)
+
+
+def prune_durable_state(config=None, now=None) -> list:
+    """Delete durable per-run artifacts past their TTL. Returns the list of file
+    NAMES actually deleted (never a `Path`, so a caller can print them without
+    leaking the operator's home directory) — empty when nothing was due, never
+    `None`. Never raises: an unreadable or undeletable file is skipped and pruning
+    continues with the rest, the same degrade-not-halt posture every sibling
+    durable-store writer in this plugin follows (D-59-10).
+
+    Run at the START of a round, never mid-run — deleting a file a live dispatch is
+    about to append to would corrupt the partial-run guarantee
+    (`written_records.append_chunk`'s own D-59-07 contract) these files exist for.
+
+    Two TTL families, both measured from the file's own MTIME — not a `saved_at`
+    field parsed from its content. Uniform across every JSON store AND the
+    plain-text `run_report-*.md` (which carries no such field at all), and immune to
+    any clock skew between an embedded timestamp and the actual write:
+      - `run_state-*.json`: `PRUNE_SHORT_TTL_DAYS` (7).
+      - `written_records-*.json` / `run_audit-*.json` / `run_manifest-*.json` /
+        `run_report-*.md`: `artifact_store.TTL_CONFIG_KEY`
+        (`dashboard_artifact_ttl_days`, default 30, reused rather than a second key) —
+        the end-of-run report for a run this old has been read, or never will be.
+
+    `held_queue.json`, `suggestion_declines.json`, `operator.local.json` (and any
+    sibling starting with that name) are never touched — see `PRUNE_NEVER`/
+    `PRUNE_NEVER_PREFIXES`.
+    """
+    now = now or datetime.now(timezone.utc)
+    directory = durable_paths.resolve_state_path().parent
+    short_ttl = timedelta(days=PRUNE_SHORT_TTL_DAYS)
+    long_ttl = artifact_store._ttl(config)  # `_ttl(None)` already falls back to DEFAULT_TTL_DAYS
+
+    deleted = []
+    for globs, ttl in ((_PRUNE_SHORT_TTL_GLOBS, short_ttl), (_PRUNE_LONG_TTL_GLOBS, long_ttl)):
+        for pattern in globs:
+            try:
+                matches = sorted(directory.glob(pattern))
+            except OSError:
+                continue
+            for path in matches:
+                if path.name in PRUNE_NEVER or path.name.startswith(PRUNE_NEVER_PREFIXES):
+                    continue  # unreachable given the glob patterns above; a second,
+                              # independent guard rather than trusting glob alone.
+                try:
+                    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+                    if now - mtime < ttl:
+                        continue
+                    path.unlink()
+                except OSError:
+                    continue
+                deleted.append(path.name)
+
+    return deleted
 
 
 def _refuses_real_durable_write_under_pytest(target: Path) -> bool:

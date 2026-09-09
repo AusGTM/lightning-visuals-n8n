@@ -301,6 +301,19 @@ COVERED = {
             "preingest.classify_matches", "extraction.validate",
         ),
     ): "test_linkedin_row_composition.py::test_a_lusha_hit_for_the_unmatched_row_is_proposed_through_resolutions_and_revalidated",
+    # F2 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): step 1's new
+    # housekeeping fence -- prune stale durable state at the start of a round, never
+    # mid-run. Driven end to end over a real config file on disk, proving the
+    # operator's own `dashboard_artifact_ttl_days` override reaches the pruner
+    # through `config_gate.load_config`'s real file-reading/validation path.
+    # `prune_durable_state` lives in run_report.py, not durable_paths.py --
+    # test_sweep_read_only.py's static write-verb confinement over the unattended
+    # sweep's reachable module closure (durable_paths.py IS in that closure;
+    # run_report.py is not).
+    (
+        "enrich-before-ingest",
+        ("config_gate.load_config", "run_report.prune_durable_state"),
+    ): "test_run_report.py::test_config_load_composed_with_prune_durable_state_respects_the_operators_configured_ttl",
     (
         "enrich-before-ingest",
         (

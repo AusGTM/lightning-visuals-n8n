@@ -1,9 +1,9 @@
 ---
-status: fixing
+status: verifying
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T02:00:00Z
+updated: 2026-09-09T03:00:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
@@ -103,8 +103,8 @@ reasoning_checkpoint:
     symptom.
 ```
 
-next_action: F2 next (work order item 3) — implement `prune_durable_state` per `.planning/todos/pending/2026-09-09-durable-state-dir-never-prunes.md`'s proposed design (run_state-*/written_records-*/run_audit-*/run_manifest-* on their respective TTLs; held_queue.json/suggestion_declines.json/operator.local.json* never pruned; add the new run_report-*.md file from F3 to the same TTL family), RED then GREEN, one commit.
-test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green. F3/F4 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_chunking.py operator-claude-plugin/tests/test_preingest_merge.py -q` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q`; all green. F2 — pending.
+next_action: all four findings resolved and committed. Remaining: commit F2's fix, then hand off to the operator — deploying `n8n/wf_contact_ingest_cloud.json` to n8n Cloud (needs their `.env`) is the one action outside this session's scope. No further investigation pending.
+test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green. F3/F4 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_chunking.py operator-claude-plugin/tests/test_preingest_merge.py -q` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q`; all green. F2 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_sweep_read_only.py -q`; green. All three project suites green after every fix (see each Resolution block for exact counts).
 
 ## Constraints (project)
 
@@ -429,4 +429,70 @@ files_changed:
   - operator-claude-plugin/tests/test_run_report.py
   - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
 
-### F2 — pending, next in this session's work order.
+### F2 — RESOLVED
+
+root_cause: nothing in this plugin ever deleted a per-run durable artifact —
+  `run_state.new_run_id()` mints one 155-byte `run_state-*.json` file per run
+  (including every offline/preview run that never dispatched), and
+  `written_records`/`run_audit`/`run_manifest` each add their own per-run file too.
+  Only `artifact_store`'s `dashboard_artifact_ttl_days` (30) existed as a TTL
+  anywhere, covering exactly one file. Observed live: 393 files / 1.5 MB after one
+  week, 362 of them `run_state-*.json`.
+fix: `run_report.prune_durable_state(config=None, now=None)` — two TTL families
+  measured from each file's own mtime (never a `saved_at` field parsed from
+  content, so it works uniformly across every JSON store and F3's new plain-text
+  `run_report-*.md`): `run_state-*.json` at a fixed 7-day TTL (a resume attempted
+  after that long re-runs everything anyway, Phase 61); `written_records-*.json` /
+  `run_audit-*.json` / `run_manifest-*.json` / `run_report-*.md` at
+  `artifact_store.TTL_CONFIG_KEY` (`dashboard_artifact_ttl_days`, default 30,
+  reused rather than a second key). `held_queue.json`, `suggestion_declines.json`,
+  and `operator.local.json` (and any sibling starting with that name) are named
+  explicitly and never touched. Never raises — an unreadable/undeletable file is
+  skipped, matching every sibling durable-store writer's degrade-not-halt posture
+  (D-59-10). Wired into `enrich-before-ingest/SKILL.md` step 1, run once at the
+  start of a round, never mid-run (deleting a file a live dispatch is about to
+  append to would corrupt the D-59-07 partial-run guarantee).
+
+  DESIGN DEVIATION from the todo's original proposal: the function lives in
+  `run_report.py`, not `durable_paths.py` as the todo suggested. Discovered
+  mid-implementation: `test_sweep_read_only.py` statically verifies the
+  unattended sweep's own module import closure never reaches a function that
+  performs a filesystem write, and confines `durable_paths.py`'s own writes to
+  exactly `_atomic_write_0600`/`_migrate_once` — `durable_paths.py` IS in that
+  closure (the sweep needs it for read-only config-path resolution).
+  `prune_durable_state`'s `path.unlink()` call would have put a write-capable
+  function back on the sweep's reachable graph. `run_report.py` already imports
+  `durable_paths` and is NOT in the sweep's closure, so that is where the pruner
+  (and its own TTL constants, duplicated fresh from `artifact_store`'s rather than
+  importing it — `artifact_store` is also outside `durable_paths.py`'s safe
+  import set, though that constraint stopped applying once the function moved) now
+  lives.
+verification: RED before fix (17 new unit tests, verified via a temporary
+  `git stash` of the implementation): all failed with
+  `AttributeError: module 'run_report' has no attribute 'prune_durable_state'` (or
+  the equivalent `SHORT_TTL_DAYS` constant lookup). GREEN after fix. The 18th test
+  (`test_config_load_composed_with_prune_durable_state_respects_the_operators_configured_ttl`,
+  registered in `test_skill_sequence_coverage.py`'s COVERED dict) drives the exact
+  documented SKILL.md step 1 sequence — `config_gate.load_config()` ->
+  `run_report.prune_durable_state(cfg)` — end to end over a real config file on
+  disk. Full suites: `node --test tests/n8n/*.test.mjs` 942/942 (unchanged — no
+  n8n JSON touched). `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q`
+  2850/2850 (2832 + 18 new), 5 known skips unchanged.
+  `.venv/bin/python -m pytest -q --tb=short` 4608/4608 (4590 + 18 new), 154 known
+  skips unchanged.
+files_changed:
+  - operator-claude-plugin/scripts/run_report.py
+  - operator-claude-plugin/tests/test_run_report.py
+  - operator-claude-plugin/tests/test_skill_sequence_coverage.py
+  - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
+
+## Session summary
+
+All four findings (F1-F4) resolved and committed. Deploying the regenerated
+`n8n/wf_contact_ingest_cloud.json` to n8n Cloud remains the operator's own next
+action (needs their `.env`) — explicitly out of scope for this session, per the
+work order. `prune_durable_state` is wired into `enrich-before-ingest/SKILL.md`
+only; adopting the same step-1 call in the other batch-shaped skills
+(`enrich-records`, `contact-upload`, `suggest-contacts`) is a natural, small
+follow-on, not done here (F2's own scope was one flow, matching the todo's
+"minor" severity and this session's own priority ordering).

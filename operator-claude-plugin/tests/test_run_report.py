@@ -686,3 +686,206 @@ def test_build_run_report_never_raises_on_a_malformed_store(tmp_path, monkeypatc
     (tmp_path / "remainder_queue-x.json").write_text("{not valid json", encoding="utf-8")
     report = run_report.build_run_report("x", {})
     assert set(report) >= REQUIRED_TOP_LEVEL_KEYS
+
+
+# =====================================================================================
+# F2 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): prune_durable_state —
+# nothing in this plugin ever deleted a per-run artifact; 393 files / 1.5 MB after one
+# week, 362 of them 155-byte run_state-*.json files. Lives in THIS module, not
+# durable_paths.py — see prune_durable_state's own module-level comment for why
+# (test_sweep_read_only.py's static write-verb confinement over the unattended
+# sweep's reachable module closure).
+# =====================================================================================
+
+import os
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+def _age_file(path, days):
+    """Back-date a file's mtime by `days` — the ONLY signal prune_durable_state reads,
+    deliberately never a `saved_at` field parsed from content."""
+    stamp = (datetime.now(timezone.utc) - timedelta(days=days)).timestamp()
+    os.utime(path, (stamp, stamp))
+
+
+def test_prune_durable_state_deletes_a_run_state_file_past_the_short_ttl(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / "run_state-abc.json"
+    target.write_text("{}")
+    _age_file(target, run_report.PRUNE_SHORT_TTL_DAYS + 1)
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == ["run_state-abc.json"]
+    assert not target.exists()
+
+
+def test_prune_durable_state_keeps_a_run_state_file_within_the_short_ttl(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / "run_state-abc.json"
+    target.write_text("{}")
+    _age_file(target, run_report.PRUNE_SHORT_TTL_DAYS - 1)
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == []
+    assert target.exists()
+
+
+@pytest.mark.parametrize("name", [
+    "written_records-abc.json", "run_audit-abc.json", "run_manifest-abc.json",
+    "run_report-abc.md",
+])
+def test_prune_durable_state_deletes_each_long_ttl_family_past_its_ttl(tmp_path, monkeypatch, name):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / name
+    target.write_text("x")
+    _age_file(target, 31)  # past the default 30-day dashboard_artifact_ttl_days
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == [name]
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("name", [
+    "written_records-abc.json", "run_audit-abc.json", "run_manifest-abc.json",
+    "run_report-abc.md",
+])
+def test_prune_durable_state_keeps_each_long_ttl_family_within_its_ttl(tmp_path, monkeypatch, name):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / name
+    target.write_text("x")
+    _age_file(target, 29)
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == []
+    assert target.exists()
+
+
+def test_prune_durable_state_respects_a_configured_dashboard_artifact_ttl_days(tmp_path, monkeypatch):
+    """Reuses `artifact_store.TTL_CONFIG_KEY` rather than a second config key — an
+    operator who shortened the dashboard artifact's own TTL gets the same shorter
+    window applied to the long-TTL run artifacts too."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / "run_audit-abc.json"
+    target.write_text("x")
+    _age_file(target, 6)
+
+    deleted = run_report.prune_durable_state({"dashboard_artifact_ttl_days": 5})
+
+    assert deleted == ["run_audit-abc.json"]
+
+
+def test_prune_durable_state_never_touches_held_queue_or_suggestion_declines(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    held = tmp_path / "held_queue.json"
+    held.write_text("{}")
+    _age_file(held, 3650)
+    declines = tmp_path / "suggestion_declines.json"
+    declines.write_text("{}")
+    _age_file(declines, 3650)
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == []
+    assert held.exists() and declines.exists()
+
+
+def test_prune_durable_state_never_touches_operator_local_json_or_its_backups(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    cfg = tmp_path / "operator.local.json"
+    cfg.write_text("{}")
+    _age_file(cfg, 3650)
+    backup = tmp_path / "operator.local.json.bak"
+    backup.write_text("{}")
+    _age_file(backup, 3650)
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == []
+    assert cfg.exists() and backup.exists()
+
+
+def test_prune_durable_state_never_touches_the_bare_run_manifest_or_written_records_files(tmp_path, monkeypatch):
+    """No run id in the name — the global run_manifest.json / legacy written_records.json
+    shared stores, never a per-run artifact this function owns."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    manifest = tmp_path / "run_manifest.json"
+    manifest.write_text("{}")
+    _age_file(manifest, 3650)
+    legacy_wr = tmp_path / "written_records.json"
+    legacy_wr.write_text("{}")
+    _age_file(legacy_wr, 3650)
+
+    deleted = run_report.prune_durable_state()
+
+    assert deleted == []
+    assert manifest.exists() and legacy_wr.exists()
+
+
+def test_prune_durable_state_returns_an_empty_list_never_none_when_nothing_is_due(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    deleted = run_report.prune_durable_state()
+    assert deleted == []
+    assert deleted is not None
+
+
+def test_prune_durable_state_skips_a_file_it_cannot_delete_without_raising(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / "run_state-abc.json"
+    target.write_text("{}")
+    _age_file(target, run_report.PRUNE_SHORT_TTL_DAYS + 1)
+
+    real_unlink = Path.unlink
+
+    def _flaky_unlink(self, *a, **k):
+        if self.name == "run_state-abc.json":
+            raise OSError("permission denied")
+        return real_unlink(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", _flaky_unlink)
+
+    deleted = run_report.prune_durable_state()  # must not raise
+    assert deleted == []
+    assert target.exists()
+
+
+def test_prune_durable_state_accepts_an_explicit_now_for_deterministic_tests(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    target = tmp_path / "run_state-abc.json"
+    target.write_text("{}")
+    fixed_now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    stamp = (fixed_now - timedelta(days=run_report.PRUNE_SHORT_TTL_DAYS + 1)).timestamp()
+    os.utime(target, (stamp, stamp))
+
+    deleted = run_report.prune_durable_state(now=fixed_now)
+
+    assert deleted == ["run_state-abc.json"]
+
+
+def test_config_load_composed_with_prune_durable_state_respects_the_operators_configured_ttl(
+        tmp_path, monkeypatch, fake_config):
+    """The documented `enrich-before-ingest/SKILL.md` step 1 sequence:
+    `config_gate.load_config()` -> `run_report.prune_durable_state(cfg)`. Driven end
+    to end over a REAL config file on disk (the real entrypoint the operator actually
+    reaches — `config_gate.load_config`'s own file-reading/validation path), not a
+    hand-built dict, so the operator's own `dashboard_artifact_ttl_days` override is
+    proven to reach the pruner through the real loader, not just
+    `prune_durable_state`'s own unit tests (which pass a dict directly)."""
+    import config_gate
+
+    _patch_durable_dir(monkeypatch, tmp_path)
+    cfg_path = tmp_path / "operator.local.json"
+    cfg_path.write_text(json.dumps({**fake_config, "dashboard_artifact_ttl_days": 5}))
+
+    target = tmp_path / "run_audit-abc.json"
+    target.write_text("x")
+    _age_file(target, 6)
+
+    cfg = config_gate.load_config(cfg_path)
+    deleted = run_report.prune_durable_state(cfg)
+
+    assert deleted == ["run_audit-abc.json"]
