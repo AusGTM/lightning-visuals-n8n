@@ -49,8 +49,21 @@ builder.
   `.item` is ambiguous across runs — observation 31305); keeping run recovery as a fenced idiom.
   — **Reversibility:** costly — every converged reader's jsCode changes from by-name to
   `$input`; undoing means reinstating run recovery at every site.
+  *Load-bearing addendum from research 2026-09-09 (70-RESEARCH.md § D-70-02, Pitfall 1):
+  a Merge in append mode "waits for the execution of all connected inputs", and an n8n lane
+  that produces zero items NEVER executes — so a Merge with an un-fired input hangs the
+  execution (`[documented]` + multiple dated community reports; not yet `[observed live]`).
+  Every Merge input must therefore ALWAYS fire: enable "Always Output Data" on each
+  lane-terminal node feeding a Merge (or emit an explicit sentinel row the Merge's consumer
+  filters back out). The single-lane-only batch — the COMMON shape — is the hang case; it
+  is a mandatory walker unit test (D-70-18) and a mandatory send in D-70-19's live run.*
 
-- **D-70-02: `executionOrder` v1 flip is the RESEARCHER's call, after a doc check.** Both live
+- **D-70-02: `executionOrder` v1 flip is the RESEARCHER's call, after a doc check.**
+  *RESOLVED by research 2026-09-09: do NOT flip to v1 in this phase. The Merge-input hang
+  is independent of v0/v1; flipping would put a second all-five-workflows behaviour change
+  into the same disarmed proof run. D-70-19's run logs `settings.executionOrder` from the
+  live workflow body so the `[observed live]` upgrade lands on the setting the workflow
+  actually ran with (absent/legacy). A v1 flip, if ever wanted, is its own later change.* Both live
   workflows run legacy v0 (`settings.executionOrder` absent on all five committed cloud
   JSONs). Merge behaviour when one lane never fires differs between v0 and v1. The researcher
   verifies from n8n's docs — under the setting the workflow will actually run with — whether a
@@ -77,6 +90,17 @@ builder.
   order incl. `continueOnFail`), HTTP inside Code via `this.helpers.httpRequest` (fewest
   nodes; credential reachability from Code on Cloud is UNVERIFIED), or another the researcher
   finds. The recommendation must state which candidate and why the others lost.
+  *RESOLVED by research 2026-09-09 (70-RESEARCH.md § D-70-04): Merge (Combine by Position,
+  2 inputs) immediately after every HTTP node — pre-hop row on input 1, HTTP response on
+  input 2. Where the API echoes an opaque row token, prefer Combine-by-Fields on that token
+  over positional combine; decide per HTTP node at build time. HTTP-inside-Code lost:
+  `this.helpers.httpRequestWithAuthentication` was broken on n8n Cloud through 1.36.1, fixed
+  in 1.42.0, and this account's build is unpinned — a credential-sandbox dependency the repo
+  cannot verify offline. The assertion must catch the literal `$('`, the dynamic `$(name)`
+  call form `nodeRunRecovery.js` uses, and node `parameters` expressions (IF conditions, HTTP
+  jsonBody/url), and must assert `nodeRunRecovery.js` is inlined nowhere (Pitfall 2). The
+  `.item` reads of `Enrichment Gate` inside the research/judge HTTP body builders
+  (`build_cloud_workflows.py` ~L5889-5954, Pitfall 4) are in scope.*
 
 ### Result channel
 
@@ -183,7 +207,15 @@ builder.
   unchanged and widens: the enrichment lane GAINS a real gate node emitting the refusal item
   (D-70-14), the scheduled-maintenance writes adopt the same `write_request` shape, and the
   inline `_writeSafetyAllows` calls in the two Decide nodes are removed so the predicate has
-  one home per lane.* The review lane's emitter sets
+  one home per lane. Forced widening: deleting the fallback ladder from `_write_gate_js`
+  (D-70-12) breaks `build_scheduled_maintenance_cloud`'s three spliced gates (`SJ-1 Set
+  Requested`, `SJ-2 Set Requested`, `Dedupe Set Needs Review`) unless their emitters adopt
+  `write_request` too — so they do, and `sj3DispatchGate` / `sjPredicates` /
+  `dedupeSweepWiring` tests plus the node-count pin 39 move with them.
+  `companyRecomputeLaneFlow.test.mjs` pins the recompute lane's `write_blocked` coming from
+  `Decide Company Action` (execution 11858, §13.0); with the inline check gone it is
+  rewritten against the new gate, not deleted. D-70-19's disarmed run does NOT exercise the
+  scheduled lane; its coverage is offline only.* The review lane's emitter sets
   `domain: null`, so 30-02's "contacts are `TEST_RECORD_IDS`-only on review writebacks" survives
   as the emitted value, not as a gate special-case; `reviewDecisionEndpoint.test.mjs` g3 stays
   green. Rejected: enrichment+ingest only; giving review the domain path.
