@@ -8736,6 +8736,101 @@ def _normalize_hubspot_auth(wf: dict) -> dict:
     return wf
 
 
+# ---- by-name-read detector (Phase 70, D-70-03/D-70-04) -----------------------
+
+# The literal `$('Node').all()`/`$("Node").item` quoted accessor form, AND the dynamic
+# call form `recoverConvergedRun` uses when inlined (`(name, b, r) => $(name).all(b, r)`
+# — an identifier held in a variable, no adjacent quote character for a naive
+# literal-substring scan to catch — research Pitfall 2).
+_BY_NAME_READ_RE = re.compile(
+    r"\$\(\s*(?:(?P<q>['\"])(?P<lit>[^'\"]*)(?P=q)|(?P<dyn>[A-Za-z_$][A-Za-z0-9_$]*))\s*\)"
+)
+
+
+def _run_recovery_marker() -> str:
+    """A distinctive line lifted from nodeRunRecovery.js's OWN function signature, read
+    from the source file itself rather than duplicated as a hardcoded string here — a
+    future edit to that module cannot silently desync this detector's marker."""
+    src = (CODE / "nodeRunRecovery.js").read_text()
+    for line in src.splitlines():
+        if "function recoverConvergedRun(" in line:
+            return line.strip()
+    raise RuntimeError("nodeRunRecovery.js's recoverConvergedRun signature not found")
+
+
+def _iter_param_strings(value, path: str):
+    """Walks a node's `parameters` tree — dicts, lists AND strings alike — yielding
+    every string found with its dotted/indexed path. NOT jsCode-only: an IF condition
+    expression, a Set assignment value, and an HTTP `jsonBody`/`url` expression are all
+    plain strings elsewhere in this same tree and can carry a node lookup exactly like a
+    Code node's jsCode can (research Pitfall 2 — a jsCode-only grep misses these)."""
+    if isinstance(value, str):
+        yield path, value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            yield from _iter_param_strings(v, f"{path}.{k}" if path else k)
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            yield from _iter_param_strings(v, f"{path}[{i}]")
+
+
+def detect_by_name_reads(wf: dict) -> list[dict]:
+    """Finds every by-name node read in a built workflow (D-70-03/D-70-04).
+
+    Live symptom this is the structural gate for (F5, execution 12163 —
+    .planning/debug/resolved/uat-batch-review-row-reads-failed.md): a downstream reader
+    of a multi-inbound-edge convergence node ("Enrichment Gate", "Company Gate")
+    recovers it BY NAME — required because an intervening HTTP hop replaces `$json` — and
+    a bare `$('Node').all()` returns only the node's MOST RECENT run, silently collapsing
+    every earlier lane's rows. `recoverConvergedRun` (n8n/code/nodeRunRecovery.js) is
+    today's mitigation for that specific collapse; it is not the by-name read's removal,
+    which is what plan 70-04 does once this detector's count reaches zero.
+
+    Returns a list of `{workflow, node, path, form, excerpt}` dicts, one per match,
+    covering three shapes:
+      - "quoted"              — `$('Node Name')` / `$("Node Name")`, the common form.
+      - "dynamic"             — `$(nodeNameVariable)`, the form `recoverConvergedRun`'s
+                                 own `(name, b, r) => $(name).all(b, r)` wrapper uses when
+                                 inlined into a node, invisible to a literal-substring scan.
+      - "run_recovery_inlined" — `n8n/code/nodeRunRecovery.js`'s own function signature
+                                 line is present verbatim in the node's jsCode (via
+                                 `inline("nodeRunRecovery.js", ...)`), naming the module
+                                 as migrating call sites for plan 70-04 to retire.
+
+    NOT wired into `main()` as a raise in this plan (70-01) — that is plan 70-04 Task 3's
+    job, once the count is zero; raising here would stop the builder from generating
+    anything today and block every plan between this one and that one.
+    """
+    marker = _run_recovery_marker()
+    workflow_name = wf.get("name", "")
+    violations = []
+    for node in wf.get("nodes", []):
+        node_name = node.get("name", "")
+        params = node.get("parameters", {})
+        for path, s in _iter_param_strings(params, ""):
+            if marker in s:
+                violations.append({
+                    "workflow": workflow_name,
+                    "node": node_name,
+                    "path": path,
+                    "form": "run_recovery_inlined",
+                    "excerpt": marker[:120],
+                })
+            for m in _BY_NAME_READ_RE.finditer(s):
+                form = "dynamic" if m.group("dyn") else "quoted"
+                start = max(0, m.start() - 20)
+                excerpt = s[start:m.end() + 20].strip()[:120]
+                violations.append({
+                    "workflow": workflow_name,
+                    "node": node_name,
+                    "path": path,
+                    "form": form,
+                    "excerpt": excerpt,
+                })
+    violations.sort(key=lambda v: (v["node"], v["path"]))
+    return violations
+
+
 def main():
     out_local = ROOT / "n8n" / "wf_contact_ingest_local.json"
     out_cloud = ROOT / "n8n" / "wf_contact_ingest_cloud.json"
