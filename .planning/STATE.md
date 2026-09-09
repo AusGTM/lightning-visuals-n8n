@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: Completed 70-05-PLAN.md
-last_updated: "2026-09-09T21:09:18.591Z"
+stopped_at: Completed 70-06-PLAN.md
+last_updated: "2026-09-09T22:01:32.827Z"
 last_activity: 2026-09-10
 last_activity_desc: Phase 70 execution in progress — 70-05 Task 1 + Task 2 sub-step 2a landed
-state_head: c947a4560eda018b744f0e207065a480db521ae7
+state_head: f4840925e71cf06742d007784413f0e62c0664e1
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
   percent: 29
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-09-09 — Phase 70 execution started
 
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-09T21:09:12.513Z
-**Stopped at:** Completed 70-05-PLAN.md
+**Last session:** 2026-09-09T22:01:32.451Z
+**Stopped at:** Completed 70-06-PLAN.md
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
@@ -650,6 +650,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 70 P03 | 7h (across two dispatches) | 3 tasks | 40 files |
 | Phase 70 P04 | ~100min | 3 tasks | 42 files |
 | Phase 70 P05 | 6h | 3 tasks | 30 files |
+| Phase 70 P06 | 46 min | 3 tasks | 38 files |
 
 ## Decisions
 
@@ -794,6 +795,12 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 70]: Retired the by-name-recovery idiom everywhere (carry merges, Wrap-then-carry, combineAll broadcast) and made the builder refuse to regenerate a workflow that reintroduces it
 - [Phase 70]: A gate's refusal lane gets its OWN merge input, never a share of the write path's — Reusing the write terminal's merge input left the ~30-entry starved-lane sentinel network untouched, which is true and was the reason it was chosen. It is still wrong: every OTHER multi-producer input on these merges is mutually exclusive by construction (a marker OR the real terminal, never both), and this one was not. On an ARMED batch with a MIXED verdict the zero-hop refusal beats the permitted row's multi-hop delivery, the Merge fires and locks, and the real arrival is dropped -- measured with the offline walker over the committed graph: the permitted row reported association "not_confirmed" when HubSpot had associated it. Every disarmed suite stayed green through the bug, because disarmed every row is refused and the two producers ARE exclusive.
 - [Phase 70]: Ingest's Associate Lane Sentinel becomes a third ALLOW_HUBSPOT_RECORD_WRITES declaring node — It duplicates the gate predicate for graph plumbing only -- deciding whether its Merge-feeding marker is needed, never whether a write is permitted (the review lane's accepted BUG-30 pattern). Required because that marker SHARES the association lane's merge input with a real delivery, so the two must be mutually exclusive. Consequence for the operator: any arming run that rewrites the gates but not the sentinel reproduces the dropped-association bug on a real batch. n8n_arming.set_write_safety rewrites all declaring nodes, so the tool is correct; the risk is a manual arm.
+- [Phase 70]: sync_response_is_sufficient DELETED, not repurposed — there is no channel left to choose between
+- [Phase 70]: build_sync_report RENAMED to build_row_reports — the rename is the migration; the body is unchanged
+- [Phase 70]: D-70-06: report.reconcile is shared, not copied — and applied on the ingest lane only, because its write-node map names the ingest workflow's nodes
+- [Phase 70]: The ledger gate is caller discipline at dispatch_and_recover's append site; written_records.append_chunk is unchanged
+- [Phase 70]: config_gate.CAPABILITY_KEYS is the fail-closed mechanism for n8n_api_key; watch.require_executions_api is its named front door
+- [Phase 70]: preingest.partition_for_ingest runs confidence.assess first and the email check second, so a no-match row is held for the signal that withheld it
 
 ### Roadmap Evolution
 
