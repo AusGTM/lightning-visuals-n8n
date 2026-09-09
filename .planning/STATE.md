@@ -1,21 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: 70-05 Task 2 sub-step 2a complete (partial); resume at 2b (enrichment lane gate)
-last_updated: "2026-09-10T00:00:00.000Z"
+stopped_at: Completed 70-05-PLAN.md
+last_updated: "2026-09-09T21:09:18.591Z"
 last_activity: 2026-09-10
 last_activity_desc: Phase 70 execution in progress — 70-05 Task 1 + Task 2 sub-step 2a landed
-state_head: d87eef187a7a634ce20e94e3fb054daf70fde821
+state_head: c947a4560eda018b744f0e207065a480db521ae7
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 2
   total_plans: 23
   completed_plans: 21
-  percent: 86
+  percent: 29
 ---
 
 # Project State
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-09-09 — Phase 70 execution started
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 86% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [███░░░░░░░] 29% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,14 +501,14 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-10T00:00:00.000Z
-**Stopped at:** 70-05 Task 2 sub-step 2a complete (partial); resume at 2b (enrichment lane gate)
+**Last session:** 2026-09-09T21:09:12.513Z
+**Stopped at:** Completed 70-05-PLAN.md
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
 `blocked` (operator could not run a live test) on an earlier phase's UAT; Phase 62 verified
 13/13 but awaiting live UAT.
-**Resume file:** .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-05-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -649,6 +649,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 70 P03 | 4.5h | 1 tasks | 19 files |
 | Phase 70 P03 | 7h (across two dispatches) | 3 tasks | 40 files |
 | Phase 70 P04 | ~100min | 3 tasks | 42 files |
+| Phase 70 P05 | 6h | 3 tasks | 30 files |
 
 ## Decisions
 
@@ -791,6 +792,8 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 70]: 70-03 Task 3: review-decision lane's 3 convergences merged using single-producer sentinels, not the plan's literal NoOp+alwaysOutputData wording (verified via the walker to leak markers into live HubSpot calls otherwise).
 - [Phase 70]: 70-03: chunking.dispatch_plan's written_records flush deleted whole (body is always the ack now); run_report.py's read of that artifact is a deferred, documented gap (D-70-08 scope).
 - [Phase 70]: Retired the by-name-recovery idiom everywhere (carry merges, Wrap-then-carry, combineAll broadcast) and made the builder refuse to regenerate a workflow that reintroduces it
+- [Phase 70]: A gate's refusal lane gets its OWN merge input, never a share of the write path's — Reusing the write terminal's merge input left the ~30-entry starved-lane sentinel network untouched, which is true and was the reason it was chosen. It is still wrong: every OTHER multi-producer input on these merges is mutually exclusive by construction (a marker OR the real terminal, never both), and this one was not. On an ARMED batch with a MIXED verdict the zero-hop refusal beats the permitted row's multi-hop delivery, the Merge fires and locks, and the real arrival is dropped -- measured with the offline walker over the committed graph: the permitted row reported association "not_confirmed" when HubSpot had associated it. Every disarmed suite stayed green through the bug, because disarmed every row is refused and the two producers ARE exclusive.
+- [Phase 70]: Ingest's Associate Lane Sentinel becomes a third ALLOW_HUBSPOT_RECORD_WRITES declaring node — It duplicates the gate predicate for graph plumbing only -- deciding whether its Merge-feeding marker is needed, never whether a write is permitted (the review lane's accepted BUG-30 pattern). Required because that marker SHARES the association lane's merge input with a real delivery, so the two must be mutually exclusive. Consequence for the operator: any arming run that rewrites the gates but not the sentinel reproduces the dropped-association bug on a real batch. n8n_arming.set_write_safety rewrites all declaring nodes, so the tool is correct; the risk is a manual arm.
 
 ### Roadmap Evolution
 

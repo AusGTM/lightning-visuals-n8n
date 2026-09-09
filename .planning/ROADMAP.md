@@ -297,7 +297,7 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 4/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
+**Plans:** 5/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
 70-05 ∥ 70-06.
 
 Plans:
@@ -316,7 +316,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 70-05-PLAN.md — Wave 4: one canonical `write_request`, an IF-shaped gate emitting refusals, a real gate on the enrichment lane, one verdict for an update and its association
+- [x] 70-05-PLAN.md — Wave 4: one canonical `write_request`, an IF-shaped gate emitting refusals, a real gate on the enrichment lane, one verdict for an update and its association
 - [ ] 70-06-PLAN.md — Wave 4: the client result channel — runData always, refusal before start on a missing API key, a write-only ledger, one per-row verdict, repo scripts migrated
 
 **Wave 5** *(blocked on Wave 4 completion)*
