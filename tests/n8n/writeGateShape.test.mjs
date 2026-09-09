@@ -370,13 +370,14 @@ async function walkIngest({ triggerItems, httpStubs }) {
   const { runData, trace } = walkWorkflow(wf, {
     triggerNode: "Webhook Trigger", triggerItems, httpStubs,
   });
-  return { trace, rows: nodeItems(runData, "Build Ingest Response") };
+  const ran = (name) => (nodeItems(runData, name) || []).length > 0;
+  return { trace, ran, rows: nodeItems(runData, "Build Ingest Response") };
 }
 
 const INGEST_EMAIL = "solo@wyongraceclub.com.au";
 
 test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest Response, one row, reported blocked", async () => {
-  const { trace, rows } = await walkIngest({
+  const { trace, ran, rows } = await walkIngest({
     triggerItems: [{ email: INGEST_EMAIL, firstname: "Solo", lastname: "Person", company: "Wyong Race Club" }],
     httpStubs: {
       "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
@@ -392,6 +393,10 @@ test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest 
   assert.equal(rows[0].action, "write_blocked",
     "the gate's verdict, not the pre-write intention (F11 / execution 12181)");
   assert.notEqual(rows[0].association, "associated");
+  // D-70-15: one verdict covers both — a refused row runs NEITHER.
+  assert.equal(ran("HubSpot Update"), false, "the refused write must not have run");
+  assert.equal(ran("HubSpot Associate Company"), false,
+    "and neither must its association");
 });
 
 test("ingest: a batch of updates that resolve NO company does not stall — an update is never held for lack of a company", async () => {

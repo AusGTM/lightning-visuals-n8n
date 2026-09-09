@@ -404,3 +404,33 @@ def test_assert_write_request_emitters_walks_through_a_native_if_node():
     }
 
     assert_write_request_emitters(nodes, conns, {"HubSpot Update": "enrich"})
+
+
+# --- Phase 70 Plan 05 Task 2 sub-step 2b (D-70-13) -------------------------------------
+
+@pytest.mark.parametrize("name", ["Decide Action", "Decide Company Action"])
+def test_the_enrichment_decide_nodes_no_longer_compute_write_permission(name):
+    """The enrichment lane was the ONLY lane in the build whose write permission was
+    decided inline in a decision node rather than in a gate. 2b moved the predicate to
+    the lane's four spliced gates, so each lane has exactly one home for it — and, with
+    the constants, one arming surface. A second copy here is exactly the drift D-70-13
+    closes: a decision node's job is WHAT the row is, never WHETHER it may be written."""
+    from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS
+
+    wf = _load(ROOT / "n8n" / "wf_enrichment_cloud.json")
+    js = _js(wf, name)
+    assert "_writeSafetyAllows(" not in js
+    for const_name in WRITE_SAFETY_DEFAULTS:
+        assert f"const {const_name} = " not in js, (
+            f"{name} still bakes {const_name} — arming belongs to the gate"
+        )
+    assert "_buildWriteRequest(" in js, f"{name} must emit the canonical write_request"
+
+
+@pytest.mark.parametrize("write_name", [
+    "HubSpot Create", "HubSpot Update", "HubSpot Company Create", "HubSpot Company Update",
+])
+def test_every_enrichment_write_sits_behind_its_own_spliced_gate(write_name):
+    wf = _load(ROOT / "n8n" / "wf_enrichment_cloud.json")
+    assert _feeders(wf, write_name) == [f"{write_name} Write Gate IF"]
+    assert _all_paths_cross_a_gate(wf, write_name)
