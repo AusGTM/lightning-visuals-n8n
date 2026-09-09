@@ -3,7 +3,7 @@ status: verifying
 trigger: "F1 and F2 (from .planning/uat/UAT-autonomous-batch-2026-09-09.md) — plus operator answers: Barry's Bigpond email came from direct web research by hand; row 3 was ignored by the round; no end-of-run report was rendered; Apollo unconfirmed is accepted (no master key)"
 slug: uat-batch-review-row-reads-failed
 created: 2026-09-09
-updated: 2026-09-09T03:00:00Z
+updated: 2026-09-09T04:00:00Z
 run_id: 377a913c1c9d49129663c6c8740f436d
 ---
 
@@ -103,8 +103,8 @@ reasoning_checkpoint:
     symptom.
 ```
 
-next_action: all four findings resolved and committed. Remaining: commit F2's fix, then hand off to the operator — deploying `n8n/wf_contact_ingest_cloud.json` to n8n Cloud (needs their `.env`) is the one action outside this session's scope. No further investigation pending.
-test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green. F3/F4 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_chunking.py operator-claude-plugin/tests/test_preingest_merge.py -q` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q`; all green. F2 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_sweep_read_only.py -q`; green. All three project suites green after every fix (see each Resolution block for exact counts).
+next_action: all four findings resolved, fixed, and committed (F1 `0c42b18`, F3/F4 `392753a`, F2 `734826b`, F4 row-accounting false-positive correction `00668a3`). Nothing verified live — every check ran offline. Awaiting operator confirmation per the CHECKPOINT below before this session moves the file to `resolved/` and appends the knowledge base.
+test_gate: F1 — `node --test tests/n8n/ingestReviewBranchResponds.test.mjs` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q -k queue`; both green. F3/F4 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_chunking.py operator-claude-plugin/tests/test_preingest_merge.py -q` and `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py -q`; all green. F2 — `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py operator-claude-plugin/tests/test_sweep_read_only.py -q`; green. Final pass after the row-accounting correction: plugin suite 2850/5, full repo 4608/154, node 942/0 — unchanged baselines, no regression.
 
 ## Constraints (project)
 
@@ -407,6 +407,22 @@ fix: (a) `chunking.dispatch_plan` now skips the `append_chunk` flush entirely wh
   patch for an out-of-band CLI call; the row-accounting line is what makes a future
   recurrence of this CLASS of symptom visible on the report's own face, per the
   objective's explicit instruction for a process-not-code cause.
+
+  CORRECTION (same day, caught by advisor review before handoff, not by a failing
+  test): the first cut passed `original_row_count=len(rows)` — step 2's WHOLE
+  extraction, before match/classification narrowed anything down. But
+  `run_state.total_row_ids` (step 5) is seeded from `unmatched_rows` only —
+  auto-matched and confirmed-proposed rows never call `run_state.start_run` at all,
+  they route to `enrich-records` via `confirmed_ids` at step 7, a different run
+  entirely. Any ordinary batch containing one matched row would have rendered a
+  false MISMATCH on the very gate meant to catch a real silent drop. Fixed by
+  switching the call site to `original_row_count=len(unmatched_rows)` — the exact
+  set step 5 passes to `run_state.start_run` — so a match now means every row that
+  was SUPPOSED to enter this run's tracked scope did, and a mismatch still names a
+  row dispatched outside `chunking.dispatch_plan`, just without the false alarm on
+  the common case. `run_report.py` itself needed no change (its row-accounting
+  tests call `build_run_report` directly with an explicit `original_row_count`);
+  this was a SKILL.md caller-side argument fix only. Commit `00668a3`.
 verification: RED before fix —
   `test_an_async_ack_body_is_never_flushed_into_written_records` (chunking) failed
   with a real entry present where none was expected;
@@ -488,11 +504,17 @@ files_changed:
 
 ## Session summary
 
-All four findings (F1-F4) resolved and committed. Deploying the regenerated
+All four findings (F1-F4) resolved, fixed, and committed (`0c42b18`, `392753a`,
+`734826b`, plus a same-day correction `00668a3` for a false-positive the F4
+row-accounting gate would have raised on the healthy path — caught by advisor
+review before handoff, not by a failing test). Every check ran offline; nothing
+here has been verified against a live send. Deploying the regenerated
 `n8n/wf_contact_ingest_cloud.json` to n8n Cloud remains the operator's own next
 action (needs their `.env`) — explicitly out of scope for this session, per the
 work order. `prune_durable_state` is wired into `enrich-before-ingest/SKILL.md`
 only; adopting the same step-1 call in the other batch-shaped skills
 (`enrich-records`, `contact-upload`, `suggest-contacts`) is a natural, small
 follow-on, not done here (F2's own scope was one flow, matching the todo's
-"minor" severity and this session's own priority ordering).
+"minor" severity and this session's own priority ordering). The untracked
+`uat-batch-2026-09-09.csv` (real names/emails from the source batch) should be
+deleted once the operator no longer needs it for reference.
