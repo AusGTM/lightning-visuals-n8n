@@ -1,6 +1,6 @@
 {
   "workflow": {
-    "_auto_chain_active": false,
+    "_auto_chain_active": true,
     "use_worktrees": false,
     "plan_review_convergence": true,
     "nyquist_validation": true,
