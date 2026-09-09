@@ -297,7 +297,7 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 3/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
+**Plans:** 4/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
 70-05 ∥ 70-06.
 
 Plans:
@@ -312,7 +312,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 70-04-PLAN.md — Wave 3: carry Merges at every provider/HubSpot hop, the last parameter-expression reads retired, `nodeRunRecovery.js` deleted, and the by-name-read assertion wired into generation
+- [x] 70-04-PLAN.md — Wave 3: carry Merges at every provider/HubSpot hop, the last parameter-expression reads retired, `nodeRunRecovery.js` deleted, and the by-name-read assertion wired into generation
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

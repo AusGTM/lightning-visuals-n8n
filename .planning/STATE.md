@@ -5,17 +5,17 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: Completed 70-03-PLAN.md (Tasks 1-3, across two dispatches)
-last_updated: "2026-09-09T17:23:10.613Z"
+stopped_at: Completed 70-04-PLAN.md
+last_updated: "2026-09-09T19:25:00.575Z"
 last_activity: 2026-09-09
 last_activity_desc: Phase 70 execution started
-state_head: a23cd2330c2074df0fed9a7e2f693fcde8342d3d
+state_head: 60402f2ef164505ce9de9d6a1b68b8e44b589563
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 23
-  completed_plans: 19
-  percent: 83
+  completed_plans: 20
+  percent: 86
 ---
 
 # Project State
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-09-09 — Phase 70 execution started
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [████████░░] 83% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████████░] 86% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-09T17:23:09.640Z
-**Stopped at:** Completed 70-03-PLAN.md (Tasks 1-3, across two dispatches)
+**Last session:** 2026-09-09T19:24:59.632Z
+**Stopped at:** Completed 70-04-PLAN.md
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -646,6 +646,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 70 P02 | 2h | 3 tasks | 13 files |
 | Phase 70 P03 | 4.5h | 1 tasks | 19 files |
 | Phase 70 P03 | 7h (across two dispatches) | 3 tasks | 40 files |
+| Phase 70 P04 | ~100min | 3 tasks | 42 files |
 
 ## Decisions
 
@@ -787,6 +788,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 70]: 70-03 Task 2: Build Ack is now the sole responder input; body-borne refusals become runData rows via Build Refusal Row (D-70-07).
 - [Phase 70]: 70-03 Task 3: review-decision lane's 3 convergences merged using single-producer sentinels, not the plan's literal NoOp+alwaysOutputData wording (verified via the walker to leak markers into live HubSpot calls otherwise).
 - [Phase 70]: 70-03: chunking.dispatch_plan's written_records flush deleted whole (body is always the ack now); run_report.py's read of that artifact is a deferred, documented gap (D-70-08 scope).
+- [Phase 70]: Retired the by-name-recovery idiom everywhere (carry merges, Wrap-then-carry, combineAll broadcast) and made the builder refuse to regenerate a workflow that reintroduces it
 
 ### Roadmap Evolution
 
