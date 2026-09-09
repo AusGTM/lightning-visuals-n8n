@@ -9918,17 +9918,26 @@ const first = $input.first();
 const row = (first && first.json) || {};
 const parsed = row;
 
-// ALLOWLIST PRE-CHECK (Phase 31 Plan 02, BUG 30). Same authority the committed gate uses,
-// same two input fields the spliced non-create gate resolves to on THIS lane: `Review
-// Extract Record` emits a flattened row carrying exactly `hs_object_id` and `domain` (never
-// `existingRecord` or `identity_keys`), so those are the fields to read here too. A preview
-// (`dry_run` anything other than the literal `false`) must keep showing the patch the
-// operator is being asked to approve, so it stays writeAllowed regardless of the allowlist
-// — the real gate, not this pre-check, is what withholds a write later if a preview caller
-// ever flips to a real submit.
+// ALLOWLIST PRE-CHECK (Phase 31 Plan 02, BUG 30). Same authority the committed gate uses.
+// A preview (`dry_run` anything other than the literal `false`) must keep showing the
+// patch the operator is being asked to approve, so it stays writeAllowed regardless of
+// the allowlist — the real gate, not this pre-check, is what withholds a write later if
+// a preview caller ever flips to a real submit.
+//
+// [Rule 1 - Bug, found by the plan's own advisor review, Phase 70 Plan 05 Task 1]
+// D-70-13 forces this node's OWN `write_request.domain` to null for BOTH object types
+// (below) — but this pre-check used to pass `row.domain` through unchanged. On a real
+// company submit with a domain-only allowlist, the pre-check said allowed (outcome
+// "applied", dry_run false) while the spliced gate — now null-domain-only for this
+// lane — refused: the row never reaches "Review Verify Fetch", its Absent Sentinel
+// never fires (guarded on `dry_run === true`, which this branch is not), and "Build
+// Review Response Merge" starves waiting on an input that will never deliver (D-70-14's
+// hang class). Passing `null` here too means a domain-only-armed company now resolves
+// to `not_allowlisted` at THIS check, `dry_run` flips true, and the row exits cleanly via
+// the no-write response lane instead of hanging behind a gate it can no longer pass.
 const writeAllowed = (parsed.dry_run !== false)
   ? true
-  : _writeSafetyAllows("review", row.hs_object_id, row.domain);
+  : _writeSafetyAllows("review", row.hs_object_id, null);
 
 const result = buildReviewDecision({
   objectType: parsed.object_type,
