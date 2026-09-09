@@ -1083,18 +1083,21 @@ whatever seven columns happened to be in the source file.
        outcome, globals().get("rerequest_dispatch_outcome"), outcome_ingest
    ) if o is not None]
 
-   # `original_row_count` (F4, gap-closure 2026-09-09): `rows` is step 2's own, minted
-   # once and never reassigned before this point in the normal (non-resume) flow —
-   # the whole batch's row count, BEFORE match/classification narrowed anything down.
-   # Compared against this run's own `run_state.total_row_ids` count inside the
-   # rendered block; a mismatch means a row never reached `run_state.start_run` at
-   # all (F4's own live shape — a row dispatched outside chunking.dispatch_plan,
-   # bypassing every store this report reads). May over-count when step 2's own
-   # extraction pass also yielded company rows (a different lane's own row set) —
-   # a rough, honest check, not a strict invariant.
+   # `original_row_count` (F4, gap-closure 2026-09-09; corrected same day after a
+   # false-positive was found on the healthy path): use `unmatched_rows` (step 4),
+   # NOT `rows` (step 2's whole extraction). Auto-matched and confirmed-proposed
+   # rows never call `run_state.start_run` at all — they go to `enrich-records` via
+   # `confirmed_ids` at step 7, a different run entirely — so counting `rows` here
+   # flagged a MISMATCH on any batch with an ordinary matched row, not just F4's
+   # actual failure mode. `unmatched_rows` is exactly the set step 5 passes to
+   # `run_state.start_run`, so a match here means every row that was SUPPOSED to
+   # enter this run's tracked scope did; a mismatch still means a row dispatched
+   # outside `chunking.dispatch_plan` (F4's own live shape) — just without the
+   # false alarm on the common case.
    report = run_report.build_run_report(
        run_id, cfg, outcomes=outcomes, disarm=disarm,
-       balances=balances_at_grant, ceiling=ceiling, original_row_count=len(rows))
+       balances=balances_at_grant, ceiling=ceiling,
+       original_row_count=len(unmatched_rows))
    ```
 
    Render `report["block"]` to the operator verbatim. It already carries the
