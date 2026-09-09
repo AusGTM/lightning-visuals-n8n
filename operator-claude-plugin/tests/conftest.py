@@ -270,6 +270,24 @@ def stub_get_transport_factory():
     return _StubGetTransport
 
 
+@pytest.fixture
+def dispatch_no_recovery_kwargs(stub_get_transport_factory):
+    """kwargs for `dispatch.dispatch()` (Phase 70 Plan 02, D-70-05) that make its
+    unconditional post-POST recovery poll resolve immediately as "not recovered" —
+    for a test exercising something OTHER than the ingest recovery mechanism itself
+    (arming, chunking bookkeeping, a decline skill's flow, ...) that does not care what
+    `result["rows"]`/`result["recovered"]` come back as. An empty-scripted GET stub
+    makes `resolve_workflow_id` see no matching workflow (so no execution list/fetch
+    call follows), and `bound_seconds=0` with a frozen clock exits the poll on its
+    first check rather than looping forever."""
+    return {
+        "get_transport": stub_get_transport_factory([]),
+        "now": lambda: 0.0,
+        "sleep": lambda seconds: None,
+        "bound_seconds": 0,
+    }
+
+
 def _default_extraction_records():
     """Two records exercising both identity groups: one via email, one via
     firstname+lastname+company — matching config/column_mapping.yaml's `any_of` groups."""

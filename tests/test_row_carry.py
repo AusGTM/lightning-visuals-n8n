@@ -41,8 +41,15 @@ ROW_REPLACING_BY_DESIGN = {
     # the ingest lane failed on its first-ever live run (execution 20). The node is a
     # binary-carrying Code node now. Lesson for the next exemption written here: a Set
     # node starves TWO channels, json and binary — justify both or neither.
+    # "Set Review" (wf_contact_ingest_cloud.json) was exempted here as "terminal, no
+    # downstream consumer" — Phase 70 Plan 02 (D-70-01) made it row-carrying too: it now
+    # feeds "Ingest Merge Response" (the explicit convergence Merge in front of "Build
+    # Ingest Response"), which needs the full decided row, not a bare
+    # `{queue: "needs_review"}`. It is an `n8n-nodes-base.code` node now — see the
+    # ingest lane's own "Set Review" jsCode in build_cloud_workflows.py — so it no
+    # longer belongs on this Set-node waiver list at all.
+    #
     # Terminal queue markers; nothing downstream consumes them.
-    "Set Review": "terminal, no downstream consumer",
     "SJ-2 Skip (NoOp)": "terminal, no downstream consumer",
     "Review Stale (NoOp)": "terminal, no downstream consumer",
 }

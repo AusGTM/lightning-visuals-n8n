@@ -1187,9 +1187,9 @@ def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(
 # ==================================================================================
 
 def _ingest_response_body(hs_object_id="348695309760"):
-    """One row in Build Ingest Response's own shape (scripts/build_cloud_workflows.py:
-    471-520, repo root) — the contacts webhook's real synchronous body is a JSON array of
-    exactly these keys."""
+    """One row in Build Ingest Response's own shape (scripts/build_cloud_workflows.py) —
+    Phase 70 Plan 02 (D-70-05/D-70-07): this is now what the settled execution's runData
+    carries, recovered via dispatch()'s GET poll, never the webhook's synchronous body."""
     return [{
         "action": "create", "outcome": "created", "contact_id": hs_object_id,
         "hs_object_id": hs_object_id, "email": "josh@seriesfutsal.com",
@@ -1198,9 +1198,20 @@ def _ingest_response_body(hs_object_id="348695309760"):
     }]
 
 
+def _ingest_settled_execution(run_id, rows, execution_id="exec-ingest-1"):
+    return {
+        "id": execution_id,
+        "status": "success",
+        "data": {"resultData": {"runData": {
+            "Set Config": [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+            "Build Ingest Response": [{"data": {"main": [[{"json": r} for r in rows]]}}],
+        }}},
+    }
+
+
 def test_enrichment_and_contacts_writes_from_the_same_run_share_one_file(
-    fake_config, stub_module_transport_factory, stub_post_transport_factory, tmp_path,
-    monkeypatch, sample_csv,
+    fake_config, stub_module_transport_factory, stub_post_transport_factory,
+    stub_get_transport_factory, tmp_path, monkeypatch, sample_csv,
 ):
     artifact = tmp_path / "written_records.json"
     monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
@@ -1209,9 +1220,15 @@ def test_enrichment_and_contacts_writes_from_the_same_run_share_one_file(
     enrich_transport = stub_module_transport_factory()
     outcome = chunking.dispatch_plan(plan, PROVIDERS, True, fake_config, transport=enrich_transport)
 
-    write_transport = stub_post_transport_factory([_ingest_response_body()])
+    write_transport = stub_post_transport_factory([{"run_id": outcome.run_id, "accepted": True, "row_ids": []}])
+    executions_client._workflow_id_cache["LV Contact Ingest (Cloud template)"] = "wf-ingest-share-one-file"
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-ingest-1"}]},
+        _ingest_settled_execution(outcome.run_id, _ingest_response_body()),
+    ])
     dispatch(
         str(sample_csv), True, fake_config, transport=write_transport, run_id=outcome.run_id,
+        get_transport=get_transport, now=lambda: 0.0, sleep=lambda seconds: None,
     )
 
     entries = written_records.load(path=artifact)

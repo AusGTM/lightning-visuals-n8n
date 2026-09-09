@@ -24,11 +24,20 @@ entry to land in the SAME file as an earlier `dispatch_plan` run in the same con
 explicitly; a standalone `contact-upload` send gets its own fresh file, same as any other
 run.
 
-Return shape is `{"body": <the raw response, exactly what this function returned before
-this change>, "run_id": <str>, "written_records_failures": [...]}` rather than the bare
-body — a bookkeeping failure has nowhere to be smuggled into a body that is sometimes a
-bare list of row items, and D-59-10 requires it be surfaced, not swallowed. Every existing
-consumer reads `result["body"]` in place of the old bare `result`.
+D-70-05/D-70-07 (Phase 70 Plan 02): the webhook now answers immediately with an ack —
+`{run_id, accepted, row_ids}` — never a row-carrying body. Every row's real outcome is
+read from the settled execution's runData, unconditionally (sync and async alike, never
+gated behind an opt-in flag): after the POST, this function ALWAYS calls
+`watch.recover_dispatch(..., lane="ingest")` and treats its recovered rows as the
+dispatch's row data. `written_records.append_chunk` is fed those recovered rows, not the
+ack. The ack is retained under `result["ack"]` for diagnostics only — `result["body"]`
+stays an alias of the SAME ack value (never the row array) so an existing reader of
+`result["body"]` degrades to "the ack" rather than crashing on a shape it no longer
+carries; migrating those readers to `result["rows"]` is D-70-08's job, not this plan's.
+
+Return shape: `{"body": <alias of "ack">, "ack": <the raw POST response>,
+"rows": <recovered per-row list, reconciled via report.reconcile>, "recovered": <bool>,
+"run_id": <str>, "written_records_failures": [...]}`.
 """
 import json
 import uuid
@@ -36,8 +45,16 @@ import uuid
 import requests
 
 import config_gate
+import report
 import tabular
 import written_records
+
+# `watch` is imported LAZILY inside `dispatch()`, not at module load time: `watch` ->
+# `run_manifest` -> `held_queue` -> `enrichment` imports `DispatchError`/`NotArmedError`
+# FROM this module, so a module-level `import watch` here would be a circular import
+# (this module partially initialized, `enrichment` importing from it before it finishes
+# loading). Deferring the import to call time breaks the cycle with no behaviour change
+# — every module is fully loaded by the time `dispatch()` is actually invoked.
 
 
 class NotArmedError(Exception):
@@ -56,7 +73,8 @@ _IO_FAILURE_REASON = "the written-records artifact could not be saved (an I/O fa
 
 
 def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
-             source_by_field=None):
+             source_by_field=None, get_transport=requests.get, now=None, sleep=None,
+             bound_seconds=None):
     # load_config() only enforces n8n_url (the universal minimum) — this is the guard
     # that stops a webhook_secret-less config from reaching the transmit path below
     # (mirrors review_queue.fetch_queue()'s require_capability call).
@@ -76,6 +94,12 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
     url = config_gate.describe_target(config)
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
     files = {"data": ("contacts.csv", csv_bytes, "text/csv")}
+    # D-70-05 (Phase 70 Plan 02): the caller's own client-minted `run_id`, sent as a
+    # plain multipart form FIELD (the SAME `filename=None` idiom `source_by_field`
+    # already proves — no filename, so n8n parses it into `$json.body.run_id` rather
+    # than `$binary`). "Set Config" (scripts/build_cloud_workflows.py) echoes it back
+    # as its own output field; that echo is what the recovery poll below correlates on.
+    files["run_id"] = (None, run_id, "text/plain")
     # Phase 62 Plan 04 (D-62-17, CLAUDE.md 13.0.2 idiom): describes the REQUEST, not a
     # row — write_dispatch_csv raises on any non-canonical row key, so a per-row
     # `origin` column cannot travel this channel. `filename=None` is load-bearing: it
@@ -96,24 +120,41 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
         ) from None
 
     try:
-        body = response.json()
+        ack = response.json()
     except Exception:
-        body = {
+        ack = {
             "status_code": getattr(response, "status_code", None),
             "text": getattr(response, "text", None),
         }
 
+    import watch  # lazy — see the module-level comment on the circular import above
+
+    # D-70-05/D-70-06 (Phase 70 Plan 02): the ack carries no row outcome (D-70-07) —
+    # every row's real outcome is read from the settled execution's runData,
+    # UNCONDITIONALLY (never gated behind an opt-in flag: sync and async both go
+    # through this same recovery call). `report.reconcile` is what makes an ingest
+    # row's `action` reflect the write node's OWN output rather than the pre-write
+    # decision "Build Ingest Response" reports — routed through here rather than a
+    # second copy of that rule.
+    recovery = watch.recover_dispatch(
+        config, run_id, expected_chunk_count=1, lane="ingest",
+        transport=get_transport, now=now, sleep=sleep, bound_seconds=bound_seconds,
+    )
+    recovered_rows = recovery.get("responses") or []
+    run_data = recovery.get("run_data") or {}
+    rows = report.reconcile(recovered_rows, run_data)
+
     # D-59-10, mirrored from chunking.py:394-407 verbatim: a written-records bookkeeping
-    # failure never stops this dispatch — the real webhook response is returned either
-    # way — and never goes unreported either. `append_chunk` is documented to return a
-    # falsey result on an OSError rather than raising (T-59-04) — checked below. It can
-    # ALSO raise `WrittenRecordsError` for a shape or forbidden-name problem in the
-    # response body (a defect in the DATA, not the environment) — caught below. Guarding
-    # only one of the two paths would repeat the exact live silent-short-artifact class
-    # D-59-10 names.
+    # failure never stops this dispatch — the real result is returned either way — and
+    # never goes unreported either. `append_chunk` is documented to return a falsey
+    # result on an OSError rather than raising (T-59-04) — checked below. It can ALSO
+    # raise `WrittenRecordsError` for a shape or forbidden-name problem in the recovered
+    # rows (a defect in the DATA, not the environment) — caught below. Guarding only one
+    # of the two paths would repeat the exact live silent-short-artifact class D-59-10
+    # names. Fed the RECOVERED rows (D-70-05), never the ack.
     written_records_failures = []
     try:
-        flushed = written_records.append_chunk(run_id, 0, body)
+        flushed = written_records.append_chunk(run_id, 0, rows)
     except written_records.WrittenRecordsError as e:
         flushed = False
         bookkeeping_reason = str(e)
@@ -123,7 +164,16 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
         written_records_failures.append({"chunk_index": 0, "reason": bookkeeping_reason})
 
     return {
-        "body": body,
+        # D-70-07: retained for diagnostics only — never a row-outcome source. Kept
+        # under both names: "ack" is this plan's own vocabulary, "body" is the
+        # pre-existing key every caller before this plan reads, so an unmigrated
+        # caller degrades to seeing the ack rather than crashing on a missing key
+        # (D-70-08 migrates callers off it; this is not a compatibility shim for the
+        # RETIRED row-array shape, which no caller can get any more either way).
+        "ack": ack,
+        "body": ack,
+        "rows": rows,
+        "recovered": bool(recovery.get("recovered")),
         "run_id": run_id,
         "written_records_failures": written_records_failures,
     }

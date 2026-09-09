@@ -407,46 +407,87 @@ def watch(config, run_handle, *, lane="enrichment", record_count=None,
 # fallback, which this module does not call here.
 # =====================================================================================
 
-def _execution_carries_run_id(execution, run_id) -> bool:
+def _execution_carries_run_id(execution, run_id, echo_node=None) -> bool:
+    """`echo_node` defaults to the enrichment lane's own echo node
+    (`report_enrichment.PARSE_EVENT_NODE`) so every existing caller's behaviour is
+    unchanged; a widened caller (D-70-05, Phase 70 Plan 02) names the ingest lane's own
+    echo node ("Set Config") instead."""
+    echo_node = echo_node or report_enrichment.PARSE_EVENT_NODE
     run_data = report._run_data(execution)
     if run_data is None:
         return False
-    for item in report_enrichment._first_node_items(run_data, report_enrichment.PARSE_EVENT_NODE):
+    for item in report_enrichment._first_node_items(run_data, echo_node):
         body = item.get("json") if isinstance(item, dict) else None
         if isinstance(body, dict) and body.get("run_id") == run_id:
             return True
     return False
 
 
-def _build_response_rows(execution) -> list:
-    """The SAME raw items `Build Response` emits as the synchronous webhook body,
-    read from the settled execution instead of the HTTP response — byte-identical
-    shape, never a second value channel.
+def _response_rows(execution, response_node=None) -> list:
+    """The SAME raw items `response_node` emits (default: the enrichment lane's `Build
+    Response`) as the synchronous webhook body used to, read from the settled execution
+    instead of the HTTP response — byte-identical shape, never a second value channel.
 
-    Reads EVERY run of `Build Response`, not just run 0 (62-11-DIAGNOSIS.md, G-62-6):
-    a batch whose rows split at `Merge Winners` (one row needs research, one does not)
-    reconverges on `Build Response` as one run per branch, each carrying one item —
-    live-confirmed on executions 12096/12098, where a `runs[0]`-only read returned 1
-    row against a summed `Build Response` total of 2. `report.all_node_items`
-    concatenates every run in order, so both branches' rows come back.
+    Reads EVERY run of `response_node`, not just run 0 (62-11-DIAGNOSIS.md, G-62-6):
+    a batch whose rows split at a fan-in convergence (one row needs research, one does
+    not) reconverges as one run per branch, each carrying one item — live-confirmed on
+    executions 12096/12098, where a `runs[0]`-only read returned 1 row against a summed
+    total of 2. `report.all_node_items` concatenates every run in order, so both
+    branches' rows come back.
     """
+    response_node = response_node or report_enrichment.BUILD_RESPONSE_NODE
     run_data = report._run_data(execution)
     if run_data is None:
         return []
-    items = report.all_node_items(run_data, report_enrichment.BUILD_RESPONSE_NODE)
+    items = report.all_node_items(run_data, response_node)
     return [item["json"] for item in items if isinstance(item, dict) and isinstance(item.get("json"), dict)]
 
 
-def find_executions_by_run_id(config, run_id, *, workflow_id=None, transport=requests.get,
-                               limit=20) -> list:
-    """One scan of the enrichment workflow's recent executions — no sleep, no retry of
-    its own (the bounded wait lives in `recover_async_dispatch` below). Returns every
-    execution whose own `Parse HubSpot Event` output names `run_id` exactly, settled or
-    not — the caller decides what to do with an unsettled match.
+def _build_response_rows(execution) -> list:
+    """Kept for backward compatibility with existing direct callers/tests — the
+    enrichment lane's own fixed `Build Response` read. `_response_rows` (above) is the
+    lane-parameterised form Phase 70 Plan 02 adds."""
+    return _response_rows(execution, report_enrichment.BUILD_RESPONSE_NODE)
+
+
+# D-70-05 (Phase 70 Plan 02): the workflow name and the echo node become parameters,
+# defaulting to the enrichment lane's own values so no existing caller changes
+# behaviour. This is what makes a second lane (contact-upload/ingest) usable by the
+# SAME correlation mechanism the enrichment lane already proved live.
+INGEST_WORKFLOW_NAME = "LV Contact Ingest (Cloud template)"
+INGEST_ECHO_NODE = "Set Config"
+INGEST_RESPONSE_NODE = "Build Ingest Response"
+
+_LANE_RECOVERY_CONFIG = {
+    "enrichment": {
+        "workflow_name": None,  # resolved from scheduled_arm.ENRICHMENT_WORKFLOW_NAME below
+        "echo_node": report_enrichment.PARSE_EVENT_NODE,
+        "response_node": report_enrichment.BUILD_RESPONSE_NODE,
+    },
+    "ingest": {
+        "workflow_name": INGEST_WORKFLOW_NAME,
+        "echo_node": INGEST_ECHO_NODE,
+        "response_node": INGEST_RESPONSE_NODE,
+    },
+}
+
+
+def find_executions_by_run_id(config, run_id, *, workflow_id=None, workflow_name=None,
+                               echo_node=None, transport=requests.get, limit=20) -> list:
+    """One scan of the named workflow's recent executions — no sleep, no retry of its
+    own (the bounded wait lives in `recover_async_dispatch` below). Returns every
+    execution whose own echo node output names `run_id` exactly, settled or not — the
+    caller decides what to do with an unsettled match.
+
+    `workflow_name`/`echo_node` default to the enrichment lane's own values (D-70-05)
+    so this signature's widening changes nothing for an existing caller that passes
+    neither.
     """
+    if workflow_name is None:
+        workflow_name = scheduled_arm.ENRICHMENT_WORKFLOW_NAME
     if workflow_id is None:
         workflow_id = executions_client.resolve_workflow_id(
-            config, transport=transport, workflow_name=scheduled_arm.ENRICHMENT_WORKFLOW_NAME,
+            config, transport=transport, workflow_name=workflow_name,
         )
     if workflow_id is None:
         return []
@@ -456,29 +497,38 @@ def find_executions_by_run_id(config, run_id, *, workflow_id=None, transport=req
         if execution_id is None:
             continue
         execution = executions_client.get_execution(config, execution_id, transport=transport)
-        if _execution_carries_run_id(execution, run_id):
+        if _execution_carries_run_id(execution, run_id, echo_node):
             matches.append(execution)
     return matches
 
 
 def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=None,
+                            workflow_name=None, echo_node=None, response_node=None,
                             transport=requests.get, now=None, sleep=None,
                             bound_seconds=None, backoff_schedule=BACKOFF_SCHEDULE_SECONDS) -> dict:
     """Waits — bounded, THIS module's own sanctioned poll site — for `expected_chunk_count`
-    executions carrying `run_id` to settle, then returns their flattened `Build Response`
-    rows: exactly the shape `preingest.merge_enriched` already consumes (one flat list of
-    per-row dicts — see `chunking.DispatchOutcome.responses`'s own docstring for why a
-    synchronous caller flattens before merging; this recovery path returns pre-flattened,
-    since one settled execution's `Build Response` output already IS one chunk's rows).
+    executions carrying `run_id` to settle, then returns their flattened `response_node`
+    (default: the enrichment lane's `Build Response`) rows: exactly the shape
+    `preingest.merge_enriched` already consumes (one flat list of per-row dicts — see
+    `chunking.DispatchOutcome.responses`'s own docstring for why a synchronous caller
+    flattens before merging; this recovery path returns pre-flattened, since one settled
+    execution's response-node output already IS one chunk's rows).
 
     Never falls back to `executions_client.find_execution_for_dispatch`'s time-proximity
     correlation — a miss here is reported as `recovered: False`, not guessed.
 
-    `{"recovered": True, "responses": [...], "matched_executions": N}` on success;
-    `{"recovered": False, "responses": [], "matched_executions": N, "elapsed_seconds",
-    "bound_seconds"}` when the bound elapses first — the caller (the skill) is expected
-    to tell the operator this run is still going and offer to call this again with the
-    SAME `run_id`, never to re-dispatch (that would send the same rows twice).
+    `workflow_name`/`echo_node`/`response_node` default to the enrichment lane's own
+    values (D-70-05) — an existing caller that passes none of them is unaffected.
+
+    `{"recovered": True, "responses": [...], "matched_executions": N, "run_data": {...}}`
+    on success — `run_data` is the MERGED `data.resultData.runData` of every matched
+    execution (D-70-06: a caller that needs to cross-reference a write node's own
+    output, e.g. `report.reconcile`, needs the real node-level data, not only the
+    flattened response rows). `{"recovered": False, "responses": [], "matched_executions":
+    N, "elapsed_seconds", "bound_seconds"}` when the bound elapses first — the caller
+    (the skill) is expected to tell the operator this run is still going and offer to
+    call this again with the SAME `run_id`, never to re-dispatch (that would send the
+    same rows twice).
     """
     _now = now or time.monotonic
     _sleep = sleep or time.sleep
@@ -486,13 +536,23 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
     start = _now()
     attempt = 0
     while True:
-        executions = find_executions_by_run_id(config, run_id, workflow_id=workflow_id, transport=transport)
+        executions = find_executions_by_run_id(
+            config, run_id, workflow_id=workflow_id, workflow_name=workflow_name,
+            echo_node=echo_node, transport=transport,
+        )
         settled = [e for e in executions if _is_settled(e)]
         if len(settled) >= expected_chunk_count:
             responses = []
+            merged_run_data = {}
             for execution in settled:
-                responses.extend(_build_response_rows(execution))
-            return {"recovered": True, "responses": responses, "matched_executions": len(settled)}
+                responses.extend(_response_rows(execution, response_node))
+                rd = report._run_data(execution)
+                if isinstance(rd, dict):
+                    merged_run_data.update(rd)
+            return {
+                "recovered": True, "responses": responses, "matched_executions": len(settled),
+                "run_data": merged_run_data,
+            }
 
         elapsed = _now() - start
         if elapsed >= bound:
@@ -503,6 +563,21 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
         wait = backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
         _sleep(wait)
         attempt += 1
+
+
+def recover_dispatch(config, run_id, expected_chunk_count=1, *, lane="enrichment", **kwargs):
+    """A thin lane-aware entry the ingest client calls (D-70-05) — selects the workflow
+    name, the echo node and the response node per lane and then delegates to the
+    EXISTING `recover_async_dispatch` body above. No second wait loop:
+    `operator-claude-plugin/tests/test_report_sufficiency.py` permits exactly one poll
+    site and `watch.py` is it — this function adds no `while`/`sleep`/`time` of its own.
+    """
+    cfg = _LANE_RECOVERY_CONFIG.get(lane, _LANE_RECOVERY_CONFIG["enrichment"])
+    return recover_async_dispatch(
+        config, run_id, expected_chunk_count,
+        workflow_name=cfg["workflow_name"], echo_node=cfg["echo_node"],
+        response_node=cfg["response_node"], **kwargs,
+    )
 
 
 # =====================================================================================

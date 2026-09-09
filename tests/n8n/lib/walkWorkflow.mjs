@@ -326,6 +326,16 @@ export function walkWorkflow(wf, opts) {
 
     if (node.type === "n8n-nodes-base.merge") {
       const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
+      // D-70-04 (Phase 70 Plan 02): `mode: "combine"` + `combineBy: "combineByPosition"`
+      // pairs item i of every input into ONE shallow-merged object (n8n's own
+      // combineByPosition.ts, verified 2026-09-09) rather than concatenating them as
+      // separate items — needed for the carry-merge's re-attach-fields use. Every OTHER
+      // mode this repo uses (absent, or explicit "append") keeps the original
+      // concatenation behaviour; existing 70-01 fixtures never set `mode` at all, so
+      // this is additive, not a change to their semantics.
+      const isCombineByPosition = node.parameters
+        && node.parameters.mode === "combine"
+        && (node.parameters.combineBy || "combineByFields") === "combineByPosition";
       const state = mergeState[node.name] || (mergeState[node.name] = { buffers: {}, fired: false });
       if (state.fired) continue; // fires ONCE per replay (spec — not n8n's real multi-wave behaviour)
       state.buffers[delivery.inputIndex] = (state.buffers[delivery.inputIndex] || []).concat(delivery.items);
@@ -335,8 +345,25 @@ export function walkWorkflow(wf, opts) {
       }
       if (!ready) continue;
       state.fired = true;
-      const merged = [];
-      for (let i = 0; i < numberInputs; i += 1) merged.push(...state.buffers[i]);
+      let merged;
+      if (isCombineByPosition) {
+        // Last input wins a key clash (this repo's carry-merges always wire the
+        // CARRIED ROW last and set `resolveClash: "preferLast"` — see
+        // scripts/build_cloud_workflows.py's `merge_node` docstring), never n8n's own
+        // combineByPosition default (`addSuffix`, which renames the clashing keys).
+        const counts = [];
+        for (let i = 0; i < numberInputs; i += 1) counts.push(state.buffers[i].length);
+        const n = Math.min(...counts);
+        merged = [];
+        for (let i = 0; i < n; i += 1) {
+          let combined = {};
+          for (let inp = 0; inp < numberInputs; inp += 1) combined = { ...combined, ...state.buffers[inp][i] };
+          merged.push(combined);
+        }
+      } else {
+        merged = [];
+        for (let i = 0; i < numberInputs; i += 1) merged.push(...state.buffers[i]);
+      }
       runData[node.name] = runData[node.name] || [];
       runData[node.name].push(merged);
       propagate(node.name, 0, merged);

@@ -406,7 +406,8 @@ def test_authorize_ungranted_send_arms_with_the_same_guardrails_a_standing_grant
 # branches to a real dispatch.dispatch call and asserts on the returned result -- neither
 # `with` body is `pass` any more.
 def test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window(
-        granting_config, stub_module_transport_factory, stub_transport, sample_csv):
+        granting_config, stub_module_transport_factory, stub_transport, sample_csv,
+        dispatch_no_recovery_kwargs):
     # Branch 1: a standing, grant-present authorize_send.
     grant_transport = stub_module_transport_factory([
         _workflow_list(),                                       # plan_grant's lane resolve
@@ -425,7 +426,7 @@ def test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_
                                  granting_config, transport=grant_transport,
                                  grant=decision["grant"]) as window:
         result = dispatch.dispatch(str(sample_csv), True, granting_config,
-                                   transport=stub_transport)
+                                   transport=stub_transport, **dispatch_no_recovery_kwargs)
 
     assert window.arm_result["outcome"] == n8n_arming.ARMED
     assert window.disarm_result["outcome"] == n8n_arming.DISARMED
@@ -461,7 +462,7 @@ def test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_
         # draining queue; it just always answers the default accepted body and appends
         # to .calls.
         result2 = dispatch.dispatch(str(sample_csv), True, granting_config,
-                                    transport=stub_transport)
+                                    transport=stub_transport, **dispatch_no_recovery_kwargs)
 
     assert window2.arm_result["outcome"] == n8n_arming.ARMED
     assert window2.disarm_result["outcome"] == n8n_arming.DISARMED

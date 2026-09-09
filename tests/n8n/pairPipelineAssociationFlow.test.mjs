@@ -132,16 +132,13 @@ test("a batch of three rows: resolved create, unresolved create, and an update �
 
   // Build Ingest Response reports all three rows, associated or not — a held row is
   // still visible in the batch's own report, never silently dropped.
-  const gated = [{ contact_id: "12345" }];
-  // F1 fix: "results" is now read by node name ("HubSpot Associate Company"), not
-  // $input — Build Ingest Response also runs off Set Review's branch now, so $input can
-  // carry an unpredictable mix. seedItems is passed through unused; kept as [] to make
-  // that explicit rather than a misleading leftover value.
-  const report = runCode(jsCodeOf("Build Ingest Response"), [], {
+  // D-70-01/D-70-04 (Phase 70 Plan 02): "Build Ingest Response" now reads $input.all()
+  // (fed by "Ingest Merge Response") instead of the three by-name reads it used
+  // before — "requested" (Build Association Request's own real output, already
+  // carrying contact_id/email/company_id) is exactly the shape "Associate Carry Merge"
+  // delivers for a real association attempt.
+  const report = runCode(jsCodeOf("Build Ingest Response"), requested, {
     "Decide Action": decided,
-    "Build Association Request": requested,
-    "HubSpot Associate Company Write Gate": gated,
-    "HubSpot Associate Company": [{ status: "ok" }],
   });
   assert.equal(report.length, 3);
   assert.equal(report[0].association, "associated");

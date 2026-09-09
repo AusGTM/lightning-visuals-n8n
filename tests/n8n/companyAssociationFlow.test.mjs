@@ -146,17 +146,17 @@ test("Build Ingest Response reports every decided row, associated or not", () =>
     { action: "review", outcome: "net_new", hs_object_id: null, company_id: null,
       reason: "no company in HubSpot matched domain club.example", properties: {} },
   ];
-  const requested = [{ contact_id: "12345", email: "jo@other.example", company_id: "901" }];
-  const gated = [{ contact_id: "12345" }];
-  // F1 fix: "results" is now read by node name ("HubSpot Associate Company"), not
-  // $input — Build Ingest Response also runs off Set Review's branch now, so $input can
-  // carry an unpredictable mix. seedItems is passed through unused; kept as [] to make
-  // that explicit rather than a misleading leftover value.
-  const out = runCode(jsCodeOf("Build Ingest Response"), [], {
+  // D-70-01/D-70-04 (Phase 70 Plan 02): "Build Ingest Response" now reads $input.all()
+  // (fed by "Ingest Merge Response", the explicit convergence Merge) instead of the
+  // three by-name reads it used before this plan. This item is the shape
+  // "Associate Carry Merge" delivers for a real association attempt — the write
+  // response's own fields plus the row's carried contact_id/email/company_id.
+  const arrived = [
+    { action: "enrich", contact_id: "12345", email: "jo@other.example", company_id: "901",
+      status: "ok" },
+  ];
+  const out = runCode(jsCodeOf("Build Ingest Response"), arrived, {
     "Decide Action": decided,
-    "Build Association Request": requested,
-    "HubSpot Associate Company Write Gate": gated,
-    "HubSpot Associate Company": [{ status: "ok" }],
   });
   assert.equal(out.length, 2);
   assert.equal(out[0].association, "associated");

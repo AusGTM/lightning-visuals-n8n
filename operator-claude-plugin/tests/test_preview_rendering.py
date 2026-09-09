@@ -175,21 +175,21 @@ def test_correcting_produces_a_second_file_it_does_not_mutate_the_first(
 
 
 def test_dispatching_the_corrected_path_puts_the_corrected_header_on_the_wire(
-    unmapped_header_csv, tmp_path, fake_config, stub_transport
+    unmapped_header_csv, tmp_path, fake_config, stub_transport, dispatch_no_recovery_kwargs
 ):
     corrected = _corrected(unmapped_header_csv, tmp_path)
 
-    dispatch(corrected, True, fake_config, transport=stub_transport)
+    dispatch(corrected, True, fake_config, transport=stub_transport, **dispatch_no_recovery_kwargs)
     sent = stub_transport.calls[0]["files"]["data"][1]
     assert sent.splitlines()[0] == b"Email Address,phone"
 
-    dispatch(unmapped_header_csv, True, fake_config, transport=stub_transport)
+    dispatch(unmapped_header_csv, True, fake_config, transport=stub_transport, **dispatch_no_recovery_kwargs)
     sent_original = stub_transport.calls[1]["files"]["data"][1]
     assert sent_original.splitlines()[0] == b"Email Address,Ph."
 
 
 def test_an_xlsx_source_corrects_to_a_csv_copy_and_that_copy_is_what_is_sent(
-    tmp_path, fake_config, stub_transport
+    tmp_path, fake_config, stub_transport, dispatch_no_recovery_kwargs
 ):
     import openpyxl
 
@@ -203,5 +203,5 @@ def test_an_xlsx_source_corrects_to_a_csv_copy_and_that_copy_is_what_is_sent(
     corrected = _corrected(source, tmp_path)
     assert corrected.suffix == ".csv"
 
-    dispatch(corrected, True, fake_config, transport=stub_transport)
+    dispatch(corrected, True, fake_config, transport=stub_transport, **dispatch_no_recovery_kwargs)
     assert stub_transport.calls[0]["files"]["data"][1] == corrected.read_bytes()

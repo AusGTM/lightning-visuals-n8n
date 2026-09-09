@@ -488,51 +488,59 @@ for (const it of $input.all()) {
     company_id,
     company_match: (row && row.company_match) || null,
     assoc_url: associationUrl(contactId, company_id),
+    // Phase 70 Plan 02 (D-70-01/D-70-04): carried so "Build Ingest Response" can join
+    // this association attempt back to its row BY VALUE once it stops reading this
+    // node by name — the same join key Decide Action already emits pre-write.
+    row_id: (row && row.row_id) ?? null,
   }});
 }
 return out;
 """
 
-BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row synchronous body.
-// Every row Decide Action produced, with what actually happened to it, in a shape
-// report.py's sync_response_is_sufficient() accepts (each item carries contact_id /
-// hs_object_id / email). A row that never reached the association subgraph still appears
-// here — the alternative is a response that silently omits held and gated rows.
+BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row report, now read from the settled
+// execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.
+// Phase 70 Plan 02 (D-70-01): this node now sits behind "Ingest Merge Response", an
+// explicit append-mode Merge combining the association lane and the review lane, so it
+// runs ONCE over every row instead of once per inbound edge (the F5 collapse shape).
+//
+// "Decide Action" is still read BY NAME for the full row set: it is not a fan-in
+// convergence (one inbound edge, one run per execution), so this read is safe under the
+// same rule the detector exists to enforce (D-70-03/D-70-04) — and it is what keeps a
+// row visible here even when its association attempt never reached the write gate at
+// all (F1/F10/F11/F12: a response that silently omits held/gated rows is the defect
+// this lane exists to not repeat).
+//
+// $input.all() (fed by the Merge) carries every row that reached EITHER lane this
+// execution, real or a harmless marker from a starved lane's sentinel (see
+// "Associate Lane Sentinel" / "Review Lane Sentinel" in build_cloud_workflows.py) — a
+// marker carries no `action` field at all and is dropped as this node's first line,
+// never treated as a row. The join is BY VALUE (row_id, then hs_object_id, then email —
+// never by index into a named node), preserving the F1 alignment property: an
+// association response still pairs with the row that requested it.
 function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
 const decided = nodeAll('Decide Action').map((it) => it.json);
-const requested = nodeAll('Build Association Request').map((it) => it.json);
-const gatedRows = nodeAll('HubSpot Associate Company Write Gate').map((it) => it.json);
-// F1 (uat-batch-review-row-reads-failed): sourced by NAME, not `$input.all()`. This node
-// now also runs off `Set Review`'s branch (a review-only batch has nothing on the
-// association chain at all), so `$input` can hold a mix of association responses and
-// bare `{queue: "needs_review"}` items in an unpredictable merge order. `results[i]` is
-// gatedRows[i]'s own response — the association HTTP node runs once per item on a
-// straight chain out of its gate — and reading it by node name keeps that alignment
-// correct regardless of what else feeds this node's input.
-const results = nodeAll('HubSpot Associate Company');
-const associated = {};
-gatedRows.forEach((g, i) => {
-  const r = results[i] && results[i].json;
-  if (r && !r.error) associated[String(g.contact_id)] = true;
-});
-const requestedByEmail = {};
-const requestedById = {};
-for (const r of requested) {
-  if (r.email) requestedByEmail[String(r.email).toLowerCase()] = r;
-  if (r.contact_id) requestedById[String(r.contact_id)] = r;
+const arrived = $input.all().map((it) => it.json).filter((row) => row && row.action !== undefined);
+const byRowId = {};
+const byContactId = {};
+const byEmail = {};
+for (const row of arrived) {
+  if (row.row_id) byRowId[String(row.row_id)] = row;
+  if (row.contact_id) byContactId[String(row.contact_id)] = row;
+  if (row.email) byEmail[String(row.email).toLowerCase()] = row;
 }
 return decided.map((row) => {
   const email = String((row.properties && row.properties.email) || row.email || "").toLowerCase();
-  const req = (row.hs_object_id && requestedById[String(row.hs_object_id)]) ||
-              (email && requestedByEmail[email]) || null;
-  const contactId = (req && req.contact_id) || row.hs_object_id || row.contact_id || null;
+  const assoc = (row.row_id && byRowId[String(row.row_id)]) ||
+                (row.hs_object_id && byContactId[String(row.hs_object_id)]) ||
+                (email && byEmail[email]) || null;
+  const contactId = (assoc && assoc.contact_id) || row.hs_object_id || row.contact_id || null;
   let association;
-  if (!req) {
-    association = row.company_id ? "not_attempted" : "none";
-  } else if (associated[String(req.contact_id)]) {
+  if (!row.company_id) {
+    association = "none";
+  } else if (assoc) {
     association = "associated";
   } else {
-    association = "not_confirmed";  // the write gate dropped it, or HubSpot refused it
+    association = "not_confirmed";  // never reached the write gate, or HubSpot refused it
   }
   return { json: {
     action: row.action,
@@ -853,8 +861,12 @@ def build_cloud():
         # review row never reached the client at all. `allEntries` is n8n's own
         # documented value for "return every item, not just the first"
         # (docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook).
+        # D-70-07 (Phase 70 Plan 02): `responseNode` + a dedicated "Respond to Webhook"
+        # fed ONLY by "Build Ingest Ack" — this lane's only responder. `responseData`
+        # (`allEntries`, the F10 fix) no longer applies under `responseNode` and is
+        # dropped; the ack's shape is fixed by "Build Ingest Ack" itself, not this param.
         "parameters": {"httpMethod": "POST", "path": "hubspot/contact-upload",
-                       "responseMode": "lastNode", "responseData": "allEntries",
+                       "responseMode": "responseNode",
                        "authentication": "headerAuth", "options": {}},
         "id": nid("w"), "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
@@ -876,12 +888,42 @@ def build_cloud():
 // Action, which reads the baked ALLOW_HUBSPOT_CREATE constant instead. This seed stays
 // here only for the LOCAL/dry-run echo lane (DECIDE_LOCAL), which legitimately keeps
 // reading a row-seeded gate.
-return $input.all().map((it) => ({
-  json: { ...it.json, allow_create: false },
-  binary: it.binary,
-}));
+// D-70-05/D-70-07 (Phase 70 Plan 02): normalizes the caller's own client-minted
+// `run_id` (a multipart form FIELD, so n8n parses it into `$json.body.run_id` — the
+// same `filename=None` idiom `source_by_field` already proves) and echoes it as this
+// node's OWN output field. This is the ingest lane's echo node: `watch.
+// _execution_carries_run_id` correlates a settled execution by finding THIS node's
+// output carrying the requested `run_id`, exactly the mechanism the enrichment lane's
+// "Parse HubSpot Event" already provides there. A request that carries no `run_id`
+// echoes `null` — this lane keeps working for a caller that predates the change.
+return $input.all().map((it) => {
+  const body = it.json.body || {};
+  return {
+    json: { ...it.json, allow_create: false, run_id: body.run_id ?? it.json.run_id ?? null },
+    binary: it.binary,
+  };
+});
 """, x, y)
     nodes.append(set_cfg)
+
+    # D-70-07: the lane's ONLY responder, fed directly from "Set Config" — before
+    # "Extract From File" parses the uploaded CSV into rows, so `row_ids` is always
+    # empty for this lane today (no per-row identity exists yet at ack time). Every
+    # row's real outcome lives in the settled execution's runData (D-70-05), read via
+    # `run_id` correlation on "Set Config"'s own echoed field above — never in this
+    # body.
+    build_ack = code_node("Build Ingest Ack", r"""// Build Ingest Ack — D-70-07: the lane's ONLY responder.
+const item = ($input.first() && $input.first().json) || {};
+return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
+""", x, y + 180)
+    nodes.append(build_ack)
+    respond = {
+        "parameters": {"respondWith": "allIncomingItems", "options": {}},
+        "id": nid("rw"), "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1,
+        "position": [x + 220, y + 180],
+    }
+    nodes.append(respond)
 
     x += 220
     extract = {
@@ -998,14 +1040,21 @@ return $input.all().map((it) => ({
     # is manual_protected and never promotes into the patch.
     nodes.append(_hs_http_create_node("HubSpot Create", "contacts", x + 440, y - 20))
 
-    set_review = {
-        "parameters": {"assignments": {"assignments": [
-            {"id": nid("a"), "name": "queue", "value": "needs_review", "type": "string"}
-        ]}, "options": {}},
-        "id": nid("r"), "name": "Set Review",
-        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x + 440, y + 140],
-    }
-    nodes.append(set_review)
+    # F1's original fix made "Set Review" a dead end that "Build Ingest Response" never
+    # needed to read (it reconstructed everything from "Decide Action" by name instead).
+    # Phase 70 Plan 02 (D-70-01) inverts that: "Build Ingest Response" now reads $input
+    # off an explicit Merge, so "Set Review"'s OWN output is what the review lane
+    # contributes — it must be a Code node carrying the FULL decided row through (a Set
+    # node here would drop every field but `queue`, the same BUG 12/21 class), not the
+    # bare `{queue: "needs_review"}` shape it emitted before.
+    nodes.append(code_node("Set Review", r"""// Set Review — the review lane's own contribution to "Ingest Merge Response".
+// IF nodes only route; every item reaching here still carries Decide Action's full row
+// (action/outcome/contact_id/company_id/reason/row_id/...). Also fed by "Review Lane
+// Sentinel" on a batch where nothing would otherwise reach this node at all (every row
+// routed to update/create) — that marker carries no other field, so it becomes
+// `{queue: "needs_review"}` here and is dropped downstream as identity-less.
+return $input.all().map((it) => ({ json: { ...it.json, queue: "needs_review" } }));
+""", x + 440, y + 140))
 
     # Association subgraph (2026-08-25). Both write branches converge here; the v4
     # `default` endpoint is idempotent (re-running an ingest re-asserts the same
@@ -1026,7 +1075,48 @@ return $input.all().map((it) => ({
     }
     nodes.append(assoc)
     nodes.append(code_node("Build Ingest Response", BUILD_INGEST_RESPONSE,
-                           x + 1100, y - 20))
+                           x + 1320, y - 20))
+
+    # D-70-01 (Phase 70 Plan 02): a GLOBAL, whole-batch check computed once from every
+    # row "Decide Action" produced (fed by a fan-out off that single-producer node — safe
+    # to read via $input directly, not a by-name read), one per lane. Each is the
+    # mechanism that satisfies "Ingest Merge Response"'s two inputs on a single-lane
+    # batch (research Pitfall 1) WITHOUT racing real content converging on the same
+    # Merge from a slower path: a per-branch `alwaysOutputData` flag on "IF Update"/
+    # "IF Create" was tried first and rejected, by hand-tracing the mixed-batch case
+    # before writing this graph — "IF Create"'s own empty TRUE branch fires independently
+    # of whether "IF Update"'s TRUE branch is ALSO carrying a real row toward the SAME
+    # merge input in the SAME execution, and the offline walker's (and n8n's own,
+    # verified via workflow-execute.ts::addNodeToBeExecuted) "wait for every configured
+    # input" Merge semantics fire and lock on WHICHEVER pair of deliveries satisfies it
+    # first — a fast marker beating a slow multi-hop real delivery would drop the real
+    # row. A GLOBAL check is mutually exclusive with the real chain by construction (it
+    # emits a marker only when NO row will ever traverse that chain at all), so it can
+    # never race it.
+    associate_sentinel_js = r"""// Associate Lane Sentinel — see build_cloud_workflows.py's own comment above this
+// node's call site for why this is a global, single-producer check rather than a
+// per-IF alwaysOutputData flag.
+const rows = $input.all().map((it) => it.json);
+const anyWrite = rows.some((r) => r && (r.action === "update" || r.action === "create"));
+return anyWrite ? [] : [{}];
+"""
+    review_sentinel_js = r"""// Review Lane Sentinel — the review-side twin of "Associate Lane Sentinel". Fires
+// only when EVERY row this execution decided is update/create (so "Set Review" would
+// otherwise never even be enqueued at all, on a create-only or update-only batch).
+const rows = $input.all().map((it) => it.json);
+const anyNonWrite = rows.some((r) => r && r.action !== "update" && r.action !== "create");
+return anyNonWrite ? [] : [{}];
+"""
+    nodes.append(code_node("Associate Lane Sentinel", associate_sentinel_js, x + 220, y - 260))
+    nodes.append(code_node("Review Lane Sentinel", review_sentinel_js, x + 220, y + 320))
+
+    # "Associate Carry Merge" (D-70-02/D-70-04): re-attaches the association write
+    # response to the row that requested it, across the "HubSpot Associate Company" HTTP
+    # hop — Combine by Position, the carried row (input 1, the write gate's own output —
+    # the SAME delivery that feeds the HTTP node, a literal fan-out, so count and order
+    # always agree) wired LAST so its identity fields win any key clash.
+    nodes.append(merge_node("Associate Carry Merge", x + 1100, y - 20,
+                            inputs=2, mode="combine", combine_by="combineByPosition"))
 
     conns = chain([
         "Webhook Trigger", "Set Config", "Extract From File", "Map Columns",
@@ -1036,9 +1126,28 @@ return $input.all().map((it) => ({
         "HubSpot Company Search by Name", "Adapt Company Link",
         "Decide Action", "IF Update",
     ])
-    conns.update(chain([
-        "Build Association Request", "HubSpot Associate Company", "Build Ingest Response",
-    ]))
+    # D-70-07: "Set Config" fans to "Extract From File" (the existing pipeline,
+    # unchanged) AND "Build Ingest Ack" (the immediate response) — both receive the
+    # SAME items; the ack does not delay or gate the pipeline.
+    conns["Set Config"]["main"][0].append({"node": "Build Ingest Ack", "type": "main", "index": 0})
+    conns.update(chain(["Build Ingest Ack", "Respond to Webhook"]))
+    # D-70-01: "Decide Action" fans to "IF Update" (the existing pipeline, unchanged)
+    # AND both sentinels — all three receive the SAME complete row set from Decide
+    # Action's single run.
+    conns["Decide Action"]["main"][0].append(
+        {"node": "Associate Lane Sentinel", "type": "main", "index": 0})
+    conns["Decide Action"]["main"][0].append(
+        {"node": "Review Lane Sentinel", "type": "main", "index": 0})
+
+    conns.update(chain(["Build Association Request", "HubSpot Associate Company"]))
+    conns["HubSpot Associate Company"] = {
+        "main": [[{"node": "Associate Carry Merge", "type": "main", "index": 0}]]}
+    conns["Associate Lane Sentinel"] = {"main": [[
+        {"node": "Associate Carry Merge", "type": "main", "index": 0},
+        {"node": "Associate Carry Merge", "type": "main", "index": 1},
+    ]]}
+    conns["Associate Carry Merge"] = {
+        "main": [[{"node": "Build Ingest Response", "type": "main", "index": 0}]]}
     for write_node in ("HubSpot Update", "HubSpot Create"):
         conns[write_node] = {"main": [
             [{"node": "Build Association Request", "type": "main", "index": 0}]
@@ -1052,14 +1161,11 @@ return $input.all().map((it) => ({
         [{"node": "HubSpot Create", "type": "main", "index": 0}],   # true (gated)
         [{"node": "Set Review", "type": "main", "index": 0}],       # false
     ]}
-    # F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): `Set
-    # Review` was a dead end — a batch where every row is held for review never reached
-    # `Build Ingest Response`, so `responseMode: "lastNode"` answered the webhook with
-    # `Set Review`'s own bare `{"queue": "needs_review"}` output, losing `Decide
-    # Action`'s real `action`/`reason`/`row_id`. `Build Ingest Response` already
-    # reconstructs every decided row from `Decide Action` by NAME (see BUILD_INGEST_
-    # RESPONSE above), so this wiring only needs to make it RUN when a batch is
-    # review-only; it does not need Set Review's own output content.
+    conns["Review Lane Sentinel"] = {"main": [[{"node": "Set Review", "type": "main", "index": 0}]]}
+    # F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): a batch
+    # where every row is held for review must still reach "Build Ingest Response" — the
+    # explicit Merge in front of it (below) is what now makes that ONE run over every
+    # row rather than a dead end.
     conns["Set Review"] = {"main": [
         [{"node": "Build Ingest Response", "type": "main", "index": 0}]
     ]}
@@ -1092,6 +1198,33 @@ return $input.all().map((it) => ({
         # row carries both its id and the company domain the allowlist can match on.
         "HubSpot Associate Company": "enrich",
     })
+
+    # D-70-02/D-70-04: "HubSpot Associate Company Write Gate" (just spliced in above) is
+    # the carry_source for "Associate Carry Merge"'s input 1 — the SAME delivery that
+    # feeds the HTTP node, fanned to the Merge as well, so count and order always agree
+    # with input 0 (no by-name read of the pre-hop node).
+    conns["HubSpot Associate Company Write Gate"]["main"][0].append(
+        {"node": "Associate Carry Merge", "type": "main", "index": 1})
+
+    # D-70-01: the two inbound edges into "Build Ingest Response" ("Associate Carry
+    # Merge", "Set Review") become one explicit, append-mode Merge — the converged node
+    # runs ONCE over every row instead of once per inbound edge.
+    splice_merge_before(nodes, conns, "Build Ingest Response", merge_name="Ingest Merge Response")
+
+    # Pre-probe placement (Task 2's human-check settles this live): "Set Review" is a
+    # Code node and takes the flag directly per the plan's own literal suggestion; the
+    # association terminal ("HubSpot Associate Company") sits downstream of two IFs.
+    # Traced by hand against both the offline walker's model and n8n's own execution
+    # engine (workflow-execute.ts::ensureAlwaysOutputData) before writing this graph:
+    # neither flag is what actually satisfies "Ingest Merge Response" on a starved lane
+    # here — a node that received ZERO deliveries is never dispatched at all, flag or
+    # not, and the two sentinel nodes above are the mechanism that DOES. Both flags are
+    # kept because (a) the plan's own <action> text names them as the candidate
+    # placement the live probe evaluates, and (b) neither is harmful here — "Set
+    # Review"'s own computation is only ever empty if its OWN input is (never true,
+    # since it always receives at least the count it was given), and "HubSpot Associate
+    # Company" never runs with zero input regardless of this flag.
+    set_always_output_data(nodes, ["Set Review", "HubSpot Associate Company"])
 
     return {
         "id": "LVcontactIngestCloud01",
@@ -7662,6 +7795,190 @@ def splice_write_gates(nodes, conns, gated):
                         conn["node"] = gate_name
         conns[gate_name] = {"main": [[{"node": write_name, "type": "main", "index": 0}]]}
     return nodes, conns
+
+
+# ---- explicit Merge nodes (Phase 70 Plan 02, D-70-01/D-70-02/D-70-04) -------
+#
+# typeVersion and parameter keys verified 2026-09-09 against n8n-io/n8n `master`
+# (github.com/n8n-io/n8n, packages/nodes-base/nodes/Merge/): `Merge.node.ts`'s
+# `defaultVersion: 3.2`; `v3/actions/versionDescription.ts` names `mode` values
+# `append`/`combine`/`combineBySql`/`chooseBranch` and, when `mode: "combine"`, a
+# `combineBy` selector `combineByFields`/`combineByPosition`/`combineAll`;
+# `v3/helpers/descriptions.ts`'s `numberInputsProperty` (`numberInputs`, 2-10) and
+# `clashHandlingProperties` (`options.clashHandling.values.resolveClash`, default
+# `preferLast` generically but `combineByPosition.ts` overrides its OWN default to
+# `addSuffix` — RENAMING clashing keys rather than overwriting them, surprising for a
+# reader expecting a known field name, hence `merge_node` sets `preferLast` explicitly
+# below rather than trusting that per-mode default). Source read via raw.githubusercontent.com,
+# not training-data recall.
+_TRIGGER_TYPES_BUILDER = {
+    "n8n-nodes-base.webhook", "n8n-nodes-base.scheduleTrigger",
+    "n8n-nodes-base.executeWorkflowTrigger",
+}
+
+
+def merge_node(name, x, y, *, inputs=2, mode="append", combine_by=None):
+    """An `n8n-nodes-base.merge` node (D-70-01 the fan-in convergence Merge; D-70-02/
+    D-70-04 the per-hop carry Merge). `mode="append"` concatenates whatever each input
+    delivered (D-70-01's convergence use — every lane terminal's rows land in one list,
+    once). `mode="combine"` (with `combine_by="combineByPosition"`, the default for that
+    mode here) pairs input i of every configured input into ONE shallow-merged object —
+    D-70-04's carry-across-an-HTTP-hop use, re-attaching a row's pre-hop fields to its
+    post-hop response. `resolveClash: "preferLast"` is set explicitly for combine mode
+    so a key present on more than one input keeps the LAST-wired input's value (this
+    repo always wires the CARRIED ROW last, precisely so its identity fields win over
+    whatever the HTTP response happens to also carry) — never n8n's own combineByPosition
+    default of `addSuffix`, which would rename the clashing keys instead.
+
+    OBLIGATION (research Pitfall 1): every configured input must deliver at least once
+    per execution or this node never fires — n8n's own execution engine (verified via
+    `packages/core/src/execution-engine/workflow-execute.ts::addNodeToBeExecuted`, which
+    only advances a multi-input node to the execution stack once every declared input
+    index has data) waits for ALL of them, exactly like this. Callers are responsible for
+    ensuring a lane that can go genuinely empty still delivers something — see this
+    module's ingest-lane sentinel nodes for the mechanism chosen there, and this
+    docstring's own note on why a per-branch `alwaysOutputData` flag was tried and
+    rejected for that specific convergence.
+    """
+    params = {"mode": mode, "numberInputs": inputs}
+    if mode == "combine":
+        params["combineBy"] = combine_by or "combineByPosition"
+        params["options"] = {"clashHandling": {"values": {"resolveClash": "preferLast"}}}
+    return {
+        "parameters": params,
+        "id": nid("m"), "name": name,
+        "type": "n8n-nodes-base.merge", "typeVersion": 3.2, "position": [x, y],
+    }
+
+
+def classify_convergence(nodes_by_name, conns, target_name):
+    """Which of the three convergence classes `target_name`'s inbound edges form
+    (Phase 70 Plan 02 action text): only "entry_points" is refused by
+    `splice_merge_before` — a Merge there hangs unconditionally, because exactly one
+    trigger ever runs per execution and there is no node on the unused trigger's path
+    that runs at all to satisfy it. "fan_in" (two-or-more edges that CAN both deliver in
+    one execution) and "mutually_exclusive" (a routing IF's true/false both reaching the
+    same next stage) both get a Merge — this function does not need to tell them apart,
+    since both are safe to merge; it only needs to refuse the one class that is not.
+
+    Classification: collect target_name's direct inbound source nodes; for each, walk
+    the connection graph BACKWARD to the trigger-type node(s) that can reach it. If two
+    or more sources have DISJOINT, non-empty trigger-ancestries, they can only ever be
+    live in DIFFERENT executions (a webhook run vs. a sub-workflow run) — "entry_points".
+    Otherwise every source can trace back to a trigger some other source ALSO traces back
+    to (the common, single-trigger-workflow case), or the source count is under two —
+    "fan_in".
+    """
+    sources = sorted({
+        src for src, spec in conns.items()
+        for outputs in (spec.get("main") or [])
+        for conn in (outputs or [])
+        if conn.get("node") == target_name
+    })
+    if len(sources) < 2:
+        return "fan_in"
+
+    reverse = {}
+    for src, spec in conns.items():
+        for outputs in (spec.get("main") or []):
+            for conn in (outputs or []):
+                reverse.setdefault(conn.get("node"), set()).add(src)
+
+    def trigger_ancestors(start):
+        seen = set()
+        stack = [start]
+        triggers = set()
+        while stack:
+            n = stack.pop()
+            if n in seen:
+                continue
+            seen.add(n)
+            node = nodes_by_name.get(n)
+            if node and node.get("type") in _TRIGGER_TYPES_BUILDER:
+                triggers.add(n)
+                continue
+            for pred in reverse.get(n, ()):
+                stack.append(pred)
+        return triggers
+
+    ancestor_sets = [trigger_ancestors(s) for s in sources]
+    if all(ancestor_sets):
+        seen_triggers = set()
+        for s in ancestor_sets:
+            if seen_triggers & s:
+                break
+            seen_triggers |= s
+        else:
+            return "entry_points"
+    return "fan_in"
+
+
+def splice_merge_before(nodes, conns, target_name, *, merge_name=None):
+    """Collects every inbound connection whose target is `target_name`, creates one
+    Merge (`mode="append"`) with that many inputs, re-points each collected edge to a
+    DISTINCT Merge input index (preserving the connections dict's current iteration
+    order, so the walker's and n8n's input indices agree), and wires the Merge's single
+    output to `target_name`. Returns the Merge node's name.
+
+    Refuses (`ValueError`) a class "entry_points" convergence per
+    `classify_convergence` — a later plan cannot copy a mechanical inventory row into a
+    hang. Requires at least two inbound connections; a single inbound edge is not a
+    convergence at all.
+    """
+    nodes_by_name = {n["name"]: n for n in nodes}
+    if target_name not in nodes_by_name:
+        raise ValueError(f"splice_merge_before: no node named {target_name!r}")
+
+    classification = classify_convergence(nodes_by_name, conns, target_name)
+    if classification == "entry_points":
+        raise ValueError(
+            f"splice_merge_before: {target_name!r} converges alternate ENTRY POINTS "
+            "(exactly one trigger ever runs per execution) — a Merge here hangs "
+            "unconditionally; refusing rather than generating a hang."
+        )
+
+    collected = []
+    for src_name, spec in conns.items():
+        for out_idx, outputs in enumerate(spec.get("main") or []):
+            for conn in (outputs or []):
+                if conn.get("node") == target_name:
+                    collected.append(conn)
+    if len(collected) < 2:
+        raise ValueError(
+            f"splice_merge_before: {target_name!r} has {len(collected)} inbound "
+            "connection(s) — nothing to converge"
+        )
+
+    name = merge_name or f"{target_name} Merge"
+    target = nodes_by_name[target_name]
+    mx, my = target["position"][0] - 160, target["position"][1]
+    nodes.append(merge_node(name, mx, my, inputs=len(collected), mode="append"))
+    for input_index, conn in enumerate(collected):
+        conn["node"] = name
+        conn["index"] = input_index
+    conns[name] = {"main": [[{"node": target_name, "type": "main", "index": 0}]]}
+    return name
+
+
+def set_always_output_data(nodes, names):
+    """Sets `alwaysOutputData: true` on each named node (research Pitfall 1's
+    mitigation): a node whose OWN computation would otherwise produce zero items still
+    propagates one marker `{}` item, so a downstream Merge waiting on that lane does not
+    hang forever. This ONLY rescues a node that actually RAN with some input and
+    produced nothing — verified against n8n's own execution engine
+    (`workflow-execute.ts::ensureAlwaysOutputData`, applied after `runNode` returns);
+    it does nothing for a node that received ZERO input and was never dispatched at all.
+    Placement is decided per call site — see the ingest lane's own comment for why a
+    per-routing-IF placement was tried and rejected (it can race a slower real-data path
+    converging on the same Merge input) in favour of a global, single-producer sentinel
+    computed once from the complete decided-row set."""
+    by_name = {n["name"]: n for n in nodes}
+    for name in names:
+        node = by_name.get(name)
+        if node is None:
+            raise ValueError(f"set_always_output_data: no node named {name!r}")
+        node["alwaysOutputData"] = True
+    return nodes
 
 
 def build_scheduled_maintenance_cloud():

@@ -439,7 +439,8 @@ def _entry_with_provenance(run_id, company_id, first, last, reason_code="no_emai
 
 
 def test_a_drained_send_clears_the_same_gates_a_normal_send_clears(
-        granting_config, stub_module_transport_factory, stub_transport, tmp_path):
+        granting_config, stub_module_transport_factory, stub_transport, tmp_path,
+        dispatch_no_recovery_kwargs):
     entry = _entry_with_provenance("run-1", COMPANY_ID, "Pat", "Alpha")
     key = suggestion_declines.entry_key(COMPANY_ID, entry["row"])
     chosen = {key: entry}
@@ -486,7 +487,8 @@ def test_a_drained_send_clears_the_same_gates_a_normal_send_clears(
             granting_config, transport=ungranted_transport,
             grant=decision["grant"]) as window:
         dispatch_result = dispatch.dispatch(
-            str(out_path), True, granting_config, transport=stub_transport)
+            str(out_path), True, granting_config, transport=stub_transport,
+            **dispatch_no_recovery_kwargs)
 
     assert window.disarm_result["outcome"] == n8n_arming.DISARMED
     assert dispatch_result["run_id"]
@@ -500,7 +502,7 @@ def test_a_drained_send_clears_the_same_gates_a_normal_send_clears(
 
 def test_a_drained_send_runs_step_5s_gates_before_step_7(
         granting_config, fake_config, stub_module_transport_factory, stub_transport,
-        tmp_path):
+        tmp_path, dispatch_no_recovery_kwargs):
     out_path = tmp_path / "dispatch.csv"
     out_path.write_text("email\njamie.fox@roma-example.example\n", encoding="utf-8")
     events = []
@@ -543,7 +545,8 @@ def test_a_drained_send_runs_step_5s_gates_before_step_7(
     with n8n_arming.armed_window(
             decision["workflow_id"], [COMPANY_ID], [COMPANY_DOMAIN], True, cfg_on,
             transport=arm_transport, grant=decision["grant"]) as window:
-        dispatch.dispatch(str(out_path), True, cfg_on, transport=logging_dispatch_transport)
+        dispatch.dispatch(str(out_path), True, cfg_on, transport=logging_dispatch_transport,
+                          **dispatch_no_recovery_kwargs)
 
     assert window.disarm_result["outcome"] == n8n_arming.DISARMED
     pause_index = events.index(("pause", watch.PRE_SPEND_PAUSE_SECONDS))
@@ -756,7 +759,8 @@ def test_the_inline_pointer_names_the_standalone_skill():
 
 
 def test_the_whole_decline_lifecycle_runs_end_to_end_over_one_store(
-        granting_config, stub_module_transport_factory, stub_transport, tmp_path):
+        granting_config, stub_module_transport_factory, stub_transport, tmp_path,
+        dispatch_no_recovery_kwargs):
     store = tmp_path / "suggestion_declines.json"
     company_name = "The Roma Turf Club"
     rounds = [{"start": 0, "count": 2,
@@ -840,7 +844,8 @@ def test_the_whole_decline_lifecycle_runs_end_to_end_over_one_store(
             transport=stub_module_transport_factory(
                 _armed_window_reads(domains=f'"{COMPANY_DOMAIN}"')),
             grant=decision["grant"]) as window:
-        result = dispatch.dispatch(str(out_path), True, cfg, transport=_Logging(stub_transport))
+        result = dispatch.dispatch(str(out_path), True, cfg, transport=_Logging(stub_transport),
+                                   **dispatch_no_recovery_kwargs)
     assert window.disarm_result["outcome"] == n8n_arming.DISARMED
     assert result["run_id"] and len(stub_transport.calls) == 1
     assert events.index(("pause", watch.PRE_SPEND_PAUSE_SECONDS)) < events.index(
