@@ -2,19 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 69
+current_phase: 70
+current_phase_name: One merge, one result channel — n8n runtime truth
 status: completed
 stopped_at: Phase 70 context gathered
-last_updated: "2026-09-09T10:48:51.768Z"
+last_updated: "2026-09-09T12:28:50.442Z"
 last_activity: 2026-09-08
 last_activity_desc: Phase 69 complete
-state_head: cc182ca3e4fe078c01968735ffe6afa3f6ea234c
+state_head: 16fc57bbbae4b37779c47a024ae74350e4f8feac
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 16
+  total_plans: 23
   completed_plans: 16
-  percent: 86
+  percent: 70
 ---
 
 # Project State
@@ -357,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 69
+Phase: 70 (One merge, one result channel — n8n runtime truth) — READY TO EXECUTE
 Plan: Not started
 Status: All phases complete
 Last activity: 2026-09-08 — Phase 69 complete

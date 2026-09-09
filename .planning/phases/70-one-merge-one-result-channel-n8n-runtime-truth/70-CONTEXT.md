@@ -81,8 +81,8 @@ builder.
   bare `.all()` and lint the rest; retire only the seven listed instances.
   — **Reversibility:** costly — touches every provider/HubSpot hop in three workflows.
 
-- **D-70-04: The locked rule is a BUILD-TIME ASSERTION; the researcher picks the carry
-  mechanism.** `scripts/build_cloud_workflows.py` fails generation if any emitted jsCode or
+- **D-70-04: Build-time assertion is the locked rule; researcher picks the carry.**
+   `scripts/build_cloud_workflows.py` fails generation if any emitted jsCode or
   expression contains a `$('` read, and a test pins it against the committed JSON. How a row
   survives an HTTP hop without `$('Prev')` (HTTP Request nodes have no pass-through) is
   evaluated by the researcher against n8n Cloud limits — candidates named in discussion: Merge
@@ -104,8 +104,8 @@ builder.
 
 ### Result channel
 
-- **D-70-05: The client result channel is the settled execution's runData, read by the
-  client-minted `run_id`, ALWAYS.** Sync and async, every mode including `propose`. This is
+- **D-70-05: The client result channel is runData by client-minted `run_id`, ALWAYS.**
+   Sync and async, every mode including `propose`. This is
   `watch.recover_async_dispatch`'s existing mechanism (`Build Response` runs off the settled
   execution, correlated on `Parse HubSpot Event`'s echoed `run_id` — exact match) promoted to
   the only path. It REOPENS F5b's debug-scope "no code fix" ruling (`7524ee7`) structurally:
@@ -195,8 +195,8 @@ builder.
   — **Reversibility:** costly — one shape across three workflows; re-adding tolerance means
   re-growing the ladder.
 
-- **D-70-13: Scope — every gated write in every lane, one shape; the review lane keeps id-only
-  AS DATA.** Enrichment (create/update/company), ingest (create/update/associate) and
+- **D-70-13: Every gated write in every lane, one shape; review lane keeps id-only AS DATA.**
+   Enrichment (create/update/company), ingest (create/update/associate) and
   review-decision (`Review Decision Update` etc.).
   *Premise corrected by research 2026-09-09 (70-RESEARCH.md § Write-gate inventory): the
   "three splice sites" named at discussion were misattributed. `splice_write_gates` is called
@@ -260,8 +260,8 @@ builder.
   first-run-only). Note for the planner: memory `audit-sweep-anti-patterns` says a guard test
   must be seen RED; here the RED lives in the walker's unit tests, by operator decision.
 
-- **D-70-19: The phase closes on a DISARMED live mixed batch whose runData matches the
-  walker.** After the operator deploys and bounces (disarmed, both write flags `"false"`), one
+- **D-70-19: Phase closes on a DISARMED live mixed batch whose runData matches the walker.**
+   After the operator deploys and bounces (disarmed, both write flags `"false"`), one
   disarmed 2-lane × 2-action send per lane; the rows recovered from runData must be shape-equal
   to the walker's predicted rows for the same input (precedent:
   `.planning/milestones/v1.1-phases/61-autonomous-batch-runs/61-ASYNC-RECOVERY-VERDICT.json`,
