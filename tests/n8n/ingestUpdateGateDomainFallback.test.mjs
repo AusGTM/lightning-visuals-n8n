@@ -1,13 +1,12 @@
 // tests/n8n/ingestUpdateGateDomainFallback.test.mjs
 //
-// F11 (uat-batch-review-row-reads-failed, execution 12181): "HubSpot Update Write Gate"
-// reads a row's domain as `identity_keys.domain || json.domain`, but the ingest lane's
-// "Decide Action" only ever emits `company_domain` (and `email`) on an update row — the
-// CREATE gate has an email-domain fallback for this exact class of gap (BUG 27), the
-// UPDATE gate had none. A domain-only allowlist (TEST_RECORD_DOMAINS, no
-// TEST_RECORD_IDS) could therefore never admit an update, matching BUG 24's precedent
-// (a gate reading a field its own lane never emits) — fixed the same way BUG 24 was:
-// make the lane populate the field the gate already reads, not touch the shared gate.
+// F11 (uat-batch-review-row-reads-failed, execution 12181), historical subject: "HubSpot
+// Update Write Gate" used to read a row's domain as `identity_keys.domain || json.domain`
+// — a fallback ladder that grew from two separate live incidents (F11 here, BUG 27 on the
+// create side). D-70-12 (Phase 70 Plan 05 Task 1) deleted that ladder outright: the gate
+// now reads ONLY `write_request`, and the case this file protected — an update row's
+// domain reaching the gate at all — is now an EMITTER-SIDE assertion (Decide Action must
+// stamp `write_request.domain`), not a gate-side fallback.
 //
 // Runs the repo's OWN committed node jsCode via `new Function`, same mechanism n8n's
 // Code node uses, over the actual committed n8n/wf_contact_ingest_cloud.json. No
@@ -79,13 +78,18 @@ function armedDecideAction(wf) {
   });
 }
 
-test("Decide Action (ingest, cloud): an update row carries `domain`, not just `company_domain`", () => {
+test("Decide Action (ingest, cloud): an update row's write_request carries the company domain (D-70-12)", () => {
   const wf = loadWorkflow();
   const [decided] = runCode(armedDecideAction(wf), [matchedUpdateRow()]);
   assert.equal(decided.action, "update", "seed row must actually reach Decide Action as an update");
   assert.equal(decided.company_domain, "wyongraceclub.com.au");
-  assert.equal(decided.domain, "wyongraceclub.com.au",
-    "the field name HubSpot Update Write Gate reads (`domain`) must be populated too");
+  // The case this file used to protect via the (now-deleted) gate-side fallback: the
+  // emitter must be the one to populate the identity the gate will check.
+  assert.ok(decided.write_request, "Decide Action must stamp write_request on every row");
+  assert.equal(decided.write_request.domain, "wyongraceclub.com.au",
+    "write_request.domain is what HubSpot Update Write Gate now reads exclusively");
+  assert.equal(decided.write_request.hs_object_id, "35551");
+  assert.equal(decided.write_request.action, "update");
 });
 
 test("HubSpot Update Write Gate: a domain-only allowlist admits an update Decide Action produced", () => {
@@ -112,4 +116,20 @@ test("HubSpot Update Write Gate: still denies when the domain is not on the allo
   });
   const gated = runCode(gateJs, [decided]);
   assert.equal(gated.length, 0, "an unlisted domain must still be refused");
+});
+
+test("HubSpot Update Write Gate: a row with no write_request at all is refused, not rescued (D-70-12)", () => {
+  const wf = loadWorkflow();
+  const gateJs = armConstants(jsCodeOf(wf, "HubSpot Update Write Gate"), {
+    ALLOW_HUBSPOT_RECORD_WRITES: "true",
+    TEST_RECORD_DOMAINS: "wyongraceclub.com.au",
+  });
+  // The legacy fields the deleted ladder used to fall back to, with no write_request.
+  const legacyShapedRow = {
+    hs_object_id: "35551", domain: "wyongraceclub.com.au",
+    identity_keys: { domain: "wyongraceclub.com.au" },
+  };
+  const gated = runCode(gateJs, [legacyShapedRow]);
+  assert.equal(gated.length, 0,
+    "a row without write_request must be refused even though every legacy fallback field is present and allowlisted");
 });

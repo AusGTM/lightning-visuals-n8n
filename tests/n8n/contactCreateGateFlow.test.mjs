@@ -110,7 +110,10 @@ test("HubSpot Create Write Gate: a create-action row is dropped with an empty al
   const wf = loadWorkflow();
   const gateJs = jsCodeOf(wf, "HubSpot Create Write Gate");
 
-  const createRow = { action: "create", hs_object_id: null, identity_keys: { domain: "exampleco.example" } };
+  // D-70-12 (Phase 70 Plan 05 Task 1): the gate reads ONLY `write_request` now — the
+  // fallback ladder this test used to exercise via `identity_keys.domain` is gone.
+  const createRow = { action: "create", hs_object_id: null,
+    write_request: { action: "create", hs_object_id: null, domain: "exampleco.example", email: null } };
 
   // Committed (disarmed): both write-safety booleans false, allowlist empty -> dropped.
   const disarmed = runCode(gateJs, [createRow]);

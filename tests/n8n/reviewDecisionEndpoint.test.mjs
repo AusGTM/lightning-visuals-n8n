@@ -794,6 +794,10 @@ test("(g4) a contacts APPROVE with no held candidate is now a real write reachin
     ...contactRow, hs_object_id: contactRow.hs_object_id, properties: result.properties,
     would_write: { ...result.properties }, outcome: result.outcome, message: result.message,
     dry_run: false,
+    // D-70-12/D-70-13 (Phase 70 Plan 05 Task 1): mirrors REVIEW_BUILD_DECISION's own
+    // committed `write_request` stamp — domain forced null (contacts stay id-only).
+    write_request: { action: "review", hs_object_id: contactRow.hs_object_id, domain: null,
+      email: contactRow.email },
   };
   assert.equal(built.would_write[P_NEEDS_REVIEW], "false", "an approval clears the queue");
 

@@ -134,7 +134,9 @@ test("the association PUT is a gated write node reading only fields its gate emi
 
   const gateJs = jsCodeOf("HubSpot Associate Company Write Gate");
   assert.match(gateJs, /_writeSafetyAllows/);
-  const row = { action: "enrich", hs_object_id: "12345", domain: "club.example", assoc_url: "u" };
+  // D-70-12 (Phase 70 Plan 05 Task 1): the gate reads ONLY `write_request` now.
+  const row = { action: "enrich", hs_object_id: "12345", domain: "club.example", assoc_url: "u",
+    write_request: { action: "enrich", hs_object_id: "12345", domain: "club.example", email: null } };
   assert.equal(runCode(gateJs, [row]).length, 0, "disarmed: the association is dropped");
   const armed = ARM(gateJs).replace(
     'const TEST_RECORD_DOMAINS = "";',

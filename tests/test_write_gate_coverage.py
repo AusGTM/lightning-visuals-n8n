@@ -335,3 +335,72 @@ def test_decide_action_return_only_strings_never_match_a_write_router():
             f"{action_string!r} appears in IF Create/IF Enrich's own conditions — a propose "
             "or needs-match-review row could structurally reach a write node"
         )
+
+
+# Phase 70 Plan 05 Task 1 (D-70-12) — the generation-time half of the canonical
+# write_request contract: a gated write whose upstream Code node does not emit it must
+# fail the BUILD, not ship a gate that (pre-this-plan) silently fell back to a stale
+# identity field, or (post-this-plan, absent this assertion) silently denied every row.
+
+def test_assert_write_request_emitters_raises_on_a_missing_emitter():
+    from scripts.build_cloud_workflows import assert_write_request_emitters, code_node
+
+    nodes = [
+        code_node("Naive Decide", "return $input.all().map((it) => ({ json: { ...it.json, action: 'enrich' } }));", 0, 0),
+        {"parameters": {}, "id": "w1", "name": "HubSpot Update",
+         "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [200, 0]},
+    ]
+    conns = {"Naive Decide": {"main": [[{"node": "HubSpot Update Write Gate", "type": "main", "index": 0}]]}}
+
+    with pytest.raises(ValueError) as excinfo:
+        assert_write_request_emitters(nodes, conns, {"HubSpot Update": "enrich"})
+    message = str(excinfo.value)
+    assert "HubSpot Update" in message, "the raise must name the gated write node"
+    assert "Naive Decide" in message, "the raise must name the offending upstream source"
+
+
+def test_assert_write_request_emitters_passes_when_the_emitter_is_correct():
+    from scripts.build_cloud_workflows import (
+        WRITE_REQUEST_JS, assert_write_request_emitters, code_node,
+    )
+
+    js = WRITE_REQUEST_JS + (
+        "return $input.all().map((it) => ({ json: { ...it.json, action: 'enrich', "
+        "write_request: _buildWriteRequest('enrich', it.json.hs_object_id, it.json.domain, null) } }));"
+    )
+    nodes = [
+        code_node("Real Decide", js, 0, 0),
+        {"parameters": {}, "id": "w1", "name": "HubSpot Update",
+         "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [200, 0]},
+    ]
+    conns = {"Real Decide": {"main": [[{"node": "HubSpot Update Write Gate", "type": "main", "index": 0}]]}}
+
+    # Must not raise.
+    assert_write_request_emitters(nodes, conns, {"HubSpot Update": "enrich"})
+
+
+def test_assert_write_request_emitters_walks_through_a_native_if_node():
+    """A gated write node is frequently fed via a routing IF (no jsCode of its own) —
+    the assertion must walk past it to the real emitter, not treat the IF itself as a
+    missing-emitter failure."""
+    from scripts.build_cloud_workflows import (
+        WRITE_REQUEST_JS, assert_write_request_emitters, code_node,
+    )
+
+    js = WRITE_REQUEST_JS + (
+        "return $input.all().map((it) => ({ json: { ...it.json, action: 'enrich', "
+        "write_request: _buildWriteRequest('enrich', it.json.hs_object_id, it.json.domain, null) } }));"
+    )
+    nodes = [
+        code_node("Real Decide", js, 0, 0),
+        {"parameters": {}, "id": "if1", "name": "IF Update",
+         "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [100, 0]},
+        {"parameters": {}, "id": "w1", "name": "HubSpot Update",
+         "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [200, 0]},
+    ]
+    conns = {
+        "Real Decide": {"main": [[{"node": "IF Update", "type": "main", "index": 0}]]},
+        "IF Update": {"main": [[{"node": "HubSpot Update Write Gate", "type": "main", "index": 0}]]},
+    }
+
+    assert_write_request_emitters(nodes, conns, {"HubSpot Update": "enrich"})

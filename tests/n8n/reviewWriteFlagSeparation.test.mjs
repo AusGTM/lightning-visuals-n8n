@@ -51,10 +51,12 @@ function arm(jsCode, name, value) {
   return jsCode.replace(from, to);
 }
 
+// D-70-12 (Phase 70 Plan 05 Task 1): the gate reads ONLY `write_request` now — the
+// fallback ladder this row used to exercise via `identity_keys.domain` is gone.
 const createRow = {
   action: "create",
   hs_object_id: null,
-  identity_keys: { domain: DOMAIN },
+  write_request: { action: "create", hs_object_id: null, domain: DOMAIN, email: null },
 };
 
 test("committed (disarmed) create gate drops a create row", () => {

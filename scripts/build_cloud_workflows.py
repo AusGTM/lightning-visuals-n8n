@@ -90,6 +90,43 @@ def inline(*modules: str) -> str:
     return "\n\n".join(strip_module(m) for m in modules)
 
 
+# D-70-12 (Phase 70 Plan 05 Task 1): the single canonical write-request shape every gated
+# write's upstream decide/set node must emit — `{action, hs_object_id, domain, email}`,
+# exactly those four keys. The four-way identity fallback ladder `_write_gate_js` used to
+# carry (two live incidents' worth of "the row didn't have the field the gate reads") is
+# deleted, not extended; every emitting node calls this ONE shared helper instead of
+# growing its own copy of the ladder. The create-row email-domain derivation — a create
+# has no `hs_object_id`, so its email domain is its only allowlist path — moves in here,
+# once: `action` decides whether the derivation applies, so a non-create call passing a
+# real `domain` is never second-guessed, and a `null` domain a caller passes ON PURPOSE
+# (the review lane's contacts-stay-id-only rule, D-70-13) is never overridden either.
+# Defined here (near the top of the module, ahead of every Code-node-body constant that
+# embeds it) rather than beside WRITE_SAFETY_GATE_JS/_write_safety_const, which are
+# composed at build sites specifically BECAUSE they depend on constants defined later in
+# this module (see "D-16b" at this file's ingest builder) — this helper has no such
+# dependency, so module-level string concatenation (`+ WRITE_REQUEST_JS +`) works at every
+# call site, early or late, without that workaround.
+def _write_request_js() -> str:
+    """Embedded verbatim into every decide/set Code node that feeds a gated write (same
+    no-shared-runtime constraint as WRITE_SAFETY_GATE_JS — Code nodes cannot require()
+    each other). Defines `_buildWriteRequest(action, hsObjectId, domain, email)`; callers
+    pass their own row's fields and assign the result to `write_request` on their return
+    object. `assert_write_request_emitters` (below) checks for this function's own name
+    in a gated write's upstream Code node jsCode at generation time."""
+    return r"""
+function _buildWriteRequest(action, hsObjectId, domain, email) {
+  var d = domain || null;
+  if (!d && action === "create" && email && String(email).indexOf("@") !== -1) {
+    d = String(email).split("@").pop().toLowerCase();
+  }
+  return { action: action, hs_object_id: hsObjectId || null, domain: d, email: email || null };
+}
+"""
+
+
+WRITE_REQUEST_JS = _write_request_js()
+
+
 # ---- Code-node bodies (inlined module + n8n I/O wrapper) --------------------
 # Every wrapper runs "Once for All Items": read $input.all() (or reference a
 # prior node by name to preserve rows across the collapse→HTTP→expand hop),
@@ -474,7 +511,7 @@ return $input.all().map((it) => {
 });
 """
 
-BUILD_ASSOCIATION_REQUEST = inline("companyLink.js") + r"""
+BUILD_ASSOCIATION_REQUEST = inline("companyLink.js") + WRITE_REQUEST_JS + r"""
 
 // --- n8n wrapper: written contact -> association request ---
 // Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now a carry merge
@@ -512,6 +549,9 @@ return $input.all().map((it) => {
     // this association attempt back to its row BY VALUE — the same join key Decide
     // Action already emits pre-write.
     row_id: row.row_id ?? null,
+    // D-70-12 (Phase 70 Plan 05 Task 1): "HubSpot Associate Company Write Gate" reads
+    // only this now — same action/id/domain/email the fields above already compute.
+    write_request: _buildWriteRequest("enrich", contactId, row.company_domain || null, email || null),
   }};
 }).filter(Boolean);
 """
@@ -747,6 +787,15 @@ return $input.all().map((it) => {
     // which domain the create gate checks (caught live by
     // contactCreateGateFlow.test.mjs's BUG 27 regression).
     domain: action !== "create" ? (row.company_domain || null) : null,
+    // D-70-12 (Phase 70 Plan 05 Task 1): the canonical shape "HubSpot Update Write
+    // Gate"/"HubSpot Create Write Gate" now read EXCLUSIVELY — same action/id/domain
+    // values the fields above already computed for the (now-deleted) fallback ladder,
+    // stamped once through the shared helper rather than re-derived at the gate.
+    write_request: _buildWriteRequest(
+      action, id.contact_id || null,
+      action !== "create" ? (row.company_domain || null) : null,
+      row.email_normalized || row.email || null
+    ),
     properties
   }};
 });
@@ -1060,7 +1109,9 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     # `action = "write_blocked"` block inside DECIDE_CLOUD), so it needs
     # `_writeSafetyAllows` and the allowlist consts too, the same way ENRICH_DECIDE_CLOUD
     # already does for the enrichment lane.
-    decide_action_js = WRITE_SAFETY_GATE_JS + DECIDE_CLOUD
+    # D-70-12 (Phase 70 Plan 05 Task 1): also needs `_buildWriteRequest` — DECIDE_CLOUD's
+    # own return object stamps `write_request` on every row it emits.
+    decide_action_js = WRITE_SAFETY_GATE_JS + WRITE_REQUEST_JS + DECIDE_CLOUD
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),
@@ -1519,6 +1570,7 @@ function _writeSafetyAllows(action, hsObjectId, domain) {
 }
 """
 )
+
 
 
 # ---- shared inlined Code-node bodies (Cloud + local both use these) ----------
@@ -2765,7 +2817,7 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
 # (e.g. a producer-less companies signal) would re-trigger every month forever, the same
 # shape of over-triggering this fix removes. `SJ-2 Search`'s existing 6-field fetch already
 # covers this narrower REQUIRED in full — no fetch-list change needed here.
-SJ2_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
+SJ2_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + WRITE_REQUEST_JS + r"""
 
 // --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
 // SJ-2-specific REQUIRED/POLICY — deliberately NOT ENRICH_CO_GATE's 13-field completeness
@@ -2798,7 +2850,10 @@ return $input.all().map((it) => {
         "record — refused rather than created (" + gate.reason + ")";
     }
   }
-  return { json: { ...row, gate, action } };
+  // D-70-12 (Phase 70 Plan 05 Task 1): "SJ-2 Set Requested" is fed via "SJ-2 IF Skip"'s
+  // false branch, whose nearest upstream Code node is this one.
+  return { json: { ...row, gate, action,
+    write_request: _buildWriteRequest("enrich", row.hs_object_id || null, row.domain || null, null) } };
 });
 """
 
@@ -8330,14 +8385,21 @@ def build_backend_status_cloud():
 # (Approach C, spec §0.7) — never a derived ICP output (score/tier/scored-at).
 # =============================================================================
 
-ENRICH_EXTRACT_SEARCH_ROWS = r"""// Extract Search Rows — HubSpot search envelope -> one row per matched record.
+ENRICH_EXTRACT_SEARCH_ROWS = WRITE_REQUEST_JS + r"""// Extract Search Rows — HubSpot search envelope -> one row per matched record.
 // Shared by the SJ-1/SJ-3/dedupe/review scheduled branches (Phase 16-02) — none of them
 // need enrichmentGate's existingRecord shape (that is SJ-2 + Company Gate's job, via a
 // dedicated Adapt step mirroring ENRICH_ADAPT_CO_SEARCH's contract).
 const item = $input.first();
 const res = (item && item.json) || {};
 const rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);
-return rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id } }));
+// D-70-12 (Phase 70 Plan 05 Task 1): "SJ-1 Set Requested" is fed directly by this node
+// (no intermediate Code node), so it is the emitter for that gate. Harmless elsewhere
+// (SJ-3/dedupe/review each transform the row again before their own write, and stamp
+// their own write_request there) — action "enrich" matches every scheduled-maintenance
+// gate's action; `domain` is whatever this search fetched (company rows carry it,
+// contact rows don't and get null, same as before).
+return rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id,
+  write_request: _buildWriteRequest("enrich", r.id, (r.properties || {}).domain || null, null) } }));
 """
 
 # fix(40) / WINDOWS.md #3: ENRICH_EXTRACT_SEARCH_ROWS's `{...properties, hs_object_id}`
@@ -8521,7 +8583,8 @@ return rows.map((r) => {
 # contact-shaped properties.{email,phone,linkedin_url}; the canonical HubSpot property is
 # lv_linkedin_url (PN-1 rename), so the wrapper maps it here rather than touch the module.
 ENRICH_DEDUPE_SWEEP = inline(
-    "normalizeEmail.js", "normalizePhone.js", "resolveIdentity.js", "dedupeSweep.js") + r"""
+    "normalizeEmail.js", "normalizePhone.js", "resolveIdentity.js", "dedupeSweep.js"
+) + WRITE_REQUEST_JS + r"""
 
 // --- n8n wrapper: Dedupe Sweep (CLASSIFY ONLY) ---
 const rows = $input.all().map((it) => it.json);
@@ -8536,11 +8599,14 @@ const report = dedupeSweep(records);
 // company:search. Converging this lane onto the shared `properties` row contract (the same
 // move BUG 11/16 made for the review lane above) lets it use the credential-bound PATCH
 // node instead of an operation that does not exist.
+// D-70-12 (Phase 70 Plan 05 Task 1): "Dedupe Set Needs Review Write Gate" is fed
+// directly by this node's own output — it is the emitter for that gate.
 return report.to_review_ids.map((id) => ({
   json: {
     hs_object_id: id,
     to_review_reason: "dedupe_sweep",
     properties: { lv_enrichment_needs_review: "true" },
+    write_request: _buildWriteRequest("enrich", id, null, null),
   },
 }));
 """
@@ -8548,7 +8614,7 @@ return report.to_review_ids.map((id) => ({
 # reviewApply.js's consumer contract is documented on the module itself — see its header.
 ENRICH_APPLY_REVIEW = inline(
     "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js",
-    "mergeCompanies.js", "reviewApply.js") + r"""
+    "mergeCompanies.js", "reviewApply.js") + WRITE_REQUEST_JS + r"""
 
 // --- n8n wrapper: Apply Review — Extract Search Rows already flattened id + properties,
 // so the row itself IS the freshly-refetched compare-and-set baseline. ---
@@ -8571,7 +8637,10 @@ return $input.all().map((it) => {
   // to the apply branch and PATCHed an empty body. `review_skip` covers BOTH reasons
   // nothing should be written: reviewApply reported stale, OR the assembled patch is empty.
   const review_skip = result.stale === true || Object.keys(properties).length === 0;
-  return { json: { ...row, hs_object_id: row.hs_object_id, ...result, properties, review_skip } };
+  // D-70-12 (Phase 70 Plan 05 Task 1): "Review Apply Update Write Gate" is fed via
+  // "Review IF Stale"'s false branch, whose nearest upstream Code node is this one.
+  const write_request = _buildWriteRequest("enrich", row.hs_object_id || null, row.domain || null, null);
+  return { json: { ...row, hs_object_id: row.hs_object_id, ...result, properties, review_skip, write_request } };
 });
 """
 
@@ -8818,46 +8887,86 @@ def _execute_workflow_node(name, x, y, workflow_id, workflow_name, wait_for_sub=
 # between a write node and whatever feeds it, so it cannot be forgotten for a write node
 # added later — tests/test_write_gate_coverage.py asserts EVERY write node in EVERY cloud
 # workflow sits directly behind one.
+# D-70-12 (Phase 70 Plan 05 Task 1): the four-way identity fallback ladder this function
+# used to carry (`hs_object_id || existingRecord.hs_object_id`, then a THREE-deep domain
+# fallback through `identity_keys.domain`/`domain`/`properties.email`/`email`) is deleted
+# outright, not extended — a row arriving without a `write_request` is refused, not
+# rescued by falling back to whatever identity fields happen to be lying around on it.
 def _write_gate_js(action: str) -> str:
     return WRITE_SAFETY_GATE_JS + (
-        "\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\n"
-        "return $input.all().filter((it) => _writeSafetyAllows(\n"
-        f"  {action!r},\n"
-        "  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n"
-        # BUG 27 (found live by the 23-06 armed canary, runs 1122/1123/1126): the create
-        # path has NO hs_object_id and Decide Action emits neither `identity_keys` nor
-        # `domain` — so a net-new create evaluated _writeSafetyAllows('create', null, null)
-        # and was denied whatever the allowlist said. BUG 16 fixed the id-half of exactly
-        # this for updates; the domain-half survived because nothing live-tested create
-        # until the canary. The domain IS present — Decide Action's create branch emits
-        # `properties.email` — so derive it there as the last fallback.
-        + (
-            # The email-domain fallback applies to CREATE ONLY. A net-new create has no
-            # hs_object_id, so the domain is its sole allowlist path — but widening the
-            # same fallback to review gates would give contact review-writebacks a domain
-            # path that 30-02 deliberately withheld (contacts are TEST_RECORD_IDS-only
-            # there; reviewDecisionEndpoint.test.mjs g3 pins it, and caught exactly that
-            # over-widening when this fix was first written unscoped).
-            "  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain\n"
-            "    || ((it.json.properties && it.json.properties.email && "
-            "String(it.json.properties.email).indexOf('@') !== -1) ? "
-            "String(it.json.properties.email).split('@').pop() : null)\n"
-            "    || ((it.json.email && String(it.json.email).indexOf('@') !== -1) ? "
-            "String(it.json.email).split('@').pop() : null),\n"
-            if action == "create" else
-            "  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n"
-        )
-        + "));\n"
+        "\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n"
+        "// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n"
+        "return $input.all().filter((it) => {\n"
+        "  var wr = it.json.write_request;\n"
+        "  if (!wr) return false;\n"
+        f"  return _writeSafetyAllows({action!r}, wr.hs_object_id || null, wr.domain || null);\n"
+        "});\n"
     )
+
+
+def _write_request_source_names(nodes_by_name, conns, target_name, _seen=None):
+    """BFS backwards from `target_name`'s inbound edges, stopping expansion at the first
+    Code node found on each path (routing IFs and Merges carry no jsCode of their own —
+    the nearest Code node in the path is the one whose OWN return shape determines what
+    the row looks like from there on, since none of this codebase's Code-node bodies
+    spread a field they never mention). Returns the set of those Code node names."""
+    if _seen is None:
+        _seen = set()
+    found = set()
+    for src, spec in conns.items():
+        if src in _seen:
+            continue
+        for outputs in spec.get("main", []):
+            for conn in (outputs or []):
+                if conn.get("node") == target_name:
+                    _seen.add(src)
+                    node = nodes_by_name.get(src)
+                    if node is None:
+                        continue
+                    if node.get("type") == "n8n-nodes-base.code":
+                        found.add(src)
+                    else:
+                        found |= _write_request_source_names(nodes_by_name, conns, src, _seen)
+    return found
+
+
+def assert_write_request_emitters(nodes, conns, gated):
+    """D-70-12's generation-time half: for each gated write node, walk backwards to the
+    nearest upstream Code node(s) and raise ValueError naming the write node and the
+    source when a source's jsCode does not call `_buildWriteRequest` (the marker
+    `_write_request_js()` stamps — same string-literal-marker approach as
+    `_run_recovery_marker`/`assert_no_by_name_reads`, checked at generation time rather
+    than trusted at runtime). Called from `splice_write_gates` after the gate is wired,
+    so `f"{write_name} Write Gate"`'s inbound edges are exactly the write node's ORIGINAL
+    predecessors, untouched by the splice."""
+    nodes_by_name = {n["name"]: n for n in nodes}
+    for write_name in gated:
+        gate_name = f"{write_name} Write Gate"
+        sources = _write_request_source_names(nodes_by_name, conns, gate_name)
+        if not sources:
+            raise ValueError(
+                f"assert_write_request_emitters: {gate_name!r} (feeding {write_name!r}) "
+                "has no upstream Code node emitting write_request"
+            )
+        for src in sources:
+            js = nodes_by_name[src]["parameters"].get("jsCode", "")
+            if "_buildWriteRequest(" not in js:
+                raise ValueError(
+                    f"assert_write_request_emitters: {write_name!r}'s upstream source "
+                    f"{src!r} does not emit write_request"
+                )
 
 
 def splice_write_gates(nodes, conns, gated):
     """Insert a write-safety gate Code node in front of each named write node.
 
     `gated` maps write-node name -> the action string passed to _writeSafetyAllows
-    ("create" or "enrich"). Every inbound connection to the write node is re-pointed at
-    its gate. Pure list/dict mutation over already-built structures — no builder needs to
-    know about it."""
+    ("create", "enrich" or "review"). Every inbound connection to the write node is
+    re-pointed at its gate. Pure list/dict mutation over already-built structures — no
+    builder needs to know about it. D-70-12: asserts every gated node's upstream emits
+    the canonical `write_request` shape before returning, so a missed emitter fails
+    generation rather than shipping a gate that silently denies (or, pre-this-plan,
+    silently admits via a stale fallback) every row."""
     by_name = {n["name"]: n for n in nodes}
     for write_name, action in gated.items():
         target = by_name.get(write_name)
@@ -8874,6 +8983,7 @@ def splice_write_gates(nodes, conns, gated):
                     if conn["node"] == write_name:
                         conn["node"] = gate_name
         conns[gate_name] = {"main": [[{"node": write_name, "type": "main", "index": 0}]]}
+    assert_write_request_emitters(nodes, conns, gated)
     return nodes, conns
 
 
@@ -9782,7 +9892,8 @@ return [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: tru
 # this is an earlier, louder answer in front of it, never a replacement for it.
 REVIEW_BUILD_DECISION = inline(
     "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js",
-    "mergeCompanies.js", "mergeContacts.js", "reviewApply.js", "reviewDecision.js") + r"""
+    "mergeCompanies.js", "mergeContacts.js", "reviewApply.js", "reviewDecision.js"
+) + WRITE_REQUEST_JS + r"""
 
 // --- n8n wrapper: Build Review Decision ---
 // ONE decision node for both object types: the row arriving here has already been fetched
@@ -9856,6 +9967,13 @@ return [{ json: { ...row,
   // dry_run above (not the raw request's), since a refused/not_flagged/no_candidate/
   // stale outcome forces dry_run=true regardless of what the caller sent.
   object_type: parsed.object_type,
+  // D-70-12/D-70-13 (Phase 70 Plan 05 Task 1): "Review Decision Update Write Gate" and
+  // "Review Contact Decision Update Write Gate" now read only this. `domain` is forced
+  // null regardless of object type — the review lane's contacts-stay-id-only rule
+  // (30-02) is now an EMITTED VALUE here rather than a gate special-case, and it applies
+  // uniformly to both write nodes this one node feeds (companies included) since both
+  // sit behind the same "review" action and the same allowlist.
+  write_request: _buildWriteRequest("review", row.hs_object_id || null, null, row.email || null),
 }}];
 """
 
