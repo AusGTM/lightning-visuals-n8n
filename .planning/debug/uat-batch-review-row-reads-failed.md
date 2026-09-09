@@ -880,3 +880,97 @@ It reconstructs rows from `Decide Action` by name, so Greg's row reported `actio
 
 hypothesis: F10 (config default), F11 (field-name mismatch between the ingest Decide Action item and the shared gate helper), F12 (response built from the decision, not the write). All three in `scripts/build_cloud_workflows.py`; F10/F12 also touch the client's body handling and `written_records` mapping (`write_blocked` → GATED already exists).
 next_action: fix F10, F11, F12 in the builder (RED node-chain tests first, one per finding), regenerate `n8n/wf_contact_ingest_cloud.json` (+ local variants), verify the client accepts a LIST ingest body and maps `write_blocked` → GATED; then decide F5b (recommend: sync path recovers from runData like async, or document sync as single-lane and make the skill use async_ack always). Operator deploys + bounces; live proof = a 2-row ingest (one update with `send_ids` carrying the matched id, one review) returning two items, the update actually landing (HubSpot Update ran), and Barry's review reason in the body.
+
+## F11 — RESOLVED (2026-09-09, commit `fa447cc`)
+root_cause: `DECIDE_CLOUD` (ingest lane) never emitted a top-level `domain` field on an
+  update row — only `company_domain` — while `HubSpot Update Write Gate` (action
+  "enrich") reads `identity_keys.domain || json.domain`. A domain-only
+  `TEST_RECORD_DOMAINS` allowlist could never admit an update.
+fix: `DECIDE_CLOUD` now also emits `domain: action !== "create" ? (row.company_domain ||
+  null) : null` — scoped to non-create actions so `HubSpot Create Write Gate`'s own BUG
+  27 email-domain derivation is untouched (widening unscoped broke
+  contactCreateGateFlow.test.mjs live during this fix; caught by the full node suite,
+  fixed by scoping before commit). `HubSpot Associate Company Write Gate` was already
+  fine — `BUILD_ASSOCIATION_REQUEST` already aliases `company_domain` -> `domain`.
+verification: RED (tests/n8n/ingestUpdateGateDomainFallback.test.mjs, 2/3 failing) ->
+  GREEN. Full suites: node 957/957 (954+3), plugin 2850/5, full repo 4608/154 — all
+  unchanged baselines.
+files_changed: scripts/build_cloud_workflows.py, n8n/wf_contact_ingest_cloud.json,
+  tests/n8n/ingestUpdateGateDomainFallback.test.mjs (new)
+next_action: F11 done. Proceed to F10 (webhook responseData: allEntries), then F12
+  (write_blocked when the gate refuses a row), then decide F5b.
+
+## F10 — RESOLVED (2026-09-09, commit `4d35812`)
+root_cause: ingest `Webhook Trigger` had `responseMode: "lastNode"` with no
+  `responseData`, defaulting to n8n's `firstEntryJson` — collapsed a multi-row `Build
+  Ingest Response` output to one item at the webhook boundary.
+fix: added `responseData: "allEntries"`. Client side needed no change —
+  `written_records.append_chunk` and `report.sync_response_is_sufficient` already
+  normalize `body if isinstance(body, list) else [body]` (checked, not assumed).
+  `wf_contact_ingest_local.json` has no Webhook Trigger node at all (Manual Trigger +
+  fixture rows) — nothing to change there.
+verification: RED (tests/n8n/ingestWebhookRespondsAllEntries.test.mjs) -> GREEN. Full
+  suites: node 958/958 (957+1), plugin 2850/5, full repo 4608/154 — unchanged baselines.
+files_changed: scripts/build_cloud_workflows.py, n8n/wf_contact_ingest_cloud.json,
+  tests/n8n/ingestWebhookRespondsAllEntries.test.mjs (new)
+next_action: F10, F11 done. Proceed to F12 (write_blocked when the gate refuses a row,
+  discriminating case = NO review row in the batch so Build Ingest Response's only path
+  is the association chain), then decide F5b.
+
+## F12 — RESOLVED (2026-09-09, commit `8344b7a`)
+root_cause: `Build Ingest Response` reconstructs every row from `Decide Action` by name,
+  so a row the downstream write gate silently refused still reported its pre-block
+  action ("update") as if it landed. A wiring-only fix is insufficient: a Code node
+  filtering its input to zero never fires its outgoing connection, so a 100%-refused,
+  review-row-less batch would leave `Build Ingest Response` unreachable (F1's dead-end
+  recurring for a different reason).
+fix: `Decide Action` now pre-computes the same write-safety verdict the downstream
+  `HubSpot Update Write Gate` applies (mirrors `ENRICH_DECIDE_CLOUD`'s own precedent),
+  setting `action = "write_blocked"` before the IF Update/IF Create split — routes
+  through `Set Review`'s F1 edge into `Build Ingest Response` with no new wiring.
+  Scoped to UPDATE only; CREATE deferred (todo filed:
+  2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md) since replicating BUG
+  27's live-canary-proven email-domain fallback for create carried unevidenced
+  regression risk this session chose not to take on.
+verification: RED (tests/n8n/ingestUpdateWriteBlockedFlow.test.mjs, 4 cases incl. the
+  discriminating no-review-row full-flow case) -> GREEN. Collateral: 3 test files
+  (companyAssociationFlow, pairPipelineAssociationFlow, ingestUpdateGateDomainFallback)
+  updated to arm the allowlist Decide Action now also checks;
+  test_control_flag_parity.py's declaration-count pins updated (3->4,
+  ALLOW_HUBSPOT_RECORD_WRITES) to match the new declaring node. Full suites: node
+  962/962 (958+4), plugin 2850/5, full repo 4608/154 — unchanged baselines. Builder
+  idempotency + node count (29, unchanged) verified.
+files_changed: scripts/build_cloud_workflows.py, n8n/wf_contact_ingest_cloud.json,
+  tests/n8n/ingestUpdateWriteBlockedFlow.test.mjs (new),
+  tests/n8n/ingestUpdateGateDomainFallback.test.mjs,
+  tests/n8n/pairPipelineAssociationFlow.test.mjs, tests/n8n/companyAssociationFlow.test.mjs,
+  operator-claude-plugin/tests/test_control_flag_parity.py,
+  .planning/todos/pending/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md (new)
+next_action: F10, F11, F12 all done. Decide F5b next (see below), then update
+  operator_handoff and request the CHECKPOINT.
+
+## F5b — DECIDED: no code fix needed (2026-09-09, commit `7524ee7`)
+
+The mechanism F5b describes is real (confirmed: n8n's `Respond to Webhook` only ever
+sends the FIRST lane's run back over HTTP when a chunk fires more than one of
+"Enrichment Gate"'s lanes in one execution — a sync response can legitimately carry
+fewer items than rows sent). But investigation found this is ALREADY SAFE in every
+SKILL-documented path: `preingest.classify_matches` (called with the FULL row list,
+`spec["rows"]`, never `outcome.responses` alone) and `preingest.rerequest_unanswered`'s
+`merge_enriched` both walk the INPUT rows, not the response — a row with no matching
+response item is bucketed `unchecked`/`unanswered` by design (both functions' own
+docstrings state this explicitly), never silently dropped, never misread as a negative
+match. `unchecked` already has a real second chance via the F4-fixed re-request pass.
+
+Decision: neither candidate fix (a: n8n recovers every lane from runData; b: client
+always forces async_ack) is warranted — both are heavier than the actual gap, which
+turned out to be confidence/documentation, not code. Checked all four `dispatch_plan`
+call sites: `enrich-before-ingest` step 5 and `enrich-records` pass `async_ack=True`
+(immune); `scheduled_arm.py` does not, but its rows are record-id-only (single lane in
+practice, not exposed to F5's multi-lane trigger) — noted, no follow-up filed.
+fix: one paragraph added to `enrich-before-ingest/SKILL.md`'s match step (right where
+  `classify_matches` is called), stating the short-response shape is expected and
+  should be trusted, not re-split by hand.
+files_changed: operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
+next_action: F10, F11, F12, F5b all done. Update operator_handoff and request the
+  CHECKPOINT for human verification before moving this session to resolved/.
