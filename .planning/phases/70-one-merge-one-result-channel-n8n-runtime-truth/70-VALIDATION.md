@@ -2,10 +2,10 @@
 phase: "70"
 slug: "one-merge-one-result-channel-n8n-runtime-truth"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
+# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: true) (#2117)
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: false  # 70-01 lands it
 created: "2026-09-09"
 ---
 
@@ -40,26 +40,46 @@ created: "2026-09-09"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 70-01-01 | 01 | 0 | D-70-16 / D-70-18 | — | walker replays committed JSON per executionOrder; detects F5 collapse and double-Respond | unit | `node --test tests/n8n/<walker>.test.mjs` | ❌ W0 | ⬜ pending |
-| 70-01-02 | 01 | 0 | D-70-03 / D-70-04 | — | build-time assertion: zero by-name reads in generated jsCode AND node parameter expressions; `nodeRunRecovery.js` not inlined | unit | `.venv/bin/python -m pytest tests/test_no_by_name_reads.py -q` (or equivalent) | ❌ W0 | ⬜ pending |
-| 70-02-xx | 02 | 1 | D-70-01 / D-70-02 | — | Merge at every convergence; every Merge input always fires (Always Output Data or sentinel row); single-lane batch does not hang | integration (walker) | `node --test tests/n8n/<enrichmentMixedBatch>.test.mjs` | ❌ W0 | ⬜ pending |
-| 70-03-xx | 03 | 1 | D-70-12..15 | T-70-01 | canonical `write_request`; gate emits refusal item; review lane `domain: null`; no allowlist widening | unit | `node --test tests/n8n/<writeGateShape>.test.mjs`; `.venv/bin/python -m pytest tests/test_write_gate_coverage.py -q` | extend | ⬜ pending |
-| 70-04-xx | 04 | 2 | D-70-05..08a / D-70-10 | T-70-02 | runData sole channel; ack-only body; refusal before start on missing `n8n_api_key`; no time-proximity fallback | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_watch.py operator-claude-plugin/tests/test_report_sufficiency.py -q` | ✅ extend | ⬜ pending |
-| 70-04-xx | 04 | 2 | D-70-09 / D-70-11 | — | no-write legs never appended to `written_records`; preview verdict = `confidence.assess` | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py operator-claude-plugin/tests/test_preingest.py -q` | ✅ extend | ⬜ pending |
-| 70-05-xx | 05 | 3 | D-70-17 | — | 2 lanes × 2 actions per lane, every row returns once from the write node | integration (walker) | `node --test tests/n8n/<enrichmentMixedBatch>.test.mjs tests/n8n/<ingestMixedBatch>.test.mjs` | ❌ W0 | ⬜ pending |
-| 70-05-xx | 05 | 3 | D-70-19 | — | disarmed live run; runData shape-equal to walker prediction; `settings.executionOrder` logged | live (disarmed) | adapted `scripts/prove_async_recovery.py`; verdict JSON in phase dir | ✅ precedent | ⬜ pending |
+| 70-01-01 | 01 | 0 | D-70-16 | T-70-07 | walker replays committed JSON per executionOrder; unhandled node types surfaced, unstubbed HTTP throws | unit | `node tests/n8n/lib/walkWorkflow.mjs --workflow n8n/wf_contact_ingest_cloud.json --rows tests/n8n/fixtures/walkerSmoke.json --node "Build Ingest Response"` | ❌ W0 | ⬜ pending |
+| 70-01-02 | 01 | 0 | D-70-18 | T-70-07 | walker detects F5 collapse, Merge-input hang, double-Respond first-only — this phase's RED evidence | unit | `node --test tests/n8n/walkWorkflow.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-01-03 | 01 | 0 | D-70-03 / D-70-04 | T-70-08 | detector finds quoted form, dynamic call form and parameter-expression reads; proven non-zero against today's JSON | unit | `.venv/bin/python -m pytest tests/test_no_by_name_reads.py -q` | ❌ W0 | ⬜ pending |
+| 70-02-01 | 02 | 1 | D-70-05 / D-70-07 | T-70-02 | one-way contract confirmed before publication | checkpoint:decision | human (`gate="blocking-human"`) | n/a | ⬜ pending |
+| 70-02-02 | 02 | 1 | D-70-01 / D-70-05 / D-70-06 / D-70-07 | T-70-02, T-70-04, T-70-05 | tracer: Merge at convergence, ack-only respond, runData channel, always-output-data on lane terminals | integration (walker) | `node --test tests/n8n/ingestTracerFlow.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-02-03 | 02 | 1 | D-70-03 / D-70-04 | T-70-13 | carry Merge across ingest HTTP hops; zero by-name reads on that lane | integration (walker) | `node --test tests/n8n/ingestCarryMerge.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-03-01 | 03 | 2 | D-70-01 / D-70-02 | T-70-04, T-70-05 | Merge at all 17 enrichment convergence points; every input always fires; no executionOrder flip | integration (walker) | `node --test tests/n8n/enrichmentConvergenceMerge.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-03-02 | 03 | 2 | D-70-07 | T-70-02, T-70-11 | responder has one inbound edge; four body-borne refusals become rows; retired flag gone both sides | unit + integration | `node --test tests/n8n/asyncAck.test.mjs tests/n8n/enrichmentBatchRefusal.test.mjs` | ✅ extend | ⬜ pending |
+| 70-03-03 | 03 | 2 | D-70-01 / D-70-08 | T-70-12 | review lane Merges; body response preserved | integration (walker) | `node --test tests/n8n/reviewConvergenceMerge.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-04-01 | 04 | 3 | D-70-04 | T-70-13, T-70-05 | carry Merge at every provider/HubSpot hop; research+judge bodies row-correct with providers enabled | integration (walker) | `node --test tests/n8n/providerCarryMerge.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-04-02 | 04 | 3 | D-70-03 | T-70-08, T-70-11 | parameter expressions and single-run request reads retired; flags ride the row with semantics intact | unit | `.venv/bin/python -m pytest tests/test_no_by_name_reads.py -q` | ✅ extend | ⬜ pending |
+| 70-04-03 | 04 | 3 | D-70-01 / D-70-04 | T-70-08 | run-recovery module deleted; generation raises on a by-name read — demonstrated, not assumed | unit | `node --test tests/n8n/nodeRunRecovery.test.mjs tests/n8n/enrichmentGateRunRecoveryFlow.test.mjs` | ✅ rewrite | ⬜ pending |
+| 70-05-01 | 05 | 4 | D-70-12 | T-70-01, T-70-14, T-70-15 | canonical `write_request`; ladder deleted; emitter asserted at generation; review lane domain null | unit + integration | `node --test tests/n8n/writeGateShape.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-05-02 | 05 | 4 | D-70-13 / D-70-14 / D-70-06 | T-70-06 | IF-shaped gate; refusals emitted; enrichment lane gains a gate; precheck removed | integration (walker) | `node --test tests/n8n/companyRecomputeLaneFlow.test.mjs tests/n8n/ingestUpdateWriteBlockedFlow.test.mjs` | ✅ rewrite | ⬜ pending |
+| 70-05-03 | 05 | 4 | D-70-15 | T-70-01 | one verdict covers update + association; update never held for lack of a company; maintenance adopts the shape | integration (walker) | `node --test tests/n8n/companyAssociationFlow.test.mjs tests/n8n/sjPredicates.test.mjs` | ✅ rewrite | ⬜ pending |
+| 70-06-01 | 06 | 4 | D-70-05 / D-70-08 / D-70-08a / D-70-10 | T-70-02, T-70-03, T-70-16, T-70-18 | runData sole channel incl. scale-up children; refusal before start on missing API key; no time-proximity fallback; one poll site | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_watch_settle_reporting.py operator-claude-plugin/tests/test_report_sufficiency.py -q` | ✅ extend | ⬜ pending |
+| 70-06-02 | 06 | 4 | D-70-09 / D-70-11 | T-70-17 | no-write legs never appended to the ledger; preview verdict = `confidence.assess`, pinned as an equality | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py operator-claude-plugin/tests/test_preingest_preview.py -q` | ✅ extend | ⬜ pending |
+| 70-06-03 | 06 | 4 | D-70-08 | T-70-02, T-70-03 | repo scripts migrated through their one shared poster; spent probes deleted; none reads the ack for a row outcome | unit | `.venv/bin/python -m pytest tests/test_enrich_coverage_companies.py -q` | ✅ extend | ⬜ pending |
+| 70-07-01 | 07 | 5 | D-70-17 | T-70-05 | 2 lanes x 2 actions per lane, every row returns once; plus single-lane and fully-refused cases | integration (walker) | `node --test tests/n8n/enrichmentMixedBatch.test.mjs tests/n8n/ingestMixedBatch.test.mjs` | ❌ W0 | ⬜ pending |
+| 70-07-02 | 07 | 5 | D-70-07 / D-70-11 / D-70-08a | T-70-02 | operator-facing docs state the new contract; moved pins updated; plugin version bumped with its CHANGELOG entry | unit (full suites) | `.venv/bin/python -m pytest -q --tb=short` | ✅ existing | ⬜ pending |
+| 70-07-03 | 07 | 5 | D-70-19 / D-70-02 | T-70-19, T-70-03, T-70-04, T-70-20 | disarmed live run; runData shape-equal to walker prediction; live `settings.executionOrder` logged; zero writes | live (disarmed, `gate="blocking-human"`) | `scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
-
-(Task IDs are placeholders until PLAN.md files exist; the planner replaces them.)
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/n8n/<walker>.mjs` + `<walker>.test.mjs` — the D-70-16 graph walker and its own unit tests (F5 collapse, Respond-fires-once, Webhook `responseData`, single-lane-only batch)
-- [ ] build-time by-name-read assertion in `scripts/build_cloud_workflows.py` and its pytest (D-70-03/04; covers `$('`, dynamic `$(name)`, and node `parameters` expressions — research Pitfall 2)
-- [ ] `tests/n8n/<enrichmentMixedBatch>.test.mjs`, `tests/n8n/<ingestMixedBatch>.test.mjs` — D-70-17 acceptance tests
+Wave 0 is plan **70-01**. It lands the instrument and the detector; the acceptance tests are
+built on that instrument in 70-07 against the finished JSON.
+
+- [ ] `tests/n8n/lib/walkWorkflow.mjs` + `tests/n8n/walkWorkflow.test.mjs` — the D-70-16 graph walker and its own unit tests (F5 collapse, Respond-fires-once, Merge input never fires, always-output-data satisfies a Merge, paired-item resolution, synthetic 2x2 mixed batch)
+- [ ] `detect_by_name_reads` in `scripts/build_cloud_workflows.py` and `tests/test_no_by_name_reads.py`, proven by a non-zero count against today's committed JSON (D-70-03/04; covers the quoted form, the dynamic call form, node `parameters` expressions, and an inlined run-recovery module — research Pitfall 2)
+- [ ] `tests/n8n/fixtures/walkerSmoke.json` — the two-row ingest fixture the walker CLI consumes
+
+**Deliberate deviation, recorded:** the two D-70-17 mixed-batch acceptance tests are NOT stubbed in
+Wave 0. They assert behaviour that does not exist until 70-05 completes, and D-70-18 explicitly
+permits GREEN-on-the-refactored-JSON with no historical RED. Wave 0 de-risks them instead by
+proving the walker they run on, including a synthetic 2x2 mixed-batch case. The real ones land in
+70-07 Task 1.
 
 ---
 
@@ -73,11 +93,15 @@ created: "2026-09-09"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 300s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (deviation for the two acceptance tests recorded above)
+- [x] No watch-mode flags
+- [x] Feedback latency < 300s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planner sign-off 2026-09-09 — every task carries an `<automated>` verify with a
+stated failing direction except the two checkpoints (70-02-01 `checkpoint:decision`, 70-07-03
+`checkpoint:human-verify`, both `gate="blocking-human"`), which are human by design. No three
+consecutive tasks lack an automated verify. No watch-mode flags. Feedback latency under 300s for
+the per-task commands.

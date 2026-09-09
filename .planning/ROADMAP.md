@@ -297,3 +297,15 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
+**Plans:** 7 plans (planned 2026-09-09), waves 0–5, sequential on the builder file except
+70-05 ∥ 70-06.
+
+Plans:
+- [ ] 70-01-PLAN.md — Wave 0: the graph walker over the committed JSON, its own RED-detection unit tests, and the by-name-read detector proven against today's violations
+- [ ] 70-02-PLAN.md — Wave 1: TRACER — one ingest row end to end (Merge at the convergence, carry Merge across the HTTP hops, ack-only webhook, runData at the client); leads with the one-way contract checkpoint
+- [ ] 70-03-PLAN.md — Wave 2: a Merge at every enrichment and review convergence point; the enrichment webhook answers with an ack; refusals become rows; the opt-in flag retired
+- [ ] 70-04-PLAN.md — Wave 3: carry Merges at every provider/HubSpot hop, the last parameter-expression reads retired, `nodeRunRecovery.js` deleted, and the by-name-read assertion wired into generation
+- [ ] 70-05-PLAN.md — Wave 4: one canonical `write_request`, an IF-shaped gate emitting refusals, a real gate on the enrichment lane, one verdict for an update and its association
+- [ ] 70-06-PLAN.md — Wave 4: the client result channel — runData always, refusal before start on a missing API key, a write-only ledger, one per-row verdict, repo scripts migrated
+- [ ] 70-07-PLAN.md — Wave 5: the two mixed-batch acceptance tests, the operator-facing docs and version bump, and the disarmed live run whose rows must match the walker
+
