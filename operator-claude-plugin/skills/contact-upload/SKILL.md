@@ -507,9 +507,12 @@ be sent, and — only when explicitly armed — send it.
    it runs under; passing the grant's full list would widen every window to the whole batch
    and every test would still pass.
 
-   `dispatch.dispatch` returns `{"body": <the raw JSON body>, "run_id": <str>,
-   "written_records_failures": [...]}`, not a bare body. The webhook response step 7 works
-   from is `result["body"]` — hand it to the next step exactly as returned, unparsed. This
+   `dispatch.dispatch` returns `{"ack": <the webhook's ack>, "body": <an alias of "ack">,
+   "rows": <the recovered, reconciled per-row list>, "recovered": <bool>,
+   "run_id": <str>, "written_records_failures": [...]}`. **Step 7 works from
+   `result["rows"]`.** The ack carries `{run_id, accepted, row_ids}` and no row outcome
+   at all (D-70-07) — `result["body"]` is kept only so an unmigrated reader degrades to
+   seeing the ack rather than crashing, and it is never a source of a row's outcome. This
    send is now recorded, at the write site, into a `written_records-<run_id>.json` artifact
    in the plugin's durable state directory (`scripts/written_records.py`) — the same
    artifact a write grant's own consequence sentence already promises at arming time,
@@ -521,29 +524,27 @@ be sent, and — only when explicitly armed — send it.
 
 7. **Report the outcome — per record, not a bare acceptance.**
 
-   First, check whether the synchronous body from step 6 is even usable: import
-   `scripts/report.py` (its functions are a library, the same way
-   `scripts/config_gate.py`/`scripts/tabular.py` already are, not a CLI) and call
-   `sync_response_is_sufficient(body)` on it, where `body = result["body"]`.
+   **One result channel, and it is `result["rows"]` (D-70-05).** `dispatch.dispatch`
+   already read them back for you: after the POST it called
+   `watch.recover_dispatch(..., lane="ingest")`, correlated on this run's own
+   client-minted `run_id`, waited (bounded) for the execution to settle, and reconciled
+   each row against the write node's OWN output through `report.reconcile` — so a row
+   whose write was gated reads `not_confirmed` rather than `create`. There is no second
+   channel to fall back to and no sufficiency check to run: the synchronous body is an
+   ack in every case now, and `report.sync_response_is_sufficient` has been deleted.
 
-   n8n Cloud's webhook response is cut off by a Cloudflare-enforced ceiling of
-   roughly one hundred seconds (a 524 on breach) — treat crossing it, or any
-   connection/gateway error from step 6, as a fallback trigger, not a failed send.
+   **Never correlate by time.** `executions_client.find_execution_for_dispatch()` picks
+   an execution by how close its start time is to your POST; on a busy instance that can
+   attribute a stranger's run to this send. It is not a correlation path — D-70-10 —
+   and no step of this skill may call it.
 
-   - **If the body is sufficient** (every item carries a row-identifying field, or is
-     a full HubSpot object with an `id` and `properties`), render the outcome
-     directly from it.
-   - **If it is not** — thin, `Set Review`-shaped (only a `queue` marker), or the POST
-     timed out/gatewayed — correlate and fetch through `scripts/executions_client.py`
-     instead: resolve the `LV Contact Ingest (Cloud template)` workflow id, list its
-     recent executions, call `find_execution_for_dispatch()` against the time you
-     sent the POST, then `get_execution()` on the result. Feed that execution into
-     `scripts/report.py`'s `build_contact_report()` to get the counts, the ledger,
-     and the in-flight state.
-
-   When the report came from the executions API, **say so in your own words**, and
-   say the run may still be progressing — a report built this way is never presented
-   as a finished one, even when it already shows some rows landing (D-03).
+   n8n Cloud cuts the webhook response off at roughly one hundred seconds (a 524 on
+   breach). That no longer costs you the rows: the ack returns immediately and the rows
+   come from the settled execution regardless. What it means is only that
+   `result["recovered"]` may be `False` when the run outlasts the watch's bound — in
+   that case say plainly that the send landed, the run is still going, and the rows are
+   not known yet, and offer to read them again with the SAME `run_id`. Never
+   re-dispatch: that would send every row a second time.
 
    Then render, in this order:
    1. **Summary counts first** — created / updated-matched / needs_review / rejected
@@ -558,8 +559,8 @@ be sent, and — only when explicitly armed — send it.
       so keep it to the actionable subset or an explicit ask. Never paste a raw
       execution payload into the conversation.
 
-   **Report the association, per row, alongside the write.** Each row in the
-   synchronous body carries `association`: `associated` (the contact is now linked to
+   **Report the association, per row, alongside the write.** Each recovered row carries
+   `association`: `associated` (the contact is now linked to
    `company_id`), `not_confirmed` (the association was gated or HubSpot refused it —
    the contact landed, the link did not), `not_attempted`, or `none` (no company was
    resolved for this row). A row whose `action` is `review` with a `reason` mentioning a

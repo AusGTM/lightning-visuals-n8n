@@ -500,8 +500,20 @@ says nothing per record, this lane reports at chunk granularity and says so.
    try:
        with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
                                     allow_create, cfg, grant=decision["grant"]) as window:
-           outcome = chunking.dispatch_plan(plan, providers, True, cfg, run_id=run_id,
-                                            execution_ceiling=execution_ceiling)
+           # D-70-05/D-70-08a (Phase 70 Plan 06): `dispatch_and_recover`, never
+           # `dispatch_plan` alone. The webhook answers with an ack, so every row's
+           # outcome comes back from the settled execution's runData, correlated on
+           # this run's own `run_id`. It runs INSIDE the armed window: the ack returns
+           # long before n8n has finished writing, and disarming underneath a
+           # still-running armed execution is what closing the window early would do.
+           # This lane's id-less spec forms (a named list, a view) correlate fine —
+           # correlation is on `run_id` alone, never on a row id — and the ack's
+           # `row_ids` may legitimately be empty for them.
+           dispatched = chunking.dispatch_and_recover(
+               plan, providers, True, cfg, run_id=run_id,
+               execution_ceiling=execution_ceiling)
+           outcome = dispatched["outcome"]
+           rows = dispatched["rows"]
        disarm = window.disarm_result
    except Exception:
        crashed = True
@@ -574,10 +586,13 @@ says nothing per record, this lane reports at chunk granularity and says so.
    bookkeeping failure was considered and rejected, so this loud disclosure is what was
    chosen instead).
 
-   **For every response in `outcome.responses`, read what it actually says before calling
-   that chunk sent.** Import `scripts/report_enrichment.py` (a library here, the same way
-   `scripts/report.py` already is, not a CLI) and call `build_sync_report(response)` on
-   each one. It returns `(rows, reason)`: one row per record the body itself decided on,
+   **Read the RECOVERED rows — `dispatched["rows"]` — and report what they actually say
+   before calling that chunk sent. `outcome.responses` carries the ACKS
+   (`{run_id, accepted, row_ids}`) and no row outcome at all; reading it for one would
+   report nothing while sounding complete.** Import `scripts/report_enrichment.py` (a
+   library here, the same way `scripts/report.py` already is, not a CLI) and call
+   `build_row_reports(dispatched["rows"])`. It returns `(rows, reason)`: one row per
+   record the result channel itself decided on,
    each carrying `outcome` — one of `written_records`'s eight words (D-57-03/57-02):
    `written`, `write_attempted`, `created_id_unknown`, `written_id_unknown`, `gated`,
    `held`, `failed`, `no_action` — `reason` (present for `gated`/`held`/`failed`), and
@@ -587,6 +602,11 @@ says nothing per record, this lane reports at chunk granularity and says so.
    accepted 1 chunk, 1 row" must never stand in for that when the row itself says
    otherwise.
 
+   **If `dispatched["recovered"]` is `False`, the run has not settled inside the watch's
+   bound.** Say exactly that — the send landed, the run is still going, and the rows are
+   not known yet — and offer to read them again with the SAME `run_id`. Never re-dispatch
+   (that sends the same rows twice), and never report a row this pass could not see.
+
    **`gated` is AFTER-03's case (57-05): the row would have been written and is
    RECOVERABLE, never a failure.** Say plainly that opening a grant and re-sending it
    writes it — never describe it as a dead end, and never let its wording read like a
@@ -595,15 +615,15 @@ says nothing per record, this lane reports at chunk granularity and says so.
    RECORDED EDIT (F3, 2026-08-25) — never invent what the body does not carry; always
    relay what it does. This step used to carry a blanket rule against stating any
    per-record outcome at all, written to stop the client INVENTING an outcome the
-   synchronous body never carried. A live walk hit the old rule read too broadly: a body
+   result channel never carried. A live walk hit the old rule read too broadly: a body
    reading `action: "write_blocked"`, `match.reason: "searched, no hit"` was received and
    reported as "no failures, nothing to re-send" anyway. The property was never "withhold
    per-record detail" — it is "never guess beyond what the body says". When
-   `build_sync_report` returns a `reason` instead of rows (the body was not shaped like a
-   decision response at all — the `{status_code, text}` fallback, or an empty or malformed
-   body), say plainly that this lane reports at chunk granularity for that chunk and point
+   `build_row_reports` returns a `reason` instead of rows (the recovered rows were not
+   shaped like a decision response at all — the `{status_code, text}` fallback, or an
+   empty or malformed result), say plainly that this lane reports at chunk granularity for that chunk and point
    the operator at the record in HubSpot — that is the one case where a real gap in the
-   body limits what can be said, not a habit of withholding what it does carry.
+   channel limits what can be said, not a habit of withholding what it does carry.
 
    If `outcome.failed_batch` is present, say that the failed records have been collected as
    **a batch that can be re-sent** — one well-formed enrichment request, not a list of

@@ -24,6 +24,31 @@ REPO_ROOT = PLUGIN_ROOT.parent
 SAMPLES_DIR = PLUGIN_ROOT / "tests" / "samples"
 
 
+# =====================================================================================
+# Phase 70 Plan 06 (D-70-05): `rerequest_unanswered` no longer reads its rows out of the
+# POST's own response — the webhook answers with an ack, and every row comes back from
+# the settled execution's runData (`chunking.dispatch_and_recover`). These tests
+# exercise the RETRY PASS's own logic, not the recovery mechanism, which
+# `test_chunking.py` and `test_watch_settle_reporting.py` own end to end — so the sole
+# channel is stubbed here at `watch.recover_dispatch` and answers nothing by default.
+# =====================================================================================
+
+@pytest.fixture(autouse=True)
+def recovers(monkeypatch):
+    import watch
+
+    def _install(rows=()):
+        monkeypatch.setattr(
+            watch, "recover_dispatch",
+            lambda *a, **k: {"recovered": True,
+                             "responses": [dict(row) for row in rows],
+                             "run_data": {}},
+        )
+
+    _install()
+    return _install
+
+
 def _rows(n):
     return preingest.build_rows_spec([
         {"firstname": f"First{i}", "lastname": "Doe", "company": "GCTC"}
@@ -480,16 +505,16 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
 
 
 def test_a_rerequest_response_carrying_a_widened_key_keeps_it_on_the_row(
-        fake_config, stub_module_transport_factory):
+        fake_config, stub_module_transport_factory, recovers):
     # Caller C: preingest.rerequest_unanswered re-enters merge_enriched, so it
     # inherits the union with no separate change.
     rows = _rows(1)
     merge_report = preingest.merge_enriched(rows, [])
     assert len(merge_report.unanswered) == 1
 
-    transport = stub_module_transport_factory(responses=[
-        [_response(rows[0]["row_id"], {"email": "amy@example.com", "seniority": "Director"})],
-    ])
+    transport = stub_module_transport_factory()
+    recovers([_response(rows[0]["row_id"],
+                        {"email": "amy@example.com", "seniority": "Director"})])
     result = preingest.rerequest_unanswered(
         rows, merge_report, ["zoominfo"], True,
         {**fake_config, "max_records_per_chunk": 10}, transport=transport,
@@ -661,14 +686,13 @@ def _rerequest_config(fake_config, ceiling=10):
 
 
 def test_rerequest_unanswered_dispatches_one_pass_and_narrows_the_unanswered_set(
-        fake_config, stub_module_transport_factory):
+        fake_config, stub_module_transport_factory, recovers):
     rows = _rows(2)
     merge_report = preingest.merge_enriched(rows, [])  # neither row answered
     assert len(merge_report.unanswered) == 2
 
-    transport = stub_module_transport_factory(responses=[
-        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
-    ])
+    transport = stub_module_transport_factory()
+    recovers([_response(rows[0]["row_id"], {"email": "answered@x.com"})])
 
     result = preingest.rerequest_unanswered(
         rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
@@ -749,16 +773,15 @@ def test_rerequest_unanswered_request_bodies_carry_the_original_row_ids(
 
 
 def test_rerequest_unanswered_carries_the_dispatch_outcome_and_ceiling(
-        fake_config, stub_module_transport_factory):
+        fake_config, stub_module_transport_factory, recovers):
     """Phase 57 / D-57-01 / REVIEW-57-H3: the re-request pass is a real production
     `dispatch_plan` caller that runs a SECOND pass under the same grant, and its own
     spend was invisible to any tally before `execution_ceiling` and `dispatch_outcome`
     existed."""
     rows = _rows(1)
     merge_report = preingest.merge_enriched(rows, [])
-    transport = stub_module_transport_factory(responses=[
-        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
-    ])
+    transport = stub_module_transport_factory()
+    recovers([_response(rows[0]["row_id"], {"email": "answered@x.com"})])
 
     result = preingest.rerequest_unanswered(
         rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
@@ -771,14 +794,13 @@ def test_rerequest_unanswered_carries_the_dispatch_outcome_and_ceiling(
 
 
 def test_rerequest_unanswered_with_no_execution_ceiling_is_unchanged(
-        fake_config, stub_module_transport_factory):
+        fake_config, stub_module_transport_factory, recovers):
     """`execution_ceiling=None` is today's behaviour — the same plan, the same single
     call, the same `MergeResult` fields every existing caller relies on."""
     rows = _rows(2)
     merge_report = preingest.merge_enriched(rows, [])
-    transport = stub_module_transport_factory(responses=[
-        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
-    ])
+    transport = stub_module_transport_factory()
+    recovers([_response(rows[0]["row_id"], {"email": "answered@x.com"})])
 
     result = preingest.rerequest_unanswered(
         rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
@@ -793,7 +815,7 @@ def test_rerequest_unanswered_with_no_execution_ceiling_is_unchanged(
 
 
 def test_rerequest_unanswered_threads_run_id_through_to_dispatch_plan(
-        fake_config, stub_module_transport_factory):
+        fake_config, stub_module_transport_factory, recovers):
     """F4 (uat-batch-review-row-reads-failed): without `run_id=`, `chunking.dispatch_plan`
     mints a FRESH `uuid.uuid4().hex` internally, orphaning this pass's
     `written_records`/bookkeeping under a run_id nobody else in the batch ever sees —
@@ -803,9 +825,8 @@ def test_rerequest_unanswered_threads_run_id_through_to_dispatch_plan(
     echo the SAME id the caller already minted for the rest of this batch."""
     rows = _rows(1)
     merge_report = preingest.merge_enriched(rows, [])
-    transport = stub_module_transport_factory(responses=[
-        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
-    ])
+    transport = stub_module_transport_factory()
+    recovers([_response(rows[0]["row_id"], {"email": "answered@x.com"})])
 
     result = preingest.rerequest_unanswered(
         rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
@@ -816,14 +837,13 @@ def test_rerequest_unanswered_threads_run_id_through_to_dispatch_plan(
 
 
 def test_rerequest_unanswered_with_no_run_id_is_unchanged(
-        fake_config, stub_module_transport_factory):
+        fake_config, stub_module_transport_factory, recovers):
     """`run_id=None` (the default) is today's behaviour — a fresh id, unchanged for
     every existing caller that does not pass one."""
     rows = _rows(1)
     merge_report = preingest.merge_enriched(rows, [])
-    transport = stub_module_transport_factory(responses=[
-        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
-    ])
+    transport = stub_module_transport_factory()
+    recovers([_response(rows[0]["row_id"], {"email": "answered@x.com"})])
 
     result = preingest.rerequest_unanswered(
         rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),

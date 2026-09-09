@@ -42,6 +42,7 @@ from pathlib import Path
 
 import requests
 
+import config_gate
 import executions_client
 import report
 import report_enrichment
@@ -472,6 +473,61 @@ _LANE_RECOVERY_CONFIG = {
 }
 
 
+def require_executions_api(config) -> None:
+    """Refusal BEFORE the send, not a diagnosis after it (D-70-10, Phase 70 Plan 06).
+
+    runData is the ONLY result channel now: a config that cannot read the executions
+    API cannot report on anything it sends, so the honest moment to stop is before the
+    money is spent, not after. This joins the plugin's existing fail-closed conditions
+    (`config_gate.require_capability`'s per-capability key table) rather than inventing
+    a second refusal mechanism — it raises the SAME `config_gate.ConfigError` every
+    other missing-key refusal raises, and it NAMES the key without ever interpolating
+    its value (T-70-03).
+
+    It never falls back to `executions_client.find_execution_for_dispatch`: that is a
+    time-proximity guess, and D-70-10 forbids it as a correlation path — a run with no
+    way to correlate is refused, never approximated.
+    """
+    if not (config or {}).get("n8n_api_key"):
+        raise config_gate.ConfigError(
+            "This send needs `n8n_api_key` in the plugin's config: every row's outcome "
+            "is read back from the n8n executions API after the run settles, so without "
+            "that key the send could not be reported on. Nothing was sent. Ask an admin "
+            "to add `n8n_api_key`, then try again."
+        )
+
+
+# The `scale_up` fan-out node (CLAUDE.md 13.0.2). A dispatched child is named on the
+# parent's OWN output item as `metadata.subExecution.executionId` — the key path the
+# phase-61 premise probe measured live (parent `12036` -> child `12037`,
+# `61-PREMISE-PROBE-VERDICT.json` P-13; CLAUDE.md 13.0.3 records it as `[observed live]`),
+# and it is carried even with wait-for-completion off, so detachment costs no correlation.
+SCALE_UP_DISPATCH_NODE = "Dispatch Self"
+
+
+def child_execution_ids(execution) -> list:
+    """Every child execution this execution dispatched, in order, de-duplicated.
+
+    Structured extraction off the item's own `metadata`, never a raw-text id scan —
+    the same discipline `scripts/prove_scale_up_runtime.py` used against the live
+    instance. An execution that never fanned out returns `[]`, which is what makes
+    `include_children` free for the overwhelming majority of runs.
+    """
+    run_data = report._run_data(execution)
+    if not isinstance(run_data, dict):
+        return []
+    found = []
+    for item in report.all_node_items(run_data, SCALE_UP_DISPATCH_NODE):
+        if not isinstance(item, dict):
+            continue
+        sub = ((item.get("metadata") or {}).get("subExecution") or {}) \
+            if isinstance(item.get("metadata"), dict) else {}
+        child_id = sub.get("executionId") if isinstance(sub, dict) else None
+        if child_id is not None and child_id not in found:
+            found.append(child_id)
+    return found
+
+
 def find_executions_by_run_id(config, run_id, *, workflow_id=None, workflow_name=None,
                                echo_node=None, transport=requests.get, limit=20) -> list:
     """One scan of the named workflow's recent executions — no sleep, no retry of its
@@ -505,7 +561,8 @@ def find_executions_by_run_id(config, run_id, *, workflow_id=None, workflow_name
 def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=None,
                             workflow_name=None, echo_node=None, response_node=None,
                             transport=requests.get, now=None, sleep=None,
-                            bound_seconds=None, backoff_schedule=BACKOFF_SCHEDULE_SECONDS) -> dict:
+                            bound_seconds=None, backoff_schedule=BACKOFF_SCHEDULE_SECONDS,
+                            include_children=True) -> dict:
     """Waits — bounded, THIS module's own sanctioned poll site — for `expected_chunk_count`
     executions carrying `run_id` to settle, then returns their flattened `response_node`
     (default: the enrichment lane's `Build Response`) rows: exactly the shape
@@ -542,17 +599,36 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
         )
         settled = [e for e in executions if _is_settled(e)]
         if len(settled) >= expected_chunk_count:
-            responses = []
-            merged_run_data = {}
-            for execution in settled:
-                responses.extend(_response_rows(execution, response_node))
-                rd = report._run_data(execution)
-                if isinstance(rd, dict):
-                    merged_run_data.update(rd)
-            return {
-                "recovered": True, "responses": responses, "matched_executions": len(settled),
-                "run_data": merged_run_data,
-            }
+            # D-70-08a (Phase 70 Plan 06): a `scale_up` batch's rows live in the
+            # CHILDREN — the parent detaches (`waitForSubWorkflow: false`) and settles
+            # at once, so returning on the parent alone drops every fanned row on the
+            # sole result channel. Each child is fetched by the id the PARENT itself
+            # named; a child that has not settled yet keeps the whole recovery waiting,
+            # because a partial fan-out is a short read, not a result.
+            children = []
+            child_still_running = False
+            if include_children:
+                for execution in settled:
+                    for child_id in child_execution_ids(execution):
+                        child = executions_client.get_execution(
+                            config, child_id, transport=transport)
+                        if _is_settled(child):
+                            children.append(child)
+                        else:
+                            child_still_running = True
+            if not child_still_running:
+                responses = []
+                merged_run_data = {}
+                for execution in list(settled) + children:
+                    responses.extend(_response_rows(execution, response_node))
+                    rd = report._run_data(execution)
+                    if isinstance(rd, dict):
+                        merged_run_data.update(rd)
+                return {
+                    "recovered": True, "responses": responses,
+                    "matched_executions": len(settled) + len(children),
+                    "run_data": merged_run_data,
+                }
 
         elapsed = _now() - start
         if elapsed >= bound:

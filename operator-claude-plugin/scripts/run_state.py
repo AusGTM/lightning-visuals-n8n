@@ -134,11 +134,12 @@ have nowhere to keep separate.
 """
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
 import durable_paths
+import report
 import run_manifest
 
 # --- schema ----------------------------------------------------------------------------
@@ -154,6 +155,13 @@ PARSEABLE = "parseable"
 ANOMALOUS = "anomalous"
 
 # read_progress()'s three states.
+# The execution statuses n8n reports for a finished run. IMPORTED from `report.py`,
+# not restated: `watch._is_settled` already tests this exact set, and a second copy that
+# drifted would let this store call a run settled that the watch is still waiting on.
+# (The deliberate anti-DRY convention this module's docstring describes covers store
+# MECHANICS — path resolution, classify_read — never a shared vocabulary.)
+SETTLED_EXECUTION_STATUSES = frozenset(report.SETTLED_STATUSES)
+
 NOT_STARTED = "not_started"
 OK = "ok"
 UNREADABLE = "unreadable"
@@ -320,6 +328,13 @@ class Progress:
     done: int = None
     held: int = None
     failed: int = None
+    # D-70-08a (Phase 70 Plan 06): settlement is a RUN-level fact read off the
+    # EXECUTION's own status, never derived from manifest verdicts. `enrich-records`'
+    # id-less spec forms write no verdicts at all, so a verdict-derived read reports
+    # their rows `running` forever — that is precisely the recorded exception this
+    # replaces. It never promotes a verdict-less row to `done`: the five buckets are
+    # untouched, and this says only "the run is over", which is a different claim.
+    settled: bool = False
 
 
 def _empty_progress(run_id, state) -> Progress:
@@ -329,7 +344,8 @@ def _empty_progress(run_id, state) -> Progress:
     return Progress(run_id=run_id, state=state)
 
 
-def read_progress(run_id, path=None, *, manifest_snapshot=None) -> Progress:
+def read_progress(run_id, path=None, *, manifest_snapshot=None,
+                   execution_status=None) -> Progress:
     """This run's progress, combining its OWN registered scope (this file) with
     `run_manifest`'s run-scoped verdicts. See module docstring's "five-bucket invariant"
     section for exactly how each bucket is derived.
@@ -341,10 +357,23 @@ def read_progress(run_id, path=None, *, manifest_snapshot=None) -> Progress:
     one caller that passes a snapshot: it needs the SAME view of the manifest for both
     this run's progress bucket AND its per-row verdicts, and two independent loads of
     one file could in principle see two different states of it.
+
+    `execution_status` (D-70-08a, Phase 70 Plan 06), keyword-only: the settled
+    execution's OWN status, as the sole result channel reports it. Default (`None`) is
+    byte-for-byte today's read, `settled=False` — every existing caller is unaffected.
+    When it names a settled status, `Progress.settled` is `True` and the caller can say
+    "the run is over" about rows that carry no verdict, instead of reporting them
+    running indefinitely. It deliberately moves NO row between buckets: step 9's rule
+    (never report beyond what the channel said) means a settled execution is evidence
+    the run finished, never evidence any particular row succeeded.
     """
+    settled = execution_status in SETTLED_EXECUTION_STATUSES
+
     classification = classify_read(run_id, path)
     if classification != PARSEABLE:
-        return _empty_progress(run_id, NOT_STARTED if classification == ABSENT else UNREADABLE)
+        progress = _empty_progress(
+            run_id, NOT_STARTED if classification == ABSENT else UNREADABLE)
+        return replace(progress, settled=settled)
 
     document = _load_document(run_id, path)
     total_ids = set(document[TOTAL_FIELD])
@@ -370,7 +399,8 @@ def read_progress(run_id, path=None, *, manifest_snapshot=None) -> Progress:
     )
 
     return Progress(run_id=run_id, state=OK, total=total, pending=pending,
-                     running=running, done=done, held=held, failed=failed)
+                     running=running, done=done, held=held, failed=failed,
+                     settled=settled)
 
 
 def spend_against_ceiling(config, chunk_count, record_count) -> dict:

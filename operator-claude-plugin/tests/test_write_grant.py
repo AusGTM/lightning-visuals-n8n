@@ -2595,20 +2595,30 @@ def test_every_dispatch_fence_in_the_runbooks_is_valid_python(runbook):
             pytest.fail(f"{path} block {i} does not parse: {e}")
 
 
+# Phase 70 Plan 06 (D-70-05): `enrich-records` sends through
+# `chunking.dispatch_and_recover` now — `dispatch_plan` plus the runData read, in one
+# call — so the lane is identified by EITHER entry. The ceiling requirement is unchanged
+# and applies to whichever one the runbook calls (`dispatch_and_recover` forwards
+# `execution_ceiling` straight through to `dispatch_plan`).
+_DISPATCH_ENTRIES = ("dispatch_plan", "dispatch_and_recover")
+
+
 @pytest.mark.parametrize("runbook", ["enrich-records", "enrich-before-ingest"])
 def test_the_dispatch_plan_lane_carries_execution_ceiling(runbook):
-    """REVIEW-57-M4/H2: the two `chunking.dispatch_plan` lanes must pass their sampled
-    (or self-bound) ceiling straight through, not leave the mid-run tally switched off."""
-    matches = _blocks_calling(_RUNBOOK_PATHS[runbook], "dispatch_plan")
-    assert matches, f"no block in {runbook}/SKILL.md calls dispatch_plan"
+    """REVIEW-57-M4/H2: the two dispatch lanes must pass their sampled (or self-bound)
+    ceiling straight through, not leave the mid-run tally switched off."""
+    matches = []
+    for entry in _DISPATCH_ENTRIES:
+        matches.extend(_blocks_calling(_RUNBOOK_PATHS[runbook], entry))
+    assert matches, f"no block in {runbook}/SKILL.md calls a dispatch entry"
     for src, tree in matches:
         calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
-                 and getattr(n.func, "attr", None) == "dispatch_plan"]
+                 and getattr(n.func, "attr", None) in _DISPATCH_ENTRIES]
         assert calls
         for call in calls:
             assert any(kw.arg == "execution_ceiling" for kw in call.keywords), (
-                f"{runbook}/SKILL.md's dispatch_plan( call carries no execution_ceiling "
-                f"keyword"
+                f"{runbook}/SKILL.md's {call.func.attr}( call carries no "
+                f"execution_ceiling keyword"
             )
 
 

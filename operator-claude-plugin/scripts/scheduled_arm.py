@@ -231,8 +231,16 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
             # written_records_failures` below (never re-raised) and the run keeps sending.
             # `NotArmedError` remains the one exception `dispatch_plan` can still raise from
             # here, and it cannot fire since `armed=True` is passed literally.
-            dispatch_outcome = chunking.dispatch_plan(
-                plan, providers, True, config, transport=post_transport)
+            # D-70-05/D-70-08 (Phase 70 Plan 06): `dispatch_and_recover`, not
+            # `dispatch_plan` — the webhook answers with an ack now, so the rows this
+            # cycle reports on can only come from the settled execution's runData. It
+            # runs INSIDE the armed window on purpose: the ack returns long before n8n
+            # has finished writing, so recovering outside the `with` would disarm (and
+            # bounce) the write-safety gate underneath a still-running armed execution.
+            dispatched = chunking.dispatch_and_recover(
+                plan, providers, True, config, transport=post_transport,
+                get_transport=get_transport)
+            dispatch_outcome = dispatched["outcome"]
     except n8n_arming.ArmingRefused as refusal:
         return _outcome("arm_refused", detail=str(refusal), record_ids=record_ids,
                         execution_id=batch["execution_id"])
@@ -252,9 +260,13 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
     # `dispatch_outcome.run_id` is carried alongside it (also on both outcomes) so an
     # operator reading a page can find the exact per-run written-records artifact the
     # incomplete list belongs to (`written_records-<run_id>.json`).
+    # D-70-09: the ledger flush moved to `dispatch_and_recover`, which appends only a
+    # write-capable leg's RECOVERED rows — `DispatchOutcome.written_records_failures` is
+    # an always-empty tuple since Plan 03, so the misses to report are the recover-side
+    # ones. Both are read, so a caller of either shape still surfaces every miss.
     written_records_failures = [
         dict(failure) for failure in dispatch_outcome.written_records_failures
-    ]
+    ] + [dict(failure) for failure in dispatched["written_records_failures"]]
     records_incomplete = bool(written_records_failures)
 
     # A cron log/monitor pages on a batch that landed NOTHING (every chunk failed) the
@@ -274,7 +286,8 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
                     arm=window.arm_result, disarm=window.disarm_result,
                     chunk_count=plan.chunk_count, results=results,
                     failed_batch=dispatch_outcome.failed_batch,
-                    dispatch_result=list(dispatch_outcome.responses),
+                    dispatch_result=list(dispatched["rows"]),
+                    recovered=dispatched["recovered"],
                     run_id=dispatch_outcome.run_id,
                     records_incomplete=records_incomplete,
                     written_records_failures=written_records_failures)

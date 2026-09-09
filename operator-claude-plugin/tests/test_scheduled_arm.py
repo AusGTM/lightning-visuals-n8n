@@ -31,6 +31,24 @@ def _clear_workflow_id_cache():
     executions_client._workflow_id_cache.clear()
 
 
+# =====================================================================================
+# Phase 70 Plan 06 (D-70-05): the cycle reads its rows from the settled execution's
+# runData now (`chunking.dispatch_and_recover`, run INSIDE the armed window). These
+# tests exercise the ARMING and DISPATCH halves, not the recovery mechanism —
+# `test_chunking.py`/`test_watch_settle_reporting.py` own that end to end — so the sole
+# result channel is stubbed here and answers no rows.
+# =====================================================================================
+
+@pytest.fixture(autouse=True)
+def _stub_result_channel(monkeypatch):
+    import watch
+
+    monkeypatch.setattr(
+        watch, "recover_dispatch",
+        lambda *a, **k: {"recovered": True, "responses": [], "run_data": {}},
+    )
+
+
 @pytest.fixture
 def armed_env(monkeypatch):
     monkeypatch.setenv(n8n_arming.ARM_ENV_VAR, "true")

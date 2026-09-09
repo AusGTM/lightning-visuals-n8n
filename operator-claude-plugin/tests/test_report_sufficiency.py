@@ -1,4 +1,4 @@
-"""Tests for report.py's sufficiency check, write reconciliation, and adaptive
+"""Tests for report.py's write reconciliation and adaptive
 shaping (REPORT-01, D-01, D-08, D-09, D-11) — plus the AST-based no-poll-loop guard
 (D-07) that turns "this phase never grows a watch" into a property the suite
 enforces rather than a promise the next plan can quietly break.
@@ -14,49 +14,6 @@ import report
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
-
-
-# =====================================================================================
-# sync_response_is_sufficient — D-01's first leg.
-# =====================================================================================
-
-def test_review_queue_marker_only_body_is_insufficient():
-    body = [{"queue": "needs_review"}, {"queue": "needs_review"}]
-
-    assert report.sync_response_is_sufficient(body) is False
-
-
-def test_body_with_contact_id_is_sufficient():
-    assert report.sync_response_is_sufficient([{"contact_id": "c1"}]) is True
-
-
-def test_body_with_hs_object_id_is_sufficient():
-    assert report.sync_response_is_sufficient([{"hs_object_id": "1001"}]) is True
-
-
-def test_body_that_is_a_full_hubspot_object_is_sufficient():
-    assert report.sync_response_is_sufficient([{"id": "1001", "properties": {"email": "a@b.com"}}]) is True
-
-
-def test_empty_body_is_insufficient():
-    assert report.sync_response_is_sufficient([]) is False
-    assert report.sync_response_is_sufficient(None) is False
-
-
-def test_non_list_scalar_body_is_insufficient():
-    assert report.sync_response_is_sufficient("accepted") is False
-    assert report.sync_response_is_sufficient(42) is False
-
-
-def test_body_of_non_mapping_items_is_insufficient():
-    assert report.sync_response_is_sufficient(["not a dict", 1, None]) is False
-
-
-def test_mixed_sufficient_and_insufficient_items_is_insufficient():
-    # One item lacking any identity is enough to make the whole body unusable — a
-    # partial ledger is not a safe substitute for the full one.
-    body = [{"contact_id": "c1"}, {"queue": "needs_review"}]
-    assert report.sync_response_is_sufficient(body) is False
 
 
 # =====================================================================================

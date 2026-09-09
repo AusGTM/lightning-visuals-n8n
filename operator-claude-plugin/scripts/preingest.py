@@ -776,7 +776,8 @@ def strip_enrichment_extras(rows, policy_path=None) -> list[dict]:
 
 
 def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests, *,
-                          execution_ceiling=None, run_id=None):
+                          execution_ceiling=None, run_id=None, get_transport=None,
+                          now=None, sleep=None, bound_seconds=None):
     """One re-request pass over `merge_report.unanswered`, dispatched through the SAME
     `chunking.dispatch_plan` -> `enrichment.dispatch_enrichment` path the first pass
     used. No new send path exists here — see the comment on the `dispatch_plan` call
@@ -848,15 +849,17 @@ def rerequest_unanswered(rows, merge_report, providers, armed, config, transport
     # guard flags a function only when it BOTH defaults `transport` to the bare
     # `requests` module AND calls `transport.post`/`.put` directly in its own body: this
     # function does the first and not the second.
-    outcome = chunking.dispatch_plan(plan, providers, armed, config, transport=transport,
-                                     execution_ceiling=execution_ceiling, run_id=run_id)
-
-    new_items = []
-    for body in outcome.responses:
-        # The deployed webhook answers array-wrapped, a one-element list — n8n's normal
-        # firstIncomingItem behaviour, the same shape `fetch_matches` already
-        # normalizes for this same endpoint. Accept both.
-        new_items.extend(body if isinstance(body, list) else [body])
+    # D-70-05/D-70-08 (Phase 70 Plan 06): `dispatch_plan`'s responses are ACKS now —
+    # `{run_id, accepted, row_ids}`, never a row's verdict — so reading them as response
+    # items would silently answer this whole pass with nothing. `dispatch_and_recover`
+    # sends through the identical path and reads the rows back from the settled
+    # execution's runData, correlated on this pass's own `run_id`.
+    dispatched = chunking.dispatch_and_recover(
+        plan, providers, armed, config, transport=transport,
+        execution_ceiling=execution_ceiling, run_id=run_id,
+        get_transport=get_transport, now=now, sleep=sleep, bound_seconds=bound_seconds)
+    outcome = dispatched["outcome"]
+    new_items = list(dispatched["rows"])
 
     # `outcome.ceiling_stop` names the unsent rows; `merge_enriched` never sees them as
     # answered (no response item for a row this pass never sent), so they fall through

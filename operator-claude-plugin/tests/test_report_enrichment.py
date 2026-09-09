@@ -226,7 +226,7 @@ def test_contactability_carries_an_unrecognised_value_as_none_not_the_raw_string
 def test_contactability_never_raises_on_an_unhashable_dict_value():
     """CR-01 (66-REVIEW.md): a malformed/corrupted backend response could send a dict
     for contactability, which raises TypeError on the old `value in <set>` membership
-    test (dicts are unhashable) — breaking build_sync_report/build_enrichment_report's
+    test (dicts are unhashable) — breaking build_row_reports/build_enrichment_report's
     documented never-raises contract."""
     row = {"_lane": "contacts", "action": "enrich", "contactability": {"nested": True}}
 
@@ -243,17 +243,18 @@ def test_contactability_never_raises_on_an_unhashable_list_value():
     assert rendered["contactability"] is None
 
 
-def test_build_sync_report_never_raises_on_an_unhashable_contactability_value():
+def test_build_row_reports_never_raises_on_an_unhashable_contactability_value():
     body = [{"action": "enrich", "object_type": "contacts", "contactability": ["a", "b"]}]
 
-    rows, reason = report_enrichment.build_sync_report(body)
+    rows, reason = report_enrichment.build_row_reports(body)
 
     assert reason is None
     assert rows[0]["contactability"] is None
 
 
 # =====================================================================================
-# build_sync_report — the SYNCHRONOUS webhook body, live-shaped from execution 11948.
+# build_row_reports — the RECOVERED rows (Phase 70 Plan 06, D-70-08: the synchronous
+# body carries only an ack now), live-shaped from execution 11948.
 # =====================================================================================
 
 def _walk_11948_body():
@@ -272,8 +273,8 @@ def _walk_11948_body():
     }]
 
 
-def test_build_sync_report_relays_write_blocked_as_gated_with_the_no_hit_match_reason():
-    rows, reason = report_enrichment.build_sync_report(_walk_11948_body())
+def test_build_row_reports_relays_write_blocked_as_gated_with_the_no_hit_match_reason():
+    rows, reason = report_enrichment.build_row_reports(_walk_11948_body())
 
     assert reason is None
     assert len(rows) == 1
@@ -286,40 +287,40 @@ def test_build_sync_report_relays_write_blocked_as_gated_with_the_no_hit_match_r
     assert row["lane"] == "contacts"
 
 
-def test_build_sync_report_carries_contactability_when_the_body_stamped_it():
+def test_build_row_reports_carries_contactability_when_the_body_stamped_it():
     """The synchronous webhook body IS Build Response's own output — the one path
     where contactability is genuinely present (66-03), proving one edit in
     `_build_row_report` serves both callers, not two implementations."""
     body = [{**_walk_11948_body()[0], "contactability": "email_only"}]
 
-    rows, reason = report_enrichment.build_sync_report(body)
+    rows, reason = report_enrichment.build_row_reports(body)
 
     assert reason is None
     assert rows[0]["contactability"] == "email_only"
 
 
-def test_build_sync_report_accepts_a_bare_object_never_only_an_array():
-    rows, reason = report_enrichment.build_sync_report(_walk_11948_body()[0])
+def test_build_row_reports_accepts_a_bare_object_never_only_an_array():
+    rows, reason = report_enrichment.build_row_reports(_walk_11948_body()[0])
 
     assert reason is None
     assert rows[0]["outcome"] == "gated"
 
 
-def test_build_sync_report_unrecognised_action_renders_failed_never_a_success():
+def test_build_row_reports_unrecognised_action_renders_failed_never_a_success():
     body = [{**_walk_11948_body()[0], "action": "some-future-action-never-seen"}]
 
-    rows, reason = report_enrichment.build_sync_report(body)
+    rows, reason = report_enrichment.build_row_reports(body)
 
     assert reason is None
     assert rows[0]["outcome"] == "failed"
     assert rows[0]["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
 
 
-def test_build_sync_report_company_lane_row_carries_needs_review():
+def test_build_row_reports_company_lane_row_carries_needs_review():
     body = [{"action": "enrich", "object_type": "companies", "hs_object_id": "co-1",
              "needs_review": True, "match": {"tier": "high", "auto": True, "reason": "matched by email"}}]
 
-    rows, reason = report_enrichment.build_sync_report(body)
+    rows, reason = report_enrichment.build_row_reports(body)
 
     assert reason is None
     assert rows[0]["lane"] == "companies"
@@ -327,25 +328,25 @@ def test_build_sync_report_company_lane_row_carries_needs_review():
     assert rows[0]["match_level"] == "high"
 
 
-def test_build_sync_report_empty_array_is_a_named_refusal_not_a_silent_empty_success():
-    rows, reason = report_enrichment.build_sync_report([])
+def test_build_row_reports_empty_array_is_a_named_refusal_not_a_silent_empty_success():
+    rows, reason = report_enrichment.build_row_reports([])
 
     assert rows == []
     assert reason is not None
 
 
-def test_build_sync_report_status_code_shim_refuses_it_never_pretends_it_is_a_decision():
+def test_build_row_reports_status_code_shim_refuses_it_never_pretends_it_is_a_decision():
     """`dispatch_enrichment`'s own fallback for an unparseable body — `{status_code,
     text}` — carries no `action` at all and must refuse whole, not partially guess."""
-    rows, reason = report_enrichment.build_sync_report({"status_code": 502, "text": "Bad Gateway"})
+    rows, reason = report_enrichment.build_row_reports({"status_code": 502, "text": "Bad Gateway"})
 
     assert rows == []
     assert reason is not None
 
 
-def test_build_sync_report_never_raises_on_malformed_input():
+def test_build_row_reports_never_raises_on_malformed_input():
     for bad in (None, "garbage", 42, [None], [42], ["garbage"]):
-        rows, reason = report_enrichment.build_sync_report(bad)
+        rows, reason = report_enrichment.build_row_reports(bad)
         assert rows == []
         assert reason is not None
 
@@ -652,15 +653,15 @@ def test_built_report_object_carries_no_icp_trace_anywhere():
     assert not hits, f"rendered report carries a forbidden ICP/tier trace: {hits}"
 
 
-def test_build_sync_report_output_also_carries_no_icp_trace_anywhere():
+def test_build_row_reports_output_also_carries_no_icp_trace_anywhere():
     """F3's new function is not called by `build_enrichment_report`, so the guard above
     does not exercise it — asserted separately rather than assumed covered."""
-    rows, _ = report_enrichment.build_sync_report(_walk_11948_body())
+    rows, _ = report_enrichment.build_row_reports(_walk_11948_body())
 
     serialized = json.dumps(rows, default=str)
 
     hits = _scan_text_for_forbidden_terms(serialized)
-    assert not hits, f"build_sync_report output carries a forbidden ICP/tier trace: {hits}"
+    assert not hits, f"build_row_reports output carries a forbidden ICP/tier trace: {hits}"
 
 
 def test_no_operator_facing_skill_body_mentions_icp_or_tier_not_even_a_placeholder():

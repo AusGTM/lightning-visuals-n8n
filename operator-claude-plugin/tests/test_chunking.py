@@ -1013,10 +1013,27 @@ def test_written_records_failures_is_always_empty_regardless_of_body_shape(
     assert outcome.written_records_failures is not None
 
 
-def test_dispatch_plan_no_longer_imports_written_records_at_all(fake_config, stub_module_transport_factory):
-    """Structural guard against a regression re-growing the deleted flush: the module
-    must not even hold a reference to `written_records` anymore."""
-    assert not hasattr(chunking, "written_records")
+def test_dispatch_plan_itself_never_touches_the_ledger(fake_config, stub_module_transport_factory):
+    """Structural guard against a regression re-growing the DELETED ack flush.
+
+    Narrowed from "the module holds no reference to `written_records`" (Phase 70 Plan
+    03) to "`dispatch_plan`'s own body calls nothing on it" (Phase 70 Plan 06): the
+    module now legitimately appends RECOVERED rows for a write-capable leg, from
+    `dispatch_and_recover`, which is D-70-09's ledger gate. The invariant that actually
+    matters is unchanged and is what this now asserts — `dispatch_plan` itself, which
+    only ever sees the ack, never reaches the ledger.
+    """
+    tree = ast.parse(inspect.getsource(chunking.dispatch_plan))
+    touches = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "written_records"
+    ]
+    assert not touches, (
+        "dispatch_plan sees only the ack — it must never write the ledger: "
+        f"{[node.attr for node in touches]}"
+    )
 
 
 def test_a_legacy_caller_still_passing_the_retired_early_ack_keyword_is_ignored_not_rejected(

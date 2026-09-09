@@ -223,33 +223,18 @@ def _group_rejected_reasons(failing_rows):
 
 
 # =====================================================================================
-# Sufficiency of the synchronous webhook body (D-01's first leg).
+# D-70-08 (Phase 70 Plan 06): `sync_response_is_sufficient` USED TO LIVE HERE and is
+# DELETED, not repurposed. Its entire job was D-01's first leg — decide whether the
+# synchronous webhook body could identify rows, and fall through to the executions API
+# when it could not. There is no longer a choice to make: the webhook answers with an
+# ack (`{run_id, accepted, row_ids}`) for every send in every mode, and every row's
+# outcome is read from the settled execution's runData. A helper that still ASKED the
+# question would keep a second channel alive in the reader's mind even with no branch
+# left to take, which is exactly the two-channel shape this phase removes. Repurposing
+# it as "a sanity check on the ack's shape" was considered and rejected: the ack's shape
+# is `Build Ack`'s own contract, pinned on the n8n side, and a client-side re-assertion
+# of it is a second copy of a rule with one home.
 # =====================================================================================
-
-def sync_response_is_sufficient(body) -> bool:
-    """The synchronous webhook body is used only when it can actually identify rows.
-    A body is sufficient when every item carries a row-identifying key (a contact id,
-    a HubSpot object id, an email) or is a full HubSpot object with both an `id` and
-    a `properties` map. A body whose items carry only the review queue marker
-    (`Set Review`'s own output, `{"queue": "needs_review"}`) is insufficient by
-    construction (D-11, Pitfall 1) — the caller falls through to the executions-API
-    path rather than rendering an unusable report. Empty bodies, scalars and
-    non-mapping items are all insufficient.
-    """
-    if body is None:
-        return False
-    items = body if isinstance(body, list) else [body]
-    if not items:
-        return False
-    for item in items:
-        if not isinstance(item, dict):
-            return False
-        has_identity = any(k in item for k in ("contact_id", "hs_object_id", "email"))
-        has_hubspot_object = "id" in item and "properties" in item
-        if not (has_identity or has_hubspot_object):
-            return False
-    return True
-
 
 # =====================================================================================
 # Shaping the report object — one shape, one renderer (D-08/D-09).

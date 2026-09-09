@@ -53,7 +53,9 @@ import requests
 
 import enrichment
 import remainder_queue
+import report
 import run_manifest
+import written_records
 from dispatch import DispatchError, NotArmedError
 
 CEILING_KEY = "max_records_per_chunk"
@@ -109,6 +111,14 @@ class ChunkResult:
     ok: bool
     reason: str = None
     resolvable: tuple = ()
+    # D-70-09 (Phase 70 Plan 06): whether THIS chunk's leg can write at all, decided by
+    # the very object that decides the mode — the built envelope — rather than by a
+    # second reading of the spec somewhere downstream. `written_records` exists to
+    # record WRITES; a propose / match / enrich-proposal leg sends nothing that can
+    # write, so it must never enter the ledger, or the end-of-run report can label a
+    # row that was never sent (the `None -> failed` shape observed live on run
+    # `2bc3617b`). `None` means "not decided" — the chunk never reached envelope build.
+    can_write: bool = None
 
 
 @dataclass(frozen=True)
@@ -142,20 +152,26 @@ class DispatchOutcome:
     rather than on an empty container. When present it is a record specification the
     envelope builder accepts unmodified — that is the whole of D-13.
 
-    `responses` is ONE RAW BODY PER CHUNK SENT, in chunk order — never one item per
-    row. Each element is exactly what `enrichment.dispatch_enrichment` returned for
-    that chunk: normally a JSON array (n8n's own `respondWith: allIncomingItems`
-    behaviour, one item per row in that chunk) or, for a caller that still hands one
-    row un-wrapped, a bare dict. A caller that needs a flat list of per-row response
-    items — to index by `row_id`, for instance — must flatten this first:
-    `[item for body in outcome.responses for item in (body if isinstance(body, list)
-    else [body])]`. `preingest.rerequest_unanswered` does exactly this before calling
-    `preingest.merge_enriched`. Passing `responses` straight through unflattened is
-    the exact defect FINDING 2 (53-WALK-RECORD.md) recorded: it silently files every
-    row as unanswered with no error.
+    `responses` IS ONE ACK PER CHUNK SENT, in chunk order — NOT a row outcome, and no
+    longer a row outcome for ANY mode (D-70-05/D-70-07, Phase 70 Plan 06). `Build Ack`
+    is the workflow's only responder input now, so each element is
+    `{run_id, accepted, row_ids}` — the backend confirming it took the request, nothing
+    about what it then decided. It is kept because a run that could not even be accepted
+    is worth seeing, and because `_failure_reason` reads the STATUS around it.
 
-    `run_id` is the id every chunk was flushed under, into D-59-07's durable
-    "what got written" artifact. Under D-59-09 each run flushes into its OWN file —
+    A CALLER THAT WANTS ROWS CALLS `dispatch_and_recover`, which reads them from the
+    settled execution's runData correlated on `run_id`. Reading `responses` for a row
+    outcome does not raise — it quietly reports nothing while sounding complete, which
+    is exactly the shape FINDING 2 (53-WALK-RECORD.md) recorded when a caller passed
+    this field on unflattened, and exactly the shape F4
+    (uat-batch-review-row-reads-failed) proved live for the async case before the ack
+    became universal.
+
+    `run_id` is this run's own client-minted correlation handle: it rides every chunk's
+    envelope, the backend echoes it on every event, and it is BOTH what
+    `watch.recover_dispatch` correlates the settled execution on AND the id D-59-07's
+    durable "what got written" artifact is filed under. Under D-59-09 each run flushes
+    into its OWN file —
     `written_records.written_records_path(run_id)` — rather than a path shared across
     runs (see `written_records.py`'s own `append_chunk` for the flush).
 
@@ -351,6 +367,32 @@ def _failure_reason(watcher):
     return None
 
 
+WRITE_MODE = "write"
+
+
+def envelope_can_write(envelope) -> bool:
+    """Can this envelope's leg write to HubSpot at all? (D-70-09, Phase 70 Plan 06.)
+
+    Read off the BUILT envelope, never re-derived from the spec: `enrichment.
+    build_envelope` is the one place that decides a leg's mode (structurally — a
+    `rows`/`people` form pins `mode: "propose"` inside its own branch and never reads a
+    mode from the caller), so asking the envelope is asking the decision itself. A
+    second reading of the spec here is exactly the two-computations-that-agree-today
+    shape this plan exists to remove.
+
+    Mirrors the backend's own `isReturnOnly()` rule (CLAUDE.md 13.0/13.0.2): ANY mode
+    other than `"write"` is return-only. Checked at request level AND per event, because
+    the companies `propose` form stamps `mode` on both.
+    """
+    envelope = envelope if isinstance(envelope, dict) else {}
+    if envelope.get("mode") not in (None, WRITE_MODE):
+        return False
+    for event in envelope.get("events") or []:
+        if isinstance(event, dict) and event.get("mode") not in (None, WRITE_MODE):
+            return False
+    return True
+
+
 def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None,
                    scale_up=False, execution_ceiling=None, **_ignored_legacy_kwargs):
     """Send every chunk of an approved plan, in plan order, one at a time.
@@ -429,6 +471,14 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     DEFERRED gap this change opens — migrating it to read runData instead is D-70-08's
     scope, not this plan's; recorded in 70-03-SUMMARY.md, not silently papered over here.
     """
+    # D-70-10 (Phase 70 Plan 06): BEFORE the first chunk is built or sent. runData is
+    # the only channel a row's outcome can come back on, so a config that cannot read
+    # the executions API cannot report on this send — refuse before the money is spent,
+    # never fall back to a time-proximity guess. Lazy import: `watch` -> `scheduled_arm`
+    # -> this module, so a module-level import would be circular.
+    import watch as _watch
+    _watch.require_executions_api(config)
+
     if run_id is None:
         run_id = uuid.uuid4().hex
 
@@ -497,6 +547,7 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         watcher = _StatusCapturingTransport(transport)
         try:
             envelope = enrichment.build_envelope(chunk, providers)
+            chunk_can_write = envelope_can_write(envelope)
             # D-70-07: always rides the envelope now — the server reads it
             # unconditionally, and every leg's rows are recovered from runData by this
             # id, not from this call's own synchronous response.
@@ -526,7 +577,8 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
 
         reason = _failure_reason(watcher)
         results.append(
-            ChunkResult(index=index, rows=rows, ok=reason is None, reason=reason)
+            ChunkResult(index=index, rows=rows, ok=reason is None, reason=reason,
+                        can_write=chunk_can_write)
         )
         responses.append(body)
         # D-70-07 (Phase 70 Plan 03 Task 2): the `written_records.append_chunk` flush
@@ -545,6 +597,83 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         written_records_failures=tuple(written_records_failures),
         ceiling_stop=ceiling_stop,
     )
+
+
+def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
+                          run_id=None, lane="enrichment", get_transport=None,
+                          now=None, sleep=None, bound_seconds=None, workflow_id=None,
+                          **dispatch_kwargs) -> dict:
+    """Send an approved plan and read its rows back from the settled execution — the
+    ONE dispatch-and-recover cycle, used by every mode (D-70-05, Phase 70 Plan 06).
+
+    Before this, `dispatch_plan` returned acks and each caller decided for itself
+    whether to believe the body or go to runData; that per-mode choice IS the second
+    result channel this phase removes. There is no channel selection here: the POST's
+    response is an ack (`{run_id, accepted, row_ids}`) and is never read for a row
+    outcome, and every row comes from `watch.recover_dispatch`, correlated on this
+    run's own client-minted `run_id` — never on time proximity (D-70-10).
+
+    NO SECOND POLL SITE: the wait lives entirely inside `watch.recover_dispatch`, which
+    `tests/test_report_sufficiency.py` permits as the plugin's only one. This function
+    adds no `while`, no `sleep` and no `time` of its own.
+
+    THE LEDGER GATE (D-70-09) lives here, at the call site, not inside
+    `written_records.append_chunk`: restricting WHO calls it is smaller and more durable
+    than teaching the ledger a new outcome. A leg whose envelope cannot write (propose,
+    match, enrich-proposal) is never appended, so the end-of-run report cannot label a
+    row that was never sent; those rows reach the operator through the enrichment
+    outcome instead. A write leg is appended exactly as before, fed the RECOVERED rows.
+
+    Returns `{"outcome": DispatchOutcome, "rows": [...], "recovered": bool,
+    "run_id": str, "can_write": bool, "run_data": {...},
+    "written_records_failures": [...]}`.
+    """
+    import watch as _watch  # lazy — see dispatch_plan's own note on the import cycle
+
+    outcome = dispatch_plan(plan, providers, armed, config, transport=transport,
+                            run_id=run_id, **dispatch_kwargs)
+
+    recovery_kwargs = {"transport": get_transport} if get_transport is not None else {}
+    if workflow_id is not None:
+        recovery_kwargs["workflow_id"] = workflow_id
+    recovery = _watch.recover_dispatch(
+        config, outcome.run_id, expected_chunk_count=len(outcome.results) or 1,
+        lane=lane, now=now, sleep=sleep, bound_seconds=bound_seconds, **recovery_kwargs)
+
+    rows = recovery.get("responses") or []
+    run_data = recovery.get("run_data") or {}
+    # `report.reconcile` is what makes a row's `action` reflect the write node's OWN
+    # output rather than the pre-write intent `Build Response` reports (Pitfall 3) —
+    # routed through the SAME function `dispatch.dispatch` already uses for the ingest
+    # lane, never a second copy of that rule.
+    rows = report.reconcile(rows, run_data)
+
+    can_write = any(r.can_write for r in outcome.results)
+
+    written_records_failures = []
+    if can_write and rows:
+        try:
+            flushed = written_records.append_chunk(outcome.run_id, 0, rows)
+        except written_records.WrittenRecordsError as e:
+            flushed = False
+            bookkeeping_reason = str(e)
+        else:
+            bookkeeping_reason = (
+                None if flushed
+                else "the written-records artifact could not be saved (an I/O failure)")
+        if not flushed:
+            written_records_failures.append({"chunk_index": 0,
+                                             "reason": bookkeeping_reason})
+
+    return {
+        "outcome": outcome,
+        "rows": rows,
+        "run_data": run_data,
+        "recovered": bool(recovery.get("recovered")),
+        "run_id": outcome.run_id,
+        "can_write": can_write,
+        "written_records_failures": written_records_failures,
+    }
 
 
 def projected_spend(outcome) -> int:

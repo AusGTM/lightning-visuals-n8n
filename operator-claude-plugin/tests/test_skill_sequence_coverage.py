@@ -282,7 +282,11 @@ COVERED = {
             "chunking.chunk_ceiling", "write_grant.authorize_send",
             "write_grant.authorize_ungranted_send", "run_report.record_audit",
             "n8n_arming.armed_window",
-            "chunking.dispatch_plan", "write_grant.record_dispatch_outcome",
+            # Phase 70 Plan 06 (D-70-05/D-70-08a): `enrich-records` sends and reads its
+            # rows back in one call now — `dispatch_and_recover` is `dispatch_plan` plus
+            # the runData read, correlated on this run's own `run_id`, run INSIDE the
+            # armed window.
+            "chunking.dispatch_and_recover", "write_grant.record_dispatch_outcome",
             "run_report.record_audit",
         ),
     ): "test_write_grant.py::test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_stop",

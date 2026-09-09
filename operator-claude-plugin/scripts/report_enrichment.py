@@ -222,7 +222,7 @@ def _match_info_for_row(row):
 # Phase 66 Plan 03 (D-66-06): the backend's per-row phone+email completeness marker,
 # read the same defensively-tolerant way `_match_info_for_row` reads an optional
 # nested value — absent or malformed -> None, never inferred, never raised. Present
-# only on a row that came from `Build Response`'s own output (build_sync_report's
+# only on a row that came from `Build Response`'s own output (build_row_reports'
 # synchronous webhook-body path); a row read from the executions-API ledger
 # (`enrichment_row_ledger`, which reads `Decide Action`/`Decide Company Action` — a
 # node BEFORE `Build Response` computes this value) is always None here, by
@@ -313,47 +313,50 @@ def remaining_credits_from_response(execution):
 
 
 # =====================================================================================
-# build_sync_report (F3, 2026-08-25) — the SYNCHRONOUS webhook body, read the same way
-# enrichment_row_ledger() reads the executions API, so a chunk's own response can be
-# relayed honestly without a second fetch and without a lane skill re-deriving the
-# write_blocked -> "blocked" mapping in prose. The 2026-08-25 walk's defect was never
-# that this mapping was missing (it existed here, unused) — it was that
-# `skills/enrich-records/SKILL.md` step 8 never called anything that read the body's
-# `action`/`match` fields at all, and its own "do not claim per-record outcomes" rule
-# (written to stop the client INVENTING outcomes) was read broadly enough to suppress a
-# RECEIVED one instead.
+# build_row_reports (F3, 2026-08-25; RENAMED from `build_sync_report` at Phase 70 Plan
+# 06, D-70-08) — shapes the rows a dispatch RECOVERED into the same outcome/reason/match
+# shape `enrichment_row_ledger()` computes from a whole execution.
+#
+# The rename is the migration. Under the old name this read the SYNCHRONOUS webhook
+# body, which now carries only an ack (`{run_id, accepted, row_ids}`) — a caller that
+# kept handing it that body would report nothing and say so politely, which is worse
+# than failing. The function's BODY is unchanged: the rows it is handed today are
+# `Build Response`'s own output items recovered from the settled execution
+# (`watch.recover_dispatch` -> `chunking.dispatch_and_recover`), which is byte-identical
+# in shape to what the synchronous body used to carry — the same live-confirmed
+# execution-11948 shape — so the mapping it applies is the same mapping, read off the
+# one channel that still carries data.
 # =====================================================================================
 
-def build_sync_report(body):
-    """Shape one chunk's synchronous webhook body — `chunking.DispatchOutcome.responses`
-    already carries these, one per chunk that reached the backend — into the same
-    outcome/reason/match shape `_build_row_report` computes from the executions API.
+def build_row_reports(rows):
+    """Shape a dispatch's RECOVERED rows into the same outcome/reason/match shape
+    `_build_row_report` computes from the executions API.
 
-    `body` is whatever `enrichment.dispatch_enrichment` returned for that chunk: normally
-    a JSON array (n8n's `respondWith: allIncomingItems` on "Respond to Webhook" — ONE item
-    per row in the chunk, each carrying the same action/match/hs_object_id/object_type
-    shape `Decide Action`/`Decide Company Action` emit, live-confirmed on execution
-    11948), a bare object for a caller that still hands one row un-wrapped, or
-    `{status_code, text}` — `dispatch_enrichment`'s own fallback when the body could not
-    be parsed as JSON at all.
+    `rows` is `chunking.dispatch_and_recover(...)["rows"]`: a flat list of
+    `Build Response` items, one per row, each carrying the action/match/hs_object_id/
+    object_type shape `Decide Action`/`Decide Company Action` emit (live-confirmed on
+    execution 11948). A bare object is accepted for a caller that hands one row
+    un-wrapped, and `{status_code, text}` — `dispatch_enrichment`'s unparseable-body
+    fallback — is refused rather than read as a decision.
 
     Returns `(rows, reason)`. `reason` is `None` on success; `rows` is `[]` and `reason`
     names what was missing when nothing usable could be read — never an exception, never
     a partial guess, the same contract `enrichment_row_ledger()` holds. This is a
-    WHOLE-BODY refusal (not best-effort per item): a body shaped unlike a decision
-    response at all (e.g. the `{status_code, text}` fallback) means nothing here can be
-    trusted, not that everything except the odd item can be.
+    WHOLE-INPUT refusal (not best-effort per item): input shaped unlike a decision
+    response at all means nothing here can be trusted, not that everything except the
+    odd item can be.
     """
+    body = rows
     if not isinstance(body, (list, dict)):
-        return [], "the response body was not a JSON object or array"
+        return [], "the recovered rows were not a JSON object or array"
     items = body if isinstance(body, list) else [body]
     if not items:
-        return [], "the response body was an empty array"
+        return [], "the run settled with no rows on the result channel"
 
     rows = []
     for i, item in enumerate(items, start=1):
         if not isinstance(item, dict) or "action" not in item:
-            return [], "the response body did not carry a per-row action"
+            return [], "the recovered rows did not carry a per-row action"
         lane = "companies" if item.get("object_type") == "companies" else "contacts"
         rows.append(_build_row_report({**item, "_lane": lane}, i))
     return rows, None

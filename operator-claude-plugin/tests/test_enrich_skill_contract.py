@@ -122,16 +122,22 @@ def test_the_skill_relays_what_the_sync_body_says_never_inventing_beyond_it():
 
     The safety property was never "withhold per-record detail" -- it is "never guess
     beyond what the body says". The string assertion is REPLACED by the clauses carrying
-    that property, and by the call into `report_enrichment.build_sync_report`, which now
-    computes the created/enriched/blocked/skipped/unknown + match mapping instead of
-    leaving it to prose the model could read either way.
+    that property, and by the call into `report_enrichment.build_row_reports` (renamed
+    from `build_sync_report` at Phase 70 Plan 06 — the synchronous body carries only an
+    ack now, so the rows it shapes are the ones RECOVERED from the settled execution),
+    which computes the created/enriched/blocked/skipped/unknown + match mapping instead
+    of leaving it to prose the model could read either way.
     """
     body = _normalized(_text())
     assert "Do not claim per-record outcomes" not in body, (
-        "the withhold-everything rule is dead (F3) -- a synchronous body's own action "
+        "the withhold-everything rule is dead (F3) -- a recovered row's own action "
         "and match fields must be relayed, not suppressed"
     )
-    assert "build_sync_report" in body
+    assert "build_row_reports" in body
+    assert "build_sync_report" not in body, (
+        "D-70-08: the ack-reading helper is gone -- a step still naming it would read "
+        "a channel that carries no row outcome"
+    )
     assert "never invent what the body does not carry" in body.lower()
     assert "always relay what it does" in body.lower()
     assert "match_level" in body and "match_reason" in body
