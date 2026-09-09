@@ -124,6 +124,13 @@ one Anthropic call per unmatched company, roughly 8–15 n8n executions.
 
 Open a fresh conversation (a grant lives only in a conversation; nothing carries over).
 
+**Scripts (operator ruling 2026-09-09):** your Claude may write a driver or probe script when a
+SKILL.md step cannot do the job — ladder down, not around. Two conditions: the script goes
+through the same durable bookkeeping the skill's fences use (`run_state`, `held_queue`,
+`written_records`, `run_report`), so the end-of-run row-accounting line stays true; and every
+such script is deleted at the end of the session (scratchpad only, never the repo root or the
+plugin cache). Note in the UAT record which script ran and which step it replaced.
+
 > `/operator-claude-plugin:enrich-before-ingest`
 >
 > Enrich and load `<path>/uat-batch-2026-09-09.csv`.
