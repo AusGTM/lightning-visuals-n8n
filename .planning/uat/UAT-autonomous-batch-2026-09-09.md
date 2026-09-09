@@ -73,3 +73,15 @@ F5. Observed:
   observe (F9).
 - F1 (review branch response) NOT exercised: no ingest send happened. Round A result not yet
   reported.
+
+## F4 closed with direct evidence, 2026-09-09
+
+The 2026-09-08 session's own scratchpad (`…/043ec56e…/scratchpad/drv_enrich.py`, plus
+`drv_preview.py`, `drv_ingest_natalie.py`, `drv_ingest_barry.py`) shows the round was driven by
+scripts, not the SKILL.md. `drv_enrich.py:11` hard-codes `enrich_rows=[all_rows['row-1'],
+all_rows['row-2']]` — row-3 was left out by the driver before `run_state.start_run` ran; and
+`:39` passes `async_ack=True`, which is the source of the bogus `written_records` entry
+`392753a` later stopped. Not a repo defect. Under the operator's 2026-09-09 ruling (scripts
+allowed when required, bookkeeping through the same stores, cleanup at session end) the
+report's row-accounting line is the right guard: it now names any row the batch knew about
+and the run did not.
