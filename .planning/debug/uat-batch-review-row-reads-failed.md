@@ -802,3 +802,59 @@ files_changed:
   - tests/n8n/linkedinProducer.test.mjs
   - tests/n8n/bareEventChainFlow.test.mjs
   - tests/n8n/enabledResearchLaneFlow.test.mjs
+
+## F5 — post-fix self-checks (2026-09-09, before returning the checkpoint)
+
+- timestamp: 2026-09-09T05:10:00Z
+  checked: `/usr/bin/grep -n "onError" scripts/build_cloud_workflows.py` (every `onError`
+    site in the file, not just the ones on the Gate->Normalize+Score chain)
+  found: every occurrence is `onError: "continueRegularOutput"` (or the helper's own
+    documented default of the same value) — a provider/HTTP failure always lands as an
+    ITEM on the node's REGULAR output, never routed to a separate error branch. No
+    `continueErrorOutput` anywhere in the file.
+  implication: confirms there is exactly ONE wave-dropping point between "Enrichment
+    Gate"/"Company Gate" and "Normalize + Score"/"Normalize + Score Company" — the
+    `action !== "skip"` gate ("IF Provider Processing Needed"/"IF Company Skip") — which
+    is what the fix_rationale's "Lusha/Apollo/ZoomInfo sit downstream of the ONE drop
+    point" claim depends on. A second, hidden drop point via HTTP error routing would
+    have made the plain `.all(0, $runIndex)` simplification for those three wrong; ruled
+    out.
+- timestamp: 2026-09-09T05:12:00Z
+  checked: builder idempotency (`python scripts/build_cloud_workflows.py` re-run, then
+    `git status --porcelain -- n8n/`) and node count (`jq '.nodes|length'
+    n8n/wf_enrichment_cloud.json`)
+  found: re-running the builder against the committed source produces a byte-identical
+    `n8n/wf_enrichment_cloud.json` (empty git diff) — confirms the committed JSON is
+    exactly what the committed builder emits, not hand-edited. Node count: 123 (unchanged
+    from CLAUDE.md §13.0.2's last-recorded count) — this fix edited existing Code nodes'
+    `jsCode` strings only, added/removed none.
+  implication: satisfies the debug file's own Constraints ("never hand-edit
+    `n8n/wf_*.json`... regenerate; Phase 46 parity") and the resume directive's explicit
+    node-count-unless-Merge-node-is-smallest condition (a Merge node was NOT used; the
+    scan-based fix stayed inside existing Code nodes).
+- timestamp: 2026-09-09T05:14:00Z
+  checked: `n8n/wf_enrichment_cloud.json`'s top-level `settings` key (workflow-level
+    `executionOrder`)
+  found: `"settings": {}` — `executionOrder` is ABSENT, not explicitly set to either `v0`
+    (legacy) or `v1`. Recorded as context, not asserted as evidence either way: this
+    session has no live n8n access to observe what execution order n8n actually applies
+    for an unset value on this account/version, or whether it affects the ORDER in which
+    independently-firing inbound branches into "Enrichment Gate"/"Company Gate" execute.
+  implication: **this is the fix's one remaining unverified assumption, flagged rather
+    than silently assumed away** (advisor-raised, 2026-09-09). recoverConvergedRun pairs
+    "Normalize + Score" run *k* with "Enrichment Gate"'s *k*-th SURVIVING run — correct
+    only if the reader's own runs fire in the SAME temporal order the Gate's runs did
+    (chain 0 -> reader run 0, chain 1 -> reader run 1). The live trace (execution 12163)
+    proves BOTH Gate runs completed before either Normalize+Score run started (not pure
+    depth-first-per-lane), but does NOT prove which chain the Gate processed FIRST, or
+    that Normalize+Score's own run order matches it. In propose mode (Round B, as run so
+    far) this is INVISIBLE either way — providers are off, so `lusha`/`apollo`/`zoominfo`
+    are always `[]` regardless of pairing, and Normalize+Score just re-emits whichever
+    Gate row set it paired with, all 4 row_ids present either way. The misalignment would
+    only be OBSERVABLE once providers are enabled: `lusha = nodeAll('Lusha Enrich')` would
+    correctly be chain-k's own provider data (downstream of the one drop point, in
+    lockstep with its own reader), but `rows` would be chain-(1-k)'s Gate data if run
+    order were reversed — stapling one lane's provider response to the OTHER lane's row,
+    the exact contamination class already found and fixed at "ZoomInfo Token Gate", one
+    node later in the chain. **This is why the checkpoint below asks the operator to
+    verify per-run row_id identity, not just that all 4 rows came back.**
