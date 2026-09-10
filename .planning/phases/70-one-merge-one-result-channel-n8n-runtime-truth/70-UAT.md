@@ -3,12 +3,20 @@ status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T07:14:46Z
+updated: 2026-09-10T09:00:05Z
 ---
 
 ## Current Test
 
-[testing paused — Gate 5 enrichment lane blocked on G-70-5; Gate 6 blocked on Gate 5]
+number: 7
+name: Gate 7 — disarmed deploy + bounce of the loop-free round-2 JSON, then the two-minute burst watch
+expected: |
+  Deploy + bounce the round-2 JSON disarmed (`scripts/deploy_n8n_workflows.py`,
+  `scripts/bounce_n8n_workflows.py`): live node counts 30/69/287/55/43, all active, both write
+  flags `"false"`. Then, with NOTHING sent, watch the executions list for two minutes: zero
+  executions with `mode: integrated` appear. Steps in `70-DEFERRED-GATES.md` § Gate 7 and
+  `70-ROLLBACK-RUNBOOK.md` Step 6.
+awaiting: user response
 
 ## Tests
 
@@ -144,12 +152,24 @@ result: blocked
 blocked_by: prior-phase
 reason: "Gate 5 did not pass on the enrichment lane (G-70-5); Gate 6 arms nothing until it does"
 
+### 7. Gate 7 — disarmed deploy + bounce of the round-2 JSON, then the two-minute burst watch
+expected: Live node counts 30/69/287/55/43, all active, both write flags `"false"`; enrichment body has zero `executeWorkflow` nodes; two-minute watch with nothing sent shows zero `mode: integrated` executions. Steps in `70-DEFERRED-GATES.md` § Gate 7.
+result: [pending]
+
+### 8. Gate 8 — disarmed D-70-19 proof re-run on the loop-free graph
+expected: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → all four sends `shapes_equal: true`, every execution settled, `writes_performed: 0`, the enrichment sends recover real rows carrying `row_id` (never marker-shaped items), and on every execution each node's runData `source` matches a declared connection. Steps in `70-DEFERRED-GATES.md` § Gate 8.
+result: [pending]
+
+### 9. Gate 9 — armed mixed-verdict re-run on the ingest lane (only after Gate 8 passes)
+expected: Armed for exactly one contact of a same-company pair; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after. Steps in `70-DEFERRED-GATES.md` § Gate 9.
+result: [pending]
+
 ## Summary
 
-total: 6
+total: 9
 passed: 0
 issues: 5
-pending: 0
+pending: 3
 skipped: 0
 blocked: 1
 skipped: 0
@@ -238,7 +258,10 @@ blocked: 0
 
 - gap_id: G-70-5
   truth: "Deploying the gap-closure enrichment JSON produces no execution the caller did not request; Dispatch Self runs only for a scale_up request with fan_depth < 1"
-  status: failed
+  status: resolved
+  resolved_by: "70-13-PLAN.md (+70-14, 70-15)"
+  resolved_at: 2026-09-10
+  live_confirmation: "pending Gates 7/8/9"
   reason: "Observed 2026-09-10 07:04–07:10Z: 135 self-dispatched child executions (12211–12348) from four disarmed proof sends; Dispatch Self ran once per execution with a marker item though its only producer emitted 0 items"
   severity: blocker
   test: 4
