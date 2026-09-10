@@ -360,7 +360,7 @@ Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-11 - Completed quick tasks 260911-1z5 and 260911-3mu: walker v1 model review closure rounds 2 and 3
+Last activity: 2026-09-11 - Quick tasks 260911-0tz, 1z5, 3mu complete after four review passes (no blocker, no major); master pushed at 4e26a7a1; plugin 0.44.0 released and installed
 
 *The v1.1 retained sections below are history, not current position.*
 
