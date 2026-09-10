@@ -1,316 +1,245 @@
 ---
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
-reviewed: 2026-09-10T06:22:45Z
+reviewed: 2026-09-10T08:59:50Z
 depth: standard
-files_reviewed: 24
+files_reviewed: 21
 files_reviewed_list:
-  - operator-claude-plugin/scripts/dispatch.py
-  - operator-claude-plugin/scripts/watch.py
-  - operator-claude-plugin/tests/test_dispatch_multipart.py
   - scripts/build_cloud_workflows.py
   - scripts/prove_phase70_runtime.py
+  - operator-claude-plugin/scripts/chunking.py
+  - operator-claude-plugin/scripts/report.py
+  - operator-claude-plugin/scripts/watch.py
+  - operator-claude-plugin/scripts/written_records.py
+  - operator-claude-plugin/tests/test_chunking.py
+  - operator-claude-plugin/tests/test_scale_up_retired.py
+  - operator-claude-plugin/tests/test_watch_settle_reporting.py
+  - operator-claude-plugin/tests/test_written_records.py
   - tests/n8n/lib/walkWorkflow.mjs
-  - tests/n8n/walkWorkflow.test.mjs
+  - tests/n8n/buildResponseMarkerFilter.test.mjs
+  - tests/n8n/enrichmentBatchRefusal.test.mjs
+  - tests/n8n/scaleUpRefused.test.mjs
+  - tests/n8n/sj3DispatchGate.test.mjs
   - tests/n8n/walkerEngineFidelity.test.mjs
-  - tests/n8n/mergeInputContract.test.mjs
-  - tests/n8n/writeGateShape.test.mjs
-  - tests/n8n/ingestMixedBatch.test.mjs
-  - tests/n8n/ingestTracerFlow.test.mjs
-  - tests/n8n/enrichmentConvergenceMerge.test.mjs
-  - tests/n8n/companyRecomputeLaneFlow.test.mjs
-  - tests/n8n/linkedinLaneFlow.test.mjs
-  - tests/n8n/researchErrorGateFlow.test.mjs
-  - tests/n8n/reviewDecisionEndpoint.test.mjs
-  - tests/test_merge_helpers.py
-  - tests/test_phase70_rollback_bundle.py
-  - tests/test_prove_phase70_runtime.py
-  - tests/test_cloud_companies_branch.py
-  - tests/test_cloud_contacts_branch.py
+  - tests/n8n/zoominfoLaneFlow.test.mjs
   - tests/test_enrichment_lane_dedup.py
-  - tests/test_enrichment_list_branch.py
-  - tests/test_remaining_credits_response.py
+  - tests/test_merge_helpers.py
+  - tests/test_no_by_name_reads.py
+  - tests/test_subworkflow_ref_rebinding.py
 findings:
   critical: 0
-  warning: 6
+  warning: 1
   info: 4
-  total: 10
+  total: 5
 status: issues_found
 ---
 
-# Phase 70: Code Review Report (incremental — gap-closure plans 70-08..70-12)
+# Phase 70: Code Review Report
 
-**Reviewed:** 2026-09-10T06:22:45Z
+**Reviewed:** 2026-09-10T08:59:50Z
 **Depth:** standard
-**Files Reviewed:** 24 (commits `6be2894..HEAD`)
-**Status:** issues_found (no Critical findings; this REVIEW.md replaces the prior
-70-REVIEW.md dated 2026-09-09, which covered plans through the code-review sealed at
-`6be2894`)
+**Files Reviewed:** 21 (required-reading set; four additional files —
+`scripts/enrich_coverage_companies.py`, `scripts/fix_sfv_region.py`,
+`scripts/probe_company_propose_mode.py`, `scripts/prove_zoominfo_balance.py` — spot-checked
+per the review brief's instruction to confirm they carry only the WR-03 reference cleanup,
+which they do)
+**Status:** issues_found (1 Warning, 4 Info, 0 Critical)
 
 ## Summary
 
-This increment closes the gap the first review's WR-04 named directly: `Build Response
-Merge`'s 15 inputs (over n8n's own documented 2-10 cap) is now split into three
-lane-grouped stage Merges (≤10 inputs each), enforced from this commit forward by a
-generation-time refusal (`assert_merge_input_contract`, composed at all 8 workflow write
-sites in `scripts/build_cloud_workflows.py::main()`) and pinned by a structural test that
-runs over every committed `n8n/wf_*.json` (`tests/n8n/mergeInputContract.test.mjs`). More
-consequentially, this increment also retires a live, observed defect class the authors
-found by pointing their own corrected walker at a frozen snapshot of the graph that ran
-executions 12203 and 12206: a starved-lane sentinel's zero-item Code-node output was
-racing (and sometimes beating) a slower, multi-hop real producer to a shared Merge input,
-silently dropping real association/refusal rows while the run still reported success. The
-fix (`_add_starved_lane_sentinel`'s "condition → gate → targets" shape, D-70-23) converts
-that race into a logic question — a starved-lane sentinel's gate makes literally zero
-delivery whenever the real producer would ever deliver, because a node fed zero items
-never runs. I verified this is not merely asserted: `tests/n8n/writeGateShape.test.mjs`'s
-"ingest, ARMED with a mixed verdict" test reproduces execution 12203's exact shape
-(one permitted, one refused row, same company) against the **current** (fixed) committed
-graph and asserts the permitted row's association now correctly reads `"associated"`
-rather than `"not_confirmed"`. That is a genuine, targeted regression test for the exact
-defect class this phase exists to retire, and it passes.
+This is the third review of phase 70, scoped to commits `7a9f1e5..HEAD`: the five WR-fix
+commits already reported in `70-REVIEW-FIX.md` (`a1e6ce5..f59010e`), plus gap-closure round
+2 (plans 70-13/14/15, `b5bcf33..cb669fe`) responding to the G-70-5 self-dispatch runaway
+(135 child executions in six minutes, executions 12211-12348, 2026-09-10).
 
-I re-verified the six Warnings carried from the prior review against the current code
-(not assumed unchanged) — see "Carried Findings" below. Two of the six have materially
-changed status: WR-04 is resolved at the structural level (the remaining risk — whether
-the live n8n Cloud engine actually honours this Merge topology at all — is Gate 3, already
-tracked and deliberately deferred, not a new finding), and WR-05's stated failure mode
-("nothing raises if a future edit adds a fourth [write-flag-declaring] node without
-updating whatever inventory `n8n_arming.set_write_safety` uses to find all of them") is
-factually incorrect on inspection: that function scans every node's `jsCode` by regex —
-there is no fixed inventory to go stale — and its own fail-closed re-scan
-(`n8n_read.read_write_safety`) already documents "the declaring set is not stable ... and
-both sets have grown." The remaining risk is narrower than WR-05 stated and I've
-downgraded it accordingly.
+Round 2's actual work — deleting the self-referencing `Execute Workflow` fan-out lane
+(D-70-24), adding a generation-time refusal for any future self-dispatching node
+(`assert_no_self_dispatch`, D-70-26a), fixing the marker-identity leak at both response
+builders (D-70-25), and pinning execution 12316's still-unexplained walker divergence as a
+prohibition guard rather than a modelled mechanism (D-70-26b) — is largely solid. I traced
+each piece against the actual diff (not just the commit messages), re-ran every relevant test
+suite, and re-derived the headline claims independently rather than trusting the stated
+numbers:
 
-I also found one new, real coverage gap (Warning) and one new, low-severity behavioural
-note (Info) that no `70-0N-SUMMARY.md` names: the entire ZoomInfo-touching slice of the
-new Merge/sentinel network (three carry Merges and their pass-throughs/gates) has
-**zero dynamic (walker-replay) test coverage** — only the static structural contract
-checks it — because the walker cannot execute the three ZoomInfo Code nodes' `await`
-bodies and no test in the reviewed files ever sets `providers_requested` to include
-`"zoominfo"`. And `split_merge_into_stages`'s grouping for `Build Response Merge`
-reorders the merged row set relative to the original single-Merge's numeric-index
-concatenation order — almost certainly benign (every consumer keys rows by identity, never
-position) but an undocumented behavioural change worth a one-line note.
+- `node --test tests/n8n/*.test.mjs` → **1075/1075** green (confirmed, not just quoted).
+- `.venv/bin/python -m pytest -q` (root) → **4700 passed, 154 skipped** (confirmed).
+- `operator-claude-plugin` pytest → **2864 passed** (confirmed).
+- `scripts/build_cloud_workflows.py` regeneration is idempotent (`git status --porcelain
+  n8n/` clean before and after a fresh run).
+- `n8n/wf_enrichment_cloud.json` → **287 nodes, 0 `n8n-nodes-base.executeWorkflow` nodes**
+  (confirmed by direct JSON inspection, not the commit message).
+- `n8n/wf_scheduled_maintenance_cloud.json` → 43 nodes, exactly one `executeWorkflow` node
+  (`SJ-3 Dispatch To Enrichment`, the one exempted pair) — confirmed.
 
-None of this rises to Critical. The reachable, safety-critical write-gate paths behave
-correctly by my reading and by the phase's own unusually rigorous self-directed replay
-testing (RED-first against the walker's own historical fidelity to two named live
-executions, GREEN against the current graph on the exact scenario that broke).
+Specific things I verified rather than took on faith:
 
-## Carried Findings — re-verified against the current code, not assumed
+- The five "pre-fork" sentinels the commit message claims were re-sourced from `Parse
+  HubSpot Event` (after the deleted `IF Scale Up Route` splice was removed) are exactly the
+  five I found sourced from that node: `Contacts Absent Sentinel`, `Companies Absent
+  Sentinel`, `Unsupported Absent Sentinel`, `Recompute Not Requested Sentinel`, `Recompute
+  Requested Sentinel` (build_cloud_workflows.py:7683-7822). Count matches the claim.
+- D-70-25's marker-identity fix: `ROW_IDENTITY_KEYS_JS`/`hasRowIdentity`
+  (build_cloud_workflows.py:63-91) is defined once and applied at both `ENRICH_BUILD_
+  RESPONSE` (line 5770, positioned after the existing negative filter and before the
+  outcome-contract projection — correct order, since the projection is what would otherwise
+  make a marker indistinguishable) and `BUILD_INGEST_RESPONSE` (line 692). The eleven
+  `buildResponseMarkerFilter.test.mjs` cases — including the two shapes actually recovered
+  live in Gate 5 (`70-RUNTIME-VERDICT.json`) — all pass, and the one genuinely load-bearing
+  case (a raw HubSpot write response `{id, properties}` with none of the other five identity
+  keys) is asserted to survive, not just the marker-drop cases.
+- Every symbol the retirement was supposed to remove is actually gone, not just unreferenced
+  from the two files the commit touched: repo-wide grep for `scale_up`, `fan_depth`,
+  `child_execution_ids`, `include_children`, `SCALE_UP_DISPATCH_NODE`,
+  `SCALE_UP_MAX_FAN_DEPTH`, `Dispatch Self`, `Build Scale Up Fan-Out`/`Ack`, `IF Scale Up
+  Route` returns nothing outside test/fixture files that document the retired mechanism by
+  name (which is correct — those are history, not dead code). No unused imports were left
+  behind in `chunking.py`/`watch.py` (checked via AST, not just eyeballing the diff).
+- `tests/n8n/lib/walkWorkflow.mjs` is byte-identical to the commit that closed plan 70-13
+  (`git diff c6dc8fe..HEAD -- tests/n8n/lib/walkWorkflow.mjs` is empty) — confirms D-70-26b's
+  claim that no plan-convenient walker change was smuggled in to make execution 12316's
+  divergence look modelled rather than refused.
+- WR-01's reshaped test fixtures in `test_watch_settle_reporting.py` (`_execution_with_write_
+  node`, lines 404-425) still carry the load-bearing shape: `exec-a` wrote, `exec-b` produced
+  a *present-but-empty* `HubSpot Update` run and is folded last. That is exactly the ordering
+  that would fail under the pre-fix `dict.update` (the empty run would erase the real write)
+  and passes under the union fix — the reshape from a parent/child pair to two top-level
+  executions did not accidentally make the test vacuous.
+- `CLAUDE.md` §13.0.2/§13.0.3 is internally consistent with the code on the load-bearing
+  claims: the retirement narrative, the 291→287 node-count delta, the "nothing armed"
+  deployment-gap table, and the `70-DEFERRED-GATES.md` gate renumbering (Gates 7/8/9 added,
+  Gate 6 superseded) all line up with what the commits actually did. One phrasing imprecision
+  noted below (IN-03).
 
-### WR-01 (carried, STILL OPEN, unchanged): `watch.recover_async_dispatch`'s cross-execution `runData` merge is a plain `dict.update`, not a per-execution union
+## Warnings
 
-**File:** `operator-claude-plugin/scripts/watch.py:619-626`
-Unchanged from the prior review — `merged_run_data.update(rd)` at line 626 still silently
-replaces (never unions) one execution's per-node output with another's when more than one
-execution contributes to a single recovery (a multi-chunk enrichment dispatch, or a
-`scale_up` parent plus its children). I re-traced every live call path rather than
-assuming the prior review's "not reachable" conclusion still holds:
-- `dispatch.dispatch` (the ingest lane's only caller of `report.reconcile`) always uses
-  `expected_chunk_count=1` and the ingest workflow (`n8n/wf_contact_ingest_cloud.json`)
-  has no `Dispatch Self` node — confirmed by direct inspection — so `include_children`
-  never actually finds a child execution on this lane, and the merge is never exercised
-  with more than one execution's `runData`.
-- `chunking.dispatch_and_recover` only calls `report.reconcile` when `lane == "ingest"`
-  (chunking.py:672-675), and grepping every call site (`preingest.py:904`,
-  `scheduled_arm.py:240`) confirms neither ever passes `lane="ingest"` — this branch is
-  WR-02's dead code, so the buggy merge's output never reaches `reconcile` there either.
-- `preingest.py`'s own `dispatch_and_recover` caller reads only `dispatched["rows"]` (a
-  list, built by `.extend()`, immune to this bug) — never `dispatched["run_data"]`.
+### WR-08: `assert_no_self_dispatch`'s exemption is keyed on the caller-supplied label, not the workflow body's own name — it can widen without editing `_SELF_DISPATCH_EXEMPTIONS`
 
-So WR-01 remains accurately described: real, present, general-purpose, documented as safe
-for exactly the cross-reference use `report.reconcile` performs, and still not reachable
-by any live call path today. One line of a future caller (or a fix to WR-02) still turns
-it into a live silent misreport.
-**Fix:** unchanged from the prior review — key the merge by execution as well as node
-name, or keep a list of per-execution `run_data` dicts and have `report.reconcile`
-iterate all of them, treating a node's write as confirmed if *any* execution's copy
-produced output.
-
-### WR-02 (carried, STILL OPEN, unchanged): `chunking.dispatch_and_recover`'s `lane="ingest"` branch is unreachable dead code
-
-**File:** `operator-claude-plugin/scripts/chunking.py:666-675`
-Re-verified: still only `dispatch.py`'s own internal call to
-`watch.recover_dispatch(..., lane="ingest")` ever passes that lane name anywhere in the
-plugin; `dispatch_and_recover`'s own `lane` parameter and its `if lane == "ingest":
-rows = report.reconcile(...)` branch remain dead — no caller in this incremental scope
-changed that. Same fix as before: delete the parameter and branch, or wire a real caller
-and add a test that exercises it through this function specifically.
-
-### WR-03 (carried, STILL OPEN, now more clearly obsolete): `scripts/prove_async_recovery.py` is stale against the fully-landed D-70-07 contract
-
-**File:** `scripts/prove_async_recovery.py:134, 151, 203` — confirmed unchanged by this
-increment (no diff against `6be2894`). The script still dispatches with
-`async_ack=True` and still asserts a synchronous/async differential that D-70-07 (now
-fully landed in this increment — `async_ack` is retired, not merely optional; per
-CLAUDE.md §13.0.2, "the ack is now UNCONDITIONAL on both row-outcome lanes... there is no
-longer a row-carrying response body to opt out of") has erased the premise of entirely.
-`chunking.dispatch_plan` still silently swallows `async_ack` via
-`**_ignored_legacy_kwargs` (chunking.py:404, confirmed present), so a run of this script
-today would compare the ack-only response against itself and could report a false PROVEN
-verdict. `scripts/prove_phase70_runtime.py` (reviewed above) is its evident, disarmed,
-gated successor and already exists — the case for deleting `prove_async_recovery.py`
-rather than guarding it is now stronger than it was in the prior review.
-**Fix:** unchanged — delete, or add a refusal at the top of `main()` naming D-70-07 and
-the replacement, before any transport is constructed.
-
-### WR-04 (carried, RESOLVED at the structural level — not a new finding either way): `Build Response Merge`'s over-wide input count
-
-**File:** `scripts/build_cloud_workflows.py` (`split_merge_into_stages`, called at line
-8276) / `n8n/wf_enrichment_cloud.json`
-The 15-input Merge this warning named is gone: `split_merge_into_stages` now splits it
-into three lane-grouped stage Merges — `[0,1,2,3,11,12]` (contacts, 6 inputs),
-`[4,5,6,7,8,13,14]` (companies, 7 inputs), `[9,10]` (whole-batch refusal, 2 inputs) — each
-within n8n's documented 10-input cap, reconverging on the unrenamed `Build Response
-Merge` (now itself only 3 inputs). This is enforced, not merely asserted in prose:
-`assert_merge_input_contract` raises `ValueError` at generation time if any Merge exceeds
-10 declared inputs, is composed at all 8 workflow write sites in `main()`, and
-`tests/n8n/mergeInputContract.test.mjs` re-derives the same check independently over
-every committed `n8n/wf_*.json` with an empty `PENDING` list (asserted exact, in both
-directions — a workflow that stops satisfying the contract, or one that starts satisfying
-it while still listed, both fail loudly). I confirmed `split_merge_into_stages` itself is
-correct: the partition-completeness check (`seen != set(range(original_inputs))`) and the
-per-group `max_inputs` check are both real generation-time refusals, tested directly in
-`tests/test_merge_helpers.py::test_split_merge_into_stages_reconverges_on_the_original_merge_name`.
-
-What is **not** resolved, and was never in this phase's own stated scope to resolve
-offline: whether the live n8n Cloud engine actually honours native Merge nodes at all —
-this repo has never observed one running live. That is Gate 3 in
-`70-DEFERRED-GATES.md`, already disclosed there and in CLAUDE.md §13.0.2's Phase 70
-addendum ("NOT DEPLOYED. NOTHING ARMED... no committed workflow in this repo has ever had
-a native Merge node observed on the real engine"). I am not restating it as a new finding
-— it is already named, already tracked, and deliberately deferred by the phase's own
-design (`gsd-code-review`'s job is to catch what isn't already known, not to re-file a
-disclosed and tracked risk).
-
-### WR-05 (carried, CORRECTED — the specific failure mode described does not exist in production tooling): triplicated write-authorization predicate
-
-**File:** `scripts/build_cloud_workflows.py:1250-1266` (`Associate Lane Sentinel`'s
-jsCode) / `operator-claude-plugin/scripts/n8n_arming.py:100-150`
-The underlying design fact WR-05 named is still accurate: `ALLOW_HUBSPOT_RECORD_WRITES`
-is declared in three places on the ingest lane for plumbing reasons (the gate, and the
-Merge-feeding sentinel that duplicates the predicate to keep `Ingest Merge Response`'s
-association-lane input correctly starved-or-fed), and the comment at the site is explicit
-that this is deliberate. But I checked the specific claim in WR-05's own "why it matters"
-— "nothing raises if a future edit adds a fourth `ALLOW_HUBSPOT_RECORD_WRITES`-declaring
-node without updating whatever inventory `n8n_arming.set_write_safety` uses to find all
-of them" — against the actual implementation, and it does not hold:
-`n8n_arming.set_write_safety` (unchanged by this phase; predates it) does not use a fixed
-inventory at all. It scans every node's `jsCode` by regex
-(`const\s+{flag}\s*=\s*[^;]+;`), rewrites every match it finds regardless of count, and
-then performs a fail-closed re-scan via `n8n_read.read_write_safety`, whose own docstring
-states plainly: "Scans EVERY node's code rather than a fixed node list: the declaring set
-is not stable (`ALLOW_HUBSPOT_CREATE` is currently declared in 9 nodes and
-`ALLOW_HUBSPOT_RECORD_WRITES` in 8, across three workflows, and both sets have grown)." A
-future fourth declaring node would be picked up automatically by production arming, and
-`set_write_safety`'s own re-scan would raise `ArmingRefused` rather than silently ship a
-partial rewrite if it somehow weren't.
-The residual risk is narrower than WR-05 stated: only a **hand-rolled test fixture**
-that hardcodes an `ARMING_NODES` list (several test files in this review's scope do this
-— `writeGateShape.test.mjs`, `ingestMixedBatch.test.mjs`,
-`walkerEngineFidelity.test.mjs`) could drift from a future fourth declaring node and
-under-arm a test scenario relative to what production arming would actually do — a
-test-fidelity gap, not a production authorization gap.
-**Fix:** low priority, and only for the test-fixture risk — consider deriving each
-test's `ARMING_NODES` list from the same regex `n8n_arming.py` uses (scan the loaded
-workflow for `ALLOW_HUBSPOT_RECORD_WRITES` declarations) rather than a hand-typed list,
-so a test's simulated arming can never structurally lag production arming.
-
-### WR-06 (carried, STILL OPEN, unchanged, low priority): hand-maintained deleted-file fingerprint
-
-**File:** `scripts/build_cloud_workflows.py:11178` (`_run_recovery_marker`) — confirmed
-unchanged by this increment. Still a deliberate, reasoned mechanism, still not pinned
-against the actual git history of the file it fingerprints. No change in status.
-
-## Warnings (new this increment)
-
-### WR-07: the ZoomInfo-touching Merge/sentinel network has zero dynamic (walker-replay) test coverage — structural contract only
-
-**File:** `tests/n8n/enrichmentConvergenceMerge.test.mjs` (and every other
-`walkWorkflow`-driven test over `n8n/wf_enrichment_cloud.json` in this review's scope);
-the affected graph nodes are `ZoomInfo Mint Carry Merge`, `ZoomInfo Mint Company Carry
-Merge`, `ZoomInfo Usage Mint Carry Merge`, and their D-70-23 gated sentinels and D-70-20
-pass-throughs in `scripts/build_cloud_workflows.py`.
-**Issue:** Three Code nodes on this graph — `ZoomInfo Enrich`, `ZoomInfo Company`,
-`ZoomInfo Usage` — contain `await` in their `jsCode`, which `tests/n8n/lib/walkWorkflow.mjs`
-cannot execute (it runs Code-node bodies synchronously via `new Function`, and this
-limitation is explicitly acknowledged elsewhere in the test suite —
-`tests/n8n/mergeInputContract.test.mjs`'s `hasAwaitingCodeNode` bucket exists precisely to
-exclude whole workflows from dynamic replay for this reason). Separately, and more
-directly: the "IF ZoomInfo Enabled" gate's own condition
-(`$json.providers_requested.includes('zoominfo')`, confirmed in
-`scripts/build_cloud_workflows.py` around the `IF ZoomInfo Enabled` gate construction)
-depends on a per-row `providers_requested` field. I checked every event-building helper
-in `tests/n8n/enrichmentConvergenceMerge.test.mjs` (`contactEvent`/`companyEvent`) and
-neither ever sets `providers_requested`, so no test in the reviewed suite ever routes a
-row down the ZoomInfo lane at all — meaning the three ZoomInfo-adjacent carry Merges and
-their gated sentinels (all touched by this phase's Plan 10/11 work — e.g. the
-`IF ZoomInfo Needs Mint`/`IF ZoomInfo Company Needs Mint`/`IF ZoomInfo Usage Needs Mint`
-pass-through retargets at `scripts/build_cloud_workflows.py:8239-8245`) have **only**
-been checked by the static structural contract (`assert_merge_input_contract`: every
-input has a producer, no sentinel/IF feeds a Merge directly, no Merge is over-wide) —
-never by an actual replay proving the sentinel's condition logic correctly predicts
-"will the real ZoomInfo lane deliver."
-**Why it matters:** the static contract can prove an input is fed by *something*; only a
-replay can prove that a sentinel's gate and its lane's real producer are truly mutually
-exclusive (`mergeInputContract.test.mjs`'s own header says exactly this: "Static analysis
-cannot tell a safe share from an unsafe one; only a replay can"). The one lane this phase
-cannot dynamically replay is also the one lane in this graph that makes a real external
-network call from inside a Code node — the shape most likely to have a genuine
-timing/ordering subtlety the design elsewhere in this phase was built specifically to
-catch. This gap is not named in any `70-0N-SUMMARY.md` or `70-DEFERRED-GATES.md` I read.
-**Fix:** either (a) extend `tests/n8n/lib/walkWorkflow.mjs` to stub an `await`-containing
-Code node's body behind an injectable async-safe shim (mirroring the existing `httpStubs`
-pattern) so it can be driven synchronously in a test, or (b) if that is out of scope,
-explicitly document the gap (a short note in `70-DEFERRED-GATES.md` or this phase's own
-summary) so a future reader doesn't assume "the whole graph is walker-verified" when one
-provider's lane specifically is not — and treat Gate 3's live run as the only real
-evidence for that slice until then.
+**File:** `scripts/build_cloud_workflows.py:11334` (and the docstring's contrary claim at
+11303-11309/11336-11340)
+**Issue:** The exemption check is `if (name, node_name) in _SELF_DISPATCH_EXEMPTIONS`, where
+`name` is the string literal each `main()` call site passes to `_assert_generation_contracts`
+(e.g. `"wf_scheduled_maintenance_cloud"`) — never `wf.get("name")`, the workflow body's own
+intrinsic display name. Rule 1 (the unconditional self-reference check, lines 11325-11333)
+still correctly compares `target_id`/`target_name` against the *actual* `wf_id`/`wf_name` of
+the body being checked, so a genuine self-reference is caught regardless of label. But for a
+node that dispatches to some *other* workflow (rule 2, the exemption-gated case), the
+exemption only ever tests the caller's label string. The docstring states, twice, that
+"adding a new dispatch must be a deliberate decision that edits this list" and that "no other
+executeWorkflow node may ship unless its (workflow, node) pair is named in
+`_SELF_DISPATCH_EXEMPTIONS`" — but a cross-workflow `executeWorkflow` node literally named
+`"SJ-3 Dispatch To Enrichment"`, added to any *other* build (say, a future `wf_review_
+decision_cloud` that copies SJ-3's dispatch pattern), would pass this check for free the
+moment its build's `main()` call site is mislabelled with `name="wf_scheduled_maintenance_
+cloud"` (a plausible copy-paste-and-forget-to-rename mistake when adding a ninth `main()`
+block) — with `_SELF_DISPATCH_EXEMPTIONS` never touched. None of the six tests in
+`tests/test_merge_helpers.py:394-452` — including the two tests explicitly titled "the
+exemption cannot widen" — exercise this path; both widening tests vary the *node's* workflow
+identity/name, never the *caller's* `name` argument passed into the function under test.
+Today's eight `main()` call sites are all correct hardcoded literals, so there is no live
+exposure, but the guarantee the docstring makes is not actually enforced by the code as
+written — it holds only because every current caller happens to pass the right label, not
+because the function verifies it.
+**Fix:** Key the exemption tuple on the workflow's own intrinsic name instead of (or in
+addition to) the caller-supplied label — `(wf.get("name"), node_name)` — so a mislabelled
+`name` argument at a `main()` call site cannot silently confer an exemption that was never
+granted to that workflow body. Add a test that passes a *correct* `wf` body but a
+*mislabelled* `name` argument and asserts the exemption still does not apply.
 
 ## Info
 
-### IN-04: `split_merge_into_stages`'s lane grouping changes `Build Response Merge`'s row concatenation order
+### IN-01: `written_records.append_chunk`'s docstring still undercounts its call sites
 
-**File:** `scripts/build_cloud_workflows.py:8276-8283` (the `groups=` argument to
-`split_merge_into_stages`)
-**Issue:** The three groups passed for `Build Response Merge` — `[0,1,2,3,11,12]`,
-`[4,5,6,7,8,13,14]`, `[9,10]` — are not a contiguous partition of the original 0..14
-index range. Under the walker's (and, per its own docstring, n8n's) append-mode
-concatenation (`for i in 0..numberInputs: merged.push(...state.buffers[i])`), the final
-row order out of `Build Response Merge` is now stage-1-items, then stage-2-items, then
-stage-3-items — e.g. an item that used to arrive at position 11 (before position 4) now
-arrives after everything in the first group, changing its relative position versus a row
-delivered on input 4-8. `split_merge_into_stages`'s own docstring makes no claim about
-preserving the original numeric concatenation order (only about preserving each input's
-existing sentinel/producer *coverage*), so this is not a violation of any stated
-contract — but it is an undocumented behavioural change from the pre-split single Merge.
-**Why it matters:** every downstream consumer I checked (`Filter Build Response Rows`,
-`Build Ack`, `report.reconcile`, the plugin's `merge_enriched`) correlates rows by
-identity (`row_id`, `email`, `hs_object_id`) rather than array position, and
-`prove_phase70_runtime.py`'s own comparator (`shapes_equal`) is explicitly
-order-insensitive ("Order-insensitive by design... Row IDENTITY and COUNT are what this
-phase asserts, never row order"), so I do not believe this causes an actual defect. It is
-recorded because no test in this review's scope asserts order-independence for a batch
-that genuinely mixes contacts, companies, and an unsupported-object-type row in one
-execution — the closest test (`enrichmentConvergenceMerge.test.mjs`'s "mixed batch"
-case) mixes only two contacts, never crossing a group boundary.
-**Fix:** none required. Optionally, a one-line comment at the `split_merge_into_stages`
+**File:** `operator-claude-plugin/scripts/written_records.py:486-503` (docstring),
+call site at `operator-claude-plugin/scripts/chunking.py:662`
+**Status:** carried forward from the prior review (6be2894), **still present, unchanged by
+this round** — re-checked both files against current HEAD rather than trusting the old line
+numbers.
+**Issue:** The docstring claims "TWO call sites remain, both at the write itself, never in a
+caller" and names only `dispatch.dispatch` and `review_decision.submit_decision`. It
+separately explains that `chunking.dispatch_plan`'s own former call site was retired by
+D-70-07. It never mentions the third, still-live call site inside
+`chunking.dispatch_and_recover` (`written_records.append_chunk(outcome.run_id, 0, rows)` at
+chunking.py:662) — which is exactly the kind of caller-not-write-site call the docstring's
+own framing says doesn't happen. Not a functional bug (`chunk_index=0` is harmless there,
+identical to the other two sites), but a future reader auditing "who calls this" for a
+fourth, unaccounted-for site would be misled by the "TWO... never in a caller" claim.
+**Fix:** Update the docstring to name three call sites, or fold `dispatch_and_recover`'s
+site into the same enumeration, noting it is a caller (not "the write itself") by design
+(D-70-09's ledger-gate placement).
+
+### IN-02: `split_merge_into_stages` changes `Build Response Merge`'s row concatenation order, undocumented
+
+**File:** `scripts/build_cloud_workflows.py:8189-8196` (line numbers shifted from the prior
+review's 8276-8283 due to the scale-up lane deletion earlier in the file; content unchanged —
+re-verified against current HEAD)
+**Status:** carried forward from the prior review, still present, not touched by this round.
+**Issue:** The three groups passed to `split_merge_into_stages` for `Build Response Merge` —
+`[0,1,2,3,11,12]`, `[4,5,6,7,8,13,14]`, `[9,10]` — are not a contiguous partition of the
+original 0..14 index range. Under append-mode concatenation (both the walker's model and,
+per its own docstring, n8n's real behaviour), the output row order is now
+stage-1-items-then-stage-2-then-stage-3, not numeric input order — a row that used to arrive
+at position 11 now arrives after everything in group 1's indices, changing its relative
+position versus a row on indices 4-8. `split_merge_into_stages` makes no contractual claim
+about preserving numeric order (only per-input sentinel/producer coverage), so this isn't a
+broken contract — but it's an undocumented behavioural change from the pre-split single
+Merge.
+**Why it still doesn't rise to Warning:** every downstream consumer re-checked this round
+(`Filter Build Response Rows`, `Build Ack`, `report.reconcile`, the plugin's
+`merge_enriched`) correlates rows by identity (`row_id`/`email`/`hs_object_id`), never array
+position, and `prove_phase70_runtime.py`'s own comparator is explicitly order-insensitive by
+design. No test in either round's scope asserts order-independence for a batch that
+genuinely mixes contacts, companies, and an unsupported-object-type row crossing all three
+stage-group boundaries in one execution.
+**Fix:** none required functionally. A one-line comment at the `split_merge_into_stages`
 call site noting that global row order is not preserved across the split (only
 per-stage-group order) would pre-empt a future reader assuming otherwise.
 
-### IN-01/IN-02/IN-03 (carried from prior review, out of this increment's diffed scope, not re-verified)
+### IN-03: A round-2 comment edit left a stale characterization of `async_ack` as a currently-generalized "invariant" flag
 
-`operator-claude-plugin/scripts/written_records.py`'s docstring undercount,
-`scripts/prove_zoominfo_balance.py`'s duplicated comment reference, and the prior
-review's own file-disposition note were all about files outside this increment's changed
-set (`written_records.py` and `prove_zoominfo_balance.py` are not in this review's `files`
-list and show no diff against `6be2894`). I did not re-verify their current status; they
-are carried forward by reference only, not re-classified.
+**File:** `tests/n8n/sj3DispatchGate.test.mjs:312-314` (edited this round, by `bfdf1c8`)
+**Issue:** The comment reads "§13.0.2 generalizes the same invariant to `async_ack` and
+`source_by_field`." `CLAUDE.md` §13.0.2 does not generalize an active invariant to
+`async_ack` — it documents `async_ack` as **retired** (D-70-07): the ack is now
+unconditional, `async_ack` opts into nothing, and a caller passing it is silently ignored.
+Keeping `"async_ack"` in the test's `REQUEST_LEVEL_FLAGS` absence-check array (line 332) is
+harmless and arguably still correct (asserting SJ-3 never carries it costs nothing), but the
+comment's citation implies §13.0.2 still treats it as a live, generalized flag requiring the
+same guard as `recompute`/`source_by_field` — which is the state before D-70-07, not the
+current one. This comment was touched in the same commit that correctly removed `scale_up`
+from the same line, so the `async_ack` half of the edit was a smaller, missed pass.
+**Fix:** Reword to something like "§13.0.2 lists `source_by_field` as the other live
+request-level flag; `async_ack` is kept in this check only because a caller silently passing
+it must still assert absence-of-effect, not because it remains an active invariant."
+
+### IN-04: `CLAUDE.md`:2423 states `scale_up` "is normalized in `Parse HubSpot Event`" one paragraph before explaining it no longer is
+
+**File:** `CLAUDE.md:2423-2427`
+**Issue:** Line 2423 states "`recompute` and `scale_up` are booleans normalized in `Parse
+HubSpot Event`... They describe the REQUEST, not a row" — grouping `scale_up` with
+`recompute`'s still-current behavior (read, then written onto the per-row event object). Four
+lines later, 2427 clarifies `scale_up` is retired and the fan-out lane deleted; per the
+generator's actual code (`build_cloud_workflows.py`'s enrichment `Parse HubSpot Event` body),
+`scale_up` today is read and checked for refusal but never "normalized" onto anything — the
+row-level fields it used to set are explicitly gone ("the two fan-out fields that used to
+ride every row from here are gone with the lane that read them"). Read in isolation, 2423
+is stale; read with 2427 immediately following, the correction lands before a reader could
+act on the stale claim, so this is a wording precision issue, not a claim anyone would be
+misled by in practice.
+**Fix:** Optional. Reorder or reword 2423 to say `scale_up` "used to be normalized... is now
+read only to refuse the request," matching 2427's framing, rather than grouping it with
+`recompute`'s still-current behavior.
+
+### Carried forward, resolved or non-issues (from the prior review, not re-classified as new findings)
+
+- **Prior IN-02** (`scripts/prove_zoominfo_balance.py`'s duplicated `prove_async_recovery.py`
+  self-reference in a comment) — **resolved**, confirmed on disk: the WR-03 fix commit
+  (`6a15a64`) repointed the comment to `prove_phase70_runtime.py` as an incidental side
+  effect of the broader reference cleanup. No duplicate reference remains.
+- **Prior IN-03** (review-context file-disposition note about
+  `scripts/probe_company_propose_mode.py`) — was never a code defect, just a mismatch in a
+  prior review brief's instructions; nothing to track in the codebase.
 
 ---
 
-_Reviewed: 2026-09-10T06:22:45Z_
+_Reviewed: 2026-09-10T08:59:50Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
