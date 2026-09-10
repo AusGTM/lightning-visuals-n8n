@@ -27,6 +27,8 @@
 # and `assert_no_by_name_reads` is wired into `main()` at every one of the eight write
 # sites (composed with `_normalize_hubspot_auth`), so a regression fails the BUILD, not
 # just this test file.
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -203,3 +205,48 @@ def test_detector_clean_workflow_returns_empty():
         ],
     }
     assert bcw.detect_by_name_reads(wf) == []
+
+
+# =====================================================================================
+# Review WR-06 — the deleted module's fingerprint, pinned against git history.
+# =====================================================================================
+
+_RUN_RECOVERY_PATH = "n8n/code/nodeRunRecovery.js"
+# The commit that deleted the module (Phase 70 Plan 04 Task 3, D-70-01). Its PARENT is
+# the last revision that still carried the file's real content.
+_RUN_RECOVERY_DELETED_AT = "60402f2"
+_SIGNATURE_RE = re.compile(r"^function \w+\(all, nodeName, runIndex, keep, maxRuns\) \{$")
+
+
+def _git(*args):
+    return subprocess.run(("git",) + args, cwd=ROOT, capture_output=True, text=True)
+
+
+def test_run_recovery_marker_still_matches_the_deleted_modules_real_signature():
+    """`_run_recovery_marker` is a HAND-MAINTAINED copy of a line in a file that no
+    longer exists, so nothing in the working tree can contradict it if it drifts — and a
+    drifted fingerprint degrades `detect_by_name_reads` silently: a genuine reinlining of
+    the retired mechanism would be reported as an ordinary `dynamic`/`quoted` miss
+    instead of `run_recovery_inlined`, exactly when the distinction matters most.
+
+    Pin it against the file's own last committed content. The retired function's bare
+    name is never spelled here either — it is SELECTED from history by its argument
+    list, so this test cannot drift with the marker it checks."""
+    show = _git("show", f"{_RUN_RECOVERY_DELETED_AT}^:{_RUN_RECOVERY_PATH}")
+    assert show.returncode == 0, (
+        f"{_RUN_RECOVERY_PATH} must still be readable at {_RUN_RECOVERY_DELETED_AT}^ — "
+        f"the fingerprint has no other source of truth: {show.stderr}")
+
+    signatures = [line for line in show.stdout.splitlines() if _SIGNATURE_RE.match(line)]
+    assert len(signatures) == 1, f"expected exactly one signature line, got {signatures}"
+    assert signatures[0] == bcw._run_recovery_marker(), (
+        "the hardcoded fingerprint no longer matches the deleted module's real "
+        "signature — detect_by_name_reads would no longer recognise a reinlining")
+
+
+def test_the_run_recovery_module_is_deleted_never_kept_as_a_fallback():
+    """D-70-01: the module is gone at HEAD, not retained beside its replacement. If it
+    ever comes back, the fingerprint stops being historical and this whole mechanism
+    needs rethinking rather than quietly passing."""
+    assert _git("cat-file", "-e", f"HEAD:{_RUN_RECOVERY_PATH}").returncode != 0, (
+        f"{_RUN_RECOVERY_PATH} is back in the tree — see D-70-01")
