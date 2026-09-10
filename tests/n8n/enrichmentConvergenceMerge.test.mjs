@@ -280,14 +280,53 @@ test("the six converged nodes' jsCode changes are the identity-drop filter only"
 // must still be satisfied by a starved-lane sentinel, never left stalled.
 // =============================================================================================
 
+// NF-MN-01 (260911-1z5 review): `starvedWithData` alone cannot see an unsatisfied Merge input
+// (by design — an undelivered-to Merge is the D-70-23 shape). What the header promises is
+// pinned as a SNAPSHOT of which Merges the batch never reached, so a lane that STARTS starving
+// moves the set, plus the one downstream row count that would drop if a real row were lost.
+const NEVER_DELIVERED_COMPANIES_ONLY = [
+  "Apollo Org Result Carry Merge", "Apollo Result Carry Merge", "Contact Judge Carry Merge",
+  "Contact Research Carry Merge", "HubSpot Company Create Carry Merge",
+  "HubSpot Company Fetch By Id Carry Merge", "HubSpot Fetch By Id Carry Merge",
+  "HubSpot Linkedin Search Carry Merge", "HubSpot Name Search Carry Merge",
+  "HubSpot Name Search Fallback Carry Merge", "HubSpot Search Carry Merge", "Judge Carry Merge",
+  "List By Name Carry Merge", "List Memberships Carry Merge", "Lusha Company Result Carry Merge",
+  "Lusha Result Carry Merge", "Research Carry Merge", "ZoomInfo Mint Carry Merge",
+  "ZoomInfo Mint Company Carry Merge", "ZoomInfo Usage Mint Carry Merge",
+];
+const NEVER_DELIVERED_CONTACTS_ONLY = [
+  "Apollo Org Result Carry Merge", "Apollo Result Carry Merge", "Contact Judge Carry Merge",
+  "HubSpot Company Create Carry Merge", "HubSpot Company Fetch By Id Carry Merge",
+  "HubSpot Company Name Search Carry Merge", "HubSpot Company Search Carry Merge",
+  "HubSpot Fetch By Id Carry Merge", "HubSpot Linkedin Search Carry Merge",
+  "HubSpot Name Search Carry Merge", "HubSpot Name Search Fallback Carry Merge", "Judge Carry Merge",
+  "List By Name Carry Merge", "List Memberships Carry Merge", "Lusha Company Result Carry Merge",
+  "Lusha Result Carry Merge", "Research Carry Merge", "ZoomInfo Mint Carry Merge",
+  "ZoomInfo Mint Company Carry Merge", "ZoomInfo Usage Mint Carry Merge",
+];
+const neverDelivered = (trace) =>
+  trace.stalled.filter((s) => s.reason === "merge_never_delivered_to").map((s) => s.node).sort();
+const firedUnfilled = (trace) =>
+  trace.stalled.filter((s) => s.reason === "merge_fired_with_unfilled_input").map((s) => `${s.node}#${s.run}`).sort();
+
 test("a companies-only batch does not stall any contacts-side merge input", () => {
-  const { trace } = run([companyEvent("1", "existing.com", { recompute: true })], {
+  const { trace, runData } = run([companyEvent("1", "existing.com", { recompute: true })], {
     "HubSpot Company Search": () => [{ results: [{ id: "555", properties: { domain: "existing.com" } }] }],
   });
-  assert.deepEqual(starvedWithData(trace), []);
+  assert.deepEqual(starvedWithData(trace), [], "no Merge lost a row");
+  assert.deepEqual(neverDelivered(trace), NEVER_DELIVERED_COMPANIES_ONLY,
+    "the set of Merges this batch never reaches is fixed — a contacts-side Merge starting to starve moves it");
+  assert.deepEqual(firedUnfilled(trace), ["Build Response Merge Stage 2#1", "Build Response Merge#1"],
+    "the response stage Merges drain once each on the lone companies lane (the by-design D-70-23 shape)");
+  assert.deepEqual((runData["Build Response"] || []).map((r) => r.length), [1], "the one company row returns");
 });
 
 test("a contacts-only batch does not stall any companies-side merge input", () => {
-  const { trace } = run([contactEvent("1", "a@example.com")]);
-  assert.deepEqual(starvedWithData(trace), []);
+  const { trace, runData } = run([contactEvent("1", "a@example.com")]);
+  assert.deepEqual(starvedWithData(trace), [], "no Merge lost a row");
+  assert.deepEqual(neverDelivered(trace), NEVER_DELIVERED_CONTACTS_ONLY,
+    "the set of Merges this batch never reaches is fixed — a companies-side Merge starting to starve moves it");
+  assert.deepEqual(firedUnfilled(trace), ["Decide Company Action Merge#1"],
+    "only the companies-side decide Merge drains on a lone input (the 12354 shape)");
+  assert.deepEqual((runData["Build Response"] || []).map((r) => r.length), [1], "the one contact row returns");
 });

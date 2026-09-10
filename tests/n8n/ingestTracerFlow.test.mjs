@@ -171,7 +171,7 @@ test("a review-only batch (zero association rows) does not stall any Merge — t
   // not a hang — what must never stall is the merge everything else actually depends
   // on, "Ingest Merge Response" (and every other merge on this lane).
   assert.deepEqual(starvedWithData(trace), [],
-    "no merge other than the intentionally-bypassed Associate Carry Merge may stall");
+    "no Merge lost a row on this batch (starvedWithData); per-node fire claims are asserted on runData above");
   assert.ok((runData["Ingest Merge Response"] || []).length >= 1,
     "Ingest Merge Response — what this batch's correctness actually rests on — must fire");
 

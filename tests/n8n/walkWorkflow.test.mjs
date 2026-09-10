@@ -486,12 +486,12 @@ test("D-70-20 mechanism price (2/2): the Wave 2 alternative -- a sentinel gated 
   }
 
   const liveRun = walkWorkflow(build(true), { triggerNode: "Trigger", triggerItems: [{ live: "true" }] });
-  assert.equal(liveRun.trace.merges.Merge.fired, true, "live shape: the Merge fires");
+  assert.equal(liveRun.runData.Merge.length, 1, "live shape: the Merge fires once (NF-NT-03: runData, not the tautological `fired`)");
   assert.deepEqual(liveRun.runData.Merge[0].map((r) => r.id).sort(), ["row-B", "row-real"],
     "the real row survives -- the gated sentinel never ran (fed zero items on the dead branch)");
 
   const deadRun = walkWorkflow(build(false), { triggerNode: "Trigger", triggerItems: [{ live: "false" }] });
-  assert.equal(deadRun.trace.merges.Merge.fired, true, "dead shape: the Merge still fires");
+  assert.equal(deadRun.runData.Merge.length, 1, "dead shape: the Merge still fires once");
   const deadRows = deadRun.runData.Merge[0];
   assert.ok(deadRows.some((r) => r.id === "row-B"), "LaneB's real row still arrives");
   assert.equal(deadRows.length, 2, "the marker fills the starved input instead of stalling the Merge");
@@ -620,6 +620,126 @@ test("MN-02 guard (quick task 260911-1z5): a self-referential SINGLE-input Merge
       assert.match(error.message, /feedback edge/);
       return true;
     }
+  );
+});
+
+// =============================================================================================
+// Round-3 cases (260911-1z5 review findings NF-BL-01, NF-MJ-01, NF-MN-05, NF-NT-04).
+// =============================================================================================
+
+test("NF-BL-01: a combine/combineByPosition Merge fired with an unfilled input ANNIHILATES " +
+  "the filled input's rows (rows in, zero out) — starvedWithData must report it", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("Real", "return [{ json: { id: 'r1' } }, { json: { id: 'r2' } }];"),
+      codeNode("Dead", "return [];"),
+      { name: "M", type: "n8n-nodes-base.merge",
+        parameters: { numberInputs: 2, mode: "combine", combineBy: "combineByPosition" } },
+      codeNode("Sink", "return $input.all();"),
+    ],
+    {
+      Trigger: { main: [[edge("Real"), edge("Dead")]] },
+      Real: { main: [[edge("M", 0)]] },
+      Dead: { main: [[edge("M", 1)]] },
+      M: { main: [[edge("Sink")]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.deepEqual(runData.M, [[]], "2 rows in, 0 out — the merge maths took Math.min with an absent input");
+  assert.equal(runData.Sink, undefined, "nothing downstream ran");
+  assert.deepEqual(trace.stalled,
+    [{ node: "M", reason: "merge_fired_with_unfilled_input", run: 0, missingInputs: [1] }]);
+  // RED-first (observed against the pre-round-3 walker at commit 7f573285): starvedWithData
+  // returned [] here — "no row was lost" while 2 rows were destroyed.
+  const lost = starvedWithData(trace);
+  assert.equal(lost.length, 1, "annihilation IS a loss: rows went in and never came out");
+  assert.equal(lost[0].node, "M");
+  assert.equal(trace.merges.M.runs[0].outputCount, 0);
+});
+
+test("NF-BL-01 (no false positive): an append Merge drained on one arrived input passes its " +
+  "row through — the 12354 Decide Company Action Merge run-1 shape is NOT a loss", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return [{ json: { id: 'a' } }];"),
+      codeNode("Dead", "return [];"),
+      mergeNode("M", 2),
+    ],
+    {
+      Trigger: { main: [[edge("A"), edge("Dead")]] },
+      A: { main: [[edge("M", 0)]] },
+      Dead: { main: [[edge("M", 1)]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.deepEqual(runData.M, [[{ id: "a" }]]);
+  assert.deepEqual(starvedWithData(trace), []);
+  assert.equal(trace.merges.M.runs[0].outputCount, 1);
+});
+
+test("NF-MJ-01 (KNOWN-UNOBSERVED, pinned): two grouped producers OVERLAPPING on an input of a " +
+  "3-input append Merge — the atomic-fill rule opens a second pending run that MN-01's cap " +
+  "then refuses to drain; a per-input-queue model would have completed one run (P,P,Q). " +
+  "Gate 11 did not isolate the two models. This pins the walker's CURRENT choice so the " +
+  "divergence is visible, not a claim that the engine does this", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("P", "return [{ json: { id: 'p' } }];"),
+      codeNode("Q", "return [{ json: { id: 'q' } }];"),
+      mergeNode("M", 3),
+    ],
+    {
+      Trigger: { main: [[edge("P"), edge("Q")]] },
+      P: { main: [[edge("M", 0), edge("M", 1)]] },
+      Q: { main: [[edge("M", 1), edge("M", 2)]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.equal(runData.M.length, 1, "one drained run (MN-01 cap)");
+  const undrained = trace.stalled.filter((s) => s.reason === "merge_pending_runs_undrained");
+  assert.equal(undrained.length, 1, "the overlapping producer's run is left undrained");
+  assert.equal(starvedWithData(trace).length, 1,
+    "reported as a loss under the current grouping model — a walker artifact OR a real engine " +
+    "loss; see .planning/todos/pending/2026-09-11-merge-input-contract-allows-many-producers-per-input.md");
+});
+
+test("NF-MN-05 (MJ-01 coverage): an unfired LEGACY Merge keeps its partial sources/itemCounts " +
+  "view (the 12203/12206 diagnostic: who claimed input 0 before it starved)", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return [{ json: { id: 'a' } }];"),
+      mergeNode("M", 2),
+    ],
+    {
+      Trigger: { main: [[edge("A")]] },
+      A: { main: [[edge("M", 0)]] },
+    }
+  );
+  graph.settings = {}; // a LEGACY recording shape — the only way this branch is reached
+  const { trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}], allowLegacy: true });
+  assert.deepEqual(trace.merges.M, { fired: false, sources: { 0: "A" }, itemCounts: { 0: 1 }, runs: [] });
+});
+
+test("NF-NT-04: a feedback cycle with NO Merge on it terminates with a thrown error, not a hang", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return $input.all();"),
+      codeNode("B", "return $input.all();"),
+    ],
+    {
+      Trigger: { main: [[edge("A")]] },
+      A: { main: [[edge("B")]] },
+      B: { main: [[edge("A")]] },
+    }
+  );
+  assert.throws(
+    () => walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] }),
+    /feedback cycle with no Merge/
   );
 });
 

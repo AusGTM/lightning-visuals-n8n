@@ -236,7 +236,9 @@ test("ingest single-lane-only batch (every row an update on the association path
   }
   // Named explicitly: the review lane contributed nothing to this batch, and the
   // response Merge still fired.
-  assert.equal(starvedWithData(trace).length, 0, "Ingest Merge Response must not wait on the empty review lane");
+  assert.equal(starvedWithData(trace).length, 0, "no Merge lost a row on this batch (starvedWithData)");
+  assert.equal((runData["Ingest Merge Response"] || []).length, 1,
+    "Ingest Merge Response fired without waiting on the empty review lane");
 });
 
 // =====================================================================================

@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FROZEN = path.join(HERE, "fixtures", "frozen");
@@ -106,6 +106,15 @@ for (const id of EXECUTIONS) {
     assert.equal(runs[1].sources[0], "Recompute Not Requested Sentinel Gate",
       `${id}: run 1's input 0 must be claimed by the drain's actual producer`);
 
+    // NF-MJ-02 (260911-1z5 review): the detector's report on the RECORDING itself, so
+    // CLAUDE.md §13.0.3's claim that this file pins `merge_fired_with_unfilled_input`
+    // against 12354/12355/12356 is true.
+    assert.deepEqual(trace.stalled.filter((s) => s.node === "Decide Company Action Merge"),
+      [{ node: "Decide Company Action Merge", reason: "merge_fired_with_unfilled_input",
+         run: 1, missingInputs: [1] }],
+      `${id}: the drained run-1 is reported as fired-with-unfilled-input, nothing else on that Merge`);
+    assert.deepEqual(starvedWithData(trace), [], `${id}: nothing was actually lost on this execution`);
+
     assert.equal(runData["Decide Company Action"].length, 2,
       `${id}: Decide Company Action ran twice, once per Merge run`);
     assert.deepEqual(runData["Decide Company Action"].map((r) => r.length), [0, 0],
@@ -146,8 +155,8 @@ test("the frozen v1 graph is byte-identical to what executions 12354/12355/12356
     .update(fs.readFileSync(FROZEN_V1_GRAPH))
     .digest("hex");
   assert.equal(digest, "77a4e8c0137580c1b1d827586a2d600d1fbf2942e883596caeb58f77318eab7d",
-    "a regeneration of n8n/wf_enrichment_cloud.json must not silently make " +
-    "wf_enrichment_cloud.v1.2026-09-10.json a non-reproduction of Gate 11's recordings — " +
-    "regenerate the frozen copy and re-verify it against a fresh live recording instead " +
-    "of updating this digest to match");
+    "this frozen copy must never be edited: it is the byte image of ec102a4's " +
+    "n8n/wf_enrichment_cloud.json, the graph executions 12354/12355/12356 ran. A later " +
+    "regeneration of n8n/ is EXPECTED to diverge from it (NF-MN-04) — that is not what " +
+    "this test detects; only an edit to the frozen file is. Do not update this digest.");
 });

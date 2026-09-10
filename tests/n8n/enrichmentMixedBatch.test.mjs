@@ -212,7 +212,7 @@ test("enrichment single-lane-only batch (email identity only, no companies lane,
   assertAckFiredOnce(trace, { rowIds: EMAIL_ROWS.map((e) => e.row_id) });
   assert.equal(rows.length, 2, "both rows return with every companies-side merge input silent");
   assert.equal(starvedWithData(trace).length, 0,
-    "Build Response Merge must not wait on the companies lane this batch never touched");
+    "no Merge lost a row on this batch (starvedWithData); the Build Response fire itself is asserted above");
 });
 
 // =====================================================================================

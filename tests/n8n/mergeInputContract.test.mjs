@@ -266,7 +266,7 @@ test("wf_contact_ingest_cloud.json: single-lane batch (every row a review row, n
   // arrives from "HubSpot Associate Company" — by design, not a hang, since nothing
   // downstream reads its output directly. What must never stall is every other Merge,
   // above all "Ingest Merge Response", the one this batch's correctness rests on.
-  assert.deepEqual(starvedWithData(trace), [], "no merge other than the bypassed carry Merge may stall");
+  assert.deepEqual(starvedWithData(trace), [], "no Merge lost a row on this batch (starvedWithData)");
   assert.ok((runData["Ingest Merge Response"] || []).length >= 1, "Ingest Merge Response must fire");
 
   const rows = nodeItems(runData, "Build Ingest Response");

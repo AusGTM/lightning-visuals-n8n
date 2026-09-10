@@ -514,9 +514,15 @@ export function walkWorkflow(wf, opts) {
     if (order === "v1" && outItems.length === 0) return;
 
     // BL-02 (quick task 260911-1z5): ONE producer node-run's deliveries to SEVERAL inputs
-    // of the SAME Merge land in ONE pending run (Gate 11, 12354/12355/12356:
-    // `Companies Absent Sentinel Gate`'s single node-run filled BOTH inputs of `Decide
-    // Company Action Merge`'s run 0). Grouping unit is ONE propagate() call — one
+    // of the SAME Merge land in ONE pending run. This rule is CONSISTENT WITH the Gate 11
+    // recordings (12354/12355/12356: `Companies Absent Sentinel Gate`'s single node-run
+    // is recorded as the source of BOTH inputs of `Decide Company Action Merge`'s run 0)
+    // but was NOT isolated by them — a per-input FIFO queue model (input i's k-th delivery
+    // joins run k) reproduces the same recording whenever that gate reaches input 0 first
+    // (NF-MJ-01, 260911-1z5 review). The two models diverge on a Merge where two grouped
+    // producers OVERLAP on an input; that shape is pinned as a KNOWN-UNOBSERVED case in
+    // walkWorkflow.test.mjs and recorded in .planning/todos/pending/2026-09-11-merge-
+    // input-contract-allows-many-producers-per-input.md. Grouping unit is ONE propagate() call — one
     // node-run, one output index — so two different output indexes of one IF landing on
     // the same Merge stay two separate deliveries (unobserved either way, not modelled).
     // Edges to a non-Merge target are unaffected, one delivery per edge as always.
@@ -561,14 +567,21 @@ export function walkWorkflow(wf, opts) {
   // per-Merge cap to stop it. One shared counter catches either shape.
   let v1FiresCount = 0;
   const FIRE_CAP = (wf.nodes || []).length * 4;
-  function recordV1Fire(nodeName) {
+  function recordV1Fire(nodeName, site) {
     v1FiresCount += 1;
     if (v1FiresCount > FIRE_CAP) {
       throw new Error(
-        `walkWorkflow: end-of-run drain did not converge at "${nodeName}" — feedback ` +
-        `edge into a Merge input?`);
+        `walkWorkflow: v1 Merge fires did not converge at "${nodeName}" (fired from the ` +
+        `${site}) — feedback edge into a Merge input?`);
     }
   }
+  // NF-NT-04 (260911-1z5 review): a feedback cycle that never passes through a Merge is
+  // invisible to the fire counter above and hung the walker forever (T→A→B→A). One shared
+  // delivery counter bounds the whole walk; a real walk on the 287-node enrichment graph
+  // with a 2x2 batch dequeues a few hundred deliveries, so 50 per node is far above any
+  // legitimate shape and far below "forever".
+  let deliveriesProcessed = 0;
+  const DELIVERY_CAP = Math.max(1000, (wf.nodes || []).length * 50);
 
   // processQueue() drains `queue` to empty. Factored out (quick task 260911-0tz, Step 3c)
   // so the v1 end-of-run drain below can RESUME it after firing a pending Merge run — a
@@ -576,6 +589,12 @@ export function walkWorkflow(wf, opts) {
   function processQueue() {
     while (queue.length) {
       const delivery = dequeue();
+      deliveriesProcessed += 1;
+      if (deliveriesProcessed > DELIVERY_CAP) {
+        throw new Error(
+          `walkWorkflow: ${deliveriesProcessed} deliveries processed without the queue ` +
+          `draining (last: "${delivery.targetName}") — feedback cycle with no Merge on it?`);
+      }
       const node = nodesByName[delivery.targetName];
       if (!node) continue; // dangling connection target — should not happen on real JSON
 
@@ -675,8 +694,9 @@ export function walkWorkflow(wf, opts) {
           sources: { ...target.sources },
           itemCounts: Object.fromEntries(
             Object.entries(target.filled).map(([i, items]) => [i, items.length])),
+          outputCount: merged.length, // NF-BL-01: what the merge maths let OUT
         });
-        recordV1Fire(node.name); // MN-02: shared cap — a real double-complete-fire like
+        recordV1Fire(node.name, "main-loop arrival"); // MN-02: shared cap — a real double-complete-fire like
         // this one is observed engine behaviour and stays uncapped by count, but a
         // feedback edge that keeps re-completing must still be bounded.
         propagate(node.name, 0, merged);
@@ -786,9 +806,10 @@ export function walkWorkflow(wf, opts) {
           sources: { ...target.sources },
           itemCounts: Object.fromEntries(
             Object.entries(target.filled).map(([i, items]) => [i, items.length])),
+          outputCount: merged.length, // NF-BL-01: what the merge maths let OUT
         });
         drainedOnce.add(name);
-        recordV1Fire(name); // MN-02: shared cap with the main-loop fire site above
+        recordV1Fire(name, "end-of-run drain"); // MN-02: shared cap with the main-loop fire site above
         propagate(name, 0, merged);
         progressed = true;
         processQueue();
@@ -915,6 +936,19 @@ export function walkWorkflow(wf, opts) {
 // unfilled_input` (an input nobody ever delivered to) are the BY-DESIGN D-70-23 gated-
 // sentinel shapes, not losses.
 //
+// NF-BL-01 (260911-1z5 review): the paragraph above was TRUE of delivery and FALSE of
+// the merge maths. A `combine`/`combineByPosition` Merge fired with an unfilled input
+// computes `Math.min(...counts)` with the absent input contributing `[]` — rows IN, ZERO
+// out — and `combineAll` collapses the same way. 23 of the enrichment graph's 33 Merges
+// are `combine`. So a `merge_fired_with_unfilled_input` run whose filled inputs carried
+// >= 1 item and whose `outputCount` is 0 is a loss too: ANNIHILATION, not starvation.
+// This arm is mode-agnostic and does not fire on 12354's `Decide Company Action Merge`
+// run 1 (append: 1 in, 1 out) — the case the narrowing above was written to protect.
+// (NF-NT-01: under v1 every delivery carries >= 1 item — `alwaysOutputData`'s `[{}]`
+// substitution runs before rule (c)'s `return` — so the `total >= 1` test on the
+// undrained arm is currently always true; it is kept as the stated predicate, not as a
+// filter that has ever excluded anything.)
+//
 // The naive "declared producers ran with items" predicate the orchestrator's brief
 // proposed false-positives twice against the very recording this task reproduces:
 // (1) on 12354, `Companies Absent Sentinel Gate` is a declared producer of `Decide
@@ -924,11 +958,22 @@ export function walkWorkflow(wf, opts) {
 // an IF that routed every item to its TRUE branch still reads as "emitted >= 1 item" while
 // its FALSE branch — the one feeding the Merge — delivered nothing at all.
 export function starvedWithData(trace) {
+  // NF-NT-02: under legacy this is a PASS-THROUGH of `merge_input_never_fired` entries,
+  // which carry no `itemCounts` at all — the name is a v1 concept; on an `allowLegacy`
+  // walk read `trace.stalled` directly (no committed site calls this on a legacy walk).
   if (trace.orderingUsed === "legacy") return trace.stalled;
   return trace.stalled.filter((s) => {
-    if (s.reason !== "merge_pending_runs_undrained") return false;
-    const total = Object.values(s.itemCounts || {}).reduce((sum, n) => sum + n, 0);
-    return total >= 1;
+    if (s.reason === "merge_pending_runs_undrained") {
+      const total = Object.values(s.itemCounts || {}).reduce((sum, n) => sum + n, 0);
+      return total >= 1;
+    }
+    if (s.reason === "merge_fired_with_unfilled_input") {
+      const run = ((trace.merges[s.node] || {}).runs || [])[s.run];
+      if (!run) return false;
+      const carried = Object.values(run.itemCounts || {}).reduce((sum, n) => sum + n, 0);
+      return carried >= 1 && run.outputCount === 0; // rows in, nothing out — annihilation
+    }
+    return false;
   });
 }
 

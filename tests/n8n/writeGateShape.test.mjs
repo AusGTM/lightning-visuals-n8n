@@ -484,8 +484,9 @@ test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest 
       "HubSpot Company Search by Name": [{ results: [] }],
     },
   });
-  assert.deepEqual(noRealLoss, [],
-    "Ingest Merge Response must never stall — the gate's refusal lane feeds it directly");
+  assert.deepEqual(noRealLoss, [], "no Merge lost a row on this batch (starvedWithData)");
+  assert.ok(ran("Ingest Merge Response"),
+    "Ingest Merge Response fired — the gate's refusal lane feeds it directly");
   assert.equal(rows.length, 1);
   assert.equal(rows[0].action, "write_blocked",
     "the gate's verdict, not the pre-write intention (F11 / execution 12181)");
