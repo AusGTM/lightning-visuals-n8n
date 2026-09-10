@@ -53,7 +53,6 @@ import requests
 
 import enrichment
 import remainder_queue
-import report
 import run_manifest
 import written_records
 from dispatch import DispatchError, NotArmedError
@@ -607,7 +606,7 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
 
 
 def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
-                          run_id=None, lane="enrichment", get_transport=None,
+                          run_id=None, get_transport=None,
                           now=None, sleep=None, bound_seconds=None, workflow_id=None,
                           **dispatch_kwargs) -> dict:
     """Send an approved plan and read its rows back from the settled execution — the
@@ -653,26 +652,19 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
             recovery_kwargs["workflow_id"] = workflow_id
         recovery = _watch.recover_dispatch(
             config, outcome.run_id, expected_chunk_count=landed,
-            lane=lane, now=now, sleep=sleep, bound_seconds=bound_seconds,
+            now=now, sleep=sleep, bound_seconds=bound_seconds,
             **recovery_kwargs)
 
     rows = recovery.get("responses") or []
     run_data = recovery.get("run_data") or {}
-    # D-70-06: the reconcile rule is SHARED, not copied — `report.reconcile` is the one
-    # function that downgrades a decided `create`/`update` to `not_confirmed` when the
-    # terminal write node produced nothing (Pitfall 3 / T-26-01), and `dispatch.dispatch`
-    # already routes the ingest lane through it.
-    #
-    # It is applied ONLY on the ingest lane, deliberately. `WRITE_NODE_FOR_ACTION` names
-    # `HubSpot Update`/`HubSpot Create` — the INGEST workflow's node names. The
-    # enrichment lane has no node by either name, so reconciling there would downgrade
-    # EVERY enrichment write to `not_confirmed` on the strength of a node that was never
-    # going to be in its runData: a false downgrade written into the ledger. A parity
-    # test would only pin two rules in agreement about the wrong lane. When the
-    # enrichment lane's own write-node map is established, it belongs as a parameter to
-    # this same function — never as a second copy of the rule.
-    if lane == "ingest":
-        rows = report.reconcile(rows, run_data)
+    # NOT reconciled here (review WR-02): `report.reconcile` is `dispatch.dispatch`'s
+    # job — it names `HubSpot Update`/`HubSpot Create`, the INGEST workflow's nodes, and
+    # this function only ever runs the enrichment lane, which has no node by either name
+    # (reconciling there would downgrade EVERY enrichment write to `not_confirmed` on
+    # the strength of a node that was never going to be in its runData). The dead
+    # `lane="ingest"` branch that used to sit here — and the `lane` parameter no caller
+    # ever passed — are gone. When the enrichment lane's own write-node map exists it
+    # belongs here as a parameter, never as a second copy of the rule.
 
     can_write = any(r.can_write for r in outcome.results)
 

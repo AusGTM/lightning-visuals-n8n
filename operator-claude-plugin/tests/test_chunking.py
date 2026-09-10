@@ -1660,3 +1660,52 @@ def test_the_ingest_mode_completes_a_full_dispatch_and_recover_cycle(
         "the ingest lane still reconciles against the write node's own output"
     )
     assert result["body"] == result["ack"], "the body is the ack, never a row outcome"
+
+
+def test_dispatch_and_recover_takes_no_lane_and_never_reconciles(
+    fake_config, stub_module_transport_factory, stub_get_transport_factory, monkeypatch
+):
+    """Review WR-02: this function had a `lane` parameter no caller ever passed and a
+    `lane == "ingest"` branch no call could reach. Both are deleted. `report.reconcile`
+    belongs to `dispatch.dispatch` — it names the INGEST workflow's write nodes, and
+    this function only ever runs the enrichment lane, whose runData has neither. Pinned
+    two ways: `lane` cannot be passed, and reconcile is never called from here."""
+    import inspect
+    import report
+
+    assert "lane" not in inspect.signature(chunking.dispatch_and_recover).parameters
+
+    def _never(*args, **kwargs):
+        raise AssertionError("dispatch_and_recover must not reconcile — WR-02")
+
+    monkeypatch.setattr(report, "reconcile", _never)
+
+    run_id = "run-wr-02"
+    result = chunking.dispatch_and_recover(
+        chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 5),
+        PROVIDERS, True, fake_config, run_id=run_id,
+        transport=stub_module_transport_factory(),
+        get_transport=_recovering_get_transport(
+            stub_get_transport_factory, run_id,
+            [{"row_id": "r1", "action": "update", "hs_object_id": "1"}]),
+        workflow_id="wf-enrichment-cloud", now=lambda: 0.0, sleep=lambda s: None,
+    )
+
+    assert result["recovered"] is True
+    # The rows come back exactly as the execution reported them — unstamped by
+    # reconcile, which would have added a `reported_outcome`.
+    assert "reported_outcome" not in result["rows"][0]
+
+    # And a caller who types `lane="ingest"` anyway gets no reconcile back: the kwarg
+    # falls into `dispatch_plan`'s legacy sink and is inert — it does NOT raise, so a
+    # future reader must not read a silent acceptance as the branch still being there.
+    revived = chunking.dispatch_and_recover(
+        chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 5),
+        PROVIDERS, True, fake_config, run_id=run_id, lane="ingest",
+        transport=stub_module_transport_factory(),
+        get_transport=_recovering_get_transport(
+            stub_get_transport_factory, run_id,
+            [{"row_id": "r1", "action": "update", "hs_object_id": "1"}]),
+        workflow_id="wf-enrichment-cloud", now=lambda: 0.0, sleep=lambda s: None,
+    )
+    assert "reported_outcome" not in revived["rows"][0]
