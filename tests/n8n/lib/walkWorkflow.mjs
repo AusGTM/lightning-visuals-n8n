@@ -286,7 +286,11 @@ export function runNode(node, items, ctx) {
  *     unmodelled hop.
  *
  * Returns `{ runData, trace }`. `trace.unhandledTypes`, `trace.stalled`, `trace.respond`,
- * `trace.respondSuppressed`, `trace.trigger`, `trace.orderingUsed` — see 70-01-PLAN.md.
+ * `trace.respondSuppressed`, `trace.trigger`, `trace.orderingUsed` — see 70-01-PLAN.md —
+ * plus `trace.merges` (Phase 70 plan 70-09): per Merge node, `{fired, sources, itemCounts}`
+ * keyed by input index, naming the producer whose delivery CLAIMED each input. Added
+ * because the defect executions 12203 and 12206 exposed is invisible in item counts
+ * alone: which node took input 0 IS the finding.
  */
 export function walkWorkflow(wf, opts) {
   const { triggerNode, triggerItems, httpStubs = {}, env = {} } = opts || {};
@@ -325,12 +329,34 @@ export function walkWorkflow(wf, opts) {
   function propagate(fromName, outputIndex, items) {
     const node = nodesByName[fromName];
     let outItems = items;
+    // The always-output-data substitution is UNCHANGED and models a different rule from
+    // the one below: a node that RAN and produced nothing, whose AOD flag forces one
+    // empty marker item onto the wire. Live evidence it is still the right model:
+    // execution 12200 (70-UAT.md § Test 1), where "HubSpot Associate Company" never ran
+    // at all and its own alwaysOutputData contributed nothing.
     if (outItems.length === 0 && node && node.alwaysOutputData === true) {
       outItems = [{}];
     }
-    if (outItems.length === 0) return; // nothing to deliver — this wave is dropped here
+    // ENGINE RULE (executions 12203 and 12206, 70-UAT.md § Tests 2 and 3; D-70-20): a
+    // node that ran and emitted ZERO items still DELIVERS to its targets. The runData
+    // `source` arrays of both executions name a sentinel whose output was `[]` as the
+    // producer that took a Merge input. This line used to read
+    // `if (outItems.length === 0) return;` — dropping the wave — which is why every
+    // offline suite was green while the live engine dropped rows. A zero-item delivery
+    // is enqueued exactly like any other; what it means at the CONSUMING end depends on
+    // whether the target is a Merge (see the walk loop below).
+    //
+    // INFERRED, NOT OBSERVED: this also makes an IF node's EMPTY branch a delivery to a
+    // Merge input. No execution in this repo has ever observed whether the live engine
+    // does that (an IF is not a Code node and may not emit an empty branch at all). The
+    // routing pass-throughs plan 70-10 adds make every generated graph independent of
+    // the answer either way; until an observation exists, treat this branch of the model
+    // as unverified.
     for (const edge of connectionsFrom(fromName, outputIndex)) {
-      enqueue({ targetName: edge.node, inputIndex: edge.index || 0, items: outItems.slice() });
+      enqueue({
+        targetName: edge.node, inputIndex: edge.index || 0,
+        items: outItems.slice(), fromName,
+      });
     }
   }
 
@@ -362,12 +388,28 @@ export function walkWorkflow(wf, opts) {
       // Merge node exposes this as a third `combineBy` value alongside the two above
       // (merge_node's own docstring, Task 2's source citation).
       const isCombineAll = combineByValue === "combineAll";
-      const state = mergeState[node.name] || (mergeState[node.name] = { buffers: {}, fired: false });
-      if (state.fired) continue; // fires ONCE per replay (spec — not n8n's real multi-wave behaviour)
-      state.buffers[delivery.inputIndex] = (state.buffers[delivery.inputIndex] || []).concat(delivery.items);
+      const state = mergeState[node.name]
+        || (mergeState[node.name] = { buffers: {}, arrived: {}, sources: {}, fired: false });
+      // ENGINE RULE (executions 12203 and 12206): a Merge fires AT MOST ONCE per
+      // execution, and a delivery arriving after it has fired is discarded. Execution
+      // 12206 observed exactly that: "Adapt Search" (2 items) and "Adapt Linkedin Search"
+      // (2 items) reached "Enrichment Gate Merge" AFTER it had already fired on the
+      // sentinels' deliveries, and the real rows were dropped.
+      if (state.fired) continue;
+      // ENGINE RULE (executions 12203 and 12206): the FIRST delivery to an input wins.
+      // A later delivery to an already-arrived input is discarded — this is what let a
+      // sentinel's `[]` claim an input ahead of the real producer's row.
+      if (state.arrived[delivery.inputIndex]) continue;
+      state.arrived[delivery.inputIndex] = true;
+      state.sources[delivery.inputIndex] = delivery.fromName;
+      state.buffers[delivery.inputIndex] = delivery.items.slice();
+      // Readiness is ARRIVAL, tracked separately from the items buffered, because after
+      // the delivery change an arrived input can legitimately hold zero items (execution
+      // 12203: "Associate Carry Merge" input 1 arrived carrying nothing and the Merge
+      // fired anyway, combining 1 x 0 into 0 items).
       let ready = true;
       for (let i = 0; i < numberInputs; i += 1) {
-        if (!state.buffers[i] || state.buffers[i].length === 0) { ready = false; break; }
+        if (!state.arrived[i]) { ready = false; break; }
       }
       if (!ready) continue;
       state.fired = true;
@@ -410,6 +452,15 @@ export function walkWorkflow(wf, opts) {
 
     if (TRIGGER_TYPES.has(node.type)) continue; // a trigger is never re-delivered to
 
+    // ENGINE RULE (execution 12200, 70-UAT.md § Test 1): a node fed ZERO items does not
+    // RUN, and so contributes no run entry and no delivery of its own. On 12200
+    // "HubSpot Associate Company" received zero items, never ran, and its own
+    // alwaysOutputData therefore contributed nothing to the carry Merge — the sentinel
+    // alone satisfied it. This is the counterpart of the delivery rule in `propagate`
+    // above, and the two together are what make a gated sentinel possible at all: an
+    // empty delivery still SATISFIES a Merge input, but it never STARTS a lane.
+    if (delivery.items.length === 0) continue;
+
     if (node.type === "n8n-nodes-base.respondToWebhook") {
       const runIndex = (runData[node.name] || []).length;
       runData[node.name] = runData[node.name] || [];
@@ -440,11 +491,27 @@ export function walkWorkflow(wf, opts) {
     if (state.fired) continue;
     const node = nodesByName[name];
     const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
+    // Keyed on ARRIVAL, never on an empty buffer: an input that arrived carrying zero
+    // items is satisfied (execution 12203), and reporting it as missing would name the
+    // wrong inputs and hide the starvation this trace exists to expose.
     const missingInputs = [];
     for (let i = 0; i < numberInputs; i += 1) {
-      if (!state.buffers[i] || state.buffers[i].length === 0) missingInputs.push(i);
+      if (!state.arrived[i]) missingInputs.push(i);
     }
     trace.stalled.push({ node: name, reason: "merge_input_never_fired", missingInputs });
+  }
+
+  // trace.merges — which producer took each Merge input, and whether the Merge fired.
+  // Needed because the defect this walker now models is invisible in item counts alone:
+  // on execution 12206 the question "which node claimed input 0" IS the finding.
+  trace.merges = {};
+  for (const [name, state] of Object.entries(mergeState)) {
+    trace.merges[name] = {
+      fired: state.fired,
+      sources: { ...state.sources },
+      itemCounts: Object.fromEntries(
+        Object.entries(state.buffers).map(([i, items]) => [i, items.length])),
+    };
   }
 
   return { runData, trace };

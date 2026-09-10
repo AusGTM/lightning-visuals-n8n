@@ -160,3 +160,111 @@ test("execution 12203 (armed mixed verdict, ingest lane): the walker reproduces 
     "output is ABSENT from Ingest Merge Response's merged set — input 3 was taken by " +
     "HubSpot Update Gate Unreached Sentinel's zero-item output");
 });
+
+// =====================================================================================
+// Execution 12206 — Gate 3 / D-70-19, the disarmed `enrichment_single_lane` send.
+//
+// Observed (70-UAT.md § Test 3, and `70-RUNTIME-VERDICT.json` § enrichment_single_lane):
+// two contact rows with unresolvable `.invalid` identities, propose mode, disarmed. The
+// execution settled `success` — no hang — and 0 rows came back against 2 predicted.
+// `Enrichment Gate Merge` (append, 5 inputs) fired ONCE on starved-lane sentinel
+// deliveries; the real rows (`Adapt Search`, `Adapt Linkedin Search`) reached it AFTER it
+// had fired and were dropped; `Build Response` never ran; the lane terminated silently.
+//
+// TWO DIVERGENCES between this replay and the live runData, recorded rather than tuned
+// away (D-70-19 — the walker is never adjusted to make an assertion land):
+//
+//   1. INPUT PROVENANCE. Live, `Enrichment Gate Merge` input 0 was claimed by
+//      `Contacts Lane FetchById Absent Sentinel` (one marker item) and inputs 1-4 by
+//      `Contacts Absent Sentinel`'s `[]`, so the Merge carried 1 marker and
+//      `Enrichment Gate` ran and filtered it to 0. This replay has `Contacts Absent
+//      Sentinel` — one hop off `IF Scale Up Route`, i.e. shallower — claiming all five,
+//      so the Merge carries 0 items and `Enrichment Gate` never runs at all. Which of
+//      two producers claims a shared input first is an ORDERING question this repo has
+//      no live evidence to settle, and depth-first ordering was tried and rejected: it
+//      swings the 12203 case above back to the outcome the design intended, which the
+//      engine demonstrably did not produce. The OUTCOME is identical either way — zero
+//      real rows past the gate — so the assertions below are written on the outcome and
+//      on the mechanism, never on which sentinel won the race.
+//   2. `Build Response Merge` (15 inputs). Live it NEVER EXECUTED. Under this corrected
+//      walker every one of its 15 inputs receives a delivery and it fires, carrying only
+//      sentinel markers, which `Filter Build Response Rows` then removes — so
+//      `Build Response` still never runs and the lane still yields zero rows. The
+//      difference matters for Wave 2: it means starvation does NOT explain the live
+//      non-firing, and n8n's documented 2-10 input range is left as the leading
+//      hypothesis rather than a confounded one. See
+//      `70-WALKER-RED-INVENTORY.md` § "The 15-input observation".
+// =====================================================================================
+
+const FROZEN_ENRICHMENT = path.join(FROZEN, "wf_enrichment_cloud.2026-09-10.json");
+
+// The same neutral "nothing resolved" body `scripts/prove_phase70_runtime.py` sends into
+// the walker for this send — every identity search runs against synthetic `.invalid`
+// addresses that resolve nothing, and every provider is disabled, so every HTTP hop
+// returns nothing on BOTH sides of the comparison.
+const NEUTRAL_HTTP_BODY = {
+  results: [], data: {}, matched: false, access_token: "stub-token", id: null, properties: {},
+};
+
+function run12206() {
+  const wf = JSON.parse(fs.readFileSync(FROZEN_ENRICHMENT, "utf8"));
+  const httpStubs = {};
+  for (const n of wf.nodes) {
+    if (n.type === "n8n-nodes-base.httpRequest" || n.type === "n8n-nodes-base.hubspot") {
+      httpStubs[n.name] = Array.from({ length: 8 }, () => ({ ...NEUTRAL_HTTP_BODY }));
+    }
+  }
+  return walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ body: { run_id: null, mode: "propose", events: [
+      { objectType: "contact", email: "p70-single-a@runtime-proof.invalid", row_id: "e-single-a" },
+      { objectType: "contact", email: "p70-single-b@runtime-proof.invalid", row_id: "e-single-b" },
+    ] } }],
+    httpStubs,
+  });
+}
+
+test("execution 12206 (disarmed propose batch, enrichment lane): the walker reproduces the silent termination — a sentinel's zero-item delivery claims every Enrichment Gate Merge input, the real rows arrive after the fire, and Build Response never runs", () => {
+  const { runData, trace } = run12206();
+
+  // --- the gate Merge fired ONCE, and every input was taken by a starved-lane sentinel.
+  const gateMerge = trace.merges["Enrichment Gate Merge"];
+  assert.equal((runData["Enrichment Gate Merge"] || []).length, 1,
+    "execution 12206 observed: Enrichment Gate Merge fired exactly once");
+  const claimants = Object.values(gateMerge.sources);
+  assert.equal(claimants.length, 5,
+    "execution 12206 observed: all five Enrichment Gate Merge inputs received a delivery");
+  for (const [input, producer] of Object.entries(gateMerge.sources)) {
+    assert.match(producer, /Sentinel$/,
+      `execution 12206 observed: Enrichment Gate Merge input ${input} was claimed by a ` +
+      `starved-lane sentinel (${producer}), never by the lane's real producer`);
+  }
+
+  // --- the real rows EXIST upstream and are absent from the merged set. This is the
+  // whole defect: nothing errored, nothing stalled, the rows were simply too late.
+  assert.equal(nodeItems(runData, "Adapt Search").length, 2,
+    "execution 12206 observed: Adapt Search really did produce the two rows — they exist");
+  const mergedItems = nodeItems(runData, "Enrichment Gate Merge");
+  assert.equal(mergedItems.some((it) => it && it.row_id), false,
+    "execution 12206 observed: not one real row is in Enrichment Gate Merge's output — " +
+    "the merge had already fired on the sentinels when the real rows arrived, and a " +
+    "delivery to a fired merge is discarded");
+
+  // --- the gate contributes zero rows, and the response builder never runs.
+  assert.equal(nodeItems(runData, "Enrichment Gate").length, 0,
+    "execution 12206 observed: Enrichment Gate contributed ZERO rows downstream");
+  assert.equal((runData["Build Response"] || []).length, 0,
+    "execution 12206 observed: Build Response NEVER RAN — the response lane terminated " +
+    "silently and the execution still finished 'success'");
+  assert.equal(nodeItems(runData, "Build Response").length, 0,
+    "execution 12206 observed: 0 rows recovered against 2 rows sent (70-RUNTIME-VERDICT" +
+    ".json: recovered_row_count 0, predicted_row_count 2)");
+
+  // --- and the caller was told the batch was accepted. The ack is the only thing that
+  // answered, which is exactly why the loss was silent to the client.
+  assert.ok(trace.respond, "execution 12206 observed: the ack still fired");
+  assert.equal(trace.respond.items[0].accepted, true,
+    "execution 12206 observed: the caller was told accepted:true while every row was lost");
+  assert.deepEqual(trace.respond.items[0].row_ids, ["e-single-a", "e-single-b"],
+    "execution 12206 observed: the ack even named both rows it had already dropped");
+});

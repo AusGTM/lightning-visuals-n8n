@@ -112,15 +112,19 @@ test("merge case: the same lanes into a Merge before the Gate — the reader see
     "both rows survive, in one run, once the fan-in happens through a real Merge");
 });
 
-test("hang case: a Merge whose second configured input never delivers never fires", () => {
-  // research Pitfall 1: a Merge node with a configured input that never receives a run
-  // never fires — the walker must be able to say WHY a graph would hang live, not just
-  // that it produced no output.
+test("zero-item delivery case: a lane that RAN and emitted nothing still satisfies its " +
+  "Merge input — the Merge fires and the empty input contributes no items", () => {
+  // CHANGED by Phase 70 plan 70-09 (D-70-20). This case used to be the "hang case" and
+  // asserted that `return []` never delivers, so the Merge stalled. Execution 12203
+  // (70-UAT.md § Test 2) proved the live engine does the opposite: `Associate Lane
+  // Sentinel` returned `[]` and the runData `source` array names it as the producer that
+  // TOOK the Merge's input. The genuine hang shape — a producer that never RAN — is the
+  // case immediately below, and it is the one that still stalls.
   const graph = wf(
     [
       triggerNode("Trigger"),
       codeNode("LaneA", "return [{ json: { id: 'row-A' } }];"),
-      codeNode("LaneB", "return [];"), // no items, no alwaysOutputData -> never delivers
+      codeNode("LaneB", "return [];"), // RAN, emitted nothing -> still a delivery
       mergeNode("Merge", 2),
     ],
     {
@@ -129,7 +133,40 @@ test("hang case: a Merge whose second configured input never delivers never fire
       LaneB: { main: [[edge("Merge", 1)]] },
     }
   );
-  const { trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.deepEqual(trace.stalled, [],
+    "execution 12203: a zero-item output is a DELIVERY, so nothing stalls here");
+  assert.equal(runData.Merge.length, 1, "the Merge fired exactly once");
+  assert.deepEqual(runData.Merge[0], [{ id: "row-A" }],
+    "the empty input satisfied readiness and contributed no items of its own");
+  assert.equal(trace.merges.Merge.sources[1], "LaneB",
+    "and the empty lane is named as the producer that took input 1 — the runData " +
+    "`source` reading execution 12203 was diagnosed from");
+});
+
+test("hang case: a Merge whose second configured input never DELIVERS never fires", () => {
+  // research Pitfall 1, restated after D-70-20: the walker must still be able to say WHY
+  // a graph would hang live. The shape that hangs is now a producer that never RAN —
+  // execution 12200 (70-UAT.md § Test 1), where "HubSpot Associate Company" was fed zero
+  // items, never ran, and contributed nothing at all to its carry Merge.
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("LaneA", "return [{ json: { id: 'row-A' } }];"),
+      codeNode("Upstream", "return [];"), // ran empty -> LaneB is fed zero items
+      codeNode("LaneB", PASSTHROUGH),     // never runs, so never delivers
+      mergeNode("Merge", 2),
+    ],
+    {
+      Trigger: { main: [[edge("LaneA"), edge("Upstream")]] },
+      Upstream: { main: [[edge("LaneB")]] },
+      LaneA: { main: [[edge("Merge", 0)]] },
+      LaneB: { main: [[edge("Merge", 1)]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.equal(runData.LaneB, undefined,
+    "execution 12200: a node fed zero items does not run, and records no run entry");
   assert.equal(trace.stalled.length, 1);
   assert.equal(trace.stalled[0].node, "Merge");
   assert.deepEqual(trace.stalled[0].missingInputs, [1]);
