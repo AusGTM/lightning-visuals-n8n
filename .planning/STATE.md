@@ -501,7 +501,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-10T23:00:20Z
-**Stopped at:** Quick batch 260911-anu complete (8/8 verified passed; plugin 0.45.0 cut, not pushed). Todos: 11 -> 6 pending (3 new residuals). Next: push + marketplace refresh, then first supervised armed batch per docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md (operator go required).
+**Stopped at:** Quick batch 260911-anu complete (8/8 verified passed; plugin 0.45.0 cut, pushed, marketplace clone refreshed; SAFE-01 ticked; todo triage rules §31 live). Todos: 11 -> 6 pending (3 new residuals). Next: restart Claude Code for 0.45.0, rotate x-enrichment-secret, then first supervised armed batch per docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md (operator go required).
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
