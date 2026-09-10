@@ -1,11 +1,12 @@
 ---
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
-verified: 2026-09-10T09:30:00Z
+verified: 2026-09-10T12:15:00Z
 status: human_needed
-score: 46/46 offline-verifiable must-haves verified (28 regression-checked from round 1 + 18 round-2 plan truths, D-70-24..27); Gates 7, 8 and 9 (all live, all operator) remain outstanding
+score: 55/55 offline-verifiable must-haves verified (46 regression-checked from rounds 1+2 + 9 round-3 plan truths, D-70-28..31); Gates 10, 11 and 12 (all live, all operator) remain outstanding
 behavior_unverified: 0
 overrides_applied: 0
 covered_files:
+  - .planning/ROADMAP.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-01-PLAN.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-01-SUMMARY.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-02-PLAN.md
@@ -36,6 +37,12 @@ covered_files:
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-14-SUMMARY.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-15-PLAN.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-15-SUMMARY.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-16-PLAN.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-16-SUMMARY.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-17-PLAN.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-17-SUMMARY.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-18-PLAN.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-18-SUMMARY.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-ROLLBACK-DRYRUN.txt
@@ -43,240 +50,260 @@ covered_files:
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-RUNTIME-VERDICT.json
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-UAT.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-WALKER-RED-INVENTORY.md
+  - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/deferred-items.md
   - CHANGELOG.md
   - CLAUDE.md
   - n8n/README.md
+  - n8n/wf_backend_status_cloud.json
   - n8n/wf_contact_ingest_cloud.json
+  - n8n/wf_contact_ingest_local.json
   - n8n/wf_enrichment_cloud.json
+  - n8n/wf_enrichment_local.json
   - n8n/wf_enrichment_local_live.json
   - n8n/wf_review_decision_cloud.json
+  - n8n/wf_scheduled_maintenance_cloud.json
   - operator-claude-plugin/scripts/chunking.py
   - operator-claude-plugin/scripts/dispatch.py
   - operator-claude-plugin/scripts/watch.py
   - operator-claude-plugin/scripts/written_records.py
+  - operator-claude-plugin/tests/test_control_allowlist_diff.py
   - operator-claude-plugin/tests/test_scale_up_retired.py
+  - scripts/bounce_n8n_workflows.py
   - scripts/build_cloud_workflows.py
   - scripts/prove_phase70_runtime.py
   - tests/n8n/buildResponseMarkerFilter.test.mjs
   - tests/n8n/enrichmentBatchRefusal.test.mjs
+  - tests/n8n/executionOrderV1.test.mjs
   - tests/n8n/fixtures/frozen/README.md
   - tests/n8n/lib/walkWorkflow.mjs
   - tests/n8n/mergeInputContract.test.mjs
   - tests/n8n/scaleUpRefused.test.mjs
   - tests/n8n/sj3DispatchGate.test.mjs
+  - tests/n8n/walkWorkflow.test.mjs
   - tests/n8n/walkerEngineFidelity.test.mjs
+  - tests/test_bounce_n8n_workflows.py
+  - tests/test_deploy_n8n_workflows.py
   - tests/test_merge_helpers.py
+  - tests/test_prove_phase70_runtime.py
   - tests/test_subworkflow_ref_rebinding.py
-covered_digest: "v1:sha256:186930e9da7851dac495a080cb161015c74610937f067fab83fc9c89a83cbd62"
+covered_digest: "v1:sha256:0ddc1b3b0fd465e98a8d2c4bfcbb5060e09805196668d6263af48943972c82e9"
 re_verification:
   previous_status: human_needed
-  previous_score: "28/28 offline-verifiable must-haves verified (gap-closure plans 70-08..70-12); 2 live proof gates remained (Gate 5, Gate 6); Gate 4 recorded but not exercised"
+  previous_score: "46/46 offline-verifiable must-haves verified (28 regression-checked from round 1 + 18 round-2 plan truths, D-70-24..27); Gates 7, 8 and 9 (all live, all operator) remained outstanding"
   gaps_closed:
-    - "G-70-5 (blocker) — offline half closed by D-70-24/25/26 (plans 70-13/70-14): the self-referencing `Dispatch Self`/`Build Scale Up Fan-Out`/`IF Scale Up Route`/`Build Scale Up Ack` lane is DELETED from `n8n/wf_enrichment_cloud.json` (291 -> 287 nodes, 1 -> 0 executeWorkflow nodes), a `scale_up: true` request (envelope or event) is REFUSED as a row before any dispatch, `assert_no_self_dispatch` makes any future self-referencing executeWorkflow node a generation-time refusal (RED commit 97e254e precedes GREEN 54d43e9), a shared positive row-identity filter (`hasRowIdentity`/`ROW_IDENTITY_KEYS_JS`, one definition, spliced into both `Build Response` and `Build Ingest Response`) drops any marker item before either response builder projects a row (RED commit fa19a23 precedes GREEN 04ca411), and execution 12316's three unconnected-source node runs are pinned as a documented, unmodelled divergence in `tests/n8n/walkerEngineFidelity.test.mjs` (the walker itself confirmed byte-identical since the commit that closed 70-13)."
+    - "G-70-6 (blocker) — offline half closed by D-70-28/29/30 (plans 70-16/70-17): every one of the eight committed n8n/wf_*.json bodies now carries settings.executionOrder = \"v1\" from one shared generator constant (WORKFLOW_SETTINGS), with a generation-time refusal (assert_execution_order_v1) that stops a future non-v1 body from being written; the regeneration diff is exactly 8 files at +3/-1 each with node counts unchanged (287/69/55/43/30 cloud, 82/10/13 local — independently confirmed); walkWorkflow.mjs now refuses a non-v1 graph unless the caller passes allowLegacy, confined to exactly one file (walkerEngineFidelity.test.mjs, its three frozen-fixture cases only) and documents per-rule which v1 behaviour it models, does not model, and leaves unobserved; both live-write paths that could revert the setting (deploy PUT/POST, the plugin's arming PUT) are pinned value-level to preserve it and refuse a reversion; the bounce read-back and the proof driver's new execution_order_all_v1 verdict field both fail loudly on a live non-v1 reading. This closes the OFFLINE half only — no claim about v1 has been observed live; Gates 10/11/12 are the live observation."
   gaps_remaining:
-    - "Gate 7 (disarmed deploy + bounce of the loop-free 287-node body, then the two-minute mode:integrated burst watch, nothing sent) — not yet run; live enrichment lane is still the pre-Phase-70 59812be body (123 nodes) restored as the 2026-09-10 incident stop"
-    - "Gate 8 (D-70-19 disarmed live proof re-run on the loop-free graph, all four sends required shapes_equal:true, plus the new runData-source-vs-declared-connections check) — gated behind Gate 7; not run. Gate 5's prior attempt PASSED only the two ingest sends (12293/12309) against the round-1 ingest body, which predates the D-70-25 marker-filter jsCode change, so it does not stand in for Gate 8 on either lane"
-    - "Gate 9 (armed mixed-verdict re-run, formerly Gate 6, re-pointed at the graph Gate 7 deploys and Gate 8 proves) — gated behind Gate 8; not run"
+    - "Gate 10 (disarmed deploy + bounce of the v1 bodies, then the two-minute mode:integrated burst watch, nothing sent) — not yet run; live enrichment lane (and all five cloud workflows) is still the pre-Phase-70 59812be bundle restored during the Gate 8 incident stop"
+    - "Gate 11 (the D-70-19 disarmed live proof re-run under v1, all four sends required shapes_equal:true AND execution_order_all_v1:true, plus the runData-source-vs-declared-connections check) — gated behind Gate 10; not run. This is the live observation that actually settles whether the v1 flip explains Gate 8's symptoms; a null/non-v1 live reading, or a persisting legacy symptom even with v1 confirmed, is an explicit STOP-and-report condition per Gate 11's own text — not a pass to be forced"
+    - "Gate 12 (armed mixed-verdict re-run, formerly Gate 9, formerly Gate 6, re-pointed at the graph Gate 10 deploys and Gate 11 proves) — gated behind Gate 11; not run"
   regressions: []
 gaps: []
 deferred: []
 advisory:
-  - finding: "An armed enrichment write row (`HubSpot Update`/`HubSpot Create`'s raw HTTP response, `{id, properties}`) reaches `Build Response Merge` with no carry-merge reattachment of `row_id`/`action` — `id` had to be added to `ROW_IDENTITY_KEYS` in this round specifically because that bare shape was the only identity such a row carries (70-14-SUMMARY.md deviation 2)."
+  - finding: "An armed enrichment write row (`HubSpot Update`/`HubSpot Create`'s raw HTTP response, `{id, properties}`) reaches `Build Response Merge` with no carry-merge reattachment of `row_id`/`action` — `id` had to be added to `ROW_IDENTITY_KEYS` in gap-closure round 2 specifically because that bare shape was the only identity such a row carries (70-14-SUMMARY.md deviation 2)."
     category: architectural
-    reason: "This is pre-existing (round 1's graph already shipped this shape; round 2 only discovered and preserved it while building the marker filter), not a regression introduced by plans 70-13/14/15, and no deferred gate (7/8/9) exercises an armed enrichment write to observe it live — Gate 9 arms the ingest lane only. Worth a future phase's attention against the phase goal's own text (\"every row once, from the write that happened\") and D-70-04's carry-Merge-at-every-hop rule, but no deterministic evidence of it causing a live miss exists in this round's scope."
-    evidence_status: "none provided beyond the pre-existing test shape (enrichmentMixedBatch.test.mjs asserts row count and the write node's own outcome, not a reattached row_id/action on the armed path)"
+    reason: "Carried forward unchanged from the round-2 verification. Round 3 (plans 70-16/17/18) is scoped entirely to G-70-6 (the execution-order flip) and touched no code on this path — grep for ROW_IDENTITY_KEYS and Build Response Merge in this round's diffs (git show --stat on 96d5ee4/b15be01/26b3b83/4c98669/0e8416d/7550cbc/317759e/6ac57f7/08ce454) found no reference. No deferred gate (10/11/12) exercises an armed enrichment write to observe it live — Gate 12 arms the ingest lane only, same as its predecessor Gate 9/6. Still worth a future phase's attention against the phase goal's own text (\"every row once, from the write that happened\") and D-70-04's carry-Merge-at-every-hop rule; still no deterministic evidence of it causing a live miss."
+    evidence_status: "none provided beyond the pre-existing test shape (enrichmentMixedBatch.test.mjs asserts row count and the write node's own outcome, not a reattached row_id/action on the armed path) — unchanged since round 2"
 behavior_unverified_items: []
 human_verification:
-  - test: "Gate 7 — disarmed deploy + bounce of the current committed loop-free enrichment body (287 nodes, zero executeWorkflow), then the two-minute mode:integrated burst watch (70-ROLLBACK-RUNBOOK.md Step 6) with nothing sent. Steps in 70-DEFERRED-GATES.md § Gate 7."
-    expected: "All five workflows read active=true; live node counts read exactly 287/69/55/43/30 matching the committed JSON; both write flags read \"false\" everywhere either is declared; the two-minute watch shows ZERO new execution ids, in particular none with mode:integrated."
-    why_human: "Requires a live deploy + bounce against n8n Cloud and a real-time watch of the executions list; this is exactly the step the 2026-09-10 runaway (135 child executions, 12211-12348) proved cannot be assumed safe from a green offline suite alone — the phase's own thesis is that the live engine, not the offline model, is the source of truth for this class of failure."
-  - test: "Gate 8 — disarmed live re-proof on the loop-free graph (D-70-19 proof re-run), only after Gate 7 passes: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` (same four sends as Gates 3/5), PLUS the new runData-source-vs-declared-connections check on each of the four executions (the exact detector for the mechanism execution 12316 exhibited). Steps in 70-DEFERRED-GATES.md § Gate 8."
-    expected: "70-RUNTIME-VERDICT.json records shapes_equal:true on ALL FOUR sends (Gate 5 passed only the two ingest sends); every recovered row on the enrichment lane carries a non-null row_id matching its input row — an empty or marker-shaped recovery is a FAILURE of this gate even if the row count looks right, per Gate 8's own stated caveat that Gate 5 recovered zero enrichment rows with a row_id at all; all four primary executions settled:true; the connections check finds no node whose runData source names a node its own workflow's connections map does not declare; writes_performed:0; live settings.executionOrder recorded again."
-    why_human: "This is the live proof that the offline harness's GREEN (1075/1075 node tests, 4700/4700 pytest, 2864/2864 plugin tests, all confirmed in this verification) actually agrees with the real n8n engine on the regenerated graph — no committed workflow carrying the current Merge/gate redesign has ever completed this proof; Gate 5's own attempt is what surfaced G-70-5 in the first place."
-  - test: "Gate 9 — the armed mixed-verdict re-run (formerly Gate 6, superseded), only after Gate 8 passes: one contact permitted, one refused, resolving the same company, in one ingest batch. Steps in 70-DEFERRED-GATES.md § Gate 6 (referenced, not restated, by § Gate 9)."
-    expected: "Build Ingest Response returns exactly 2 rows; the permitted row reports action:update, association:associated; the refused row reports action:write_blocked; execution settled; HubSpot shows exactly one contact updated and one association created, the other contact untouched; disarm afterward and read all three declaring nodes (HubSpot Update Write Gate, HubSpot Create Write Gate, Associate Lane Sentinel — independently confirmed in this verification to be the exact three nodes `n8n_arming.set_write_safety` rewrites on the committed ingest JSON) back at their disarmed literals."
-    why_human: "This is the one armed HubSpot write this phase's close makes; it must never run against a graph that has not itself been proven both non-self-dispatching (Gate 7) and disarmed-correct (Gate 8) — the ordering rule in 70-DEFERRED-GATES.md is absolute and the operator alone opens the armed window."
-    followability_check: "70-15's Task 3 also asked a human to confirm Gates 7/8/9 are followable as written (exact commands/files named, unambiguous pass conditions, no step asking to arm before Gate 8 passes) — folded into the three items above rather than listed separately; reading the gates in this verification session found the same (steps name exact scripts, env vars and pass/fail conditions throughout)."
+  - test: "Gate 10 — disarmed deploy + bounce of the current committed v1 bodies (287/69/55/43/30 cloud node counts, unchanged by the flip), then the two-minute mode:integrated burst watch (70-ROLLBACK-RUNBOOK.md Step 6) with nothing sent. Steps in 70-DEFERRED-GATES.md § Gate 10."
+    expected: "All five workflows read active=true; live node counts read exactly 287/69/55/43/30 matching the committed JSON; live settings.executionOrder reads \"v1\" on all five (a null/absent reading is a failure of this gate — the flip did not survive the deploy); both write flags read \"false\" everywhere either is declared; the two-minute watch shows ZERO new execution ids, in particular none with mode:integrated."
+    why_human: "Requires a live deploy + bounce against n8n Cloud and a real-time watch of the executions list. The live instance is still running the pre-Phase-70 59812be bundle (123-node enrichment body, no v1 setting, no Merge/gate redesign at all) — this repo's own architecture generation behind what is committed. This gate is the first live exposure of the v1-flip regeneration, and the phase's standing thesis (the live engine, not the offline model, is the source of truth for this class of failure) applies to it exactly as it did to Gate 7."
+  - test: "Gate 11 — the D-70-19 disarmed live proof re-run under v1, only after Gate 10 passes: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` (same four sends as Gates 3/5/8), PLUS the runData-source-vs-declared-connections check on each of the four executions (the detector execution 12316 required). Steps in 70-DEFERRED-GATES.md § Gate 11."
+    expected: "70-RUNTIME-VERDICT.json records shapes_equal:true AND execution_order_all_v1:true on ALL FOUR sends — a null or non-\"v1\" execution-order reading is a FAILURE of this gate, the exact inverse of Gate 8's expectation; every recovered row on the enrichment lane carries a non-null row_id matching its input row; all four primary executions settled:true; the connections check finds no node whose runData source names a node its own workflow's connections map does not declare; writes_performed:0; live settings.executionOrder recorded per workflow. If the Gate 8 symptoms (HubSpot Update firing on an empty lane, a doubly-fired Merge, etc.) persist even with execution_order_all_v1:true confirmed, Gate 11's own text requires the operator to STOP and report rather than adjust the walker or the driver to match."
+    why_human: "This is the live observation that actually tests this round's central hypothesis — that the missing executionOrder setting, not a walker-modelling gap, explains every Gate 8 symptom. No committed workflow carrying the v1 flip has ever been observed live; every v1 claim in CLAUDE.md §13.0.3 is tagged [documented] and stays that way until this gate runs."
+    followability_check: "70-18's Task 3 asked whether Gates 10/11/12 are followable as written (exact commands/files named, unambiguous pass conditions, explicit stop-and-report language on a legacy-symptom-persists-under-v1 outcome, no step asking to arm before Gate 11 passes) — confirmed independently in this verification session: 70-DEFERRED-GATES.md §Gate 10/11/12 name exact scripts, env vars, and pass/fail conditions throughout, and Gate 11 explicitly states a null/non-v1 reading and a persisting-symptom-under-confirmed-v1 outcome are both STOP conditions, not silent passes."
+  - test: "Gate 12 — the armed mixed-verdict re-run (formerly Gate 9, formerly Gate 6), only after Gate 11 passes: one contact permitted, one refused, resolving the same company, in one ingest batch, against the v1 graph. Steps in 70-DEFERRED-GATES.md § Gate 12 (points at Gate 6's steps with named substitutions)."
+    expected: "Build Ingest Response returns exactly 2 rows; the permitted row reports action:update, association:associated; the refused row reports action:write_blocked; execution settled; HubSpot shows exactly one contact updated and one association created, the other contact untouched; disarm afterward and read all three declaring nodes (HubSpot Update Write Gate, HubSpot Create Write Gate, Associate Lane Sentinel) back at their disarmed literals."
+    why_human: "This is the one armed HubSpot write this phase's close makes; it must never run against a graph that has not itself been proven non-self-dispatching, on the v1 order, and disarmed-correct (Gates 10 and 11) — the ordering rule in 70-DEFERRED-GATES.md is absolute and the operator alone opens the armed window."
 ---
 
-# Phase 70: One merge, one result channel — n8n runtime truth (Gap-Closure Round 2 Verification)
+# Phase 70: One merge, one result channel — n8n runtime truth (Gap-Closure Round 3 Verification)
 
 **Phase Goal:** a batch with two identity lanes and two actions returns every row once, from
 the write that happened, on one client result channel — and the offline harness would have
 caught every finding the 2026-09-09 UAT found.
 
-**Verified:** 2026-09-10T09:30:00Z
+**Verified:** 2026-09-10T12:15:00Z
 **Status:** human_needed
-**Re-verification:** Yes — gap-closure round 2, after Gate 5 found gap G-70-5 (blocker) on
-2026-09-10.
+**Re-verification:** Yes — gap-closure round 3, after Gate 8 found G-70-6 (blocker) on
+2026-09-10 (executions 12349-12353): `HubSpot Update` executed on an empty lane and PATCHed an
+empty id, `IF List Expanded` emitted a refusal on an empty list lane, gated sentinels delivered
+markers on inputs whose sentinel emitted zero items, and `Enrichment Gate Merge` fired twice and
+dropped every real row.
 
 ## Context
 
-Round 1's verification (`e4e95f0`, committed content) recorded `human_needed`, 28/28
-offline-verifiable must-haves, with Gates 5 and 6 outstanding. The operator ran Gate 4/5's
-deploy: the gap-closure JSON (then 291 nodes on the enrichment lane) went live disarmed, and
-within a minute of the first proof send it began self-dispatching — 135 child `Execute Workflow`
-executions in six minutes (`12211`-`12348`), stopped by deactivating the workflow and restoring
-the pre-Phase-70 `59812be` body. This is gap `G-70-5`, recorded as `failed`/blocker in
-`70-UAT.md`. Operator ruling `D-70-24`..`D-70-27` (`70-CONTEXT.md`) directed three gap-closure
-plans, executed 2026-09-10: 70-13 (delete the fan-out, refuse the request, generation-time
-refusal for any future self-dispatching node, retire the client's ability to ask), 70-14 (marker
-filter at both response builders, freeze execution 12316 as a documented walker divergence), and
-70-15 (record the retirement and the platform facts, make the burst watch standing, write
-Gates 7/8/9).
-
-This verification re-checks every offline claim in plans 70-13/14/15 against the actual
-committed code and JSON — not the SUMMARYs' narration of it — and regression-checks round 1's
-28 must-haves are still true. It does not run anything live: Gates 7, 8 and 9 are unexercised,
-exactly as `D-70-27`'s standing ruling (back-load blocking-human live gates to end-of-phase UAT)
-requires.
+Round 2's verification (`46/46` offline-verifiable must-haves, `human_needed`, Gates 7/8/9
+outstanding) is superseded by this round. The operator ran Gate 7 (passed) and Gate 8 (failed,
+G-70-6) on 2026-09-10, then rolled all five live cloud workflows back to the pre-Phase-70
+`59812be` bundle. G-70-6's root cause, per the operator's own decisions (D-70-28..31,
+`70-CONTEXT.md` § "Gap-closure round 3 decisions"): every live n8n body was running with
+`settings.executionOrder` ABSENT, which defaults to n8n's legacy execution order — a mode that
+pushes a single empty item onto every node fed an empty branch so a waiting multi-input node can
+still fire. This single documented mechanism explains every Gate 8 symptom. Plans 70-16 (flip
+every generated body to v1, refuse a non-v1 body at generation time, stop the walker from
+silently modelling a legacy mode it was never proven to model correctly), 70-17 (pin both
+live-write paths so neither a deploy nor an arming PUT can revert the setting, and make the
+bounce read-back and the proof driver's verdict fail loudly on a live non-v1 reading), and 70-18
+(record the engine rule with source citations in CLAUDE.md, correct the stale post-runaway
+live-state table, and write up Gates 10/11/12) close the OFFLINE half of G-70-6. No claim about
+v1 execution order has been observed live; that is exactly what Gate 11 exists to do.
 
 ## Goal Achievement
 
-### Observable Truths (round-2 plan truths, D-70-24..27)
+### Observable Truths — Round 3 (plans 70-16/17/18, D-70-28..31)
 
 | # | Truth | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | D-70-24: no committed n8n workflow contains a self-referencing Execute Workflow node | ✓ VERIFIED | `grep -c '"n8n-nodes-base.executeWorkflow"' n8n/wf_enrichment_cloud.json` = 0 (287 nodes total, down from 291); `n8n/wf_scheduled_maintenance_cloud.json` = 1 (SJ-3, targets a different workflow); all other six workflows = 0. Verified by direct node-count script, not by grepping node names. |
-| 2 | A request carrying `scale_up: true` (envelope or event) is refused as a row, never fanned | ✓ VERIFIED | `ENRICH_PARSE_EVENT_CLOUD` (build_cloud_workflows.py:5286-5297) reads `ENVELOPE_SCALE_UP`/`ANY_EVENT_SCALE_UP` and returns a refusal item BEFORE the oversize/empty checks; `tests/n8n/scaleUpRefused.test.mjs` and `tests/n8n/enrichmentBatchRefusal.test.mjs` both green (node --test run, 1075/1075 pass overall). |
-| 3 | The five pre-fork starved-lane sentinels are re-sourced from `Parse HubSpot Event`, no sentinel condition still reads `scale_up` | ✓ VERIFIED | `grep -n scale_up scripts/build_cloud_workflows.py` shows only the refusal-read block and two historical comments; no sentinel condition body reads it. `tests/n8n/scaleUpRefused.test.mjs`'s "the five pre-fork sentinels are fed from Parse HubSpot Event" case passes. |
-| 4 | D-70-26(a): a self-referencing executeWorkflow node in any built workflow stops generation with a named error | ✓ VERIFIED | `assert_no_self_dispatch` (build_cloud_workflows.py:11286) composed into `_assert_generation_contracts` as the third, outermost contract; default-refuse with one `(workflow, node)`-keyed exemption (`_SELF_DISPATCH_EXEMPTIONS`, keyed on the pair, never node name alone); self-reference check runs BEFORE the exemption is consulted (read directly in the source, matches plan text exactly). RED commit `97e254e` precedes GREEN commit `54d43e9` (confirmed in `git log`). |
-| 5 | SJ-3's cross-workflow dispatch still builds, still rebinds at deploy time, and is the ONE named exemption | ✓ VERIFIED | `_SELF_DISPATCH_EXEMPTIONS = frozenset({("wf_scheduled_maintenance_cloud", "SJ-3 Dispatch To Enrichment")})`; `wf_scheduled_maintenance_cloud.json` still carries exactly 1 executeWorkflow node; `tests/test_subworkflow_ref_rebinding.py` green. |
-| 6 | The plugin can no longer ask for a fan-out: `dispatch_plan` has no `scale_up` parameter, never stamps one on an envelope | ✓ VERIFIED | `dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None, execution_ceiling=None, **_ignored_legacy_kwargs)` (chunking.py:402) — no `scale_up` keyword; a caller still passing it is swallowed by `_ignored_legacy_kwargs`. `grep -rn scale_up operator-claude-plugin/scripts/` returns nothing. |
-| 7 | No recovery path in the plugin reads a node that no longer exists | ✓ VERIFIED | `grep -n 'Dispatch Self\|SCALE_UP_DISPATCH_NODE\|child_execution_ids\|include_children' operator-claude-plugin/scripts/*.py` returns nothing; `test_report_sufficiency.py` (single-poll-site invariant) unchanged and green. |
-| 8 | D-70-25: a marker item is dropped by both `Build Response` and `Build Ingest Response` before either emits | ✓ VERIFIED | `ROW_IDENTITY_KEYS_JS`/`hasRowIdentity` defined ONCE (build_cloud_workflows.py:86-87), spliced into both `BUILD_INGEST_RESPONSE` (line 596) and `ENRICH_BUILD_RESPONSE` (line 5685) — one shared definition, not two hand-copied lists, confirmed by direct grep. `tests/n8n/buildResponseMarkerFilter.test.mjs`'s fixtures traced to `70-RUNTIME-VERDICT.json`'s actual `sends[0].recovered_shapes` (cross-checked directly against the JSON in this verification, not invented) and `exec_12316.runData.json`'s `object_id: null` — not fabricated. |
-| 9 | The drop is pinned by a test built from Gate 5's actual recovered shape, seen RED first | ✓ VERIFIED | RED commit `fa19a23` precedes GREEN commit `04ca411` (git log confirmed); SUMMARY's stated RED transcript (2 items returned, marker survived, before the fix) is consistent with the recorded `recovered_shapes[0]` key set independently re-read from `70-RUNTIME-VERDICT.json` in this verification. |
-| 10 | A request-level refusal row still reaches the caller (outcome-only identity) | ✓ VERIFIED | `ROW_IDENTITY_KEYS = ["row_id", "action", "outcome", "object_id", "hs_object_id", "id"]` includes `outcome`; `REFUSAL_ROW` fixture (outcome-only, no action/row_id/object_id) is asserted as a survival case in `buildResponseMarkerFilter.test.mjs`, passing. |
-| 11 | D-70-26(b): the walker's engine-fidelity suite carries a frozen reproduction of execution 12316 recording a documented divergence | ✓ VERIFIED | `tests/n8n/walkerEngineFidelity.test.mjs` (5 tests, all pass): frozen body verified 291 nodes/empty settings/zero credentials (re-verified directly in this session, NOT regenerated); runData sidecar verified to name exactly 3 unconnected-source nodes (`Build Scale Up Fan-Out`, `Dispatch Self`, `Recompute Requested Sentinel Gate` — re-derived directly from the sidecar JSON in this session, matches). |
-| 12 | That divergence case is a prohibition guard — fails if the walker ever starts reproducing any of the three | ✓ VERIFIED | Test title: "the walker does NOT reproduce the three unconnected-source runs — a prohibition guard, not a model"; asserts absence, not presence. `tests/n8n/lib/walkWorkflow.mjs` confirmed byte-identical to the commit that closed plan 70-13 (`git diff --quiet 51e9722..HEAD -- tests/n8n/lib/walkWorkflow.mjs` — clean, re-run in this session). |
-| 13 | CLAUDE.md records the retirement, the execution ids, and the corrected flag count | ✓ VERIFIED | §13.0.2 line 2409: `scale_up` row marked "RETIRED 2026-09-10 (executions 12211-12348)"; heading corrected to "TWO, not three"; node-count table shows 291→287; the four-of-nine deleted nodes named explicitly. `grep -q 12316/12348/'observed live'` all present. |
-| 14 | §13.0.3 gains three observed-live platform-fact rows, each with execution ids, no Merge row upgraded | ✓ VERIFIED | Three new rows read directly (deactivation drain lag/tail-errors, `12346`-`12348`; unconnected-source run, `12316`, "cause NOT isolated" stated verbatim; runaway scale, `12209`-`12348`). Line "No Merge-behaviour row above was touched by this round." present immediately after the table. |
-| 15 | The deployment-parity note states the current MIXED five-workflow live state | ✓ VERIFIED | Table read directly: enrichment lane live = pre-Phase-70 `59812be` (123 nodes), other four = gap-closure round-1 JSON (69/55/43/30); "Nothing is armed anywhere in this chain" stated explicitly. |
-| 16 | The rollback runbook carries a standing two-minute burst watch before every send | ✓ VERIFIED | `70-ROLLBACK-RUNBOOK.md` § Step 6 "watch for a burst BEFORE any send (mandatory, every deploy in this repo)"; names `mode: integrated`, cites `12211`-`12348`, gives the deactivate-then-PUT stop procedure with the observed ~30s drain lag. |
-| 17 | Gates 7, 8, 9 recorded in the same shape as Gates 1-6, in order, Gate 6 marked superseded | ✓ VERIFIED | `70-DEFERRED-GATES.md` § Gate 6 header reads "— SUPERSEDED"; §§ Gate 7/8/9 present in order, each with what-it-proves / risk-accepted / operator-steps / pass-criteria shape; Gate 9 references Gate 6's steps with two named substitutions rather than duplicating them (read directly, confirmed). Single ordering rule ("7 before 8, 8 before 9, nothing armed until 8 passes") appears once, covers all three. |
-| 18 | Gate 8's text states Gate 5 recovered zero real (row-id-bearing) rows on the enrichment lane | ✓ VERIFIED | § Gate 8 states verbatim: "every recovered row on the enrichment lane had `row_id: null`"; "A marker-free but EMPTY result on this lane is still a FAILURE of this gate, not progress toward passing it." |
+| 1 | Every one of the eight committed `n8n/wf_*.json` bodies carries `settings.executionOrder = "v1"` | ✓ VERIFIED | Independently read all 8 files with `python3 -c "json.load(...)['settings']['executionOrder']"` — all report `v1`. |
+| 2 | The value comes from ONE shared module-level constant, used at all eight emission sites; no per-workflow settings decision | ✓ VERIFIED | `WORKFLOW_SETTINGS = {"executionOrder": "v1"}` at `scripts/build_cloud_workflows.py:85` (only definition); `dict(WORKFLOW_SETTINGS)` used exactly 8 times (`grep -c`). |
+| 3 | Generation REFUSES to write a body whose `settings.executionOrder` is not `v1` | ✓ VERIFIED | `assert_execution_order_v1` defined at line 11376, invoked in `_assert_generation_contracts`; SUMMARY records a reverted in-session demonstration of the refusal firing on a forced-bad value (not independently re-run, but the function's presence and composition point confirmed by grep). |
+| 4 | Regeneration diff is settings-only: exactly 8 files, each +3/-1; node counts unchanged (287/69/55/43/30 cloud, 82/10/13 local) | ✓ VERIFIED | `git show --numstat b15be01 -- n8n/` — exactly 8 files, all `3\t1`; independently counted nodes in all 8 live files, matches exactly. |
+| 5 | `walkWorkflow` REFUSES a non-v1 graph unless the caller passes `allowLegacy` | ✓ VERIFIED | `tests/n8n/lib/walkWorkflow.mjs` lines 352-362: order computed from `settings.executionOrder`, throws naming D-70-30 unless `allowLegacy` is set. |
+| 6 | `walkerEngineFidelity.test.mjs` is the ONLY caller passing `allowLegacy`, confined to its three frozen-fixture cases (recorded legacy-engine divergences from executions 12203/12206/12316), not a legacy model | ✓ VERIFIED | `grep -rl allowLegacy tests/n8n/*.test.mjs` returns exactly one file; that file's header and comments (independently read) frame the fixtures as frozen legacy-engine divergences, not a walker capability. |
+| 7 | The walker's own comments state, per rule, which v1 rule is modelled / not modelled / unobserved, citing D-70-30 | ✓ VERIFIED | Comment blocks at lines 401-423 (rule c, unobserved), 529-543 (rule a, modelled), 574-581 (rule b, not modelled) all present and cite D-70-30; matches the plan's "Interpretation note" in 70-16-PLAN.md exactly (implements only rule (a), which the walker already modelled). |
+| 8 | The walker's Merge firing semantics are unchanged; only the dequeue direction differs between v1/legacy branches | ✓ VERIFIED (coincidental-reliance not applicable — read directly) | SUMMARY documents 3 re-derived `walkWorkflow.test.mjs` assertions, all attributed to FIFO-shift-vs-LIFO-pop dequeue order, none to a semantic change in Merge firing rules; independently confirmed the walker's Merge-firing predicate code (first-delivery-wins, fires-at-most-once) is not among the diff hunks the SUMMARY lists as touched. |
+| 9 | The whole offline harness is green at the end of round 3 (node suite, python suite, plugin suite) | ✓ VERIFIED | Independently re-ran all three: `node --test tests/n8n/*.test.mjs` → 1078 pass, 0 fail; `.venv/bin/python -m pytest -q --tb=short` → 4721 passed, 154 skipped; `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` → 2866 passed, 5 skipped. |
+| 10 | D-70-29: the deploy PUT payload carries the workflow's settings, and v1 survives the whole bind/rebind/flag-overlay pipeline intact — pinned by a test | ✓ VERIFIED | `tests/test_deploy_n8n_workflows.py` contains the 4 named pins (`test_update_put_payload_carries_settings_value_intact`, `test_create_post_payload_carries_settings_value_intact`, `test_settings_survive_rebind_bind_and_baked_flag_transforms`); full pytest run (4721 passed) includes this file with no failures. |
+| 11 | D-70-29: `put_body` forwards settings intact; a PUT whose settings differ from the live original is REFUSED | ✓ VERIFIED | `operator-claude-plugin/tests/test_control_allowlist_diff.py` contains `test_put_body_value_level_round_trip_preserves_settings_object` and `test_reverting_settings_to_legacy_shape_is_refused_naming_settings_key`; plugin suite (2866 passed) includes this file, 0 failures. |
+| 12 | D-70-29: the bounce script's read-back reports each live workflow's execution order and FAILS the run on any non-v1 reading | ✓ VERIFIED | `_row_ok` extracted at `scripts/bounce_n8n_workflows.py:57`, used at line 89; `tests/test_bounce_n8n_workflows.py` exists with 9 cases, all passing in the full run. |
+| 13 | D-70-29: the proof driver's verdict `answer` is false when any live workflow's execution order reads anything but v1, including null | ✓ VERIFIED | `execution_order_all_v1` present in `scripts/prove_phase70_runtime.py` (folded into `answer` per lines 375-394); `tests/test_prove_phase70_runtime.py` has 6 direct `build_verdict`/exit-code cases, all passing. |
+| 14 | Nothing in round 3 deploys, bounces, arms, or sends anything live | ✓ VERIFIED | All three SUMMARYs state no live action; independently confirmed CLAUDE.md's corrected §13.0.2 states the live instance is still the pre-Phase-70 `59812be` bundle on all five workflows, nothing armed; `.env` is permission-blocked so no live credential path was available to any executor. |
+| 15 | CLAUDE.md §13.0.3 gains two `[documented]` rows (legacy `addEmptyItem` push, v1 `requiredInputs` contract) citing source file/symbol, never tagged observed | ✓ VERIFIED | Both rows present at lines 2696-2697, each ending `[documented]` with a named source file/symbol, no v1 claim tagged `[observed live]` anywhere in the file (checked by grep for `[observed live]` co-occurring with `v1`/`execution order` — zero hits). |
+| 16 | CLAUDE.md §13.0.3 gains an `[observed live]` row for Gate 8 (executions 12349-12353); the two pre-existing Merge rows are annotated legacy-order-only, not deleted | ✓ VERIFIED | Gate 8 row present at line 2698 tagged `[observed live]` citing 12349-12353; the two pre-existing Merge rows (lines 2699-2700) both carry "Observed under the LEGACY execution order only" annotations, both still present with their original execution ids (12203/12206) intact. |
+| 17 | CLAUDE.md §13.0.2 states the corrected live state: all five workflows on `59812be`, disarmed; committed JSON ahead by all of Phase 70 plus the v1 flip; node counts unchanged by the flip; nothing armed | ✓ VERIFIED | Table at lines 2646-2656 shows all five workflows at their `59812be` node counts (17/29/123/26/39) vs. committed (30/69/287/55/43) all "+v1"; paragraph at 2667-2676 states rollback to `59812be` on all five, Gate 10 pending, nothing armed. |
+| 18 | Gates 10, 11, 12 exist in the Gate 7/8/9 shape with explicit preconditions, numbered steps, pass criteria, resume signal | ✓ VERIFIED | `## Gate 10`, `## Gate 11`, `## Gate 12` headings present in `70-DEFERRED-GATES.md`; read in full — each has numbered steps, an explicit pass-criteria list, and (for 10/11) an explicit resume-to-next-gate instruction. |
+| 19 | Gate 11's pass criteria require `live_settings_execution_order` = v1 on every workflow (a null reading is a FAILURE, the exact inverse of Gate 8), retains Gate 8's runData-source-vs-declared-connections check | ✓ VERIFIED | Read Gate 11's full text: "A `null` or absent reading is a FAILURE of this gate — the exact opposite of Gate 8"; the connections check is present verbatim (§13.0.3's unresolved-mechanism row citation retained). |
+| 20 | Gate 11 carries explicit STOP-and-report instruction if legacy symptoms persist under confirmed v1 | ✓ VERIFIED | Read verbatim: "If the legacy symptoms persist under v1 ... STOP and report. Do not adjust the walker or the driver to match." |
+| 21 | Gate 9 marked SUPERSEDED by Gate 12; Gates 7 and 8 left in the record as run/failed respectively | ✓ VERIFIED | Line 585 heading: "Gate 9 ... SUPERSEDED"; line 587: "SUPERSEDED by Gate 12"; Gate 7/Gate 8 headings (lines 431, 499) and bodies unchanged/untouched by this round's diff. |
+| 22 | The rollback runbook's read-back reports execution order alongside node count and write flags | ✓ VERIFIED | `grep -ci 'executionOrder\|execution order' 70-ROLLBACK-RUNBOOK.md` → 2. |
+| 23 | ROADMAP's Phase 70 plan list names 70-16/17/18 under a round-3 gap-closure heading; 70-UAT.md records what closed offline vs. remains live | ✓ VERIFIED | `.planning/ROADMAP.md` line 343: "Gap closure, round 3 ... G-70-6 blocker; D-70-28/29/30/31"; lines 345-347 name all three plans with `[x]`; `70-UAT.md`'s `offline_closure` field (line 332) present and describes D-70-28/29/30 precisely. |
 
-**Score:** 18/18 round-2 plan truths verified directly against code, JSON, git history and the
-recorded verdict/runData — none accepted on SUMMARY narration alone.
+**Score:** 23/23 round-3-specific truths verified (0 present-behavior-unverified). Combined with
+round 1 + round 2's 46 regression-checked truths (re-verified at a lighter existence+wiring
+level below): **55/55 offline-verifiable must-haves verified.**
 
-### Round-1 Regression Check (28 prior must-haves)
+### Regression Check — Rounds 1 + 2 (46 previously-verified truths)
 
-Round 1's 28 offline-verifiable must-haves (plans 70-01..70-12, D-70-01..23) were re-checked at
-existence + basic sanity per the re-verification optimization (passed items get a quick
-regression check, not a full re-derivation):
-
-- Full offline suites still green: `node --test tests/n8n/*.test.mjs` **1075/1075 pass** (up
-  from round 1's baseline of 1063, reflecting round 2's new `scaleUpRefused.test.mjs`,
-  `buildResponseMarkerFilter.test.mjs` and the 3 new `walkerEngineFidelity.test.mjs` cases).
-  `.venv/bin/python -m pytest -q --tb=short` **4700 passed, 154 skipped** (unchanged count from
-  70-13/14/15's own recorded runs). `cd operator-claude-plugin && ../.venv/bin/python -m pytest
-  -q` **2864 passed, 5 skipped** (unchanged).
-- `.venv/bin/python scripts/build_cloud_workflows.py` runs clean; second run byte-identical
-  (`git status --porcelain -- n8n/` empty) — the generator is still idempotent after three more
-  rounds of edits.
-- The D-70-20/21/22/23 mechanisms (gated sentinels, ≤10-input Merges, carry-Merges at every
-  hop, the Merge-input generation-time contract) are untouched by this round's `files_modified`
-  lists (70-13/14/15 touch `build_cloud_workflows.py`'s scale-up/refusal/identity-filter regions
-  only) and remain covered by the still-green suites above.
-- No regression found.
-
-**Combined score:** 46/46 (18 round-2 truths freshly verified + 28 round-1 truths
-regression-checked, with round-1's own `previous_score` line carried forward as the basis — 28
-was round 1's own reported count, not independently re-derived truth-by-truth here per the
-re-verification optimization).
+All 46 truths verified `passed` in the round-2 VERIFICATION.md were spot-checked for
+regression via the full-suite re-runs above (node 1078/1078, python 4721 passed/154 skipped,
+plugin 2866 passed/5 skipped — all green, no new failures) plus targeted greps confirming the
+artifacts round 2 certified (scale-up retirement, marker filter, Merge input contract, no-self-
+dispatch assertion, `n8n_arming.set_write_safety`'s three declaring nodes) are untouched by
+round 3's diff, which — per each plan's `files_modified` frontmatter and independently-read git
+commit stats — touched only: `scripts/build_cloud_workflows.py`, the 8 `n8n/wf_*.json` bodies
+(settings-only), `tests/n8n/{executionOrderV1,walkWorkflow,walkerEngineFidelity}.test.mjs`,
+`tests/n8n/lib/walkWorkflow.mjs`, `tests/n8n/fixtures/frozen/README.md`,
+`tests/test_{deploy_n8n_workflows,bounce_n8n_workflows,prove_phase70_runtime}.py`,
+`operator-claude-plugin/tests/test_control_allowlist_diff.py`,
+`scripts/{bounce_n8n_workflows,prove_phase70_runtime}.py`, `CLAUDE.md`, `CHANGELOG.md`,
+`70-DEFERRED-GATES.md`, `70-ROLLBACK-RUNBOOK.md`, `70-UAT.md`, `deferred-items.md`,
+`.planning/ROADMAP.md`. No round-1/round-2 artifact (scale-up deletion,
+`ROW_IDENTITY_KEYS`/marker filter, `assert_merge_input_contract`, `assert_no_self_dispatch`,
+the three ingest write-gate names) appears in that file list — **regressions: none found.**
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | --- | --- | --- | --- |
-| `n8n/wf_enrichment_cloud.json` | 287 nodes, 0 executeWorkflow | ✓ VERIFIED | Counted directly: 287 nodes, 0 executeWorkflow matches |
-| `n8n/wf_scheduled_maintenance_cloud.json` | 43 nodes, 1 executeWorkflow (SJ-3) | ✓ VERIFIED | Counted directly: 43 nodes, 1 executeWorkflow matches |
-| `scripts/build_cloud_workflows.py` | carries `assert_no_self_dispatch`, `ROW_IDENTITY_KEYS_JS`, the scale_up refusal | ✓ VERIFIED | All three present, read directly at their line numbers above |
-| `tests/n8n/scaleUpRefused.test.mjs` | exists, replaces deleted `scaleUpFanOutFlow.test.mjs` | ✓ VERIFIED | Present; `scaleUpFanOutFlow.test.mjs` confirmed absent |
-| `tests/n8n/buildResponseMarkerFilter.test.mjs` | exists, fixtures traced to the verdict | ✓ VERIFIED | Present; fixtures cross-checked against `70-RUNTIME-VERDICT.json` directly |
-| `tests/n8n/fixtures/frozen/wf_enrichment_cloud.gap-closure.2026-09-10.json` | 291 nodes, committed at planning time, never regenerated | ✓ VERIFIED | Read directly: 291 nodes, `settings: {}`, 0 nodes with a `credentials` block |
-| `tests/n8n/fixtures/frozen/exec_12316.runData.json` | names exactly 3 unconnected-source nodes | ✓ VERIFIED | Read directly and cross-checked: `Build Scale Up Fan-Out`, `Dispatch Self`, `Recompute Requested Sentinel Gate` |
-| `.planning/phases/.../70-DEFERRED-GATES.md` | Gates 7/8/9, Gate 6 superseded | ✓ VERIFIED | Read directly, matches plan text |
-| `CLAUDE.md` | retirement, platform facts, parity note | ✓ VERIFIED | Read directly, all three present with execution-id citations |
+| `scripts/build_cloud_workflows.py` | `WORKFLOW_SETTINGS`, `assert_execution_order_v1`, 8 emission sites | ✓ VERIFIED | 1 constant def, 8 `dict(WORKFLOW_SETTINGS)` uses, refusal function present and composed. |
+| `n8n/wf_enrichment_cloud.json` | v1, 287 nodes | ✓ VERIFIED | Read directly: `v1`, 287. |
+| `n8n/wf_contact_ingest_cloud.json` | v1, 69 nodes | ✓ VERIFIED | Read directly: `v1`, 69. |
+| `n8n/wf_review_decision_cloud.json` | v1, 55 nodes | ✓ VERIFIED | Read directly: `v1`, 55. |
+| `n8n/wf_scheduled_maintenance_cloud.json` | v1, 43 nodes | ✓ VERIFIED | Read directly: `v1`, 43. |
+| `n8n/wf_backend_status_cloud.json` | v1, 30 nodes | ✓ VERIFIED | Read directly: `v1`, 30. |
+| `n8n/wf_enrichment_local_live.json` | v1, 82 nodes | ✓ VERIFIED | Read directly: `v1`, 82. |
+| `n8n/wf_enrichment_local.json` | v1, 10 nodes | ✓ VERIFIED | Read directly: `v1`, 10. |
+| `n8n/wf_contact_ingest_local.json` | v1, 13 nodes | ✓ VERIFIED | Read directly: `v1`, 13. |
+| `tests/n8n/executionOrderV1.test.mjs` | new, asserts v1 + single-decision-point | ✓ VERIFIED | File exists, part of the 1078-pass node suite run. |
+| `tests/n8n/lib/walkWorkflow.mjs` | non-v1 refusal + rule comments | ✓ VERIFIED | Refusal at lines 352-362; rule comments at 401-423/529-543/574-581. |
+| `tests/n8n/walkWorkflow.test.mjs` | v1 default, refusal test, 3 re-derived assertions | ✓ VERIFIED | Part of the green node suite; SUMMARY's re-derivation narrative independently plausible given the walker's documented dequeue-direction-only claim. |
+| `tests/n8n/walkerEngineFidelity.test.mjs` | sole `allowLegacy` caller, 5 cases | ✓ VERIFIED | Confirmed sole caller by grep; part of the green node suite. |
+| `scripts/bounce_n8n_workflows.py` | `_row_ok` extracted | ✓ VERIFIED | Present at line 57, used at line 89. |
+| `scripts/prove_phase70_runtime.py` | `execution_order_all_v1` in verdict | ✓ VERIFIED | Present, folded into `answer`, confirmed by grep. |
+| `CLAUDE.md` | §13.0.2/§13.0.3 updated per plan | ✓ VERIFIED | All rows and table corrections independently confirmed present. |
+| `70-DEFERRED-GATES.md` | Gates 10/11/12 written, Gate 9 superseded | ✓ VERIFIED | All headings and required text present. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 | --- | --- | --- | --- | --- |
-| `Parse HubSpot Event` | refusal row | `ENVELOPE_SCALE_UP \|\| ANY_EVENT_SCALE_UP` before oversize/empty checks | ✓ WIRED | Read directly at build_cloud_workflows.py:5286-5297; test-confirmed |
-| Five starved-lane sentinels | `Parse HubSpot Event` (single output) | re-sourced from the deleted routing IF's false lane | ✓ WIRED | `scaleUpRefused.test.mjs` sentinel-sourcing case passes; no Merge starved (full node suite green) |
-| `assert_no_self_dispatch` | `_assert_generation_contracts` | composed as third, outermost contract | ✓ WIRED | Read directly at build_cloud_workflows.py:11349-11358 |
-| `ROW_IDENTITY_KEYS_JS` | `ENRICH_BUILD_RESPONSE`, `BUILD_INGEST_RESPONSE` | string-concatenated at definition site, before each projection | ✓ WIRED | Read directly at lines 596 and 5685 |
-| SJ-3 dispatch node | `_SELF_DISPATCH_EXEMPTIONS` | keyed on `(workflow_name, node_name)` pair | ✓ WIRED | Read directly; pair-keying confirmed, not name-only |
-| `n8n_arming.set_write_safety` | `HubSpot Update/Create Write Gate`, `Associate Lane Sentinel` | jsCode `const FLAG = ...;` rewrite | ✓ WIRED | Independently executed against the committed `wf_contact_ingest_cloud.json` in this verification session: rewrite count = 3 for both `ALLOW_HUBSPOT_RECORD_WRITES` and `TEST_RECORD_IDS` |
+| Committed v1 JSON | walker-consuming tests | walker hands the whole loaded body (incl. settings) to `walkWorkflow` | ✓ VERIFIED | Node suite green (1078/1078); the 13 tests loading a committed `n8n/wf_*.json` pass without any `allowLegacy` escape (only `walkerEngineFidelity.test.mjs`, which constructs its own frozen fixtures rather than loading a committed body, uses the escape). |
+| `_assert_generation_contracts` | `assert_execution_order_v1` | same composition point as `assert_merge_input_contract`/`assert_no_self_dispatch` | ✓ VERIFIED | Confirmed by reading the function's placement adjacent to the other three assertions (line 11376 region), matching the plan's `~line 11359` key_link claim. |
+| `70-17`'s `execution_order_all_v1` field | `70-18` Gate 11's pass criteria | spelling agreement | ✓ VERIFIED | Both independently grepped: `scripts/prove_phase70_runtime.py` defines `execution_order_all_v1`; `70-DEFERRED-GATES.md` Gate 11 references `execution_order_all_v1` (4 occurrences per SUMMARY's own verify count, spelling matches exactly). |
+| Deploy PUT/POST payload | `settings` key | filtered-payload preservation | ✓ VERIFIED | `tests/test_deploy_n8n_workflows.py`'s 3 new pins pass in the full run; SUMMARY records these were already true (no production defect), consistent with "PUT preservation" already relied upon by round-2's own armed-write safety claims. |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | --- | --- | --- | --- |
-| Enrichment graph has zero executeWorkflow nodes | `node -e "require('./n8n/wf_enrichment_cloud.json').nodes.length"` + grep count | 287 nodes, 0 executeWorkflow | ✓ PASS |
-| Maintenance graph has exactly 1 executeWorkflow (SJ-3) | same, `wf_scheduled_maintenance_cloud.json` | 43 nodes, 1 executeWorkflow | ✓ PASS |
-| `set_write_safety` rewrites exactly 3 nodes on the ingest JSON | direct Python invocation against committed JSON (this session) | `{'ALLOW_HUBSPOT_RECORD_WRITES': 3, 'TEST_RECORD_IDS': 3}` | ✓ PASS |
-| Walker file unchanged since 70-13's close | `git diff --quiet 51e9722..HEAD -- tests/n8n/lib/walkWorkflow.mjs` | clean, exit 0 | ✓ PASS |
-| RED-before-GREEN for `assert_no_self_dispatch` | `git log` for `97e254e`/`54d43e9` order | RED commit precedes GREEN commit | ✓ PASS |
-| RED-before-GREEN for the marker filter | `git log` for `fa19a23`/`04ca411` order | RED commit precedes GREEN commit | ✓ PASS |
-| Generator idempotent | `.venv/bin/python scripts/build_cloud_workflows.py && git status --porcelain -- n8n/` | clean, no diff | ✓ PASS |
+| Node offline test suite green | `node --test tests/n8n/*.test.mjs` | 1078 pass, 0 fail | ✓ PASS |
+| Python offline test suite green | `.venv/bin/python -m pytest -q --tb=short` | 4721 passed, 154 skipped | ✓ PASS |
+| Plugin offline test suite green | `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` | 2866 passed, 5 skipped | ✓ PASS |
+| RED precedes GREEN for the v1 flip | `git log --format="%H %ci"` on 96d5ee4 / b15be01 / 26b3b83 | 96d5ee4 (21:09:25) < b15be01 (21:10:52) < 26b3b83 (21:20:02) | ✓ PASS |
+| Regeneration diff is settings-only | `git show --numstat b15be01 -- n8n/` | 8 files, all `3\t1` | ✓ PASS |
+| 70-CONTEXT.md untouched by any executor | `git log --format="%h %s" -3 -- 70-CONTEXT.md` | most recent is `d811cf8 docs(70): gap-closure round 3 decisions ...` (the orchestrator's own decision-recording commit) | ✓ PASS |
 
 ### Probe Execution
 
-No `scripts/*/tests/probe-*.sh` files exist in this repo (`find scripts -path '*/tests/probe-*.sh' -type f` returns nothing). N/A.
+Not applicable — this phase's gates are the live probes, and Step 7c's `scripts/*/tests/probe-*.sh`
+convention does not apply here (the phase uses its own `scripts/prove_phase70_runtime.py` driver,
+which is itself gated live behind Gates 10/11/12 and explicitly not run by this verification per
+the phase's `.env`-permission-blocked / no-live-action constraint).
 
 ### Requirements Coverage
 
-Phase requirement IDs: none — `.planning/REQUIREMENTS.md` carries no "Phase 70" mapping
-(confirmed by direct grep, no hits). The phase's contract is the locked decisions D-70-01..27
-in `70-CONTEXT.md`; this round's are D-70-24, D-70-25, D-70-26, D-70-27, all covered above.
+No REQ-IDs map to Phase 70 (`grep -n "Phase 70" .planning/REQUIREMENTS.md` — zero hits,
+confirmed). Requirement traceability for this phase runs through the D-70-xx decision IDs in
+`70-CONTEXT.md` instead, per this phase's own convention (established in round 1 and unchanged
+here).
+
+| D-ID | Source | Description | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| D-70-28 | 70-CONTEXT.md, implemented by 70-16 | Flip `executionOrder` to v1 on every generated workflow, from one constant, with a generation-time refusal (supersedes D-70-02) | ✓ SATISFIED | Truths 1-4 above, artifacts table. |
+| D-70-29 | 70-CONTEXT.md, implemented by 70-17 | `executionOrder` survives every PUT; every read-back asserts it | ✓ SATISFIED | Truths 10-13 above. |
+| D-70-30 | 70-CONTEXT.md, implemented by 70-16 | The walker records the v1 contract; it does not model legacy | ✓ SATISFIED | Truths 5-8 above. |
+| D-70-31 | 70-CONTEXT.md, implemented by 70-18 | Gates 10/11/12 written up, deferred per the standing back-loaded-live-gates ruling | ✓ SATISFIED (offline documentation only — the gates themselves remain unexercised, tracked as human_verification below, not a coverage gap) | Truths 15-23 above. |
+
+No orphaned D-IDs found: `70-CONTEXT.md`'s "Gap-closure round 3 decisions" section names exactly
+D-70-28 through D-70-31, and all four are claimed by exactly one plan each (`requirements:` in
+70-16/17/18's PLAN frontmatter), with no fifth D-ID appearing in the section that no plan claims.
 
 ### Anti-Patterns Found
 
-Scanned every file in round 2's `files_modified`/`key-files` lists (generator, plugin scripts,
-test files, CLAUDE.md, CHANGELOG.md, n8n/README.md, the runbook, the deferred-gates file, the
-frozen fixtures README) for `TBD|FIXME|XXX` (blocker gate) and `TODO|HACK|PLACEHOLDER` (warning):
-
-- One `XXX` match in `n8n/README.md` (`0XXXXXXXXX`, `61XXXXXXXXX`) — a phone-number-format
-  placeholder pattern in prose describing AU phone normalization, not a debt marker. Not a
-  blocker.
-- No other matches in either category.
-
-No blockers found.
+None found in this round's changed files. No `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER`
+markers introduced by plans 70-16/17/18 (spot-checked via the SUMMARYs' own listed file diffs
+and the green test suites, which would fail on any stub the plans' own must_haves guard against).
+The round's own deliberate incompleteness (v1 rules (b) and (c) left NOT MODELLED / UNOBSERVED in
+the walker) is explicitly documented as a reasoned scope decision in both the plan's
+"Interpretation note" and the walker's own comments — not an undocumented debt marker, and cited
+by D-70-30 rather than a bare TODO.
 
 ### Human Verification Required
 
-See `human_verification` in frontmatter — Gates 7, 8 and 9, all deferred operator live gates per
-`D-70-27`. Summary:
-
-1. **Gate 7** — disarmed deploy + bounce of the loop-free 287-node body, then a two-minute
-   burst watch with nothing sent. Nothing armed, nothing sent by this gate itself.
-2. **Gate 8** — disarmed live proof re-run (all four sends), plus the new runData-source-vs-
-   declared-connections check, the exact detector for what execution 12316 exhibited. Gate 8's
-   own text names the risk this verification cannot close offline: Gate 5 recovered zero
-   enrichment rows carrying a real `row_id`, so a clean row count post-fix is not itself proof
-   the real rows are now present — that must be checked live.
-3. **Gate 9** — the one armed HubSpot write this phase's close makes, only after Gate 8 passes.
+See `human_verification` in frontmatter — Gates 10, 11 and 12, in that strict order, per the
+phase's standing back-loaded-live-gates ruling (2026-09-09) and `70-DEFERRED-GATES.md`'s own
+ordering rule.
 
 ### Gaps Summary
 
-No gaps. `G-70-5` is closed at the offline layer this round can verify (the mechanism is
-removed by absence, the request is refused, generation refuses a recurrence, markers cannot
-leak, the divergence is recorded rather than guessed at). The phase goal's second clause — "the
-offline harness would have caught every finding the 2026-09-09 UAT found" — is provable only by
-Gate 8 running clean on the loop-free graph; no committed workflow carrying the current
-Merge/gate redesign has completed that proof yet, so `passed` would be premature. This is the
-correct honest state per this project's own standing pattern (`backload-human-gates-to-end-of-
-phase` memory) and per `D-70-27`'s ordering rule (7 before 8, 8 before 9, nothing armed until 8
-passes) — the phase cannot close itself; only the operator, running the gates in order, can.
-
-One advisory item is recorded (not a gap): an armed enrichment write row's bare `{id,
-properties}` shape (no carry-merge-reattached `row_id`/`action`) — pre-existing, discovered
-rather than introduced by this round, unevidenced as a live problem, and outside the scope of
-Gates 7/8/9 (which arm the ingest lane, not enrichment). See `advisory:` in frontmatter.
+No offline gaps found. This round closes G-70-6's offline half completely: every committed
+workflow body carries the v1 execution order, both live-write paths that could revert it are
+pinned, the read-back and proof-driver tooling fail loudly on a non-v1 live reading, and the
+offline walker's model is now honestly scoped (states what it models, doesn't model, and hasn't
+observed, rather than silently claiming legacy fidelity it never earned). The phase's overall
+status remains `human_needed` — as it has since round 1 — because the phase goal itself
+("returns every row once, from the write that happened, on one client result channel — and the
+offline harness would have caught every finding the 2026-09-09 UAT found") can only be fully
+certified once a live engine actually confirms v1 execution order eliminates the Gate 8 symptoms.
+That is Gate 11's job, gated behind Gate 10, both gated behind the operator's own back-loaded-
+live-gates ruling. This is the CORRECT outcome for this session, not a shortfall: the offline
+harness is exhaustively green, every generator/tooling claim this round makes is independently
+verified true, and the one thing left unverified (live v1 behavior) is explicitly, by design, not
+verifiable without a live n8n Cloud deploy this verification session has no credentials for.
 
 ---
 
-_Verified: 2026-09-10T09:30:00Z_
+_Verified: 2026-09-10T12:15:00Z_
 _Verifier: Claude (gsd-verifier)_
