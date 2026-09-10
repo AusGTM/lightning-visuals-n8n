@@ -322,6 +322,19 @@ def row_shape(row) -> dict:
     }
 
 
+def _ingest_recovered_rows(dispatch_result) -> list:
+    """The row set to compare against the walker's raw prediction on the ingest lane
+    (D-70-22, G-70-4): `dispatch.dispatch()`'s "raw_rows" — the recovery BEFORE
+    `report.reconcile` stamps a "reported_outcome" key onto every row. The walker's
+    prediction reads `Build Ingest Response`'s own output directly and never produces
+    that key, so comparing the RECONCILED rows ("rows") against it fails on a client
+    artifact (execution 12207), not a runtime divergence. The reconciled rows stay the
+    operator-facing set every other caller reads; this reads the same single recovery
+    call under its own key, no second poll.
+    """
+    return dispatch_result.get("raw_rows") or []
+
+
 def shapes_equal(predicted, recovered) -> bool:
     """True when the two row lists are the same multiset of shapes.
 
@@ -460,7 +473,9 @@ def run_live() -> dict:
                     writer.writeheader()
                     writer.writerows(send["rows"])
                 result = dispatch.dispatch(str(csv_path), True, cfg, run_id=run_id)
-                recovered = result.get("rows") or []
+                # D-70-22 (G-70-4): the RAW recovery, not the client-reconciled "rows" —
+                # see _ingest_recovered_rows's own docstring for why.
+                recovered = _ingest_recovered_rows(result)
                 settled = bool(result.get("recovered"))
                 execution_ids = list(result.get("execution_ids") or [])
             else:

@@ -151,6 +151,9 @@ def test_armed_dispatch_calls_the_stub_exactly_once_with_the_deployed_contract(
     assert result["ack"] == {"status": "accepted"}
     assert result["body"] == result["ack"]
     assert result["rows"] == []
+    # D-70-22 (Phase 70 Plan 12, G-70-4): the SAME recovery, exposed under its own key,
+    # from the ONE recovery call above — never a second poll.
+    assert result["raw_rows"] == []
     assert result["recovered"] is True
     assert result["written_records_failures"] == []
     assert result["run_id"] == run_id
@@ -235,6 +238,29 @@ def test_dispatch_with_source_by_field_adds_exactly_one_extra_multipart_part_no_
     assert filename is None
     assert json.loads(body) == source_map
     assert len(call["files"]["run_id"]) == 2 and call["files"]["run_id"][0] is None
+
+
+def test_raw_rows_carries_the_pre_reconciliation_shape_rows_carries_the_reconciled_one(
+    sample_csv, fake_config, stub_transport, stub_get_transport_factory
+):
+    """D-70-22 (Phase 70 Plan 12, G-70-4): `raw_rows` is the SAME recovered row, before
+    `report.reconcile` stamps "reported_outcome" and (when the write node produced no
+    output, as here — the stub execution never scripts a "HubSpot Create" run) downgrades
+    the row and its reason. `rows` keeps carrying that reconciled shape unchanged."""
+    body = [{
+        "action": "create", "outcome": "created", "contact_id": "1",
+        "hs_object_id": "1", "email": "x@example.com", "company_id": None,
+        "company_match": None, "association": None, "reason": None,
+        "email_status": None,
+    }]
+    get_transport = _recovery_get_transport(stub_get_transport_factory, "r-raw", body)
+    result = dispatch(str(sample_csv), True, fake_config, transport=stub_transport,
+                       run_id="r-raw", get_transport=get_transport,
+                       now=lambda: 0.0, sleep=lambda seconds: None)
+
+    assert result["raw_rows"] == body
+    assert "reported_outcome" not in result["raw_rows"][0]
+    assert result["rows"][0]["reported_outcome"] == "not_confirmed"
 
 
 def test_missing_webhook_secret_refuses_before_the_transport_is_touched_even_when_armed(

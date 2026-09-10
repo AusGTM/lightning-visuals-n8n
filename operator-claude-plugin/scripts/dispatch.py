@@ -36,8 +36,19 @@ stays an alias of the SAME ack value (never the row array) so an existing reader
 carries; migrating those readers to `result["rows"]` is D-70-08's job, not this plan's.
 
 Return shape: `{"body": <alias of "ack">, "ack": <the raw POST response>,
-"rows": <recovered per-row list, reconciled via report.reconcile>, "recovered": <bool>,
+"rows": <recovered per-row list, reconciled via report.reconcile>,
+"raw_rows": <the SAME recovery, before reconciliation>, "recovered": <bool>,
 "run_id": <str>, "written_records_failures": [...]}`.
+
+D-70-22 (Phase 70 Plan 12, G-70-4): `raw_rows` is exposed for instrument comparison
+only — `scripts/prove_phase70_runtime.py`'s ingest branch reads it so it compares like
+with like against the walker's raw prediction. `report.reconcile` stamps a
+`reported_outcome` key onto every row under `rows`, which the walker's prediction never
+produces; comparing the reconciled rows against a raw prediction fails on that stamped
+key alone (execution 12207), not on anything the runtime did. `rows` stays the
+operator-facing set every existing caller reads — this is an ADDITIVE key from the
+SAME single recovery call, never a second poll (the plugin suite permits exactly one
+poll site).
 """
 import json
 import uuid
@@ -180,6 +191,9 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
         "ack": ack,
         "body": ack,
         "rows": rows,
+        # D-70-22 (Phase 70 Plan 12): the SAME recovery, before report.reconcile stamps
+        # "reported_outcome" — instrument comparison only, never the operator-facing set.
+        "raw_rows": recovered_rows,
         "recovered": bool(recovery.get("recovered")),
         # Phase 70 UAT (2026-09-10): the settled execution ids the rows were read from,
         # so a caller (scripts/prove_phase70_runtime.py) can cite them without a second

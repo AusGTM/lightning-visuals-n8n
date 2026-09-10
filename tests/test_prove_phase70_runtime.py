@@ -190,3 +190,47 @@ def test_the_four_sends_are_two_lanes_by_two_shapes(predicted_verdict):
         "D-70-19: a 2x2 AND a single-lane send per lane — the 2x2 alone cannot catch a "
         "Merge waiting on an input that never fires"
     )
+
+
+# --------------------------------------------------------------------------- G-70-4 / D-70-22
+#
+# Execution 12207 (70-RUNTIME-VERDICT.json, ingest_2x2): the recovered rows were
+# row-for-row equal to the walker's prediction on action/outcome/email — the ONLY
+# difference was the "reported_outcome" key `report.reconcile` stamps onto every row
+# dispatch.dispatch() returns under "rows". Comparing THAT against the walker's raw
+# prediction fails on a client artifact, never a runtime divergence. Built directly
+# from the verdict's own recorded keys, so this reproduces 12207's exact shape.
+
+_12207_RECONCILED_ROW = {
+    "action": "review", "association": None, "company_id": None,
+    "company_match": None, "contact_id": None,
+    "email": "p70-i-domain-a@runtime-proof.invalid", "email_status": None,
+    "hs_object_id": None, "outcome": "net_new", "reason": None,
+    "reported_outcome": "review", "row_id": None,
+}
+
+
+def test_ingest_recovered_rows_reads_the_raw_key_not_the_reconciled_one():
+    """D-70-22 (G-70-4): fails on execution 12207's exact shape before the fix —
+    `_ingest_recovered_rows` (and the "raw_rows" key it reads) did not exist before this
+    change, and the reconciled rows alone never compare equal to the walker's prediction.
+    """
+    raw_row = {k: v for k, v in _12207_RECONCILED_ROW.items() if k != "reported_outcome"}
+    predicted_row = dict(raw_row)  # the walker's raw prediction never carries the key either
+
+    dispatch_result = {"rows": [_12207_RECONCILED_ROW], "raw_rows": [raw_row]}
+
+    recovered = driver._ingest_recovered_rows(dispatch_result)
+
+    assert driver.shapes_equal([predicted_row], recovered) is True
+    # Sanity: the OLD source (the reconciled "rows") is exactly what execution 12207
+    # showed as unequal — proves the comparator (row_shape/shapes_equal) never needed to
+    # change; only which row set the ingest branch reads did.
+    assert driver.shapes_equal([predicted_row], dispatch_result["rows"]) is False
+
+
+def test_ingest_recovered_rows_defaults_to_empty_when_the_key_is_absent():
+    """A dispatch result shaped like the pre-fix return (no "raw_rows" at all) must
+    never crash — it degrades to zero recovered rows, same discipline as every other
+    `.get(...) or []` read in this driver."""
+    assert driver._ingest_recovered_rows({"rows": [_12207_RECONCILED_ROW]}) == []
