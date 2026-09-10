@@ -1,6 +1,6 @@
 ---
 created: 2026-08-04T05:10:00.000Z
-updated: 2026-09-03
+updated: 2026-09-11
 title: Enrichment throughput — the judge fires on nearly every record and costs ~16s of a ~34s run
 area: n8n
 severity: major
@@ -156,3 +156,112 @@ over a handful of records so `confidence_band`'s share becomes a measured distri
 confirm the `max_uses` actually in effect in the deployed workflow against
 `WEB_RESEARCH_MAX_SEARCHES=5` (lever 3). Lever 1 (band bounds) is NOT authorised until the
 measurement is in hand.
+
+## Measurement 2026-09-11 (quick task 260911-anv) — answers (a), (b), (c)
+
+Ran under this operator ruling. No gate change. `scripts/build_cloud_workflows.py` and
+every `n8n/wf_*.json` are byte-unchanged by this task (`git diff --stat -- n8n/
+scripts/build_cloud_workflows.py` prints nothing; `Judge Gate`'s built jsCode hashes to
+the same `5804fec76c32c600` before and after).
+
+**(a) The reasons array was ALREADY being emitted on every row, escalating or not — no
+builder change was needed.** This closure's own "Do this first" line above assumed the
+logging did not exist yet; it was wrong, and is corrected here. Evidence, read from the
+committed artefacts with no edit:
+
+- `scripts/build_cloud_workflows.py`'s `judge_pass1_block_js` sets
+  `judge_reasons: allReasons` unconditionally for the companies target (line ~3343) and
+  `judge_reasons: reasons` unconditionally for the contacts target (line ~3464) — both
+  BEFORE the escalation/cap decision, not conditioned on it.
+- `applyCostCap` (`n8n/code/judge.js:207`) spreads the row (`{ ...row, ... }`) when it
+  caps it, so `judge_reasons` survives being capped.
+- Pass 3 in `_enrich_judge_gate_js` (`scripts/build_cloud_workflows.py` ~line 3630)
+  returns `{ json: row }` for every row leaving the gate, capped or not, escalated or not.
+- `tests/n8n/judge.test.mjs:444` already pinned `judge_reasons: []` (an empty array, not
+  an absent key) on a non-escalating row through the BUILT `JUDGE_GATE_BODY` — this is not
+  a new test in this task; it already existed and is unchanged.
+- Live confirmation, no live call needed (already-frozen runData):
+  `tests/n8n/fixtures/frozen/exec_12354.runData.json`, node `Contact Judge Gate`, both
+  output items carry `"judge_reasons": []`, `"needs_judge": false` (checked directly:
+  `run['data']['main'][0][*]['json']['judge_reasons']` on both items is `[]`).
+
+**(b) The web-research search budget in the committed `n8n/wf_enrichment_cloud.json` is
+5, baked as a build-time literal — not a runtime env read.** `CONFIG_FLAG_DEFAULTS["WEB_RESEARCH_MAX_SEARCHES"] = "5"`
+(`scripts/build_cloud_workflows.py`); `_flag_const(name, cloud=True)` renders it as the
+literal JS `const WEB_RESEARCH_MAX_SEARCHES = 5;` in both research-request builder nodes
+(`Build Research Request`, `Build Contact Research Request`) rather than a `$env`/`$vars`
+lookup — confirmed directly against the committed JSON
+(`n8n/wf_enrichment_cloud.json`'s `Build Research Request` and
+`Build Contact Research Request` node bodies both contain the literal string
+`WEB_RESEARCH_MAX_SEARCHES = 5`). **Mechanism, not just the number:** on a cloud body the
+runtime environment variable of the same name is NOT read at all — changing this value
+means a `scripts/build_cloud_workflows.py` regenerate plus a deploy, never an env-var
+edit on the running instance. It agrees with the todo's lever-3 figure.
+
+Corroborated against live-observed `runData` rather than inferred: `research_request_body.tools[0].max_uses`
+reads `5` on every item that carried a `research_request_body` in
+`tests/n8n/fixtures/frozen/exec_12354.runData.json` and `exec_12356.runData.json`
+(checked across all 15 node-output occurrences of `research_request_body.tools` in each
+file — every one is `5`). Committed and live are level as of Gate 10 (CLAUDE.md §13.0.2),
+so this is also the value the running instance is serving right now.
+
+**(c) A live sample WAS reachable, and it measured zero judge escalations — not because
+the gate is inert, but because this n8n instance's execution retention has rolled
+entirely past the last real (provider-enabled) enrichment run.**
+
+`.venv/bin/python scripts/judge_reason_distribution.py --limit 100` reached the API
+(GET-only; `.env` credentials via the script's own `load_dotenv()`) and scanned 89
+executions of the enrichment workflow (`950HPb7a1GgSAIyZ`), ids `12264`-`12356`:
+
+| Lane | rows_through_gate | rows_research_matched | rows_with_reasons | rows_capped |
+|---|---|---|---|---|
+| companies | 83 | 0 | 0 | 0 |
+| contacts | 93 | 0 | 0 | 0 |
+| total | 176 | 0 | 0 | 0 |
+
+Zero `by_reason` entries at all — `confidence_band` included. Widening the list-and-filter
+scan to `limit=250` (the same GET, just a larger page) shows this is not a `--limit 100`
+artifact: the ENTIRE retained execution history for this workflow on this instance is ids
+`12119`-`12356`, 177 executions, split `{"webhook": 42, "integrated": 135}` — and every one
+of those falls inside the 2026-09-10 incident/UAT day (CLAUDE.md §13.0.2/§13.0.3): the 135
+`integrated`-mode executions are the D-70-24 runaway's self-dispatched fan-out children
+(the same figure — 135 — CLAUDE.md's own runaway record cites for executions
+`12211`-`12348`), and the `webhook`-mode executions are the Gate 8/11/12 disarmed proof
+sends, `mode: "propose"` with `provider_enabled: {lusha: false, apollo: false,
+zoominfo: false}` (checked directly on `Contact Judge Gate`'s output for execution
+`12354`) — `research_candidate.matched` is `false` on every item because no provider or
+research call was ever made in this window, which is exactly why `computeEscalation`'s
+RO-1 guard (`if (!researchCandidate || !researchCandidate.matched) return { needsJudge: false, reasons: [] }`)
+never fires. The one genuinely ARMED write in this whole story — Gate 12's execution
+`12363` — is itself already outside the retained window (max id `12356`).
+
+The plan's own suggested targeted ids from the original 2026-08-04 measurement —
+`1152`, `1109`, `443`, `442`, `337`, `332`, `328`, `18` — were tried explicitly via
+`--execution-ids` and every one 404s (`HTTPError 404 ... /api/v1/executions/1152`),
+confirming the todo's standing note that n8n prunes executions. **There is currently no
+execution on this instance, at any id, carrying a real provider-matched judge input** —
+this task's own script call is the direct evidence, not an inference from "the sample
+might be gone."
+
+**Prior evidence, cited both because the live sample above is zero and because this is
+what the record-keeping asks for either way:**
+`.planning/milestones/v1.1-phases/63-the-unattended-lane-actually-runs-unattended/63-JUDGE-REPLAY-VERDICT.json`'s
+`reasons_distribution` (extracted 2026-09-02, before this instance's retention rolled
+past that window) records 5 escalated judge inputs total, with `confidence_band` present
+in all 5 and the SOLE reason in 3 of 5 — the code-read prediction ("`confidence_band`
+dominates") holds on that sample. Its limit, restated: it is drawn from `Build Judge
+Request`/`Build Contact Judge Request`, which only keeps rows whose `judge_request_body`
+is non-null — i.e. already-escalated rows — so it has numerators but never had a
+denominator (`rows_research_matched`/`rows_through_gate` are not obtainable from it). This
+task's reader was built specifically to supply that missing denominator, and did — the
+denominator today is real (176 rows through the gate, 83+93), but the matched-and-eligible
+subset it needs to be a share of is 0 in the only window this instance still has. The two
+artifacts are not comparable as a before/after on the same population; Phase 63's 5 inputs
+remain the only surviving sample of a real escalation-shaped judge distribution.
+
+**Lever 1 (band bounds) remains unauthorised. The `[75, 85]` band is untouched** —
+`n8n/code/escalation.generated.js`'s `ESCALATION_CONFIDENCE_BAND = [75, 85]` literal is
+unchanged, `test_ro2_judge_gate_cannot_see_size_conflicts` is green, and this task made no
+edit to `config/escalation_policy.yaml`, `n8n/code/judge.js`, or any generated file. Lever
+3's number is now confirmed rather than assumed, but changing it still requires a
+regenerate-plus-deploy this task deliberately did not perform.
