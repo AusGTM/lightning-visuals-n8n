@@ -1,9 +1,9 @@
 ---
 status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
-source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6)]
+source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6), 70-VERIFICATION.md (round 3, gap closure 70-16..70-18: Gates 10/11/12)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T09:15:17Z
+updated: 2026-09-10T11:30:00Z
 ---
 
 ## Current Test
@@ -200,12 +200,24 @@ result: blocked
 blocked_by: prior-phase
 reason: "Gate 8 failed on the enrichment lane and showed HubSpot Update executing on an empty lane (G-70-6); nothing is armed until that rule is settled"
 
+### 10. Gate 10 — disarmed deploy + bounce of the v1 bodies, then the two-minute burst watch
+expected: Five PUTs at 200 of the committed v1 JSON (node counts 30/69/287/55/43 unchanged), bounce, read-back shows `settings.executionOrder == "v1"` on all five live bodies and both write flags `"false"`; two-minute watch with nothing sent shows zero `mode: integrated` executions. Steps in `70-DEFERRED-GATES.md` § Gate 10.
+result: [pending]
+
+### 11. Gate 11 — disarmed D-70-19 proof re-run under v1 (the test of round 3's hypothesis)
+expected: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` `execution_order_all_v1: true` (a `null`/absent reading is a FAILURE — inverts Gate 8), all four sends `shapes_equal: true`, every execution settled, `writes_performed: 0`, every recovered enrichment row carrying a non-null `row_id`, runData-source-vs-declared-connections check clean, and NONE of Gate 8's symptoms (`HubSpot Update` on an empty lane, gated sentinels delivering on zero-item inputs, `Enrichment Gate Merge` firing twice). If legacy symptoms persist under v1: STOP and report; do not adjust the walker or driver. Steps in `70-DEFERRED-GATES.md` § Gate 11.
+result: [pending]
+
+### 12. Gate 12 — armed mixed-verdict re-run on the ingest lane (only after Gate 11 passes; supersedes Gate 9)
+expected: Armed for exactly one contact of a same-company pair; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after (`executionOrder` still `"v1"`). Steps in `70-DEFERRED-GATES.md` § Gate 12.
+result: [pending]
+
 ## Summary
 
-total: 9
+total: 12
 passed: 1
 issues: 6
-pending: 0
+pending: 3
 skipped: 0
 blocked: 2
 skipped: 0
