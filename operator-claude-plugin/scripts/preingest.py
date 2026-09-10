@@ -1137,7 +1137,7 @@ def render_enriched_preview(rows, merge_report=None, responses=None):
     the channel said nothing about is held, never sent. As of T-38-01
     the gate is asked only about rows the backend actually ANSWERED for — an
     unanswered row is partitioned out first, so this does not weaken the
-    one-predicate guarantee: `hold_emailless` remains the sole source of the
+    one-predicate guarantee: `partition_for_ingest` remains the sole source of the
     SEND/HELD split, it is simply never asked a question about a row it has no
     evidence for.
 

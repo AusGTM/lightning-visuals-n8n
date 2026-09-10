@@ -2,9 +2,9 @@
 what will reach HubSpot before the operator's yes can grant the write (37-CONTEXT §5
 step 6).
 
-The weight-bearing assertion is the monkeypatch test: the SEND/HELD verdict must come
-from `extraction.hold_emailless`, never a second predicate re-derived here, because
-`write_dispatch_csv` refuses on that exact same function — a divergent second
+The weight-bearing assertion is that the preview renders exactly what
+`partition_for_ingest` returns, never a second predicate re-derived here, because
+`write_dispatch_csv` builds its CSV from that exact same function — a divergent second
 predicate would show the operator a row as SEND that the gate then refuses.
 """
 import extraction
@@ -461,3 +461,35 @@ def test_partition_for_ingest_never_widens_the_hold_code_vocabulary():
 
     assert held[0]["hold_code"] is None
     assert held[0]["reason"]
+
+
+def test_round_b_shape_send_count_zero_all_three_held_no_match():
+    """Pins UAT run `2bc3617b` (Round B, 2026-09-09): three unmatched rows — two the
+    waterfall found an email for, one it did not — all held `no_match`, including the
+    emailless one, because `confidence.assess` runs before the email check. The
+    incident's actual failure was a preview showing `send_count == 2` against a gate
+    that held all three; this test's real people are substituted for plausible rows,
+    the shape is what is pinned, not the person."""
+    rows = [_row("row-1", firstname="Greg"), _row("row-2", firstname="Barry"),
+            _row("row-3", firstname="Nardine")]
+    merge_report = preingest.MergeResult(
+        rows=(
+            _merged("row-1", firstname="Greg", email="greg@found.example"),
+            _merged("row-2", firstname="Barry", email="barry@found.example"),
+            _merged("row-3", firstname="Nardine"),  # seniority only, no email
+        ),
+    )
+    responses = [_answer("row-1", "none"), _answer("row-2", "none"),
+                 _answer("row-3", "none")]
+
+    preview_data = preingest.render_enriched_preview(rows, merge_report,
+                                                     responses=responses)
+    sendable, held = preingest.partition_for_ingest(
+        list(merge_report.rows), responses)
+
+    assert preview_data["send_count"] == 0
+    assert preview_data["held_count"] == 3
+    assert preview_data["send_count"] == len(sendable)
+    assert preview_data["held_count"] == len(held)
+    assert [r["hold_code"] for r in preview_data["held_rows"]] == \
+        [confidence.HOLD_NO_MATCH] * 3
