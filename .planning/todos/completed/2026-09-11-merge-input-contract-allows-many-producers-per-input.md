@@ -100,3 +100,41 @@ explicit tolerant-allowlist in `scripts/build_cloud_workflows.py` carrying a rea
 `Collect Credits` is admitted either by the same allowlist or by a shared-upstream-gate
 exclusivity check — implementer's choice, must be tested. No graph change, no regenerated
 JSON, no redeploy. MN-01 and NF-MJ-01 stay open as recorded.
+
+## Resolved 2026-09-11 (quick task 260911-ao1)
+
+Option A shipped. `assert_merge_input_contract` (`scripts/build_cloud_workflows.py`) gained
+rule 5: a Merge input fed by more than one producer edge is a build-time violation unless the
+pair `(workflow body name, Merge name)` is listed in a new module-level
+`_MERGE_MULTI_PRODUCER_TOLERANT` dict carrying a reason string — keyed on the same
+`(wf["name"], node name)` discipline `_SELF_DISPATCH_EXEMPTIONS` uses (WR-08), so a Merge
+name borrowed by another workflow does not inherit the tolerance.
+
+Populated with the RED-confirmed 16-entry census (identical output from both the Python
+builder loop and the mirrored JS test, quoted verbatim in `260911-ao1-SUMMARY.md`):
+
+- `Decide Company Action Merge` — the operator's own reasoning above (consumer filters
+  markers, only marker-only runs multi-fire; executions 12354/12355/12356,
+  `walkerEngineFidelityV1.test.mjs`).
+- `Collect Credits` — the todo's own mutual-exclusivity finding, proven GREEN by
+  `creditsSummaryUnderV1.test.mjs`.
+- The other fourteen — admitted by the 2026-09-11 census under this ruling, each stating the
+  D-70-23 gated-sentinel structural fact and its lane's evidence status (v1 recordings exist
+  for the enrichment-lane entries at `exec_1235{4,5,6}.runData.json` and the ingest-lane
+  entries at `exec_1235{7,8}.runData.json` — none shows that specific Merge multi-firing; the
+  local-live and review-decision entries have no recording at all). None of the fourteen
+  reasons claims "safe", "harmless" or "proven".
+
+Mirrored in `tests/n8n/mergeInputContract.test.mjs`: a new `multiProducer` bucket in
+`structuralViolations`, the same 16-pair `MULTI_PRODUCER_TOLERANT` map, and a new census test
+asserting the mirrored allowlist is EXACTLY the set of (workflow, Merge) pairs with a
+multi-producer input across every committed `n8n/wf_*.json`, in both directions — an entry
+with no real multi-producer edge fails as loudly as a real edge missing its entry.
+
+Zero `n8n/` JSON diff (`git diff --quiet -- n8n/` held throughout regeneration) — this is an
+assertion-only change, no graph change, nothing deployed, nothing armed. Full
+`node --test tests/n8n/*.test.mjs` (1101 tests) passes, `creditsSummaryUnderV1.test.mjs` and
+`walkerEngineFidelityV1.test.mjs` unmodified and green.
+
+**MN-01 and NF-MJ-01 are NOT closed by this task.** Both carried forward verbatim into
+`.planning/todos/pending/2026-09-11-merge-multi-run-drain-and-grouping-unobserved.md`.
