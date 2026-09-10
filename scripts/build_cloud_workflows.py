@@ -11225,17 +11225,138 @@ def assert_no_by_name_reads(wf: dict, name: str) -> dict:
 _MERGE_INPUT_MAX = 10  # n8n's own per-node cap on declared Merge inputs (merge_node's own docstring)
 _MERGE_INPUT_SENTINEL_RE = re.compile(r"Sentinel$")
 
+# Rule 5's tolerant allowlist (quick task 260911-ao1, operator's 2026-09-11 Option A
+# ruling on the merge-input-contract todo). Keyed on the tuple (workflow BODY's own
+# `wf["name"]`, Merge node name) — the same keying discipline `_SELF_DISPATCH_EXEMPTIONS`
+# uses (WR-08, 2026-09-10): a Merge name borrowed by another build must not inherit the
+# tolerance. This is a CENSUS of today's multi-producer Merges, admitted because the
+# builder cannot prove exclusivity statically — it is NOT a safety proof. Two entries
+# carry actual evidence of their own (the operator's marker-filter reasoning for
+# `Decide Company Action Merge`, the mutual-exclusivity test for `Collect Credits`); the
+# other fourteen are admitted by census with multi-fire unobserved on that specific
+# Merge — do not read a census entry as "safe", "harmless" or "proven".
+_MERGE_MULTI_PRODUCER_TOLERANT = {
+    # --- Family (a): the operator's own reasoning, 2026-09-11. ---
+    ("LV Enrichment (Cloud template)", "Decide Company Action Merge"): (
+        "Decide Company Action filters markers out of its own input, so only a "
+        "marker-only run multi-fires — observed live on executions "
+        "12354/12355/12356 and pinned by tests/n8n/walkerEngineFidelityV1.test.mjs."
+    ),
+
+    # --- Family (b): mutual-exclusivity, proven GREEN by a dedicated test. ---
+    ("LV Enrichment (Cloud template)", "Collect Credits"): (
+        "The two producers sharing each input are mutually exclusive by "
+        "construction — a provider is either enabled or not, so exactly one of "
+        "the pair ever runs — proven GREEN by "
+        "tests/n8n/creditsSummaryUnderV1.test.mjs."
+    ),
+
+    # --- Family (c): D-70-23 gated sentinels sharing an input with the real
+    # producer, admitted by the 2026-09-11 census under the operator's Option A
+    # ruling. NOT a proof of safety. Enrichment-lane entries below have v1
+    # recordings frozen at tests/n8n/fixtures/frozen/exec_1235{4,5,6}.runData.json —
+    # no recording in this repo shows THIS Merge multi-firing.
+    ("LV Enrichment (Cloud template)", "Build Response Merge Stage 1"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Enrichment (Cloud template)", "Build Response Merge Stage 2"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Enrichment (Cloud template)", "Build Response Merge Stage 3"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Enrichment (Cloud template)", "Company Gate Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Enrichment (Cloud template)", "Enrichment Gate Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Enrichment (Cloud template)", "Merge Company Fan-In"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Enrichment (Cloud template)", "Merge Winners Fan-In"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{4,5,6}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+
+    # Ingest-lane entries — v1 recordings frozen at exec_1235{7,8}.runData.json;
+    # no recording in this repo shows THIS Merge multi-firing.
+    ("LV Contact Ingest (Cloud template)", "Build Association Request Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{7,8}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+    ("LV Contact Ingest (Cloud template)", "Ingest Merge Response"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
+        "exist for this lane at exec_1235{7,8}.runData.json — none shows this "
+        "Merge multi-firing."
+    ),
+
+    # Local-LIVE and review-decision entries — no v1 recording exists for these
+    # workflows at all.
+    ("LV Enrichment (local LIVE)", "Merge Company Fan-In"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. No v1 "
+        "recording exists for this workflow at all."
+    ),
+    ("LV Enrichment (local LIVE)", "Merge Winners Fan-In"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. No v1 "
+        "recording exists for this workflow at all."
+    ),
+    ("LV Review Decision (Cloud)", "Build Review Response Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. No v1 "
+        "recording exists for this workflow at all."
+    ),
+    ("LV Review Decision (Cloud)", "Review Extract Record Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. No v1 "
+        "recording exists for this workflow at all."
+    ),
+    ("LV Review Decision (Cloud)", "Review Queue Rows Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer; "
+        "admitted by the 2026-09-11 census, not a proof of safety. No v1 "
+        "recording exists for this workflow at all."
+    ),
+}
+
 
 def assert_merge_input_contract(wf: dict, name: str) -> dict:
-    """Phase 70 Plan 11 (D-70-20): the generation-time half of the structural rules
-    `tests/n8n/mergeInputContract.test.mjs` checks over the committed JSON — from this
-    commit on, a violation stops generation instead of shipping, in the same style as
+    """Phase 70 Plan 11 (D-70-20); rule 5 added by quick task 260911-ao1 closing the
+    operator's Option A ruling on
+    `.planning/todos/completed/2026-09-11-merge-input-contract-allows-many-producers-per-input.md`.
+    The generation-time half of the structural rules `tests/n8n/mergeInputContract
+    .test.mjs` checks over the committed JSON — from this commit on, a violation stops
+    generation instead of shipping, in the same style as
     `assert_no_by_name_reads`/`assert_write_request_emitters` (raises `ValueError`
     naming the workflow, the offending Merge, the input index and which rule broke;
     composes at the same insertion point, returns `wf` unchanged).
 
-    Enforces the four STRUCTURAL rules only — the ones a generator can see without
-    running anything:
+    Enforces five STRUCTURAL rules — the ones a generator can see without running
+    anything:
       1. no Merge declares more than `_MERGE_INPUT_MAX` inputs (n8n's own cap);
       2. no node whose name ends `Sentinel` has a direct edge to a Merge input (a
          sentinel's condition node always runs and its own empty output is a real
@@ -11244,16 +11365,22 @@ def assert_merge_input_contract(wf: dict, name: str) -> dict:
          (whether the live engine treats an IF's own empty branch as a delivery is
          unobserved — a pass-through makes the answer irrelevant);
       4. every declared Merge input has at least one producer (an unfed input can
-         never fire — execution 12206's shape).
-
-    Deliberately NOT enforced here: that every Merge input has exactly ONE producer.
-    A sentinel's gate legitimately shares an input with its real producer (D-70-23);
-    only a replay can tell a safe share from an unsafe one (`mergeInputContract.test
-    .mjs`'s own header) — a generator cannot, so this function does not try."""
+         never fire — execution 12206's shape);
+      5. a Merge input with MORE than one producer edge is a violation unless the pair
+         `(wf["name"], merge_name)` is listed in `_MERGE_MULTI_PRODUCER_TOLERANT`. Under
+         n8n v1 a Merge input fed by two producers that are not mutually exclusive can
+         open a second pending run that the end-of-run drain fires (observed live on
+         `Decide Company Action Merge`, executions 12354/12355/12356) — the builder
+         cannot prove exclusivity statically (a sentinel's gate legitimately shares an
+         input with its real producer, D-70-23, and is sometimes safe; only a replay can
+         tell a safe share from an unsafe one), so the ruling is: refuse by default,
+         admit by name with a written reason.
+    """
     nodes_by_name = {n["name"]: n for n in wf["nodes"]}
     merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
     merge_names = {m["name"] for m in merges}
     conns = wf.get("connections", {})
+    wf_name = wf.get("name")
 
     violations = []
     for m in merges:
@@ -11262,7 +11389,7 @@ def assert_merge_input_contract(wf: dict, name: str) -> dict:
             violations.append(
                 f"{m['name']}[*]: declares {ni} inputs — over n8n's own cap of {_MERGE_INPUT_MAX}")
 
-    fed_inputs = {m["name"]: set() for m in merges}
+    fed_inputs = {m["name"]: {} for m in merges}  # merge_name -> {input_index: [producer names]}
     for src, spec in conns.items():
         src_node = nodes_by_name.get(src)
         for outputs in (spec.get("main") or []):
@@ -11270,22 +11397,29 @@ def assert_merge_input_contract(wf: dict, name: str) -> dict:
                 target = conn.get("node")
                 if target not in merge_names:
                     continue
-                fed_inputs[target].add(conn.get("index"))
+                idx = conn.get("index")
+                fed_inputs[target].setdefault(idx, []).append(src)
                 if _MERGE_INPUT_SENTINEL_RE.search(src):
                     violations.append(
-                        f"{target}[{conn.get('index')}]: fed directly by {src!r} — a "
+                        f"{target}[{idx}]: fed directly by {src!r} — a "
                         "sentinel's own Code node, not its gate")
                 if src_node is not None and src_node.get("type") == "n8n-nodes-base.if":
                     violations.append(
-                        f"{target}[{conn.get('index')}]: fed directly by routing IF "
+                        f"{target}[{idx}]: fed directly by routing IF "
                         f"{src!r} — no pass-through")
 
     for m in merges:
         ni = (m.get("parameters") or {}).get("numberInputs", 2)
         fed = fed_inputs[m["name"]]
         for i in range(ni):
-            if i not in fed:
+            producers = fed.get(i)
+            if not producers:
                 violations.append(f"{m['name']}[{i}]: no producer at all")
+            elif len(producers) > 1 and (wf_name, m["name"]) not in _MERGE_MULTI_PRODUCER_TOLERANT:
+                violations.append(
+                    f"{m['name']}[{i}]: fed by {len(producers)} producers "
+                    f"{sorted(producers)!r} — not on _MERGE_MULTI_PRODUCER_TOLERANT, "
+                    "needs a named, reasoned exemption (2026-09-11 ruling)")
 
     if violations:
         violations.sort()
