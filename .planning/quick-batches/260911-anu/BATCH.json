@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "batch_id": "260911-anu",
+  "created_at": "2026-09-10T21:40:36.051Z",
+  "options": {},
+  "base_revision": "b153f1d80da1f1b521f506dd409344b2dc2c2c41",
+  "items": [
+    {
+      "quick_id": "260911-anv",
+      "client_id": null,
+      "description": "Todo 2026-08-04-enrichment-throughput-ceiling (operator ruling: MEASURE FIRST, no gate change): (a) make Judge Gate emit its reasons[] on the row it passes downstream so a run's judge-trigger distribution is readable from runData, via scripts/build_cloud_workflows.py regeneration only (never hand-edit n8n/wf_*.json, no deploy, no arming); (b) confirm the web-research max_uses actually in effect in the committed n8n/wf_enrichment_cloud.json against WEB_RESEARCH_MAX_SEARCHES=5 and record the answer in the todo; (c) if existing n8n executions are readable via the API with zero new executions and zero writes, sample Judge Gate runData over a handful of past runs and record the reasons[] distribution in the todo. Read the todo's \"Operator ruling 2026-09-11\" section first. RO-2 test test_judge_spec.py::test_ro2_judge_gate_cannot_see_size_conflicts must stay green. Band bounds stay [75,85].",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "scripts/judge_reason_distribution.py",
+        "tests/test_judge_reason_distribution.py",
+        ".planning/todos/pending/2026-08-04-enrichment-throughput-ceiling.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "253a75b5",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-anw",
+      "client_id": null,
+      "description": "Todo 2026-09-04-walk-provenance-locator-names-last-page-only (warning, 64-REVIEW WR-01): a synthesised row's provenance locator names the LAST page fetched, not the page the person was found on. Carry a per-person source_url through walk_pages' fold in operator-claude-plugin/scripts/suggest_contacts.py (the scores list already has per-page url) and have synthesise_rows / SKILL.md step 7 use it instead of pages[-1][\"url\"]. Keep walk_pages' six documented return keys; add source_url on each admitted person rather than a seventh top-level key. Test: two-page walk, person from page 1 gets page 1's URL.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "operator-claude-plugin/scripts/suggest_contacts.py",
+        "operator-claude-plugin/tests/test_suggest_contacts.py",
+        "operator-claude-plugin/skills/suggest-contacts/SKILL.md",
+        ".planning/todos/pending/2026-09-04-walk-provenance-locator-names-last-page-only.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "901825c1",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-anx",
+      "client_id": null,
+      "description": "Todo 2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present (operator ruling: PER-FIELD, BOTH CALLERS): merge_enriched in operator-claude-plugin/scripts/preingest.py reads protect_if_current_present per field from the plugin's shipped config/field_policy.yaml for both enrich-before-ingest and suggest-contacts. jobtitle (false) accepts a differing waterfall value; email and location fields (true) are never replaced; conflicts list still records every replaced value. No per-field min_confidence in this task. Tests: operator-typed email never replaced; jobtitle DOES refresh; a field absent from policy keeps today's fill-only behaviour. Read the todo's \"Operator ruling 2026-09-11\" section first.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "operator-claude-plugin/scripts/preingest.py",
+        "operator-claude-plugin/tests/test_preingest_merge.py",
+        "operator-claude-plugin/tests/test_preingest_preview.py",
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md",
+        ".planning/todos/completed/2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "d5d38588",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-any",
+      "client_id": null,
+      "description": "Todo 2026-09-08-forbidden-name-markers-refuse-secretary-and-armidale (major): inherited forbidden-name substring markers refuse real club data (\"Secretary\" trips \"secret\", \"Armidale\" trips \"arm\"). Read the todo's \"Candidate fixes\" section and implement the smallest one that keeps the guard's intent (word-boundary or whole-token match rather than substring). Tests: \"Secretary\" and \"Armidale\" pass; the original forbidden tokens still refuse.",
+      "status": "complete",
+      "depends_on": [
+        "260911-ao0"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/scripts/held_queue.py",
+        "operator-claude-plugin/scripts/suggestion_declines.py",
+        "operator-claude-plugin/scripts/run_manifest.py",
+        "operator-claude-plugin/scripts/run_state.py",
+        "operator-claude-plugin/scripts/run_report.py",
+        "operator-claude-plugin/scripts/written_records.py",
+        "operator-claude-plugin/scripts/remainder_queue.py",
+        "operator-claude-plugin/tests/test_suggestion_declines.py",
+        "operator-claude-plugin/tests/test_held_queue.py",
+        "operator-claude-plugin/tests/test_forbidden_marker_parity.py",
+        ".planning/todos/pending/2026-09-08-forbidden-name-markers-refuse-secretary-and-armidale.md",
+        ".planning/todos/completed/2026-09-08-forbidden-name-markers-refuse-secretary-and-armidale.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "1b19432c",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-anz",
+      "client_id": null,
+      "description": "Todo 2026-09-09-enriched-preview-says-send-for-rows-the-confidence-gate-holds (major): the enriched preview labels a row SEND while confidence.assess holds it, two verdicts for one row. Implement the todo's \"## Fix\" section so the preview shows the ONE verdict the gate will actually apply. Test on the UAT Round B shape recorded in the todo (run 2bc3617b094b4c939d57f38ff6704e3f).",
+      "status": "complete",
+      "depends_on": [
+        "260911-anx"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/scripts/preingest.py",
+        "operator-claude-plugin/tests/test_preingest_preview.py",
+        "operator-claude-plugin/tests/test_autonomy_switch_prose.py",
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md",
+        ".planning/todos/completed/2026-09-09-enriched-preview-says-send-for-rows-the-confidence-gate-holds.md",
+        ".planning/todos/pending/2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "228745ef",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-ao0",
+      "client_id": null,
+      "description": "Todo 2026-09-09-written-records-labels-propose-and-enrich-legs-failed (major): written_records records propose/enrich legs, which write nothing, as \"None -> failed\" in the end-of-run report. Implement the todo's \"## Fix shape\" section in operator-claude-plugin/scripts/written_records.py so a leg that writes nothing is reported as such, never as failed. Test on the recorded run shape.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "operator-claude-plugin/tests/test_written_records.py",
+        ".planning/todos/pending/2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md",
+        ".planning/todos/completed/2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "a6c2e5fa",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-ao1",
+      "client_id": null,
+      "description": "Todo 2026-09-11-merge-input-contract-allows-many-producers-per-input (operator ruling: OPTION A, ALLOWLIST + ASSERT): assert_merge_input_contract in scripts/build_cloud_workflows.py gains rule 5: a Merge input with more than one producer edge is a build-time violation unless the Merge is named in an explicit tolerant-allowlist dict carrying a reason string; Decide Company Action Merge goes on it (consumer filters markers; only marker-only runs multi-fire). Collect Credits is admitted by the allowlist or by a shared-upstream-gate exclusivity check, implementer's choice, tested either way. Regenerate all wf_*.json via the builder and verify zero JSON diff (no graph change, no deploy). Mirror the rule in tests/n8n/mergeInputContract.test.mjs. RED first: the test must fail before the allowlist entry exists. Read the todo's \"Operator ruling 2026-09-11\" section first. MN-01 and NF-MJ-01 stay open.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "scripts/build_cloud_workflows.py",
+        "tests/n8n/mergeInputContract.test.mjs",
+        ".planning/todos/completed/2026-09-11-merge-input-contract-allows-many-producers-per-input.md",
+        ".planning/todos/pending/2026-09-11-merge-multi-run-drain-and-grouping-unobserved.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "20f5fbf3",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-ao2",
+      "client_id": null,
+      "description": "Todo 2026-09-04-website-less-company-search-fallback (operator ruling: SEARCH, LINKEDIN-OR-HELD): a company with no usable website may reach the web-search fallback from discovery_plan's empty-candidates branch in operator-claude-plugin/scripts/suggest_contacts.py. No own-host means no rank 1; rank 2 (linkedin.com) rows may be sendable, rank 3 always held; a search-discovered domain is never written back as website. MAX_FALLBACK_SEARCHES still bounds the round, no while loop (tests/test_report_sufficiency.py::_has_while_loop), refusal semantics untouched. Update skills/suggest-contacts/SKILL.md where it describes the terminal. Read the todo's \"Operator ruling 2026-09-11\" section first. Depends on nothing but shares suggest_contacts.py with the provenance-locator item.",
+      "status": "complete",
+      "depends_on": [
+        "260911-anw"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/scripts/search_fallback.py",
+        "operator-claude-plugin/scripts/suggest_contacts.py",
+        "operator-claude-plugin/skills/suggest-contacts/SKILL.md",
+        "operator-claude-plugin/tests/test_search_fallback.py",
+        "operator-claude-plugin/tests/test_suggest_contacts.py",
+        "operator-claude-plugin/tests/test_suggest_contacts_composition.py",
+        ".planning/todos/pending/2026-09-04-website-less-company-search-fallback.md",
+        ".planning/todos/completed/2026-09-04-website-less-company-search-fallback.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "20363788",
+      "failure_reason": null
+    }
+  ]
+}
