@@ -73,3 +73,50 @@ sendable, rank 3 rows are always held (D-5sd-05 unchanged). A search-discovered 
 NEVER written back as the company's website — that is a canonical write and a separate
 ruling. Every existing fence holds: `MAX_FALLBACK_SEARCHES` bounds the round, no `while`
 loop, a refusal stays terminal.
+
+## Resolved 2026-09-11 (quick task 260911-ao2)
+
+Shipped the ruling above through the SAME cause/re-entry machinery Phase 65 built, rather
+than a second call site — one new cause (`CAUSE_NO_LADDER`), one new walk ending
+(`WALK_NO_LADDER`), one new keyword on the one eligibility gate (`ladder_built`).
+
+`eligible_after_ladder` (`search_fallback.py`) gained `ladder_built=True`: an empty
+`attempts` with `ladder_built=False` is eligible as absence of information; any non-empty
+`attempts` alongside it is a contradiction and stays ineligible, so the flag can never
+launder a recorded refusal or a recorded ladder into eligibility. `rank_results` needed no
+logic change — a falsy `company_url` already makes rank 1 structurally unreachable
+(`_host_matches` refuses an empty listed host) — only a docstring naming the consequence.
+The CLI gained a bare `--no-ladder` flag threading the same claim through both entry
+points.
+
+`suggest_contacts.py` gained `WALK_NO_LADDER` (fifth and last of `WALK_ENDINGS`, never
+produced by `walk_pages` itself — only stated by a caller with nothing to walk) and
+`CAUSE_NO_LADDER` (seventh of `ROUND_CAUSES`, precedence-ordered immediately after
+`CAUSE_UNKNOWN`). `round_outcome`'s `people_count == 0` arm branches on the walk's own
+`ended` to pick between the two causes; the re-entry condition admits `CAUSE_NO_LADDER`
+under the IDENTICAL routing-vs-terminal rule already governing `CAUSE_NO_PEOPLE_FOUND` —
+all four of rows/sendable/held/fallback must be `None` — so a terminal call still cannot
+route and no second route exists.
+
+`SKILL.md` step 5's documented block guards the two ladder-only statements
+(`next_candidates`, the `accepted` binding) behind `if plan["pasted_url"]:`; the no-ladder
+branch initialises the walk already-ended with `WALK_NO_LADDER` so the candidate loop
+iterates nothing and no ladder fetch is ever attempted. The `eligible_after_ladder` call
+passes `ladder_built=bool(pasted_url)` through. Step 5 prose adds the "may still be
+searched" paragraph and a `--no-ladder` CLI example; step 9's cause table gains the
+`no_ladder` row.
+
+**Two gates a website-less round still faces, both from prior rulings, unchanged:**
+`partition_for_dispatch`'s `company_domains` argument stays required, so without an
+operator-supplied domain every row from such a round is held as `company_domain_unknown`
+— the honest consequence, documented, not fixed. And a rank-3 row is still always held
+regardless of confidence (D-5sd-05).
+
+**Two questions this ruling left explicitly open, still open:** whether a search-discovered
+domain may ever be written back as the company's canonical website, and whether one may be
+used as an email-relatedness alternate. Both are separate rulings, out of this scope.
+
+Composition test: `tests/test_suggest_contacts_composition.py` drives a website-less
+company through the documented loop end to end, both without an operator-supplied domain
+(every row held `company_domain_unknown`) and with one (rank-2 sendable, rank-3 held
+`search_source_not_strong`). Full plugin suite green throughout.

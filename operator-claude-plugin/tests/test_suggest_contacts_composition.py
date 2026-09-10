@@ -1205,3 +1205,149 @@ def test_step_9_decline_section_names_the_three_read_states():
     assert "absent" in text
     assert "parseable" in text
     assert "anomalous" in text
+
+
+# =====================================================================================
+# 260911-ao2: the website-less terminal. `discovery_plan`'s empty-candidates branch
+# never builds a ladder; the round enters the SAME cause/re-entry machinery through a
+# new cause (CAUSE_NO_LADDER) and a new walk ending (WALK_NO_LADDER), rather than a
+# second call site. This is LinkedIn-or-held by construction: no company host exists,
+# so rank_results(..., None) can never accept a rank-1 entry.
+# =====================================================================================
+
+def test_a_website_less_company_reaches_the_search_fallback_and_is_linkedin_or_held():
+    """Drives a company whose recorded `website` cannot be its own site through the
+    documented loop exactly as SKILL.md step 5's else-branch reads it, end to end:
+
+      1. `discovery_plan` yields no candidates, a note naming the recorded value; the
+         round builds the no-ladder walk literal and `next_candidates` (which would
+         raise on this value) is never called.
+      2. `round_outcome(walk)` routes it; `eligible_after_ladder([], ladder_built=False)`
+         admits it; `rank_results(results, None)` accepts LinkedIn at rank 2 and an
+         allowlisted third party at rank 3, with NO rank-1 entry.
+      3. `select_people` then `synthesise_rows(..., source_tier)` produce records whose
+         row keys are a subset of firstname/lastname/company/jobtitle -- no website, no
+         domain: the structural proof that a search-discovered domain is never written
+         back.
+      4. With the company ABSENT from `company_domains`, every row is held
+         `company_domain_unknown` and `hold_weak_sources` adds nothing on top.
+      5. With the operator supplying that company's domain, the rank-2 person is
+         sendable and the rank-3 person is still held `search_source_not_strong` --
+         proving LinkedIn-or-held for this terminal.
+      6. The terminal `round_outcome(walk, rows, sendable, held, fallback)` returns
+         `reentry == "none"`.
+    """
+    company_row = {
+        "row_id": "nosite-1",
+        "name": "No Website Racing Club",
+        # A LinkedIn URL is exactly the recorded-value-cannot-be-its-own-site case
+        # (`enrichment.NOT_A_COMPANY_DOMAIN`) -- discovery_plan refuses to guess.
+        "website": "https://linkedin.com/company/no-website-racing-club",
+        "num_associated_contacts": 0,
+    }
+
+    # --- 1: discovery_plan, no ladder built ------------------------------------------
+    plan = suggest_contacts.discovery_plan(company_row)
+    assert plan["candidates"] == []
+    assert plan["pasted_url"] is None
+    assert any("linkedin.com" in note for note in plan["notes"])
+    # next_candidates would raise over a plan with no usable host -- SKILL.md's
+    # else-branch never calls it, and neither does this test.
+
+    family_list = [{"label": "board", "members": ["Director"]}]
+    chosen_families = ["board"]
+    per_company_cap = suggest_contacts.agreed_cap(5, {"suggestion_allowance": {"priced_cap": 5}})
+    bar = suggest_contacts.walk_bar(chosen_families, per_company_cap)
+    # SKILL.md step 5's else-branch: the walk is initialised ALREADY ENDED with
+    # WALK_NO_LADDER, never None -- the candidate loop (over an empty `accepted`)
+    # iterates nothing and no ladder fetch is ever attempted.
+    walk = {"people": [], "selected": [], "dropped": [], "scores": [],
+            "ended": suggest_contacts.WALK_NO_LADDER, "bar": bar}
+
+    # --- 2: routing, eligibility, ranking --------------------------------------------
+    cause_outcome = suggest_contacts.round_outcome(walk)
+    assert cause_outcome["cause"] == suggest_contacts.CAUSE_NO_LADDER
+    assert cause_outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
+    verdict = search_fallback.eligible_after_ladder([], ladder_built=False)
+    assert verdict["eligible"] is True
+
+    results = [
+        {"url": "https://www.linkedin.com/in/jamie-fox"},
+        {"url": "https://racenet.com.au/2019/committee"},
+    ]
+    ranked = search_fallback.rank_results(results, plan["pasted_url"])
+    assert plan["pasted_url"] is None  # the call really did pass None, not a fixed URL
+    assert [entry["tier"] for entry in ranked["accepted"]] == [2, 3]
+
+    # --- 3: select_people + synthesise_rows, per accepted URL ------------------------
+    people_by_url = {
+        "https://www.linkedin.com/in/jamie-fox": [
+            {"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"},
+        ],
+        "https://racenet.com.au/2019/committee": [
+            {"firstname": "Robin", "lastname": "Lee", "jobtitle": "Director"},
+        ],
+    }
+    records = []
+    for accepted in ranked["accepted"]:
+        selection = suggest_contacts.select_people(
+            people_by_url[accepted["url"]], family_list, chosen_families,
+            known_contacts=[])
+        records.extend(suggest_contacts.synthesise_rows(
+            company_row, selection["selected"], accepted["url"],
+            per_company_cap=per_company_cap, source_tier=accepted["tier"]))
+
+    assert len(records) == 2
+    for record in records:
+        assert set(record["row"]) <= {"firstname", "lastname", "company", "jobtitle"}
+        assert "website" not in record["row"]
+        assert "domain" not in record["row"]
+    assert [record["provenance"]["source_tier"] for record in records] == [2, 3]
+
+    # --- mint / stage-2 merge / rejoin (unchanged machinery) --------------------------
+    minted = suggest_contacts.mint_row_ids(records)
+    responses = [
+        {"row_id": row["row_id"], "properties": {
+            "email": (
+                f"{row['firstname'].lower()}.{row['lastname'].lower()}"
+                f"@no-website-racing-club.example"
+            )}}
+        for row in minted["spec"]["rows"]
+    ]
+    merge_report = preingest.merge_enriched(minted["spec"]["rows"], responses)
+    rejoined = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+
+    # --- 4: company ABSENT from company_domains --------------------------------------
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in rejoined], company_domains={})
+    assert sendable == []
+    assert len(held) == 2
+    assert {entry["reason_code"] for entry in held} == {"company_domain_unknown"}
+
+    sendable_after, held_after = search_fallback.hold_weak_sources(rejoined, sendable, held)
+    assert sendable_after == sendable
+    assert held_after == held  # already held -- nothing added on top
+
+    # --- 5: operator supplies the company's domain -----------------------------------
+    company_domains = {company_row["name"]: "no-website-racing-club.example"}
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in rejoined], company_domains)
+    assert {row["firstname"] for row in sendable} == {"Jamie", "Robin"}
+    assert held == []
+
+    sendable, held = search_fallback.hold_weak_sources(rejoined, sendable, held)
+    assert [row["firstname"] for row in sendable] == ["Jamie"]
+    assert len(held) == 1
+    assert held[0]["row"]["firstname"] == "Robin"
+    assert held[0]["reason_code"] == "search_source_not_strong"
+
+    # --- 6: the terminal call never routes -------------------------------------------
+    fallback_selection = {
+        "selected": [p for people in people_by_url.values() for p in people],
+        "dropped": [],
+    }
+    terminal = suggest_contacts.round_outcome(
+        walk, rows=[record["row"] for record in rejoined], sendable=sendable, held=held,
+        fallback=fallback_selection)
+    assert terminal["reentry"] == suggest_contacts.REENTRY_NONE

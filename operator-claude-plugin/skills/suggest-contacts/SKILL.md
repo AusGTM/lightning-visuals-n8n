@@ -312,6 +312,23 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    refusal still naming two genuinely different hosts is a different site, and is
    reported as such — never as "no people page".
 
+   **A company with no usable website on record may still be searched (operator ruling
+   2026-09-11).** No ladder is ever built for it, so there is no own-host — no result
+   from this terminal can ever rank 1; rank 2 (LinkedIn) may be sendable and rank 3 is
+   always held, exactly as above. Report `discovery_plan`'s own note verbatim as the
+   reason no ladder was built — never `no_candidates`, whose text is
+   `give_up_message`'s own and describes a ladder that RAN and found nothing, not one
+   that was never built at all. State plainly that a domain found by searching is never
+   recorded as this company's website and never used as step 8's email-relatedness
+   comparison — unless the operator supplies that company's domain, every row from such
+   a round is held for lack of anything to compare against. For this case, both
+   commands above carry `--no-ladder` instead of `--company-url`:
+
+   ```
+   python3 scripts/search_fallback.py --eligible <attempts.json> --no-ladder
+   python3 scripts/search_fallback.py --rank <results.json> --no-ladder
+   ```
+
    **Redirects.** `web_fetch` hands a cross-host redirect back to you rather than
    following it, so a redirect target is offered back through `next_candidates` like any
    other candidate: an apex/`www` redirect on the same host passes and may be fetched;
@@ -493,15 +510,31 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # is the SEPARATE record `no_candidates` and `eligible_after_ladder` read
        # below -- never conflated with `pages` (D-64-13's boundary).
        pages, attempts = [], []
-       candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
-       # `accepted` is bound ONCE, here -- Python's `for` binds its iterable at loop
-       # start, so re-deriving `candidates` inside the loop below (needed to keep the
-       # walk's cap/ladder reading accurate as `attempts` grows, CR-01) can never
-       # change WHICH URLs this loop walks, only how accurately the walk reads the
-       # remaining budget after each fetch.
-       accepted = list(candidates["accepted"])
-       walk = {"people": [], "selected": [], "dropped": [], "scores": [], "ended": None,
-               "bar": bar}
+       # A company whose recorded value cannot be its own site (260911-ao2, operator
+       # ruling 2026-09-11 -- this step's own "no candidates at all" paragraph above)
+       # never builds a ladder: `plan["pasted_url"]` is `None` for exactly that case,
+       # bound HERE so both this guard and the fetch guard below read the same value.
+       pasted_url = plan.get("pasted_url")
+       if pasted_url:
+           candidates = suggest_contacts.next_candidates(eligible_company, attempts, sitemap_urls)
+           # `accepted` is bound ONCE, here -- Python's `for` binds its iterable at loop
+           # start, so re-deriving `candidates` inside the loop below (needed to keep the
+           # walk's cap/ladder reading accurate as `attempts` grows, CR-01) can never
+           # change WHICH URLs this loop walks, only how accurately the walk reads the
+           # remaining budget after each fetch.
+           accepted = list(candidates["accepted"])
+           walk = {"people": [], "selected": [], "dropped": [], "scores": [], "ended": None,
+                   "bar": bar}
+       else:
+           # No usable website on record: neither ladder-only statement above runs --
+           # there is no sitemap to ask `next_candidates` about. `accepted` stays
+           # empty (the candidate loop below iterates nothing) and the walk is
+           # initialised ALREADY ENDED with `WALK_NO_LADDER`, never `None` -- this is
+           # what lets `round_outcome` read "there was no ladder to walk" off the walk
+           # itself rather than this loop inventing a second signal.
+           candidates, accepted = None, []
+           walk = {"people": [], "selected": [], "dropped": [], "scores": [],
+                   "ended": suggest_contacts.WALK_NO_LADDER, "bar": bar}
 
        # The pasted URL is fetched FIRST, before any ladder candidate, and folds
        # into `pages` exactly like a ladder page -- `walk_pages`'s own docstring
@@ -511,7 +544,6 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # as "what was tried AFTER the pasted URL came back empty" (this step's own
        # "`pages` is not `attempts`" paragraph), and folding the pasted URL's own
        # attempt in there would misrepresent both (CR-02).
-       pasted_url = plan.get("pasted_url")
        if pasted_url:
            # web_fetch `pasted_url`; append its outcome to `pages`, carrying a
            # `disposition` per step 5's table.
@@ -563,12 +595,18 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # kept apart by name now rather than only by execution order.
        company_outcome = suggest_contacts.round_outcome(walk)
        if company_outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK:
-           # Only a ladder that found NOBODY asks this question at all.
-           verdict = search_fallback.eligible_after_ladder(attempts)
+           # Only a ladder that found NOBODY (WALK_LADDER_EXHAUSTED/WALK_CAP_EXHAUSTED)
+           # OR that never built a ladder at all (WALK_NO_LADDER, 260911-ao2) asks this
+           # question -- `ladder_built` passes the SAME claim `walk["ended"]` already
+           # states, so the gate and the router never disagree about which case this is.
+           verdict = search_fallback.eligible_after_ladder(
+               attempts, ladder_built=bool(pasted_url))
        if company_outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK and verdict["eligible"]:
            # Absence of information, not a fence (D-5sd-04, D-5sd-06). `results` is what
            # your own web search returned, written to a scratch file and read back; the
            # ranker reads the URL host ONLY, so a snippet is never a source for a field.
+           # `plan["pasted_url"]` is `None` for a website-less company -- rank 1 is then
+           # structurally unreachable and this round is LinkedIn-or-held (260911-ao2).
            ranked = search_fallback.rank_results(results, plan["pasted_url"])
            # web_fetch ONLY ranked["accepted"], in rank order, then set `people`,
            # `fetched_url` and `source_rank` from the page ACTUALLY fetched and the
@@ -722,6 +760,7 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
    | `entry["outcome"]["cause"]` | Operator's words |
    | --- | --- |
+   | `no_ladder` | "there was no usable website on record, so nothing was read" |
    | `no_people_found` | "nobody was found on any page read" |
    | `none_classified` | "people were found but none matched the roles you chose" |
    | `all_held_on_email` | "people were found but every one was held before sending" |
