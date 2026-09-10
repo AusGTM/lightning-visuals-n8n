@@ -64,3 +64,12 @@ different terminal is a design question the operator has not been asked.
   such a round is LinkedIn-or-held by construction.
 - Whether a search-discovered domain may be written back as the company's website, which
   is a canonical write and a different ruling entirely (see the `manual_protected` todo).
+
+## Operator ruling 2026-09-11 (resume session)
+
+**Search, LinkedIn-or-held.** A company with no usable website MAY be searched. There is no
+own-host, so no rank 1 exists for such a round; rank 2 (`linkedin.com`) rows may be
+sendable, rank 3 rows are always held (D-5sd-05 unchanged). A search-discovered domain is
+NEVER written back as the company's website — that is a canonical write and a separate
+ruling. Every existing fence holds: `MAX_FALLBACK_SEARCHES` bounds the round, no `while`
+loop, a refusal stays terminal.
