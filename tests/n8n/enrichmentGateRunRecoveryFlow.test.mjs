@@ -31,7 +31,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { walkWorkflow, loadWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, loadWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
@@ -84,7 +84,7 @@ function run(events, stubOverrides) {
 
 test("a batch firing TWO DIFFERENT contacts identity lanes reaches Enrichment Gate with BOTH rows, not collapsed to the last lane (F5 repro, D-70-01)", () => {
   const { runData, trace } = run([bareEvent("1"), emailEvent("2", "a@example.com")]);
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
 
   const gateRows = nodeItems(runData, "Enrichment Gate");
   const rowIds = gateRows.map((r) => r.object_id).sort();

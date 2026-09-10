@@ -34,7 +34,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
@@ -123,7 +123,7 @@ const LINKEDIN_ROWS = [
 // The responder answers with the D-70-07 ack ONLY — never a row-carrying body — exactly
 // once per request.
 function assertAckFiredOnce(trace, { runId = "mixed-batch", rowIds = null } = {}) {
-  assert.deepEqual(trace.stalled, [], "no Merge may stall on this batch");
+  assert.deepEqual(starvedWithData(trace), [], "no Merge may stall on this batch");
   assert.ok(trace.respond, "the responder must fire");
   assert.equal(trace.respondSuppressed.length, 0, "the responder must fire exactly once");
   assert.equal(trace.respond.items.length, 1, "one ack item");
@@ -211,7 +211,7 @@ test("enrichment single-lane-only batch (email identity only, no companies lane,
 
   assertAckFiredOnce(trace, { rowIds: EMAIL_ROWS.map((e) => e.row_id) });
   assert.equal(rows.length, 2, "both rows return with every companies-side merge input silent");
-  assert.equal(trace.stalled.length, 0,
+  assert.equal(starvedWithData(trace).length, 0,
     "Build Response Merge must not wait on the companies lane this batch never touched");
 });
 

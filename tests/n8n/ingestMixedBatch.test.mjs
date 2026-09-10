@@ -30,7 +30,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json");
@@ -152,16 +152,21 @@ function assertEveryRowExactlyOnce(rows, emails) {
 // Merge"), never to either of a positional carry Merge's own two inputs (a marker on
 // BOTH would pair with itself into one fabricated row, T-70-41). Nothing downstream
 // reads these carry Merges' own output directly on a batch where they never fire, so
-// their staying unfired is the intended shape, never a hang.
-const BYPASSED_CARRY_MERGES = new Set(["Update Carry Merge", "Create Carry Merge", "Associate Carry Merge"]);
+// their staying unfired is the intended shape, never a hang. (quick task 260911-1z5,
+// Task B: the const this comment used to introduce is gone — `starvedWithData(trace)`
+// now excludes a never-delivered-to Merge by construction, so the per-name filter this
+// set fed is no longer needed. Kept here as the explanation for why these three names
+// never appear in `runData`.)
 
 // The lane answers with the D-70-07 ack ONLY — never a row-carrying body — and the
-// responder fires exactly once per request.
-function assertAckFiredOnce(trace) {
-  const unexpectedStalls = trace.stalled.filter((s) => !BYPASSED_CARRY_MERGES.has(s.node));
-  assert.deepEqual(unexpectedStalls, [],
-    "no merge other than the intentionally-bypassed per-write carry Merges may stall");
-  assert.equal(trace.merges["Ingest Merge Response"] && trace.merges["Ingest Merge Response"].fired, true,
+// responder fires exactly once per request. MJ-02 (quick task 260911-1z5): `fired` is
+// checked directly against `runData`, not `trace.merges[...].fired` — under v1 the key
+// carries no information of its own once a Merge has entered `mergeState` (BL-01's
+// detector docstring).
+function assertAckFiredOnce(trace, runData) {
+  assert.deepEqual(starvedWithData(trace), [],
+    "no merge may lose a row on this batch");
+  assert.ok((runData["Ingest Merge Response"] || []).length >= 1,
     "Ingest Merge Response — what every row's response actually rests on — must fire");
   assert.ok(trace.respond, "the responder must fire");
   assert.equal(trace.respondSuppressed.length, 0, "the responder must fire exactly once");
@@ -179,9 +184,9 @@ function assertAckFiredOnce(trace) {
 
 test("ingest 2x2 mixed batch (company by domain / by name) x (update / create): every row returns exactly once, carrying the write node's own outcome", () => {
   const emails = [R_DOMAIN_UPDATE, R_DOMAIN_CREATE, R_NAME_UPDATE, R_NAME_CREATE];
-  const { rows, trace } = run(emails, { armed: true });
+  const { rows, trace, runData } = run(emails, { armed: true });
 
-  assertAckFiredOnce(trace);
+  assertAckFiredOnce(trace, runData);
   assertEveryRowExactlyOnce(rows, emails);
 
   const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));
@@ -221,9 +226,9 @@ test("ingest 2x2 mixed batch (company by domain / by name) x (update / create): 
 
 test("ingest single-lane-only batch (every row an update on the association path, review path empty): rows return and no Merge stalls", () => {
   const emails = [R_DOMAIN_UPDATE, R_NAME_UPDATE];
-  const { rows, trace } = run(emails, { armed: true });
+  const { rows, trace, runData } = run(emails, { armed: true });
 
-  assertAckFiredOnce(trace);
+  assertAckFiredOnce(trace, runData);
   assertEveryRowExactlyOnce(rows, emails);
   for (const row of rows) {
     assert.equal(row.action, "update");
@@ -231,7 +236,7 @@ test("ingest single-lane-only batch (every row an update on the association path
   }
   // Named explicitly: the review lane contributed nothing to this batch, and the
   // response Merge still fired.
-  assert.equal(trace.stalled.length, 0, "Ingest Merge Response must not wait on the empty review lane");
+  assert.equal(starvedWithData(trace).length, 0, "Ingest Merge Response must not wait on the empty review lane");
 });
 
 // =====================================================================================
@@ -241,9 +246,9 @@ test("ingest single-lane-only batch (every row an update on the association path
 
 test("ingest fully-refused batch (disarmed, every row a would-be update): every row returns once carrying its refusal reason", () => {
   const emails = [R_DOMAIN_UPDATE, R_NAME_UPDATE];
-  const { rows, trace } = run(emails, { armed: false });
+  const { rows, trace, runData } = run(emails, { armed: false });
 
-  assertAckFiredOnce(trace);
+  assertAckFiredOnce(trace, runData);
   assertEveryRowExactlyOnce(rows, emails);
   for (const row of rows) {
     assert.equal(row.action, "write_blocked",
@@ -299,29 +304,28 @@ test("ingest, ARMED with a permitted update that resolves NO company: the associ
     },
   });
 
-  // "Associate Carry Merge" is the intentionally-bypassed carry Merge here (see
-  // BYPASSED_CARRY_MERGES above) — it never fires because no association is ever
+  // "Associate Carry Merge" is the intentionally-bypassed carry Merge here (see the
+  // Phase 70 Plan 10 comment above) — it never fires because no association is ever
   // attempted, and nothing downstream reads its output directly.
-  const unexpectedStalls = trace.stalled.filter((s) => !BYPASSED_CARRY_MERGES.has(s.node));
-  assert.deepEqual(unexpectedStalls, [], "no merge other than the bypassed carry Merge may stall");
+  assert.deepEqual(starvedWithData(trace), [], "no merge may lose a row on this batch");
 
   const ingestMerge = trace.merges["Ingest Merge Response"];
-  assert.ok(ingestMerge && ingestMerge.fired, "Ingest Merge Response must fire");
+  assert.ok((runData["Ingest Merge Response"] || []).length >= 1, "Ingest Merge Response must fire");
   const assocSource = Object.values(ingestMerge.sources).find((s) =>
     s === "Associate Lane Sentinel Gate" || s === "Associate Carry Merge");
   assert.equal(assocSource, "Associate Lane Sentinel Gate",
     "the association-lane input must be satisfied by the sentinel's own gate, " +
     "never by Associate Carry Merge (the pre-70-10 padded-carry-Merge shape)");
-  // "Associate Carry Merge" may still appear in `trace.merges` UNFIRED: its own input 1
-  // ("Build Association Request") legitimately runs and legitimately emits zero items
-  // (it drops any row with no resolved company), and that zero-item run still counts as
-  // a genuine delivery — but input 0 ("HubSpot Associate Company", never dispatched
-  // since there is nothing to associate) never arrives, so the Merge itself never
-  // fires. What the D-70-23 bypass guarantees is narrower and is asserted directly
-  // above: "Ingest Merge Response" is satisfied by the sentinel's gate, not by this
-  // Merge's own (non-)output.
-  assert.notEqual(trace.merges["Associate Carry Merge"] && trace.merges["Associate Carry Merge"].fired,
-    true, "Associate Carry Merge must never fire on this batch — nothing to associate");
+  // MJ-02 (quick task 260911-1z5): "Associate Carry Merge" must never RUN at all on this
+  // batch — checked directly against `runData`, not `trace.merges[...].fired`. The old
+  // comment here claimed the Merge "may still appear in `trace.merges` UNFIRED" via a
+  // zero-item run that "still counts as a genuine delivery" — that mechanism is
+  // LEGACY-ONLY (D-70-30 rule (c)'s v1 flip): under v1 a node that runs and emits zero
+  // items makes NO delivery at all, so this Merge is either absent from `mergeState`
+  // entirely (impossible under v1 for it to be present-but-unfired) or fired — never a
+  // partial, unfired state.
+  assert.equal(runData["Associate Carry Merge"], undefined,
+    "Associate Carry Merge must never fire on this batch — nothing to associate");
 
   assert.ok((runData["HubSpot Update"] || []).length > 0, "the permitted update must have run");
   assert.equal(runData["HubSpot Associate Company"], undefined,

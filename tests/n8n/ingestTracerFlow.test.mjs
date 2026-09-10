@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json");
@@ -126,7 +126,7 @@ test("a two-row batch (one association-path row, one review-path row) reaches Bu
     httpStubs: twoRowFixture().httpStubs,
   });
 
-  assert.deepEqual(trace.stalled, [], "no Merge should ever hang on this batch");
+  assert.deepEqual(starvedWithData(trace), [], "no Merge should ever hang on this batch");
 
   const rows = nodeItems(runData, "Build Ingest Response");
   assert.equal(rows.length, 2, "both rows must appear exactly once — no F5 collapse");
@@ -170,10 +170,9 @@ test("a review-only batch (zero association rows) does not stall any Merge — t
   // Merge"'s own output directly, so its staying unfired here is the intended shape,
   // not a hang — what must never stall is the merge everything else actually depends
   // on, "Ingest Merge Response" (and every other merge on this lane).
-  const stalledOtherThanAssociateCarry = trace.stalled.filter((s) => s.node !== "Associate Carry Merge");
-  assert.deepEqual(stalledOtherThanAssociateCarry, [],
+  assert.deepEqual(starvedWithData(trace), [],
     "no merge other than the intentionally-bypassed Associate Carry Merge may stall");
-  assert.deepEqual(trace.merges["Ingest Merge Response"] && trace.merges["Ingest Merge Response"].fired, true,
+  assert.ok((runData["Ingest Merge Response"] || []).length >= 1,
     "Ingest Merge Response — what this batch's correctness actually rests on — must fire");
 
   const rows = nodeItems(runData, "Build Ingest Response");

@@ -12,7 +12,7 @@
 // refactored under them in later Phase 70 plans.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 // --- tiny graph-builder helpers (ponytail: plain objects, no builder class) --------
 
@@ -168,6 +168,11 @@ test("zero-item delivery case, LEGACY-ONLY (quick task 260911-0tz, D-70-30 rule 
     {} // no executionOrder declared — the LEGACY body execution 12203 actually ran on
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}], allowLegacy: true });
+  // LEFT AS `trace.stalled` (quick task 260911-1z5, Task B site #26): this is the LEGACY
+  // branch, whose `merge_input_never_fired` semantics BL-01 left unchanged — the
+  // `starvedWithData` rewrite is a v1-only concern (`starvedWithData` itself is a
+  // pass-through under `orderingUsed === "legacy"`), so this class-(a)-shaped assertion
+  // is NOT one of the ~30 sites that went vacuous and needed re-deriving.
   assert.deepEqual(trace.stalled, [],
     "execution 12203: a zero-item output is a DELIVERY under legacy, so nothing stalls here");
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once");
@@ -210,8 +215,15 @@ test("hang case, RE-DERIVED for v1 (quick task 260911-0tz, D-70-30 rule (b) drai
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
   assert.equal(runData.LaneB, undefined,
     "execution 12200: a node fed zero items does not run, and records no run entry");
-  assert.equal(trace.stalled.length, 0,
-    "v1: a Merge with at least one filled input drains at end-of-run instead of stalling");
+  // BL-01 (quick task 260911-1z5): the pre-1z5 detector could never see this shape at
+  // all (a Merge that fires with an unfilled input) — it is now reported explicitly, and
+  // `starvedWithData` (the shared filter) narrows it back to "nothing was actually lost".
+  assert.deepEqual(trace.stalled,
+    [{ node: "Merge", reason: "merge_fired_with_unfilled_input", run: 0, missingInputs: [1] }],
+    "v1: a Merge with at least one filled input drains at end-of-run instead of stalling, " +
+    "and now REPORTS which input it fired without");
+  assert.deepEqual(starvedWithData(trace), [],
+    "nobody ever delivered to input 1 — the by-design D-70-23 gated-sentinel shape, not a loss");
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
   assert.deepEqual(runData.Merge[0], [{ id: "row-A" }],
     "only input 0's row survives — input 1 never delivered, so it contributes nothing");
@@ -234,7 +246,11 @@ test("always-output-data case: the flag on the node that ran empty satisfies the
     }
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
-  assert.equal(trace.stalled.length, 0, "the Merge is NOT stalled");
+  // BL-01 (quick task 260911-1z5): tightened from a length check — both inputs filled,
+  // so the fired run has NO missing input and `trace.stalled` is genuinely empty here,
+  // not merely "no genuine loss" (starvedWithData would also be empty, but the stronger
+  // claim is the one this case actually demonstrates).
+  assert.deepEqual(trace.stalled, [], "the Merge is NOT stalled");
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once");
   assert.deepEqual(runData.Merge[0], [{ id: "row-A" }, {}],
     "the converged run carries lane A's real row plus one empty marker item");
@@ -263,8 +279,13 @@ test("mutually-exclusive-branch case, RE-DERIVED for v1 (quick task 260911-0tz, 
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{ id: "row-A" }] });
   assert.equal(runData.FalseSink, undefined, "FalseSink never ran — it never received a delivery");
-  assert.equal(trace.stalled.length, 0,
+  // BL-01 (quick task 260911-1z5): as the hang case above — the fired run's own
+  // unfilled input 1 is reported explicitly, and starvedWithData confirms it is not a
+  // genuine loss (FalseSink never ran at all, so nobody ever had a row to deliver).
+  assert.deepEqual(trace.stalled,
+    [{ node: "Merge", reason: "merge_fired_with_unfilled_input", run: 0, missingInputs: [1] }],
     "v1: the end-of-run drain fires the Merge on TrueSink's single filled input");
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
   assert.deepEqual(runData.Merge[0], [{ id: "row-A" }],
     "only the live branch's row survives — the dead branch's input is absent");
@@ -287,7 +308,9 @@ test("mutually-exclusive-branch case: alwaysOutputData on the IF itself DOES fir
     }
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{ id: "row-A" }] });
-  assert.equal(trace.stalled.length, 0);
+  // BL-01 (quick task 260911-1z5): both inputs filled this time — the fired run has no
+  // missing input, so `trace.stalled` is genuinely empty, not merely "no genuine loss".
+  assert.deepEqual(trace.stalled, []);
   assert.equal(runData.FalseSink.length, 1, "FalseSink ran once, fed the IF's forced empty marker");
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once");
   assert.deepEqual(runData.Merge[0], [{ id: "row-A" }, {}]);
@@ -416,9 +439,14 @@ test("D-70-20 mechanism price (1/2), RE-DERIVED for v1 (quick task 260911-0tz, D
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
   assert.equal(runData.RealLane, undefined, "the real producer's own lane never ran");
-  assert.equal(trace.stalled.length, 0,
+  // BL-01 (quick task 260911-1z5): RealLane never ran, so input 0 is the fired run's
+  // missing input — reported explicitly now, and starvedWithData confirms it is the
+  // by-design gated-sentinel shape, not a loss (nobody ever had a row for input 0).
+  assert.deepEqual(trace.stalled,
+    [{ node: "Merge", reason: "merge_fired_with_unfilled_input", run: 0, missingInputs: [0] }],
     "v1: the Merge no longer stalls — AlwaysMarker's single filled input satisfies the " +
     "end-of-run drain (requiredInputs 1)");
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
   assert.deepEqual(runData.Merge[0], [{}],
     "only the sentinel's marker survives — input 0's absence contributes nothing, and " +
@@ -467,6 +495,151 @@ test("D-70-20 mechanism price (2/2): the Wave 2 alternative -- a sentinel gated 
   const deadRows = deadRun.runData.Merge[0];
   assert.ok(deadRows.some((r) => r.id === "row-B"), "LaneB's real row still arrives");
   assert.equal(deadRows.length, 2, "the marker fills the starved input instead of stalling the Merge");
+});
+
+// =============================================================================================
+// BL-01 (quick task 260911-1z5): the v1-native starvation detector must be proven
+// non-vacuous, not merely "does not crash". Case (i) is the detector's simplest shape;
+// case (ii) is the ONE case that proves `starvedWithData` is not vacuously empty — without
+// it BL-01 would reintroduce the exact defect it closes.
+// =============================================================================================
+
+test("BL-01 case P1 (quick task 260911-1z5): both producers return [] — the Merge never " +
+  "enters mergeState, and the detector reports it by NAME, not as dead code", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("LaneA", "return [];"),
+      codeNode("LaneB", "return [];"),
+      mergeNode("Merge", 2),
+    ],
+    {
+      Trigger: { main: [[edge("LaneA"), edge("LaneB")]] },
+      LaneA: { main: [[edge("Merge", 0)]] },
+      LaneB: { main: [[edge("Merge", 1)]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.equal(runData.Merge, undefined, "the Merge never fired — no run entry at all");
+  assert.deepEqual(trace.stalled,
+    [{ node: "Merge", reason: "merge_never_delivered_to", missingInputs: [0, 1] }]);
+  assert.deepEqual(starvedWithData(trace), [], "a Merge nobody ever fed is not a loss");
+});
+
+test("BL-01/MN-01 case (quick task 260911-1z5): two producers both target input 0 of a " +
+  "2-input Merge, input 1 never fed — the drain fires ONCE (the cap) and the OTHER row " +
+  "is reported lost, non-vacuously (the one case proving starvedWithData is not " +
+  "vacuously empty)", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return [{ json: { id: 'row-A' } }];"),
+      codeNode("B", "return [{ json: { id: 'row-B' } }];"),
+      mergeNode("M", 2),
+    ],
+    {
+      Trigger: { main: [[edge("A"), edge("B")]] },
+      A: { main: [[edge("M", 0)]] },
+      B: { main: [[edge("M", 0)]] }, // SAME input as A — the MN-01 shape, input 1 never fed
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.equal(runData.M.length, 1, "MN-01: the drain caps at ONE fired run per Merge");
+  const undrained = trace.stalled.filter((s) => s.reason === "merge_pending_runs_undrained");
+  assert.equal(undrained.length, 1, "exactly one leftover pending run, never fired, never dropped");
+  assert.equal(
+    Object.values(undrained[0].itemCounts).reduce((a, b) => a + b, 0), 1,
+    "the leftover pending run carries the OTHER producer's one real item");
+  assert.notEqual(starvedWithData(trace).length, 0,
+    "BL-01's whole point — a row that went in and never came out must be visible");
+});
+
+// =============================================================================================
+// MN-01/MN-02 (quick task 260911-1z5): the review's OWN feedback graph, and the guard it
+// asked for. MN-01's per-Merge drain cap already terminates the review's literal graph
+// WITHOUT ever reaching the guard — a drain-only guard (as the review's own snippet
+// scoped it) would be provably dead code once that cap lands: drain fires are bounded by
+// the number of Merge nodes in the graph, always < nodes.length * 4. The shape that still
+// needs a guard is a Merge whose own output re-completes its own input via the MAIN
+// LOOP's arrival code, which stays UNCAPPED by count (a real double-complete-fire, like
+// `Decide Company Action Merge`'s own run 0, must still be allowed) — so the fire-count
+// cap is shared between the drain and the main loop (walkWorkflow.mjs's `recordV1Fire`).
+// =============================================================================================
+
+test("MN-02 graph (quick task 260911-1z5), AS the review's own example: A -> M.input0, " +
+  "M -> Loop -> M.input1 — MN-01's per-Merge drain cap already terminates this without a " +
+  "throw, a deviation from the review's literal fix recorded here rather than silently " +
+  "changed", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return [{ json: { id: 'row-A' } }];"),
+      codeNode("Loop", PASSTHROUGH),
+      mergeNode("M", 2),
+    ],
+    {
+      Trigger: { main: [[edge("A")]] },
+      A: { main: [[edge("M", 0)]] },
+      M: { main: [[edge("Loop")]] },
+      Loop: { main: [[edge("M", 1)]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.equal(runData.M.length, 1, "MN-01's cap fires M once, using input 0 alone");
+  const undrained = trace.stalled.filter((s) => s.reason === "merge_pending_runs_undrained");
+  assert.equal(undrained.length, 1,
+    "the feedback delivery to input 1 opens a NEW pending run that MN-01 refuses to " +
+    "re-fire — this is what stops the review's original infinite ping-pong, without " +
+    "ever reaching the guard below");
+});
+
+test("MN-02 guard (quick task 260911-1z5): a self-referential SINGLE-input Merge that " +
+  "keeps re-completing its own input via the MAIN LOOP is bounded by the shared " +
+  "fire-count cap, never hangs node --test", () => {
+  // numberInputs: 1 means ANY single delivery is immediately "complete" — the main
+  // loop's arrival code fires it right away, uncapped by count, exactly the shape that
+  // makes a self-referencing Merge genuinely dangerous.
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return [{ json: { id: 'seed' } }];"),
+      codeNode("Loop", PASSTHROUGH),
+      mergeNode("M", 1),
+    ],
+    {
+      Trigger: { main: [[edge("A")]] },
+      A: { main: [[edge("M", 0)]] },
+      M: { main: [[edge("Loop")]] },
+      Loop: { main: [[edge("M", 0)]] }, // feedback into M's OWN single input
+    }
+  );
+  assert.throws(
+    () => walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] }),
+    (error) => {
+      assert.match(error.message, /"M"/);
+      assert.match(error.message, /feedback edge/);
+      return true;
+    }
+  );
+});
+
+test("MN-07 (quick task 260911-1z5): a chooseBranch Merge is refused on the MAIN path, " +
+  "not only from the drain", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("A", "return [{ json: { id: 'row-A' } }];"),
+      { name: "M", type: "n8n-nodes-base.merge", parameters: { numberInputs: 2, mode: "chooseBranch" } },
+    ],
+    {
+      Trigger: { main: [[edge("A")]] },
+      A: { main: [[edge("M", 0)]] },
+    }
+  );
+  assert.throws(
+    () => walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] }),
+    /chooseBranch/
+  );
 });
 
 // =============================================================================================

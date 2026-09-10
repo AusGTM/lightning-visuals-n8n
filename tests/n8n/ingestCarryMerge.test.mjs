@@ -22,7 +22,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json");
@@ -129,8 +129,7 @@ test("a four-row batch reaches Build Ingest Response exactly once per row, each 
   // on — must never stall. ("Create Carry Merge" legitimately never fires on this
   // batch: nothing here is a create, ALLOW_HUBSPOT_CREATE stays baked false — an
   // accepted, documented gap, not asserted here as a false "no Merge ever stalls".)
-  const ingestMergeStalled = trace.stalled.some((s) => s.node === "Ingest Merge Response");
-  assert.equal(ingestMergeStalled, false, "Ingest Merge Response must never stall");
+  assert.deepEqual(starvedWithData(trace), [], "no Merge may lose a row on this batch");
 
   const rows = nodeItems(runData, "Build Ingest Response");
   assert.equal(rows.length, 4, "all four rows appear exactly once — no F5 collapse");

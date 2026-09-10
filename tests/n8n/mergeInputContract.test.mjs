@@ -50,7 +50,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { walkWorkflow, loadWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, loadWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const N8N_DIR = path.join(ROOT, "n8n");
@@ -266,10 +266,8 @@ test("wf_contact_ingest_cloud.json: single-lane batch (every row a review row, n
   // arrives from "HubSpot Associate Company" — by design, not a hang, since nothing
   // downstream reads its output directly. What must never stall is every other Merge,
   // above all "Ingest Merge Response", the one this batch's correctness rests on.
-  const unexpectedStalls = trace.stalled.filter((s) => s.node !== "Associate Carry Merge");
-  assert.deepEqual(unexpectedStalls, [], "no merge other than the bypassed carry Merge may stall");
-  assert.equal(trace.merges["Ingest Merge Response"] && trace.merges["Ingest Merge Response"].fired,
-    true, "Ingest Merge Response must fire");
+  assert.deepEqual(starvedWithData(trace), [], "no merge other than the bypassed carry Merge may stall");
+  assert.ok((runData["Ingest Merge Response"] || []).length >= 1, "Ingest Merge Response must fire");
 
   const rows = nodeItems(runData, "Build Ingest Response");
   assert.equal(rows.length, 2, "one response row per input row");
@@ -294,7 +292,7 @@ test("wf_review_decision_cloud.json: a dry-run companies decision stalls no Merg
     httpStubs: { "Review Fetch By Id": [{ results: [{ id: "123", properties: { domain: "acme.example" } }] }] },
   });
 
-  assert.deepEqual(trace.stalled, [], "no merge may stall on a dry-run companies decision");
+  assert.deepEqual(starvedWithData(trace), [], "no merge may stall on a dry-run companies decision");
   assert.equal(nodeItems(runData, "Build Review Response").length, 1, "one response row");
 });
 

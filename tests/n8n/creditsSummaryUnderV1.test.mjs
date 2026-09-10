@@ -128,12 +128,22 @@ test("credit lane under v1, all three providers enabled: Collect Credits fires o
     "that shares the same input (Collect Credits input 0 has TWO producer edges — " +
     "Adapt Lusha Usage and Lusha Credit Skipped — and likewise for inputs 1 and 2)");
 
+  // MN-04 (quick task 260911-1z5): NOT `nodeItems(...).length === 2` — that also passes
+  // on a 1+1 run split, the exact collapse shape `walkerEngineFidelityV1.test.mjs:112-117`
+  // explicitly declines to assert that way.
+  assert.equal(runData["Build Response"].length, 1, "Build Response runs exactly once");
+  assert.equal(runData["Build Response"][0].length, 2, "both rows in that one run");
   const rows = nodeItems(runData, "Build Response");
   assert.equal(rows.length, 2, "both rows return");
-  assert.equal(rows[0].remaining_credits, rows[1].remaining_credits,
-    "both rows carry the SAME remaining_credits array reference — one shared summary, " +
-    "not a per-row duplicate (Credits Broadcast's combineAll spreads the single Build " +
-    "Credits Summary item onto every row without cloning it)");
+  // MN-05 (quick task 260911-1z5): deepEqual on CONTENT, not `===` on array identity —
+  // this offline walker never clones items between nodes, so a reference match is a
+  // walker artifact, not an engine guarantee (n8n serializes item data across node
+  // boundaries live). The intent this pins is unchanged: one shared summary, not a
+  // per-row recomputation.
+  assert.deepEqual(rows[0].remaining_credits, rows[1].remaining_credits,
+    "both rows carry the SAME remaining_credits content — one shared summary, not a " +
+    "per-row recomputation (Credits Broadcast's combineAll spreads the single Build " +
+    "Credits Summary item onto every row)");
   // Build Credits Summary's own shape (n8n/wf_enrichment_cloud.json): an ARRAY of
   // `{provider, credits}`, never a keyed object — filtered to requested providers only.
   const summary = rows[0].remaining_credits;

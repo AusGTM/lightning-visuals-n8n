@@ -4,7 +4,8 @@
 // review-decision lane's three new convergence Merges ("Review Extract Record Merge",
 // "Review Queue Rows Merge", "Build Review Response Merge") and their starved-lane
 // sentinel network. Drives the COMMITTED n8n/wf_review_decision_cloud.json through
-// tests/n8n/lib/walkWorkflow.mjs, asserting `trace.stalled` is empty and that each
+// tests/n8n/lib/walkWorkflow.mjs, asserting `starvedWithData` (quick task 260911-1z5's
+// shared no-real-loss filter over `trace.stalled`) is empty and that each
 // converged node runs exactly once over all its real inputs — never twice, never
 // starved forever.
 //
@@ -19,7 +20,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { walkWorkflow, loadWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, loadWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_review_decision_cloud.json");
@@ -90,7 +91,7 @@ test("Review Extract Record + Build Review Response run once each on a dry-run c
     } }],
     httpStubs: { "Review Fetch By Id": [companyRecord("123")] },
   });
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(trace.respondSuppressed.length, 0);
   assert.ok(trace.respond);
   assert.equal(nodeItems(runData, "Review Extract Record").length, 1);
@@ -109,7 +110,7 @@ test("Review Extract Record + Build Review Response run once each on a contacts 
       "Review Contact Verify Fetch": [contactRecord("456", { lv_enrichment_review_reason: "no fit" })],
     },
   });
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(trace.respondSuppressed.length, 0);
   assert.ok(trace.respond);
   assert.equal(nodeItems(runData, "Review Extract Record").length, 1);
@@ -123,7 +124,7 @@ test("Review Queue Rows runs once on a queue request with rows on ONLY the compa
     triggerItems: [{ body: { object_type: "companies", limit: 10 } }],
     httpStubs: { "Review Queue Search": [{ results: [{ id: "1", properties: {} }], total: 1 }] },
   });
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(trace.respondSuppressed.length, 0);
   assert.ok(trace.respond);
   const rows = nodeItems(runData, "Review Queue Rows");
@@ -139,7 +140,7 @@ test("Review Queue Rows runs once on a queue request with rows on ONLY the conta
     triggerItems: [{ body: { object_type: "contacts", limit: 10 } }],
     httpStubs: { "Review Queue Contact Search": [{ results: [{ id: "2", properties: {} }], total: 1 }] },
   });
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(trace.respondSuppressed.length, 0);
   assert.ok(trace.respond);
   const rows = nodeItems(runData, "Review Queue Rows");

@@ -23,7 +23,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { walkWorkflow, loadWorkflow, codeNodeAwaits } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, loadWorkflow, codeNodeAwaits, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
@@ -165,13 +165,15 @@ test("a codeStub for a Code node the walker CAN run is refused — a stub never 
 // =============================================================================================
 
 test("lane live: ALL THREE ZoomInfo carry Merges fire, each claimed on both inputs by its own producer pair", () => {
-  const { trace } = run(["zoominfo"], SHORT_LIVED);
+  const { trace, runData } = run(["zoominfo"], SHORT_LIVED);
 
-  assert.deepEqual(trace.stalled, [], "no lane may be left waiting on an input nobody feeds");
+  assert.deepEqual(starvedWithData(trace), [], "no lane may be left waiting on an input nobody feeds");
 
   for (const [name, [mintNode, passThrough]] of Object.entries(CARRY_MERGES)) {
+    // MJ-02 (quick task 260911-1z5): fired checked against runData directly — under v1
+    // `trace.merges[name].fired` carries no information once the Merge is in mergeState.
+    assert.ok((runData[name] || []).length >= 1, `${name} did not fire — this lane went unreplayed`);
     const merge = trace.merges[name];
-    assert.ok(merge && merge.fired, `${name} did not fire — this lane went unreplayed`);
     assert.equal(merge.sources[0], mintNode, `${name} input 0`);
     assert.equal(merge.sources[1], passThrough, `${name} input 1`);
     // A carry Merge combines by POSITION: unequal counts would silently pair a row with
@@ -186,19 +188,20 @@ test("lane live: a still-valid cached token bypasses a carry Merge entirely, and
   // remaining lanes take their IF's false branch straight past the carry Merge. A
   // bypassed Merge that never fires must not leave anything waiting on it — the failure
   // this whole sentinel network exists to prevent.
-  const { trace } = run(["zoominfo"]);
+  const { trace, runData } = run(["zoominfo"]);
 
-  assert.deepEqual(trace.stalled, []);
-  const fired = Object.keys(CARRY_MERGES).filter((name) => (trace.merges[name] || {}).fired);
+  assert.deepEqual(starvedWithData(trace), []);
+  const fired = Object.keys(CARRY_MERGES).filter((name) => (runData[name] || []).length >= 1);
   assert.equal(fired.length, 1,
     "one lane mints on a cold cache and the rest reuse it; which one is an ordering detail");
 });
 
 test("lane live: Collect Credits input 2 is claimed by the real ZoomInfo usage adapter, never its skip sentinel", () => {
-  const { trace } = run(["zoominfo"]);
+  const { trace, runData } = run(["zoominfo"]);
   const credits = trace.merges["Collect Credits"];
 
-  assert.ok(credits.fired, "Collect Credits must fire — a starved input hangs the credit lane");
+  assert.equal((runData["Collect Credits"] || []).length, 1,
+    "Collect Credits must fire — a starved input hangs the credit lane");
   assert.equal(credits.sources[2], "Adapt ZoomInfo Usage");
   // The two providers this run did NOT request are the mirror image, which is what makes
   // the assertion above a real exclusion rather than a coincidence.
@@ -213,17 +216,16 @@ test("lane live: Collect Credits input 2 is claimed by the real ZoomInfo usage a
 test("lane dead: no ZoomInfo carry Merge fires and no ZoomInfo call is made", () => {
   const { runData, trace } = run(["lusha"]);
 
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   for (const name of Object.keys(CARRY_MERGES)) {
-    const merge = trace.merges[name];
-    assert.ok(!merge || !merge.fired, `${name} must not fire when ZoomInfo is not requested`);
+    assert.equal(runData[name], undefined, `${name} must not fire when ZoomInfo is not requested`);
   }
   for (const name of [...Object.values(CARRY_MERGES).map(([mint]) => mint), ...AWAITING_CODE_NODES]) {
     assert.ok(!runData[name], `${name} ran with ZoomInfo not requested`);
   }
 
   const credits = trace.merges["Collect Credits"];
-  assert.ok(credits.fired);
+  assert.equal((runData["Collect Credits"] || []).length, 1);
   assert.equal(credits.sources[2], "ZoomInfo Credit Skipped",
     "the skip sentinel takes the slot precisely when the real lane cannot");
 });

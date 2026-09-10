@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import { walkWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -31,9 +32,11 @@ function loadRecording(id) {
 
 // httpStubs sourced from the recording's own runData — the SAME httpStubs mechanism
 // enrichmentMixedBatch.test.mjs uses, fed by the engine's recorded responses instead of by
-// hand. Returns run k's items on call k; falls back to the last run once calls outrun
-// recorded runs, and REFUSES that fallback silently for a node that ran more than once
-// live (a genuine misalignment risk) rather than a node that only ever ran once.
+// hand. Returns run k's items on call k, and REFUSES whenever the walker calls a node MORE
+// times than the recording ran it live (NT-02, quick task 260911-1z5) — the fallback used
+// to refuse only for a node that ran more than once live, silently replaying run 0 for a
+// node that ran exactly once but was called more than once by the walk; that asymmetry is
+// gone, so ANY over-call is now a refusal, never a silent replay.
 function httpStubsFromRecording(wf, rd) {
   const stubs = {};
   for (const n of wf.nodes) {
@@ -44,13 +47,11 @@ function httpStubsFromRecording(wf, rd) {
       const k = calls;
       calls += 1;
       if (k >= runs.length) {
-        if (runs.length > 1) {
-          throw new Error(
-            `${n.name}: call ${k} exceeds the ${runs.length} recorded run(s) — the ` +
-            `run-0-only fallback would misalign a multi-run HTTP node, so this stub ` +
-            `refuses rather than silently reusing the last run`);
-        }
-        return runs[runs.length - 1].data.main[0].map((it) => it.json);
+        throw new Error(
+          `${n.name}: call ${k} exceeds the ${runs.length} recorded run(s) — the walker ` +
+          `called this node MORE times than the engine ran it live, a genuine ` +
+          `misalignment (NT-02) rather than something safe to paper over by replaying ` +
+          `the last recorded run`);
       }
       return runs[k].data.main[0].map((it) => it.json);
     };
@@ -91,6 +92,20 @@ for (const id of EXECUTIONS) {
     assert.equal(trace.merges["Decide Company Action Merge"].runs[1].sources[1], undefined,
       `${id}: run 1 input 1 must be UNFILLED — the drain fired on input 0 alone`);
 
+    // BL-02 (quick task 260911-1z5): the two per-input source-attribution assertions the
+    // 0tz REVIEW found omitted — the one recorded fact the walker got WRONG. Landed as
+    // REAL (non-todo) assertions: BL-02's grouping fix (one producer node-run's
+    // deliveries to several inputs of the same Merge land in ONE pending run, ATOMICALLY)
+    // reproduces this exactly on all three executions, with NO dequeue-order change
+    // needed (grouping alone was sufficient — see the plan's own Task A `<done>` record
+    // in 260911-1z5-SUMMARY.md for the walker's actual sources at every state reached).
+    const runs = trace.merges["Decide Company Action Merge"].runs;
+    assert.deepEqual([runs[0].sources[0], runs[0].sources[1]],
+      ["Companies Absent Sentinel Gate", "Companies Absent Sentinel Gate"],
+      `${id}: run 0's single node-run producer must claim BOTH inputs`);
+    assert.equal(runs[1].sources[0], "Recompute Not Requested Sentinel Gate",
+      `${id}: run 1's input 0 must be claimed by the drain's actual producer`);
+
     assert.equal(runData["Decide Company Action"].length, 2,
       `${id}: Decide Company Action ran twice, once per Merge run`);
     assert.deepEqual(runData["Decide Company Action"].map((r) => r.length), [0, 0],
@@ -120,3 +135,19 @@ for (const id of EXECUTIONS) {
       `${id}: HubSpot Update must not run — disarmed propose-mode batch`);
   });
 }
+
+// MN-06 (quick task 260911-1z5): nothing kept the frozen v1 graph honest after the next
+// regeneration of n8n/wf_enrichment_cloud.json. One assertion, pinned as a digest, so a
+// future regeneration that silently diverges from what 12354/12355/12356 actually ran
+// goes RED here rather than continuing to pass against a copy that no longer reproduces
+// anything.
+test("the frozen v1 graph is byte-identical to what executions 12354/12355/12356 actually ran (MN-06)", () => {
+  const digest = crypto.createHash("sha256")
+    .update(fs.readFileSync(FROZEN_V1_GRAPH))
+    .digest("hex");
+  assert.equal(digest, "77a4e8c0137580c1b1d827586a2d600d1fbf2942e883596caeb58f77318eab7d",
+    "a regeneration of n8n/wf_enrichment_cloud.json must not silently make " +
+    "wf_enrichment_cloud.v1.2026-09-10.json a non-reproduction of Gate 11's recordings — " +
+    "regenerate the frozen copy and re-verify it against a fresh live recording instead " +
+    "of updating this digest to match");
+});

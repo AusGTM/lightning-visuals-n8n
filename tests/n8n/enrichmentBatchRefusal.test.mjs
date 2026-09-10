@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { walkWorkflow, loadWorkflow, nodeItems } from "./lib/walkWorkflow.mjs";
+import { walkWorkflow, loadWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
@@ -145,7 +145,7 @@ function loadWf() {
 }
 
 function assertAckOnlyResponse(trace, { runId = null } = {}) {
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal(trace.respondSuppressed.length, 0, "the responder must fire exactly once");
   assert.ok(trace.respond, "the responder must fire at all");
   const [ack] = trace.respond.items;

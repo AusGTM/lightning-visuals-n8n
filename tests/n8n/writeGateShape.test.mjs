@@ -340,7 +340,7 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
 // batch, with "Build Response Merge" satisfied (never stalled). Drives the COMMITTED
 // wf_enrichment_cloud.json through tests/n8n/lib/walkWorkflow.mjs — no live n8n call.
 test("enrichment lane: a fully refused two-row batch produces exactly two rows at the response builder, with no stalled merge", async () => {
-  const { walkWorkflow, loadWorkflow: loadWf, nodeItems } =
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems, starvedWithData } =
     await import("./lib/walkWorkflow.mjs");
   const wf = loadWf(path.join(ROOT, "n8n", "wf_enrichment_cloud.json"));
   const events = ["11", "22"].map((id) => ({
@@ -358,7 +358,7 @@ test("enrichment lane: a fully refused two-row batch produces exactly two rows a
       "HubSpot Company Name Search": [{ results: [] }, { results: [] }],
     },
   });
-  assert.deepEqual(trace.stalled, [], "no merge may stall on a fully refused batch");
+  assert.deepEqual(starvedWithData(trace), [], "no merge may stall on a fully refused batch");
   const rows = nodeItems(runData, "Build Response");
   assert.equal(rows.length, 2, "one row per input row reaches the response builder");
   for (const r of rows) {
@@ -458,20 +458,23 @@ test("ingest: Build Ingest Response reports the GATE's verdict, not the pre-writ
 // refused row was relabelled "write_blocked" inside "Decide Action" and fell through both
 // routing IFs to "Set Review", so neither case could occur.
 async function walkIngest({ triggerItems, httpStubs }) {
-  const { walkWorkflow, loadWorkflow: loadWf, nodeItems } =
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems, starvedWithData } =
     await import("./lib/walkWorkflow.mjs");
   const wf = loadWf(path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json"));
   const { runData, trace } = walkWorkflow(wf, {
     triggerNode: "Webhook Trigger", triggerItems, httpStubs,
   });
   const ran = (name) => (nodeItems(runData, name) || []).length > 0;
-  return { trace, ran, rows: nodeItems(runData, "Build Ingest Response") };
+  return {
+    trace, ran, rows: nodeItems(runData, "Build Ingest Response"),
+    noRealLoss: starvedWithData(trace),
+  };
 }
 
 const INGEST_EMAIL = "solo@wyongraceclub.com.au";
 
 test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest Response, one row, reported blocked", async () => {
-  const { trace, ran, rows } = await walkIngest({
+  const { trace, ran, rows, noRealLoss } = await walkIngest({
     triggerItems: [{ email: INGEST_EMAIL, firstname: "Solo", lastname: "Person", company: "Wyong Race Club" }],
     httpStubs: {
       "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
@@ -481,7 +484,7 @@ test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest 
       "HubSpot Company Search by Name": [{ results: [] }],
     },
   });
-  assert.equal(trace.stalled.filter((s) => s.node === "Ingest Merge Response").length, 0,
+  assert.deepEqual(noRealLoss, [],
     "Ingest Merge Response must never stall — the gate's refusal lane feeds it directly");
   assert.equal(rows.length, 1);
   assert.equal(rows[0].action, "write_blocked",
@@ -497,7 +500,7 @@ test("ingest: a batch of updates that resolve NO company does not stall — an u
   // Task 3 / CLAUDE.md §13.0.1. "Build Association Request" drops a row with no company,
   // so on this batch the association lane delivers nothing at all — which is why
   // "Associate Lane Sentinel" has to ask about company_id, not just row.action.
-  const { trace, rows } = await walkIngest({
+  const { trace, rows, noRealLoss } = await walkIngest({
     triggerItems: [{ email: INGEST_EMAIL, firstname: "Solo", lastname: "Person", company: "Nowhere Pty" }],
     httpStubs: {
       "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
@@ -506,7 +509,7 @@ test("ingest: a batch of updates that resolve NO company does not stall — an u
       "HubSpot Company Search by Name": [{ results: [] }],
     },
   });
-  assert.equal(trace.stalled.filter((s) => s.node === "Ingest Merge Response").length, 0);
+  assert.deepEqual(noRealLoss, []);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].association, "none", "nothing to associate, and nothing held");
 });
@@ -525,7 +528,7 @@ const MIX_A = "allowed@acme-domain.example";
 const MIX_B = "refused@acme-domain.example";
 
 test("ingest, ARMED with a mixed verdict: the permitted row keeps its association and the refused row reports blocked", async () => {
-  const { walkWorkflow, loadWorkflow: loadWf, nodeItems } =
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems, starvedWithData } =
     await import("./lib/walkWorkflow.mjs");
   const wf = loadWf(path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json"));
   // Arm EVERY declaring node, the way n8n_arming.set_write_safety does — the gate and
@@ -560,7 +563,7 @@ test("ingest, ARMED with a mixed verdict: the permitted row keeps its associatio
       "HubSpot Associate Company": [{ status: "ok" }],
     },
   });
-  assert.deepEqual(trace.stalled, []);
+  assert.deepEqual(starvedWithData(trace), []);
   assert.equal((runData["Ingest Merge Response"] || []).length, 1,
     "the response Merge fires exactly once — a second run would double every reported row");
   const rows = nodeItems(runData, "Build Ingest Response");
