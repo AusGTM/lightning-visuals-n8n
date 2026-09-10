@@ -301,6 +301,30 @@ See `key-decisions` in the frontmatter. The four an operator or a later phase mu
 
 `Build Response Merge` now declares **15** inputs and `Ingest Merge Response` **5**. n8n's own `numberInputs` property is documented as 2-10. The repo already shipped 11 before this plan (D-70-07's `Build Refusal Row`), so this crosses no new line, but it widens an existing exposure: a `numberInputs` above the documented ceiling has never been observed rendering or validating on the live instance. Worth a look during the first deploy of this build — noted here rather than filed, since it is a property of the pre-existing design this plan extended, not a defect this plan introduced.
 
+### Gate 70-05-A — observed live 2026-09-10 (deferred from Task 2, run at end-of-phase UAT)
+
+Armed window `TEST_RECORD_IDS=7101` (Darwin Turf Club pair `7101`/`2751`, one company
+`9605267534`), execution `12203`. The six observations:
+
+1. `Build Ingest Response` row count: **2** — never 4. One Merge run each.
+2. Permitted row `7101`: HubSpot PATCHed and association created (typeId 279) — but the row
+   REPORTED `association: "not_confirmed"`, not `"associated"`.
+3. Refused row `2751`: untouched in HubSpot; `HubSpot Update Write Gate IF` out1 emitted its
+   `write_blocked` row — but the row REPORTED `action: "update"`, not `"write_blocked"`.
+4. Execution settled (`success`); client recovery 27s (after the G-70-1 multipart fix).
+5. HubSpot: exactly one contact updated, exactly one association created. Writes correct.
+6. `n8n_arming.set_write_safety` rewrote all THREE declaring nodes, `Associate Lane Sentinel`
+   included (read back live before the send; disarmed and read back `"false"` after).
+
+**Finding (G-70-2 in 70-UAT.md).** The commit-`3fdf413` fix gave each refusal lane its own
+Merge input, and that is still right — but the lane's SENTINEL shares that input, and the live
+engine delivers the sentinel's ZERO-ITEM output as the input's data. runData `source` on
+`Associate Carry Merge` names input 1 = `Associate Lane Sentinel` (0 items) → 1×0 combined = 0
+rows, association result dropped; on `Ingest Merge Response`, input 3 = `HubSpot Update Gate
+Unreached Sentinel` (0 items) → the refusal row dropped. The walker drops zero-item waves
+(`walkWorkflow.mjs:331`), so `writeGateShape.test.mjs`'s armed-mixed case is green offline and
+wrong live. Per this phase's own rule, reported as a finding; the walker was not adjusted.
+
 ## User Setup Required
 
 None — no external service configuration required. Nothing deployed, nothing bounced, nothing armed. Every `ALLOW_HUBSPOT_*` flag reads `"false"` in every committed workflow (verified by direct grep: zero `"true"` occurrences across all `n8n/wf_*.json`).
