@@ -19,10 +19,15 @@ alternate-domain set) are quick tasks, not phases in this milestone.
 
 ## Binding constraints — every requirement below inherits these
 
-- [ ] **SAFE-01**: No `min_confidence` is lowered, no `fill_blank_only` is weakened, and none
+- [x] **SAFE-01**: No `min_confidence` is lowered, no `fill_blank_only` is weakened, and none
   of the three enrichment drop paths (`doNotCall`/`dnc_status`, un-normalizable phone,
   unentitled provider field) is softened by any phase in this milestone. Richer means more
   fields ATTEMPTED, never more values FORCED through.
+  *Verified 2026-09-11 (resume session, offline): `config/field_policy.yaml` byte-unchanged
+  `v1.1..HEAD`, plugin copy byte-identical; `n8n/code/normalizePhone.js` unchanged; the
+  `doNotCall` suppress and `normalizePhone` drop in `normalizeProviders.js` untouched — the
+  file's only change since `v1.1` is Phase 66's additive `_linkedinHostOnly` producer, which
+  refuses rather than admits. `test_preingest_merge.py`'s SAFE-01 pin still green (2903).*
 - [x] **SAFE-02**: A refusal stays terminal (D-5sd-04). No re-entry, retry or fallback reaches
   the search path from a ladder containing a `refused` attempt, by any route.
 - [x] **SAFE-03**: `MAX_FOLLOWUP_FETCHES` and `MAX_FALLBACK_SEARCHES` bound a company's WHOLE
