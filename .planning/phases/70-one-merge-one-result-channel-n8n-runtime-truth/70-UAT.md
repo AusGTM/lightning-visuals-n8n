@@ -14,7 +14,9 @@ updated: 2026-09-10T14:20:00Z
 
 ### 1. Gate 1 — disarmed Merge-semantics probe (ingest lane)
 expected: Execution settles (not stuck `running`); a Merge whose second input never fires does not hang on this n8n Cloud build; live `settings.executionOrder` recorded; zero writes. Steps in `70-DEFERRED-GATES.md` § Gate 1.
-result: issue
+result: pass
+original_result: issue
+superseded_by: "G-70-1 fixed in-session (576fe7c), run_id echo verified live on 12202 and on every later execution incl. 12354-12358, 12363"
 reported: "log Test 1 as issue (run_id echo)"
 severity: major
 observed: |
@@ -32,7 +34,9 @@ observed: |
 
 ### 2. Gate 70-05-A — first ARMED batch with a mixed verdict on one write gate
 expected: Arm one window with `TEST_RECORD_IDS` naming exactly one of two contacts that resolve the same company; send both in one ingest batch. `Build Ingest Response` returns exactly 2 rows (never 4); permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"` with a reason; execution settled; HubSpot shows one contact updated and one association created; `n8n_arming.set_write_safety` rewrote all THREE `ALLOW_HUBSPOT_RECORD_WRITES` nodes on the ingest lane (two gates + `Associate Lane Sentinel`). Steps in `70-DEFERRED-GATES.md` § Gate 70-05-A.
-result: issue
+result: pass
+original_result: issue
+superseded_by: "G-70-2 — re-run as Gate 12 on the v1 graph (12363): permitted row update/associated, refused row write_blocked (test 12)"
 reported: "operator armed the window and delegated the send; issue observed by the agent on execution 12203 (see observed) — operator to confirm"
 severity: major
 observed: |
@@ -62,7 +66,9 @@ observed: |
 
 ### 3. Gate 3 / D-70-19 — disarmed live mixed-batch proof (phase-closing gate)
 expected: Deploy + bounce disarmed; read live `settings.executionOrder`; run `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` (4 sends: enrichment_2x2, enrichment_single_lane, ingest_2x2, ingest_single_lane). `70-RUNTIME-VERDICT.json` shows `shapes_equal: true`, all four executions settled, zero writes, and the 15-input `Build Response Merge` accepted by the live engine (n8n docs describe 2–10 inputs — flagged). Then apply the follow-on CLAUDE.md `[observed live]` edits written at the end of `70-DEFERRED-GATES.md` § Gate 3. Steps in `70-DEFERRED-GATES.md` § Gate 3.
-result: issue
+result: pass
+original_result: issue
+superseded_by: "G-70-3 — re-run as Gate 11 on the v1 graph (12354-12356): every row reaches Build Response, shapes_equal true (test 11)"
 reported: "operator delegated the run; issue observed by the agent (verdict shapes_equal: false) — operator to confirm"
 severity: blocker
 observed: |
@@ -93,7 +99,9 @@ observed: |
 
 ### 4. Gate 4 / Gate 5 (deploy) — a working graph on the live instance
 expected: Live instance no longer runs the defective pre-gap-closure JSON. EITHER Gate 4 rollback to `59812be` (17/29/123/26/39 nodes) OR Gate 5's deploy + bounce of the gap-closure JSON (291/69/55/43/30 nodes), disarmed, both write flags `"false"` read back. Steps in `70-DEFERRED-GATES.md` § Gate 4 / § Gate 5.
-result: issue
+result: pass
+original_result: issue
+superseded_by: "G-70-5 rollback + redeploy — re-run as Gate 10 on the v1 graph: five PUTs at 200, bounce, read-back, clean burst watch (test 10)"
 reported: "agent-driven (disarmed deploy/bounce); issue observed — operator to confirm"
 severity: blocker
 observed: |
@@ -124,7 +132,9 @@ observed: |
 
 ### 5. Gate 5 — disarmed re-proof on the fixed graph (D-70-19)
 expected: With the gap-closure JSON live and bounced: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` `shapes_equal: true`, four executions settled, `writes_performed: 0`, every `Build Response` / `Build Ingest Response` run reached (no starved Merge), live `settings.executionOrder` recorded. Steps in `70-DEFERRED-GATES.md` § Gate 5.
-result: issue
+result: pass
+original_result: issue
+superseded_by: "G-70-5 — re-run as Gate 11 (test 11): all four sends shapes_equal true, 0 connection violations"
 reported: "agent-driven; partial — operator to confirm"
 severity: major
 observed: |
@@ -140,7 +150,9 @@ observed: |
 
 ### 6. Gate 6 — armed mixed-verdict re-run on the fixed graph (only after Gate 5 passes)
 expected: Same pair as Gate 70-05-A (or equivalent): armed for exactly one contact; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after. Steps in `70-DEFERRED-GATES.md` § Gate 6.
-result: blocked
+result: pass
+original_result: blocked
+superseded_by: "superseded by Gate 9, then by Gate 12 (test 12), which passed"
 blocked_by: prior-phase
 reason: "Gate 5 did not pass on the enrichment lane (G-70-5); Gate 6 arms nothing until it does"
 
@@ -154,7 +166,9 @@ observed: |
 
 ### 8. Gate 8 — disarmed D-70-19 proof re-run on the loop-free graph
 expected: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → all four sends `shapes_equal: true`, every execution settled, `writes_performed: 0`, the enrichment sends recover real rows carrying `row_id` (never marker-shaped items), and on every execution each node's runData `source` matches a declared connection. Steps in `70-DEFERRED-GATES.md` § Gate 8.
-result: issue
+result: pass
+original_result: issue
+superseded_by: "G-70-6 — re-run as Gate 11 under executionOrder v1 (test 11): none of Gate 8's symptoms"
 reported: "agent-driven; issue observed — operator to confirm"
 severity: blocker
 observed: |
@@ -191,7 +205,9 @@ observed: |
 
 ### 9. Gate 9 — armed mixed-verdict re-run on the ingest lane (only after Gate 8 passes)
 expected: Armed for exactly one contact of a same-company pair; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after. Steps in `70-DEFERRED-GATES.md` § Gate 9.
-result: blocked
+result: pass
+original_result: blocked
+superseded_by: "superseded by Gate 12 (test 12), which passed"
 blocked_by: prior-phase
 reason: "Gate 8 failed on the enrichment lane and showed HubSpot Update executing on an empty lane (G-70-6); nothing is armed until that rule is settled"
 
@@ -254,15 +270,17 @@ observed: |
 ## Summary
 
 total: 12
-passed: 4
-issues: 6
+passed: 12
+issues: 0
 pending: 0
 skipped: 0
-blocked: 2
+blocked: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+<!-- Every gap below is status: resolved. Tests 1-6/8/9 carry original_result + superseded_by: the expectation each recorded was re-verified by a later passed gate on the fixed, v1 graph; their observed evidence is kept verbatim. -->
 
 - gap_id: G-70-1
   truth: "The client-minted run_id is echoed by Set Config so recovery correlates on it"

@@ -88,7 +88,7 @@ covered_files:
   - tests/test_prove_phase70_runtime.py
   - tests/test_subworkflow_ref_rebinding.py
 
-covered_digest: "v1:sha256:9ba47b3710af4ad746ff13f68de4466131e4c8b2838985c1e6ffadf68d1e60bb"
+covered_digest: "v1:sha256:7b65d15e4cf6c44ba110e3225e2e6eefae427cda11a4660e8c55ea0072ea8cf1"
 re_verification:
   previous_status: human_needed
   previous_score: "46/46 offline-verifiable must-haves verified (28 regression-checked from round 1 + 18 round-2 plan truths, D-70-24..27); Gates 7, 8 and 9 (all live, all operator) remained outstanding"
