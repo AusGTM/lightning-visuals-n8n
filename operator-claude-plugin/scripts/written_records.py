@@ -173,13 +173,12 @@ ACTION_TO_OUTCOME = {
     "recompute_refused": FAILED,
     "skip": NO_ACTION,
     "proposed": NO_ACTION,
-    # Phase 70 Plan 03 Task 2 (D-70-07): "Build Refusal Row"'s two shapes, now reachable
-    # via runData like every other terminal. `scale_up_dispatched` did nothing HERE —
-    # the row was handed to a self-fanned child execution, the identical rationale
-    # `skip`/`proposed` already use for NO_ACTION. `list_expansion_refused` is a
-    # whole-request refusal before any row was even attempted — nothing was enriched,
-    # the same bucket `research_failed`/`recompute_refused` already resolve to.
-    "scale_up_dispatched": NO_ACTION,
+    # Phase 70 Plan 03 Task 2 (D-70-07): "Build Refusal Row"'s shape, reachable via
+    # runData like every other terminal — a whole-request refusal before any row was even
+    # attempted, so nothing was enriched: the same bucket `research_failed`/
+    # `recompute_refused` already resolve to. Phase 70 Plan 13 (D-70-24) removed this
+    # node's second shape, the fan-out dispatch confirmation, along with the lane that
+    # produced it — no backend this repo builds can emit that action any more.
     "list_expansion_refused": FAILED,
 }
 

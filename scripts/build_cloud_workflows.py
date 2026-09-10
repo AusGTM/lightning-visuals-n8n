@@ -5238,14 +5238,31 @@ const parsed = parseWebhookBody(body);
 // ("Build Ack" fires unconditionally), so there is nothing left to opt into.
 const envelopeIsObject = body && typeof body === "object" && !Array.isArray(body);
 const ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;
-// Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up): a request-level opt-in
-// boolean, the SAME envelope+event-fallback idiom `recompute` already established — a
-// pattern, not an invention (61-06-PLAN.md's own framing). `fan_depth` is deliberately
-// NOT read from the envelope: the only value
-// this workflow ever trusts is one ITS OWN "Build Scale Up Fan-Out" node wrote onto a
-// self-dispatched child event, below. A caller-supplied one still normalizes safely via
-// `Number(...) || 0` exactly like a genuine one — it just cannot manufacture trust.
+// Phase 70 Plan 13 Task 1 (G-70-5, D-70-24). `scale_up` was a request-level opt-in that
+// routed the batch into a self-referencing dispatch lane inside this same workflow. On
+// 2026-09-10 that lane looped: 135 child executions in six minutes from four disarmed
+// sends (12211-12348), from a node whose only declared producer had emitted zero items.
+// The mechanism was never isolated, so the lane is DELETED rather than guarded — after
+// that observation no in-graph guard is trusted on this engine, and only the absence of
+// a self-referencing Execute Workflow node makes recursion impossible.
+//
+// The read survives for exactly one purpose: to REFUSE the request. Envelope OR event,
+// strictly boolean true, mirroring the normalization the deleted lane used, so a caller
+// who opted in either way is told rather than silently run at a different scale.
 const ENVELOPE_SCALE_UP = envelopeIsObject ? body.scale_up === true : false;
+const ANY_EVENT_SCALE_UP = (parsed.events || []).some(
+  (e) => e && e.scale_up === true);
+if (ENVELOPE_SCALE_UP || ANY_EVENT_SCALE_UP) {
+  return [{ json: {
+    outcome: "refused",
+    reason: "This request asks for the scale-up fan-out, which is retired. It was " +
+      "removed after executions 12211-12348 (2026-09-10) showed the self-dispatch " +
+      "lane looping, producing 135 child executions in six minutes from four sends. " +
+      "The request was not run at all. Re-send it without `scale_up`, in batches.",
+    events: [],
+    object_type: "unknown",
+  } }];
+}
 // Phase 36-03 Task 3 (36-CONTEXT.md sec7 step 6, D-15/D-22): refuse an oversize or empty
 // events array WHOLE, never truncate, never hang. In-node here rather than a separate
 // node (unlike Expand List To Events, whose separate-node placement guards against a
@@ -5334,10 +5351,9 @@ return parsed.events.map((event) => {
     // (Phase 70 Plan 03 Task 2, D-70-07 — the opt-in flag this field used to gate is
     // retired).
     run_id: ENVELOPE_RUN_ID ?? event.run_id ?? null,
-    // Phase 61 Plan 06 Task 5: same placement rationale as recompute above — AFTER
-    // the `...event` spread so a caller-supplied raw row property cannot shadow this.
-    scale_up: (ENVELOPE_SCALE_UP || event.scale_up) === true,
-    fan_depth: Number(event.fan_depth) || 0,
+    // Phase 70 Plan 13 Task 1 (D-70-24): the two fan-out fields that used to ride every
+    // row from here are gone with the lane that read them. A request that asks for the
+    // fan-out never reaches this map at all — it is refused above.
   }};
 });
 """
@@ -5354,8 +5370,8 @@ return parsed.events.map((event) => {
 # Phase 70 Plan 03 Task 2 (D-70-07): the opt-in is retired. "Build Ack" (renamed from
 # "Build Async Ack" — the node this feeds is no longer conditional, so the name should
 # not imply one) is now the SOLE producer "Respond to Webhook" ever hears from: every
-# OTHER edge into that node ("IF List Expanded" false, "Build Scale Up Ack", "Build
-# Response") is removed. It fires unconditionally, exactly once, for every request —
+# OTHER edge into that node ("IF List Expanded" false, the retired fan-out's ack, and
+# "Build Response") is removed. It fires unconditionally, exactly once, for every request —
 # `$input.all()` because this node also gains a SECOND inbound edge, from "IF List
 # Expanded" false (a list-expansion refusal, where "Parse HubSpot Event" never runs at
 # all this execution) — the two producers are mutually exclusive per execution (a
@@ -5376,11 +5392,10 @@ return [{ json: { run_id, accepted: true, row_ids } }];
 
 # Phase 70 Plan 03 Task 2 (D-70-07). Turns a reason that used to reach the caller ONLY
 # via the HTTP response body into a row that reaches "Build Response" instead — the sole
-# channel now that the body is always the ack. Fed by two producers that are mutually
-# exclusive PER EXECUTION (see this node's own wiring comment at its connections):
-# "IF List Expanded" false (a list-expansion refusal — "Parse HubSpot Event" never ran
-# this execution) and "Build Scale Up Ack" (the scale-up dispatch confirmation — a
-# status row, not a refusal, but body-borne today and moved the same way). Routed into
+# channel now that the body is always the ack. Phase 70 Plan 13 Task 1 (D-70-24): ONE
+# producer now — "IF List Expanded" false (a list-expansion refusal, where "Parse HubSpot
+# Event" never ran this execution). The second producer, the retired fan-out's dispatch
+# confirmation, is gone with the lane. Routed into
 # "Build Response Merge" via a NEW input (`_append_merge_input`, below) rather than
 # straight into "Build Response": the Merge's other ~10 inputs are all sourced from
 # nodes downstream of the normal (non-refused, non-fanned) chain, so in EITHER of this
@@ -5390,14 +5405,6 @@ return [{ json: { run_id, accepted: true, row_ids } }];
 ENRICH_BUILD_REFUSAL_ROW = r"""// Build Refusal Row — Phase 70 Plan 03 Task 2 (D-70-07).
 return $input.all().map((it) => {
   const row = it.json || {};
-  if (row.scale_up_dispatched === true) {
-    return { json: {
-      action: "scale_up_dispatched",
-      reason: "batch dispatched to a self-fanned child execution",
-      run_id: row.run_id ?? null,
-      row_id: row.row_id ?? null,
-    } };
-  }
   return { json: {
     action: "list_expansion_refused",
     reason: row.reason || "list expansion refused",
@@ -5405,103 +5412,6 @@ return $input.all().map((it) => {
     row_id: row.row_id ?? null,
   } };
 });
-"""
-
-# Phase 61 Plan 06 Task 5 (T-61-25, RUN-02/AFTER-02's substrate-3 scale-up path,
-# 61-PREMISE-DOCS-FINDINGS.md's "sub-workflows are doubly exempt" finding, P-14). This
-# bound is the load-bearing safety property, not a detail: it lives HERE, inside the
-# workflow, so a caller who never passes `fan_depth` still cannot start more than one
-# level of self-dispatch. 1 means exactly one fan-out hop is ever permitted — a row this
-# workflow itself re-dispatches to itself always arrives with `fan_depth >= 1` (see the
-# `depth + 1` below) and is refused a second hop by BOTH `IF Scale Up Route` (which never
-# routes it back to this branch) AND this node's own independent check, so termination
-# does not depend on either guard alone being correct (defense in depth, the same shape
-# `p14`'s own Depth Guard IF carried but never exercised at runtime).
-SCALE_UP_MAX_FAN_DEPTH = 1
-
-# The gate `IF Scale Up Route` (an n8n-native IF condition, built alongside this string)
-# tests the IDENTICAL predicate — same threshold, same fields — so a request is routed to
-# the fan-out lane if and only if this node would also fan it out. Declared once here so
-# the two expressions cannot silently drift apart.
-_SCALE_UP_IS_FANNING_EXPR = (
-    "$json.scale_up === true && (Number($json.fan_depth) || 0) < "
-    f"{SCALE_UP_MAX_FAN_DEPTH}"
-)
-
-# Phase 61 Plan 06 Task 5. Fed ONLY by `IF Scale Up Route`'s TRUE lane (already gated),
-# but self-gated a SECOND time regardless — same discipline `ENRICH_BUILD_ASYNC_ACK`
-# already uses for its own opt-in, and the two independent stops T-61-25's mitigation
-# names. Reshapes the current (already-normalized) event back into the BARE event shape
-# `ENRICH_SJ3_BUILD_DISPATCH_EVENT` already establishes as this workflow's OWN proven
-# cross-workflow dispatch contract (fix(40)/WINDOWS.md #3 — the "Execute Workflow
-# Trigger" entry point this reuses, unchanged, rather than inventing a second one) —
-# `scale_up` forced `false` and `fan_depth` incremented per item, so a dispatched child
-# can never re-fan even if every other guard were absent.
-#
-# `$input.all()`, NOT a bare `$json` (deviation, Rule 1 — found live at this task's own
-# runtime proof, execution 12042: a 2-record disarmed batch fanned out only ONE child,
-# silently dropping the second. `Build Async Ack`'s own bare-`$json` shape — this node's
-# original model — only ever reads the FIRST of however many items n8n hands a
-# "runOnceForAllItems" Code node; it was never exercised past 1 item live before this.
-# `ENRICH_SKIP_NOOP_JS`/`ENRICH_SJ3_BUILD_DISPATCH_EVENT` are this file's own precedent
-# for the CORRECT multi-item shape in this exact node mode — `$input.all().filter().map()`
-# — reused here rather than repeating Build Async Ack's latent gap. A dropped fan-out
-# item is silent data loss, not a safety issue on its own (T-61-25's depth/forced-false
-# stops are per-item and untouched by this fix), but it is a real bug: the whole point of
-# scale-up is a BATCH, and this task's own runtime proof exists to catch exactly this
-# class of miss rather than merely assert the mechanism on paper.
-ENRICH_BUILD_SCALE_UP_FAN_OUT = r"""// Build Scale Up Fan-Out — Phase 61 Plan 06 Task 5.
-// Independently re-checks the SAME predicate "IF Scale Up Route" already gated on —
-// T-61-25's two-independent-stops mitigation, not redundancy for its own sake.
-const SCALE_UP_MAX_FAN_DEPTH = __SCALE_UP_MAX_FAN_DEPTH__;
-return $input.all()
-  .filter((it) => {
-    const depth = Number(it.json.fan_depth) || 0;
-    return it.json.scale_up === true && depth < SCALE_UP_MAX_FAN_DEPTH;
-  })
-  .map((it) => {
-    const depth = Number(it.json.fan_depth) || 0;
-    // Bare-event shape (CLAUDE.md §18.2 / ENRICH_SJ3_BUILD_DISPATCH_EVENT's own
-    // precedent): arrives at the self-dispatched child's "Execute Workflow Trigger"
-    // (passthrough) and is read by Parse HubSpot Event as `$json.body ?? $json` — no
-    // `.body` wrapper needed.
-    return { json: {
-      objectId: it.json.object_id,
-      objectType: it.json.object_type,
-      subscriptionType: it.json.event_type || null,
-      propertyName: it.json.property_name || null,
-      occurredAt: new Date().toISOString(),
-      providers: it.json.providers_requested,
-      mode: it.json.mode,
-      run_id: it.json.run_id ?? null,
-      row_id: it.json.row_id ?? null,
-      // The two independent stops (T-61-25): forced false regardless of what the
-      // ORIGINAL caller asked for, plus the incremented, workflow-owned depth counter.
-      scale_up: false,
-      fan_depth: depth + 1,
-    } };
-  });
-""".replace("__SCALE_UP_MAX_FAN_DEPTH__", str(SCALE_UP_MAX_FAN_DEPTH))
-
-# Phase 61 Plan 06 Task 5. `Dispatch Self` (Execute Workflow, mode="each",
-# waitForSubWorkflow=false — P-13's proven detached shape) never waits, so its own output
-# item IS the dispatch record (each carrying `metadata.subExecution.executionId` per
-# P-13's own `correlate_child_id`), not a business outcome. This shapes a minimal ack from
-# it rather than echoing that internal metadata verbatim to the caller — mirrors
-# `ENRICH_BUILD_ASYNC_ACK`'s own minimal-ack precedent for the same reason.
-# `$input.all()` (same Rule 1 fix as Build Scale Up Fan-Out above, same commit): "each"
-# mode dispatch produces one output item PER dispatched child, and every one must be
-# acknowledged, not just the first.
-ENRICH_BUILD_SCALE_UP_ACK = r"""// Build Scale Up Ack — Phase 61 Plan 06 Task 5.
-// Reports what was DISPATCHED (fire-and-forget), never a business outcome — each child
-// execution this represents may still be running when this responds.
-// Phase 70 Plan 03 Task 2 (D-70-07): also carries `row_id` — "Dispatch Self" is
-// passthrough, so the dispatched child's own row_id survives on `it.json`, and this
-// node's sole downstream consumer ("Build Refusal Row") needs it to shape a
-// correlatable row now that this confirmation is read from runData, not the body.
-return $input.all().map((it) => ({
-  json: { scale_up_dispatched: true, run_id: it.json.run_id ?? null, row_id: it.json.row_id ?? null },
-}));
 """
 
 
@@ -6267,40 +6177,18 @@ def build_enrichment_cloud():
     # see ENRICH_BUILD_ACK's own comment above — and gains a SECOND inbound edge below
     # (from "IF List Expanded" false).
     nodes.append(code_node("Build Ack", ENRICH_BUILD_ACK, x, y + 260))
-    # Phase 70 Plan 03 Task 2 (D-70-07): the shared refusal/status-row normalizer, fed by
-    # "IF List Expanded" false and "Build Scale Up Ack" below — see
-    # ENRICH_BUILD_REFUSAL_ROW's own comment above.
+    # Phase 70 Plan 03 Task 2 (D-70-07): the shared refusal/status-row normalizer. Phase
+    # 70 Plan 13 Task 1 (D-70-24): fed by "IF List Expanded" false and nothing else now —
+    # see ENRICH_BUILD_REFUSAL_ROW's own comment above.
     nodes.append(code_node("Build Refusal Row", ENRICH_BUILD_REFUSAL_ROW, x, y + 380))
 
-    # Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up, off by default). Spliced
-    # BETWEEN "Parse HubSpot Event" and "IF Object Type Supported" — the ONE edge this
-    # task re-points (disclosed exactly like Task 2's `Adapt Company Create` splice) —
-    # rather than added as a further unconditional fan target: a fanned row must NOT
-    # ALSO run the main business chain in the parent, or an armed request would write
-    # twice. TRUE (is fanning: `_SCALE_UP_IS_FANNING_EXPR`) routes to the fan-out lane
-    # below; FALSE (every request that never opts in, the overwhelming default) routes to
-    # "IF Object Type Supported" exactly as before — functionally byte-identical, one
-    # additional pass-through hop.
-    nodes.append(_if_bool_expr_node(
-        "IF Scale Up Route", _SCALE_UP_IS_FANNING_EXPR, x, y - 260))
-    x += 220
-    nodes.append(code_node(
-        "Build Scale Up Fan-Out", ENRICH_BUILD_SCALE_UP_FAN_OUT, x, y - 260))
-    x += 220
-    # Self-reference: "LVenrichmentCloud01"/"LV Enrichment (Cloud template)" is THIS
-    # workflow's own local id/name (see this function's own final `return` below).
-    # `rebind_subworkflow_refs` (scripts/deploy_n8n_workflows.py) resolves any
-    # executeWorkflow node's `cachedResultName` against a fresh live name->id map at
-    # deploy time — this workflow already exists live (61-05's substrate-1 deploy), so
-    # its own name already resolves to its own live id with NO special-casing, the exact
-    # mechanism SJ-3's cross-workflow dispatch already proves. `wait_for_sub=False` bakes
-    # the detached shape 61-PREMISE-PROBE-VERDICT.json's P-13 measured live.
-    nodes.append(_execute_workflow_node(
-        "Dispatch Self", x, y - 260,
-        "LVenrichmentCloud01", "LV Enrichment (Cloud template)", wait_for_sub=False))
-    x += 220
-    nodes.append(code_node("Build Scale Up Ack", ENRICH_BUILD_SCALE_UP_ACK, x, y - 260))
-    x -= 660  # restore x: the fan-out lane is a side branch, not the main chain's spine
+    # Phase 70 Plan 13 Task 1 (G-70-5, D-70-24): the scale-up fan-out lane that was
+    # spliced in here — a routing IF, a fan-out builder, a self-referencing Execute
+    # Workflow node and its ack — is DELETED. It looped live (135 child executions in six
+    # minutes, 12211-12348, 2026-09-10) by a mechanism this repo never isolated, so the
+    # edge it re-pointed is restored: "Parse HubSpot Event" fans to "IF Object Type
+    # Supported" directly again, exactly as it did before the splice. A request that
+    # still asks for the fan-out is refused inside "Parse HubSpot Event" itself.
 
     # Phase 16.1 (reviews A2): an explicit unsupported-object-type check BEFORE the
     # existing companies/contacts router — a malformed/unknown object_type terminates in
@@ -7216,35 +7104,20 @@ return $input.all().map((it) => {
     # Phase 61 Plan 05 Task 2: a THIRD parallel fan target, "Build Ack" (renamed, Phase 70
     # Plan 03 Task 2, D-70-07) — see that node's own comment (ENRICH_BUILD_ACK) for why
     # this fires unconditionally now, not opt-in.
-    # Phase 61 Plan 06 Task 5: the FIRST target is now "IF Scale Up Route", not
-    # "IF Object Type Supported" directly — the ONE re-pointed edge this task discloses
-    # (see "IF Scale Up Route"'s own comment above for why an unconditional 4th fan
-    # target, mirroring Build Ack, would double-process a fanned row).
+    # Phase 70 Plan 13 Task 1 (D-70-24): the FIRST target is "IF Object Type Supported"
+    # again. Phase 61 Plan 06 Task 5 had re-pointed it through a scale-up routing IF; that
+    # whole lane is deleted (see the node-emission block above), so this edge is back to
+    # the exact shape it had before the splice — no pass-through hop, no fan-out.
     conns["Parse HubSpot Event"] = {"main": [[
-        {"node": "IF Scale Up Route", "type": "main", "index": 0},
+        {"node": "IF Object Type Supported", "type": "main", "index": 0},
         {"node": "Credit Request", "type": "main", "index": 0},
         {"node": "Build Ack", "type": "main", "index": 0},
     ]]}
     # Phase 70 Plan 03 Task 2 (D-70-07): THE sole edge into "Respond to Webhook" — every
-    # other producer that used to feed it directly ("IF List Expanded" false, "Build
-    # Scale Up Ack", "Build Response") is re-pointed elsewhere below.
+    # other producer that used to feed it directly ("IF List Expanded" false, the retired
+    # fan-out's ack, "Build Response") is re-pointed elsewhere below.
     conns["Build Ack"] = {"main": [[
         {"node": "Respond to Webhook", "type": "main", "index": 0},
-    ]]}
-    # Phase 61 Plan 06 Task 5: true (is fanning, `_SCALE_UP_IS_FANNING_EXPR`) -> the
-    # fan-out lane; false (every request that never opts in) -> "IF Object Type
-    # Supported", the exact node Parse HubSpot Event fed directly before this task.
-    conns["IF Scale Up Route"] = {"main": [
-        [{"node": "Build Scale Up Fan-Out", "type": "main", "index": 0}],  # true: fanning
-        [{"node": "IF Object Type Supported", "type": "main", "index": 0}],  # false: today's path
-    ]}
-    conns.update(chain(["Build Scale Up Fan-Out", "Dispatch Self", "Build Scale Up Ack"]))
-    # Phase 70 Plan 03 Task 2 (D-70-07): re-pointed from "Respond to Webhook" (a
-    # body-borne status) to "Build Refusal Row" (a row) — "Build Ack" already answered
-    # this request via its own edge from "Parse HubSpot Event" above, since that node
-    # runs whenever a scale-up dispatch does.
-    conns["Build Scale Up Ack"] = {"main": [[
-        {"node": "Build Refusal Row", "type": "main", "index": 0},
     ]]}
     # Phase 16.1 (reviews A2): unsupported/unknown object_type terminates HERE, before
     # Route By Object Type ever runs — no path to any provider gate.
@@ -7746,13 +7619,16 @@ return $input.all().map((it) => {
 
     sx, sy = 40, 2200  # a dedicated, empty region of the canvas for the sentinel network
 
-    # --- Pre-fork sentinels: fed from "IF Scale Up Route" false (index 1) — the single
-    # point every non-fanned request reaches with `object_type` already stamped by
-    # "Parse HubSpot Event", BEFORE "IF Object Type Supported"/"Route By Object Type"
-    # fork. Never fed from "Parse HubSpot Event" itself: that node ALSO runs on a fanned
-    # scale-up dispatch, where feeding a merge input here would satisfy it while the
-    # fanned child's OWN execution never runs the rest of the graph at all
-    # (scaleUpFanOutFlow.test.mjs would then see a half-fed merge -> false stall).
+    # --- Pre-fork sentinels: fed from "Parse HubSpot Event" — the single point every
+    # request reaches with `object_type` already stamped, BEFORE "IF Object Type
+    # Supported"/"Route By Object Type" fork.
+    #
+    # Phase 70 Plan 13 Task 1 (D-70-24): re-sourced back HERE from the deleted scale-up
+    # routing IF's false lane. The comment that forbade this source named exactly one
+    # reason — a fanned scale-up dispatch, where "Parse HubSpot Event" still runs but the
+    # rest of the graph does not, so a marker fired from here would half-feed a merge and
+    # stall it. That case cannot occur any more: the fan-out lane is deleted and a request
+    # asking for it is refused inside "Parse HubSpot Event" before any event row is built.
     # Phase 70 Plan 03 Task 2 (Rule 1 fix — a walker probe over an unsupported-object-
     # type-ONLY batch, added by enrichmentBatchRefusal.test.mjs, stalled Build Response
     # Merge): the ORIGINAL condition tested `every row IS "companies"` — sufficient but
@@ -7764,7 +7640,7 @@ return $input.all().map((it) => {
     # "no row is contacts") — this is what "contacts absent" means, and it is now
     # correct for every object_type value including "unknown", not just "companies".
     _add_starved_lane_sentinel(
-        nodes, conns, "Contacts Absent Sentinel", "IF Scale Up Route",
+        nodes, conns, "Contacts Absent Sentinel", "Parse HubSpot Event",
         'if (rows.length > 0 && rows.every((r) => r.object_type !== "contacts")) '
         'return [{}]; return [];',
         [eg("Adapt Fetch By Id"),
@@ -7784,11 +7660,11 @@ return $input.all().map((it) => {
          br("HubSpot Create"),
          br("HubSpot Update"),
          br("IF Enrich", 1)],
-        sx, sy, source_out_idx=1,
+        sx, sy,
     )
     sy += 120
     _add_starved_lane_sentinel(
-        nodes, conns, "Companies Absent Sentinel", "IF Scale Up Route",
+        nodes, conns, "Companies Absent Sentinel", "Parse HubSpot Event",
         'if (rows.length > 0 && rows.every((r) => r.object_type !== "companies")) '
         'return [{}]; return [];',
         [cg("Adapt Company Fetch By Id"),
@@ -7806,15 +7682,15 @@ return $input.all().map((it) => {
          br("Adapt Company Create"),
          br("HubSpot Company Update"),
          br("IF Company Enrich", 1)],
-        sx, sy, source_out_idx=1,
+        sx, sy,
     )
     sy += 120
     _add_starved_lane_sentinel(
-        nodes, conns, "Unsupported Absent Sentinel", "IF Scale Up Route",
+        nodes, conns, "Unsupported Absent Sentinel", "Parse HubSpot Event",
         'if (rows.length > 0 && rows.every((r) => r.object_type !== "unknown")) '
         'return [{}]; return [];',
         [br("Unsupported Object Type")],
-        sx, sy, source_out_idx=1,
+        sx, sy,
     )
     sy += 120
 
@@ -7862,27 +7738,22 @@ return $input.all().map((it) => {
     # "IF Company Recompute" itself reads it — `.first()` off "Parse HubSpot Event",
     # never per-row.
     #
-    # Phase 70 Plan 03 Task 2 (Rule 1 — bug found live via a scale_up=true walker probe
-    # this task added, `Decide Company Action Merge` stalled on `Merge Company`'s input):
-    # both sentinels below used to be sourced from "Parse HubSpot Event" directly, which
-    # STILL RUNS in a scale_up=true execution (it is the node that computes `scale_up`),
-    # so they fired their marker into "Decide Company Action Merge" even though the
-    # WHOLE companies waterfall never runs on that path — a partial delivery (this
-    # input satisfied, "Merge Company"'s own 3 inputs never satisfied at all, since
-    # THEIR sentinels are correctly gated off "IF Scale Up Route"'s false lane) that
-    # hangs the merge forever instead of leaving it correctly dormant. Re-sourced from
-    # "IF Scale Up Route"'s FALSE lane (source_out_idx=1) — the exact same idiom the
-    # pre-fork sentinels ("Contacts/Companies/Unsupported Absent Sentinel") already use
-    # — so in scale_up mode NEITHER sentinel runs at all, and "Decide Company Action
-    # Merge" gets zero deliveries on every input (dormant, not stalled), matching
-    # "Merge Company"'s own already-correct behaviour. `rows` is unchanged for every
-    # non-scale_up request: the false lane delivers every event row whenever scale_up
-    # is not requested, byte-identical to what "Parse HubSpot Event" delivered before.
+    # Phase 70 Plan 03 Task 2 had moved both sentinels below OFF "Parse HubSpot Event"
+    # onto the scale-up routing IF's false lane (Rule 1 — a scale_up=true walker probe
+    # stalled `Decide Company Action Merge`: this node still runs on a fanned dispatch, so
+    # a marker fired from here satisfied one merge input while the companies waterfall,
+    # and every other input, never ran at all).
+    #
+    # Phase 70 Plan 13 Task 1 (D-70-24): re-sourced back to "Parse HubSpot Event". The
+    # scale-up dispatch that made this node an unsafe source no longer exists — the lane
+    # is deleted and the request is refused before any event row is built — so this is
+    # once again the correct single delivery point, byte-identical to what the deleted
+    # false lane forwarded for every request that never opted in.
     _add_starved_lane_sentinel(
-        nodes, conns, "Recompute Not Requested Sentinel", "IF Scale Up Route",
+        nodes, conns, "Recompute Not Requested Sentinel", "Parse HubSpot Event",
         'if (rows.length > 0 && rows[0].recompute !== true) return [{}]; return [];',
         [dca("IF Company Recompute")],
-        sx, sy, source_out_idx=1,
+        sx, sy,
     )
     sy += 120
     # The inverse: in recompute mode, "IF Company Skip" and everything downstream of it
@@ -7894,7 +7765,7 @@ return $input.all().map((it) => {
     # against this exact scenario) — feed that index directly too, alongside the 3
     # starved "Merge Company" inputs.
     _add_starved_lane_sentinel(
-        nodes, conns, "Recompute Requested Sentinel", "IF Scale Up Route",
+        nodes, conns, "Recompute Requested Sentinel", "Parse HubSpot Event",
         'if (rows.length > 0 && rows[0].recompute === true) return [{}]; return [];',
         [mc("IF Research Needed", 1),
          mc("IF Needs Judge", 1),
@@ -7905,7 +7776,7 @@ return $input.all().map((it) => {
          br("IF Company Skip"),
          br("Build Research Failure Response"),
          dca("Merge Company")],
-        sx, sy, source_out_idx=1,
+        sx, sy,
     )
     sy += 120
 
@@ -8130,10 +8001,11 @@ return $input.all().map((it) => {
     # Phase 70 Plan 03 Task 2 (D-70-07): "Build Refusal Row" is "Build Response Merge"'s
     # ELEVENTH input — a genuinely new producer discovered after `splice_merge_before`
     # already sized that merge to its original ten, added via `_append_merge_input`
-    # rather than folded into the splice. It delivers on exactly two scenarios (a
-    # list-expansion refusal, or a scale-up dispatch confirmation) that are BOTH
-    # mutually exclusive with the normal chain — in either one, none of the OTHER ten
-    # inputs' real producers ever run, so "Refusal Fired Sentinel" below (fed FROM this
+    # rather than folded into the splice. It delivers on exactly one scenario (a
+    # list-expansion refusal; Phase 70 Plan 13 Task 1 / D-70-24 retired the second, the
+    # fan-out dispatch confirmation) that is mutually exclusive with the normal chain —
+    # in it, none of the OTHER ten inputs' real producers ever run, so "Refusal Fired
+    # Sentinel" below (fed FROM this
     # node, the same starved-lane mechanism used throughout this build) feeds all ten of
     # them directly whenever this node delivers anything.
     refusal_row_index = _append_merge_input(nodes, conns, build_response_merge, "Build Refusal Row")
@@ -8156,13 +8028,14 @@ return $input.all().map((it) => {
     # The inverse: the normal chain ran (this input's own real producer never fires this
     # execution) — fed from "Parse HubSpot Event" (single producer, runs on every
     # request except a list-expansion refusal, where Parse HubSpot Event never runs at
-    # all and the real producer above covers it instead), guarded on `scale_up !== true`
-    # so it stays silent on a scale-up dispatch (where "Build Scale Up Ack" ->
-    # "Build Refusal Row" delivers the real content) — the same idiom "Recompute Not/
-    # Requested Sentinel" use for the identical reason.
+    # all and the real producer above covers it instead). Phase 70 Plan 13 Task 1
+    # (D-70-24): the `scale_up !== true` guard is dropped — it existed only to stay
+    # silent on a fanned dispatch, whose ack was "Build Refusal Row"'s second producer.
+    # Both the lane and that producer are deleted, so the row-count test is now the whole
+    # condition and "Build Refusal Row" has exactly one real producer to complement.
     _add_starved_lane_sentinel(
         nodes, conns, "Refusal Row Absent Sentinel", "Parse HubSpot Event",
-        'if (rows.length > 0 && rows[0].scale_up !== true) return [{}]; return [];',
+        'if (rows.length > 0) return [{}]; return [];',
         [(build_response_merge, refusal_row_index)],
         sx, sy,
     )
@@ -8171,9 +8044,8 @@ return $input.all().map((it) => {
     # Phase 70 Plan 04 (D-70-04): broadcasts "Build Credits Summary"'s single
     # `remaining_credits` item onto every row "Build Response Merge" delivers —
     # combineAll (cartesian, mirrors "Source By Field Broadcast" in build_cloud()).
-    # "Credit Request" is now fed from all three mutually-exclusive per-execution
-    # entry points (Parse HubSpot Event / IF List Expanded false / the scale-up path
-    # already covered via Parse HubSpot Event), so "Build Credits Summary" always
+    # "Credit Request" is fed from both mutually-exclusive per-execution entry points
+    # (Parse HubSpot Event / IF List Expanded false), so "Build Credits Summary" always
     # delivers exactly once — this cannot starve.
     #
     # "Filter Build Response Rows" sits BETWEEN the two: "Build Response Merge" is

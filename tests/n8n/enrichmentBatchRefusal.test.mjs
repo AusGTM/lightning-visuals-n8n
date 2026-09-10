@@ -206,7 +206,14 @@ test("list-expansion refusal: the reason reaches Build Response as a row, and th
   assert.match(rows[0].reason, /no members/i);
 });
 
-test("scale_up: the dispatch confirmation reaches Build Response as a row (not the body), and the responder still answers with the ack only", () => {
+test("scale_up: the retired fan-out is REFUSED as a row, and the responder still answers with the ack only", () => {
+  // Phase 70 Plan 13 Task 1 (G-70-5, D-70-24). This case used to assert the dispatch
+  // CONFIRMATION reached Build Response. The lane that produced it looped live (135 child
+  // executions in six minutes, 12211-12348, 2026-09-10) and is deleted; the request is now
+  // refused inside "Parse HubSpot Event", exactly like the oversize and empty-array
+  // refusals above. A refusal built there carries no run_id or row_id — the ack reports
+  // null and an empty row_ids, matching the list-expansion refusal case above. Full
+  // coverage of the refusal lives in tests/n8n/scaleUpRefused.test.mjs.
   const wf = loadWf();
   const { runData, trace } = walkWorkflow(wf, {
     triggerNode: "Webhook Trigger",
@@ -215,10 +222,10 @@ test("scale_up: the dispatch confirmation reaches Build Response as a row (not t
     ] } }],
     httpStubs: {},
   });
-  assertAckOnlyResponse(trace, { runId: "case-scale-up" });
-  assert.deepEqual(trace.respond.items[0].row_ids, ["row-1"]);
+  assertAckOnlyResponse(trace, { runId: null });
+  assert.deepEqual(trace.respond.items[0].row_ids, []);
   const rows = nodeItems(runData, "Build Response");
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].action, "scale_up_dispatched");
-  assert.equal(rows[0].row_id, "row-1");
+  assert.equal(rows[0].outcome, "refused");
+  assert.match(rows[0].reason, /retired/i);
 });

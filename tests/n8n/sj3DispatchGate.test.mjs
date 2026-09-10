@@ -309,7 +309,9 @@ test("wiring: SJ-3 Drain Clear Flag's patch is exactly the two baked literal pai
 // G1). CLAUDE.md §13.0 and §19.1 state as load-bearing operational facts that the veto
 // recompute lane is ON-DEMAND ONLY: "SJ-3 and every other scheduled path still hit Company
 // Gate with no recompute flag, so a complete record is still skipped on a poller tick."
-// §13.0.2 generalizes the same invariant to async_ack, scale_up and source_by_field.
+// §13.0.2 generalizes the same invariant to async_ack and source_by_field. (The fan-out
+// flag that used to sit in this list was retired whole by Phase 70 Plan 13 / D-70-24 —
+// there is no lane left for a scheduled path to accidentally opt into.)
 //
 // Nothing guarded it. SJ-3 dispatches into the enrichment workflow, whose Parse HubSpot
 // Event spreads each event and normalizes `recompute === true`. If a future edit added
@@ -327,7 +329,7 @@ test("wiring: SJ-3 Drain Clear Flag's patch is exactly the two baked literal pai
 // It asserts the ABSENCE OF A KEY, never an exact event shape, so a legitimate future
 // event field does not trip it.
 
-const REQUEST_LEVEL_FLAGS = ["recompute", "async_ack", "scale_up", "source_by_field"];
+const REQUEST_LEVEL_FLAGS = ["recompute", "async_ack", "source_by_field"];
 
 test("G1: SJ-3's dispatch event carries no request-level flag, on any row (47.5)", () => {
   const wf = loadWorkflow();

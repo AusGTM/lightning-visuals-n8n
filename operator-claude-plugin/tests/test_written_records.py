@@ -157,12 +157,13 @@ def test_a_queue_field_with_a_real_action_present_is_unaffected():
     assert entry["outcome"] == written_records.NO_ACTION
 
 
-def test_the_twelve_real_action_values_are_extracted_from_the_builder_not_hardcoded():
+def test_the_eleven_real_action_values_are_extracted_from_the_builder_not_hardcoded():
     """REVIEW-57-M: circularity guard. The set is read FROM
-    `scripts/build_cloud_workflows.py`, not typed out here — a thirteenth action added
+    `scripts/build_cloud_workflows.py`, not typed out here — a twelfth action added
     there fails this test in the client, which is the point. Phase 70 Plan 03 Task 2
-    (D-70-07) added the eleventh and twelfth: `scale_up_dispatched`/
-    `list_expansion_refused`, "Build Refusal Row"'s two shapes."""
+    (D-70-07) added `list_expansion_refused` and `scale_up_dispatched`, "Build Refusal
+    Row"'s two shapes; Phase 70 Plan 13 (D-70-24) deleted the fan-out lane and with it
+    the second of those, leaving eleven."""
     extracted = _action_literals_from_builder()
     assert extracted == set(written_records.ACTION_TO_OUTCOME) | written_records.WRITE_ACTIONS
 
@@ -170,10 +171,10 @@ def test_the_twelve_real_action_values_are_extracted_from_the_builder_not_hardco
 @pytest.mark.parametrize("action", [
     "create", "update", "enrich", "write_blocked", "review", "needs_match_review",
     "research_failed", "recompute_refused", "skip", "proposed",
-    "scale_up_dispatched", "list_expansion_refused",
+    "list_expansion_refused",
 ])
-def test_every_one_of_the_twelve_real_actions_is_exercised(action):
-    """Non-circular per-value exercise — the twelve literals above are typed here only to
+def test_every_one_of_the_eleven_real_actions_is_exercised(action):
+    """Non-circular per-value exercise — the eleven literals above are typed here only to
     drive the call, not to assert what the mapping table says; the actual mapping
     assertions live in the more specific tests above and the builder-extraction test."""
     entry = written_records.classify_item({"action": action, "hs_object_id": "999"})

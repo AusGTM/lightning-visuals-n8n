@@ -218,8 +218,9 @@ def test_refusal_reaches_build_response_via_the_existing_unsupported_object_type
     unsupported object type does."""
     doc = _load(CLOUD_WF)
     code = _strip_comments(_node(doc, "Parse HubSpot Event")["parameters"]["jsCode"])
-    assert code.count('object_type: "unknown"') == 2, (
-        "both refusal branches (oversize and empty) must route through the existing "
+    assert code.count('object_type: "unknown"') == 3, (
+        "all three refusal branches (oversize, empty, and the retired scale-up fan-out "
+        "opt-in — Phase 70 Plan 13, D-70-24) must route through the existing "
         "unsupported-object-type false lane"
     )
     conns = doc["connections"]
