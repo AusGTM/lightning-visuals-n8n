@@ -3,15 +3,15 @@ status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6), 70-VERIFICATION.md (round 3, gap closure 70-16..70-18: Gates 10/11/12)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T12:00:00Z
+updated: 2026-09-10T13:45:00Z
 ---
 
 ## Current Test
 
-number: 10
-name: Gate 10 — disarmed deploy + bounce of the v1 bodies, then the two-minute burst watch
+number: 11
+name: Gate 11 — disarmed D-70-19 proof re-run under v1 (the test of round 3's hypothesis)
 expected: |
-  Five PUTs at 200 of the committed v1 JSON (node counts 30/69/287/55/43 unchanged), bounce, read-back shows settings.executionOrder == "v1" on all five live bodies and both write flags "false"; two-minute watch with nothing sent shows zero mode: integrated executions. Steps in 70-DEFERRED-GATES.md § Gate 10.
+  ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py -> 70-RUNTIME-VERDICT.json execution_order_all_v1: true (null/absent = FAILURE), all four sends shapes_equal: true, every execution settled, writes_performed: 0, every recovered enrichment row carrying a non-null row_id, runData-source-vs-declared-connections check clean, and none of Gate 8's symptoms. If legacy symptoms persist under v1: STOP and report. Steps in 70-DEFERRED-GATES.md § Gate 11.
 awaiting: user response
 
 ## Tests
@@ -201,7 +201,16 @@ reason: "Gate 8 failed on the enrichment lane and showed HubSpot Update executin
 
 ### 10. Gate 10 — disarmed deploy + bounce of the v1 bodies, then the two-minute burst watch
 expected: Five PUTs at 200 of the committed v1 JSON (node counts 30/69/287/55/43 unchanged), bounce, read-back shows `settings.executionOrder == "v1"` on all five live bodies and both write flags `"false"`; two-minute watch with nothing sent shows zero `mode: integrated` executions. Steps in `70-DEFERRED-GATES.md` § Gate 10.
-result: [pending]
+result: pass
+observed: |
+  2026-09-10 13:38–13:42Z, HEAD e7a516d. Dry-run listed 5 updates; armed deploy: five PUTs at 200. Bounce
+  table: all five active, live nodes 30/69/287/55/43 == committed, ALLOW_HUBSPOT_RECORD_WRITES and
+  ALLOW_HUBSPOT_CREATE 'false' everywhere declared (backend status declares neither), execution order v1
+  on all five, bounce_exit=0. Independent read-back agreed (order=v1 x5). Burst watch on 950HPb7a1GgSAIyZ:
+  baseline 13:40:17Z and 13:42:17Z identical (50 listed, 47 historic mode: integrated from the 2026-09-10
+  runaway 12211-12348, newest ids ...12349-12351) — zero new execution ids, nothing sent.
+  First live observation of executionOrder: "v1" on this instance (deploy/bounce/read-back only; runtime
+  behaviour under v1 is still unobserved until Gate 11).
 
 ### 11. Gate 11 — disarmed D-70-19 proof re-run under v1 (the test of round 3's hypothesis)
 expected: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` `execution_order_all_v1: true` (a `null`/absent reading is a FAILURE — inverts Gate 8), all four sends `shapes_equal: true`, every execution settled, `writes_performed: 0`, every recovered enrichment row carrying a non-null `row_id`, runData-source-vs-declared-connections check clean, and NONE of Gate 8's symptoms (`HubSpot Update` on an empty lane, gated sentinels delivering on zero-item inputs, `Enrichment Gate Merge` firing twice). If legacy symptoms persist under v1: STOP and report; do not adjust the walker or driver. Steps in `70-DEFERRED-GATES.md` § Gate 11.
@@ -214,9 +223,9 @@ result: [pending]
 ## Summary
 
 total: 12
-passed: 1
+passed: 2
 issues: 6
-pending: 3
+pending: 2
 skipped: 0
 blocked: 2
 skipped: 0
