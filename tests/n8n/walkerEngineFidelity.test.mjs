@@ -268,3 +268,138 @@ test("execution 12206 (disarmed propose batch, enrichment lane): the walker repr
   assert.deepEqual(trace.respond.items[0].row_ids, ["e-single-a", "e-single-b"],
     "execution 12206 observed: the ack even named both rows it had already dropped");
 });
+
+// =====================================================================================
+// Execution 12316 — Phase 70 Plan 14 (gap G-70-5, D-70-26(b)). [observed live], execution
+// 12316, dated 2026-09-10. A child of the runaway self-dispatch loop (135 child executions
+// in six minutes, 12211-12348; see CLAUDE.md §13.0.2, 70-UAT.md § Test 4). This case is a
+// RECORD, not a model — D-70-19/D-70-26 forbid teaching the walker a mechanism nobody
+// isolated. The cause of what follows is UNKNOWN.
+//
+// The engine's own runData (`exec_12316.runData.json`, committed at planning time,
+// verified below, NEVER regenerated) names, for eleven nodes, the `source` — the producer
+// the engine itself recorded as having delivered to that node's run — beside
+// `declared_producers`, read from this file's own frozen `connections` map. For eight of
+// the eleven, source and declared producer agree. For exactly THREE, they do not:
+//
+//   - "Recompute Requested Sentinel Gate": engine source "Companies Absent Sentinel Gate"
+//     (a DIFFERENT sentinel's gate); declared producer "Recompute Requested Sentinel".
+//   - "Dispatch Self": engine source "Recompute Requested Sentinel Gate" (the gate from
+//     the line above); declared producer "Build Scale Up Fan-Out".
+//   - "Build Scale Up Fan-Out": engine source "Refusal Row Absent Sentinel Gate" (yet
+//     ANOTHER sentinel's gate); declared producer "IF Scale Up Route".
+//
+// No edge in this file's own `connections` map explains any of the three. The walker
+// replays ONLY declared connections — `propagate()` enqueues exactly the edges
+// `connectionsFrom` returns — so it structurally CANNOT reproduce a delivery with no
+// declared edge. That is not a walker deficiency this case is proving; it is the reason
+// the case exists: the engine ran three nodes off connections that, on paper, do not
+// exist, and the walker must never be adjusted to pretend it knows why.
+// =====================================================================================
+
+const FROZEN_ENRICHMENT_GAP_CLOSURE = path.join(FROZEN, "wf_enrichment_cloud.gap-closure.2026-09-10.json");
+const EXEC_12316_RUNDATA = path.join(FROZEN, "exec_12316.runData.json");
+
+const MISMATCHED_12316_NODES = [
+  "Recompute Requested Sentinel Gate",
+  "Dispatch Self",
+  "Build Scale Up Fan-Out",
+];
+
+function loadFrozen12316() {
+  const wf = JSON.parse(fs.readFileSync(FROZEN_ENRICHMENT_GAP_CLOSURE, "utf8"));
+  const runDataFixture = JSON.parse(fs.readFileSync(EXEC_12316_RUNDATA, "utf8"));
+  return { wf, runDataFixture };
+}
+
+// The frozen connections' own declared producers for a node — computed from THIS file's
+// graph, never hand-copied, so a drift between the fixture and its own connections map
+// fails here rather than silently mismatching the sidecar's `declared_producers` field.
+function declaredProducersOf(wf, targetName) {
+  const producers = [];
+  for (const [srcName, spec] of Object.entries(wf.connections || {})) {
+    for (const branch of (spec.main || [])) {
+      for (const edge of (branch || [])) {
+        if (edge.node === targetName) producers.push(srcName);
+      }
+    }
+  }
+  return producers;
+}
+
+test("execution 12316 fixtures: the committed frozen body was verified, never regenerated — 291 nodes, empty settings, no node carries a credentials block", () => {
+  const { wf } = loadFrozen12316();
+  assert.equal(wf.nodes.length, 291,
+    "the gap-closure body execution 12316 actually ran carries 291 nodes (pre-70-13; " +
+    "70-13 later deleted the scale-up lane to 287 — this frozen copy predates that and " +
+    "must, since it is the body the engine executed)");
+  assert.deepEqual(wf.settings, {}, "execution 12316's frozen body carries empty settings");
+  const withCredentials = wf.nodes.filter((n) => n.credentials).map((n) => n.name);
+  assert.deepEqual(withCredentials, [],
+    "no node in this committed fixture may carry a credentials block (T-70-67)");
+});
+
+test("execution 12316 fixtures: the committed runData sidecar names exactly three nodes whose engine source is not among their declared producers", () => {
+  const { wf, runDataFixture } = loadFrozen12316();
+  const mismatched = [];
+  for (const [name, entry] of Object.entries(runDataFixture.nodes)) {
+    const observedSource = (entry.source[0] && entry.source[0].previousNode) || null;
+    const declared = declaredProducersOf(wf, name);
+    // The sidecar's own `declared_producers` field must agree with what THIS frozen
+    // graph's connections actually declare — belt-and-braces against the sidecar itself
+    // drifting from the fixture it describes.
+    assert.deepEqual([...declared].sort(), [...entry.declared_producers].sort(),
+      `${name}: the sidecar's declared_producers must match this frozen graph's own connections`);
+    if (observedSource !== null && !declared.includes(observedSource)) {
+      mismatched.push({ name, observedSource, declared });
+    }
+  }
+  assert.equal(mismatched.length, 3,
+    `exactly three nodes must show an engine source outside their declared producers, got: ${JSON.stringify(mismatched)}`);
+  assert.deepEqual(mismatched.map((m) => m.name).sort(), [...MISMATCHED_12316_NODES].sort());
+});
+
+test("execution 12316 (D-70-26(b), [observed live], 2026-09-10, cause unknown): the walker does NOT reproduce the three unconnected-source runs — a prohibition guard, not a model", () => {
+  const { wf, runDataFixture } = loadFrozen12316();
+
+  // Seeded from the SUB-WORKFLOW entry point with the single empty item the engine
+  // actually delivered (`exec_12316.runData.json`'s "Execute Workflow Trigger" entry:
+  // out0_item_count 1, out0_first_item_json {}) — the execution entered here, not the
+  // webhook, exactly as a self-dispatched child does.
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Execute Workflow Trigger",
+    triggerItems: [{}],
+    // No httpStubs supplied deliberately: the empty seed parses to object_type "unknown"
+    // (matches the sidecar's "Parse HubSpot Event" entry exactly) and routes through the
+    // unsupported-object-type terminal to "Build Response" without reaching an HTTP node
+    // at all. If a future graph edit makes this walk reach an unstubbed HTTP node, the
+    // walker throws by name — telling the next agent what changed rather than silently
+    // passing.
+    httpStubs: {},
+  });
+
+  // Prove the walk actually completed rather than dying early — a prohibition case that
+  // passes vacuously (the walk stalled before it could reach these nodes either way)
+  // proves nothing.
+  assert.ok(trace.respond, "the walk must reach the responder for this to be a real replay, not a stall");
+  assert.equal((runData["Build Response"] || []).length, 1, "Build Response ran exactly once");
+  assert.equal((runData["IF Scale Up Route"] || []).length, 1, "IF Scale Up Route ran");
+  const scaleUpTrueOut = runData["IF Scale Up Route"][0];
+  // The walker's own IF modelling records the pre-split input, not the branch outputs —
+  // confirm via the merged Parse HubSpot Event row instead: scale_up normalized false, so
+  // the walker's OWN model sends the true (scale-up) branch zero items and, per
+  // `propagate()`'s "a node fed ZERO items does not RUN" rule, none of the three should
+  // ever run.
+  assert.equal(scaleUpTrueOut[0].scale_up, false,
+    "the parsed row scale_up is false, so the walker's true branch carries no items");
+
+  for (const name of MISMATCHED_12316_NODES) {
+    const declared = declaredProducersOf(wf, name);
+    const observedSource = runDataFixture.nodes[name].source[0].previousNode;
+    assert.equal(runData[name], undefined,
+      `${name} must NOT run in the walk — the engine ran it off an observed source ` +
+      `("${observedSource}") that is not among its declared producers (${JSON.stringify(declared)}); ` +
+      `if this assertion ever fails, the walker has started reproducing an unisolated ` +
+      `mechanism and D-70-26(b) is violated`);
+  }
+});
