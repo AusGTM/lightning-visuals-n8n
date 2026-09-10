@@ -300,3 +300,27 @@ def test_review_triage_and_backend_control_read_no_autonomy_level():
         text = _text(SKILLS_DIR / skill / "SKILL.md")
         assert "autonomy_enabled" not in text, f"{skill} must name no autonomy_enabled call"
 
+
+# =====================================================================================
+# Quick task 260911-anz — the design fact from README.md L150-154 must also be stated
+# in enrich-before-ingest/SKILL.md (the only batch skill that creates people), never a
+# second differing statement. NOT parametrized over TARGETS: the other three batch
+# skills do not create people and must not be required to say this.
+# =====================================================================================
+
+def test_enrich_before_ingest_and_readme_state_the_never_created_without_approval_fact():
+    """Matches on short clauses genuinely common to both files rather than a whole
+    paragraph: the README addresses the operator directly ("your end-of-run
+    approval") while the SKILL addresses Claude ("the operator's end-of-run
+    approval"), so the possessive itself cannot be part of the matched substring."""
+    skill_text = _text(TARGETS["enrich-before-ingest"]["path"])
+    readme_text = _text(PLUGIN_ROOT / "README.md")
+
+    for label, text in (("SKILL.md", skill_text), ("README.md", readme_text)):
+        assert "is never created without" in text, (
+            f"{label} must state the never-created-without-approval clause"
+        )
+        assert "end-of-run approval" in text, (
+            f"{label} must state the end-of-run-approval clause"
+        )
+

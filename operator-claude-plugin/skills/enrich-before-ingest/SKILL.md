@@ -747,6 +747,16 @@ whatever seven columns happened to be in the source file.
    `sendable`/`send` set below; they are collected, and shown ONCE, in the end-of-run
    review pass described after step 7's report.
 
+   **A new person is never created without the operator's end-of-run approval.** A row
+   with no HubSpot match is by definition a row the system is unconfident about, so it
+   is held — and every create is such a row (D-70-11). One honest gap found while
+   closing this todo: nothing in this flow today turns an approved held row into a
+   send — `held_queue.py` exposes no approve verb, `partition_for_ingest` takes no
+   approved-rows input, and step 8's resume re-includes a held row only when it gains
+   an email, which does not make an unmatched row matched. How a new person reaches
+   HubSpot once the operator approves the hold is open; see
+   `.planning/todos/pending/2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row.md`.
+
    **The end-of-run review reuses step 3's own numbered-table vocabulary — `approve` /
    `deny` / `pick <sub-label>` / `email: <address>` — never a second decision
    vocabulary.** Its two safety rules carry over unchanged: a bare blanket approval
