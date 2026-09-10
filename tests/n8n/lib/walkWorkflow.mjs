@@ -178,7 +178,40 @@ function makeDollar(runData, selfRunIndex) {
 
 // --- one node run --------------------------------------------------------------------
 
+// A Code node whose body contains `await` cannot be driven by `new Function` (that
+// constructor builds a SYNCHRONOUS function, so the body is a SyntaxError). Three nodes
+// in n8n/wf_enrichment_cloud.json are in that shape — every one of them a provider call
+// awaiting `this.helpers.httpRequest`, i.e. the same network hop `httpStubs` already
+// stands in for at an HTTP node. `codeStubs` is that same substitution for that same
+// reason, and is deliberately fenced so it can never become a way to skip executable
+// logic (D-70-19: the walker may only gain fidelity toward the engine):
+//   - an await-bearing Code node reached with NO stub throws by name, naming this
+//     option — previously an opaque SyntaxError from deep inside `new Function`;
+//   - a stub supplied for a Code node the walker CAN run throws too, so real committed
+//     jsCode is always executed rather than replaced by a test's expectation.
+const AWAIT_RE = /(^|[^.\w$])await\s/;
+
+export function codeNodeAwaits(node) {
+  return AWAIT_RE.test((node.parameters && node.parameters.jsCode) || "");
+}
+
 function runCode(node, items, ctx) {
+  const stub = (ctx.codeStubs || {})[node.name];
+  if (stub !== undefined) {
+    if (!codeNodeAwaits(node)) {
+      throw new Error(
+        `codeStubs must not stand in for an executable Code node: ${node.name} has no ` +
+        `await in its jsCode, so the walker runs its real body — delete the stub`);
+    }
+    const raw = typeof stub === "function" ? stub(items, node) : stub;
+    return (raw || []).map(unwrapJson);
+  }
+  if (codeNodeAwaits(node)) {
+    throw new Error(
+      `Code node ${node.name} awaits — the walker runs Code bodies synchronously and ` +
+      `cannot execute it. Supply codeStubs[${JSON.stringify(node.name)}] (the same ` +
+      `substitution httpStubs makes for an HTTP hop) to replay a lane through it.`);
+  }
   const $ = makeDollar(ctx.runData, ctx.runIndex);
   const $input = {
     all: () => items.map((j) => ({ json: j })),
@@ -284,6 +317,10 @@ export function runNode(node, items, ctx) {
  *   httpStubs: { [nodeName]: array | (inputItems, node) => items } — an unstubbed HTTP
  *     node throws by name (never silently returns []), so a test cannot pass on an
  *     unmodelled hop.
+ *   codeStubs: { [nodeName]: array | (inputItems, node) => items } — the same
+ *     substitution for a Code node whose body `await`s (the walker runs Code bodies
+ *     synchronously and cannot execute one). Both directions throw: an await-bearing
+ *     Code node with no stub, and a stub for a node the walker could have run.
  *
  * Returns `{ runData, trace }`. `trace.unhandledTypes`, `trace.stalled`, `trace.respond`,
  * `trace.respondSuppressed`, `trace.trigger`, `trace.orderingUsed` — see 70-01-PLAN.md —
@@ -293,7 +330,7 @@ export function runNode(node, items, ctx) {
  * alone: which node took input 0 IS the finding.
  */
 export function walkWorkflow(wf, opts) {
-  const { triggerNode, triggerItems, httpStubs = {}, env = {} } = opts || {};
+  const { triggerNode, triggerItems, httpStubs = {}, codeStubs = {}, env = {} } = opts || {};
   const nodesByName = {};
   for (const n of wf.nodes || []) nodesByName[n.name] = n;
 
@@ -474,7 +511,7 @@ export function walkWorkflow(wf, opts) {
     }
 
     const runIndex = (runData[node.name] || []).length;
-    const ctx = { runData, httpStubs, staticData, env, runIndex };
+    const ctx = { runData, httpStubs, codeStubs, staticData, env, runIndex };
     const result = runNode(node, delivery.items, ctx);
     // For an IF node, the "row set" recorded for by-name reads is the pre-split input —
     // an IF only routes, it does not transform or drop.
@@ -557,6 +594,7 @@ function main() {
       triggerNode: triggerName,
       triggerItems: fixture.triggerItems || [],
       httpStubs: fixture.httpStubs || {},
+      codeStubs: fixture.codeStubs || {},
     });
     console.error("trace:", JSON.stringify(trace));
     console.log(JSON.stringify(nodeItems(runData, opts.node), null, 2));
