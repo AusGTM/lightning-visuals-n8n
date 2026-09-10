@@ -8,7 +8,12 @@ updated: 2026-09-10T09:15:17Z
 
 ## Current Test
 
-[testing paused — Gate 8 failed on the enrichment lane (G-70-6); Gate 9 blocked; live rolled back to 59812be]
+[testing paused — Gate 8 failed on the enrichment lane (G-70-6); Gate 9 blocked; live rolled
+back to 59812be; gap closure round 3 (D-70-28..31, plans 70-16/70-17/70-18) flipped
+settings.executionOrder to v1 on every generated body offline and wrote up Gates 10, 11 and
+12 — none of the three has been run yet. Outstanding: Gate 10 (disarmed deploy + bounce of
+the v1 bodies), Gate 11 (the D-70-19 proof re-run under v1), Gate 12 (the armed mixed-verdict
+re-run, formerly Gate 9)]
 
 ## Tests
 
@@ -324,7 +329,9 @@ blocked: 0
       issue: "models zero-item output as a delivery (70-09) but not zero-item INPUT as an execution; neither model matches the engine"
     - path: ".planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md"
       issue: "D-70-02 (no v1 flip) rests on documentation absence, now contradicted by four live observations"
+  offline_closure: "Gap closure round 3 (D-70-28..31, plans 70-16/70-17) closed the offline half. D-70-28: the operator ruled the flip — settings.executionOrder = v1 on every generated body, from one generator constant (scripts/build_cloud_workflows.py), with a generation-time refusal on any non-v1 body; node counts did not move. D-70-29: both live-write paths that could revert it (the deploy script's PUT/POST, the plugin's arming PUT) are pinned value-level to preserve it, and the bounce script's read-back plus the proof driver's execution_order_all_v1 verdict field both fail loudly on a live legacy-order reading. D-70-30: the walker now refuses a non-v1 graph outside its own frozen-fixture engine-fidelity tests, and states per rule which v1 behaviour it models (a node fed zero items does not run), does not model (the v1 end-of-run Merge drain, deliberately left unmodelled), and leaves unobserved (whether a Code node's zero-item output counts as a Merge-input delivery under v1). None of D-70-28/29/30 has been observed live yet — every claim is documentation-derived."
   missing:
-    - "Operator decision: probe settings.executionOrder = v1 on the committed bodies (one generator line, regenerate, disarmed deploy, Gate 7 watch, Gate 8 proof) BEFORE any further graph redesign — the cheapest experiment that can retire four gaps at once"
-    - "If v1 changes the rule: walker reverts toward 'zero items = no execution' (RED-first on the Gate 8 executions), sentinel network re-evaluated; if not: every node must tolerate empty input explicitly (Execute Once off, guards) and the walker models 'always executes'"
+    - "Gate 10 (D-70-31): disarmed deploy + bounce of the v1 bodies, then the two-minute burst watch, nothing sent"
+    - "Gate 11 (D-70-31): the D-70-19 proof re-run under v1 — execution_order_all_v1 must read true on every workflow, a null reading is a failure (the inverse of Gate 8's expectation); the runData-source-vs-declared-connections check is retained unchanged"
+    - "Gate 12 (D-70-31): the armed mixed-verdict re-run against the v1 graph, only after Gate 11 passes"
   debug_session: ""

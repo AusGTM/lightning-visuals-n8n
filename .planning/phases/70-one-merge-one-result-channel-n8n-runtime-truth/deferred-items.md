@@ -19,3 +19,15 @@ Out-of-scope discoveries logged during execution. Not fixed here.
   the plan required copying the existing refusal shape exactly. A caller that recovers by
   `run_id` therefore cannot find a refused request's execution. Out of scope for 70-13
   (widening the refusal shape was explicitly not this plan's job).
+
+## From 70-18 (2026-09-10)
+
+- **Two v1 walker rules stay deliberately unmodelled (D-70-30), not fixed here.** (b) The
+  v1 end-of-run Merge drain (a waiting Merge finishing at end-of-run with whatever inputs
+  arrived, gated on `requiredInputs`) is not implemented in `tests/n8n/lib/walkWorkflow.mjs`
+  — it reports starvation instead. (c) Whether a Code node that ran and emitted `[]` counts
+  as a Merge-input delivery under v1 is unobserved — the 70-09 delivery rule was observed
+  under the legacy order and may have been the `addEmptyItem` push, not a genuine delivery.
+  Reason: both are unobservable offline, and modelling either before Gate 11 (the first live
+  v1 observation, `70-DEFERRED-GATES.md`) would replace one unobserved model with another —
+  exactly the mistake this phase exists to stop.
