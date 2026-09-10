@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: Completed 70-17-PLAN.md
-last_updated: "2026-09-10T11:30:57.259Z"
+stopped_at: Completed 70-18-PLAN.md
+last_updated: "2026-09-10T11:43:26.810Z"
 last_activity: 2026-09-10
 last_activity_desc: Phase 70 execution started
-state_head: 0cf2139229cb30d518bce001e7500d7079f0442b
+state_head: e8bdb4c4bda9e287443131349cdbdbf82da0c2f0
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 34
-  completed_plans: 33
+  completed_plans: 34
   percent: 29
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
-Plan: 3 of 18
+Plan: 4 of 18
 Status: Ready to execute
 Last activity: 2026-09-10 — Phase 70 execution started
 
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-10T11:30:50.371Z
-**Stopped at:** Completed 70-17-PLAN.md
+**Last session:** 2026-09-10T11:43:26.549Z
+**Stopped at:** Completed 70-18-PLAN.md
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
@@ -654,6 +654,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 70 P07 | 1h | 3 tasks | 18 files |
 | Phase 70 P16 | 45min | 3 tasks | 14 files |
 | Phase 70 P17 | 22 min | 3 tasks | 6 files |
+| Phase 70 P18 | 70min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -812,6 +813,8 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 70]: Three walkWorkflow.test.mjs assertions (collapse/respond/paired-item cases) were re-derived under v1's pop-order dequeue, per the plan's own instruction, not treated as failures to route around. — wf() helper's synthetic-graph default flipped from legacy to v1; ordering-dependent expected values changed with it (dequeue direction is the walker's only legacy/v1 behavioral difference).
 - [Phase 70]: D-70-29 all four settings-preservation pins already true in existing code — No production defect found in the deploy PUT/POST payload filter, the three upstream transforms, or the plugin's put_body/arming refusal; git status --porcelain -- scripts/ empty after Task 1 confirms zero production changes.
 - [Phase 70]: D-70-31 execution_order_all_v1 folded into answer; exit code moved from shapes_equal to answer — Without the exit-code move a disarmed proof run against a legacy-order instance whose row shapes happened to agree would have exited 0; shapes_equal keeps its pre-existing narrower meaning.
+- [Phase 70]: Corrected CLAUDE.md's stale post-runaway live-state table in place (all five workflows are on the pre-Phase-70 59812be bundle after Gate 8 failed) rather than appending a contradicting note beside it.
+- [Phase 70]: Wrote Gates 10, 11 and 12 as complete operator procedures in the Gate 7/8/9 shape; Gate 11 inverts Gate 8's execution-order expectation (null is now a failure) while retaining its runData-source-vs-declared-connections check verbatim, and Gate 9 is marked superseded by Gate 12 rather than removed.
 
 ### Roadmap Evolution
 
