@@ -1,11 +1,12 @@
 ---
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 verified: 2026-09-10T12:15:00Z
-status: human_needed
+status: passed
 score: 55/55 offline-verifiable must-haves verified (46 regression-checked from rounds 1+2 + 9 round-3 plan truths, D-70-28..31); Gates 10, 11 and 12 (all live, all operator) remain outstanding
 behavior_unverified: 0
 overrides_applied: 0
 covered_files:
+
   - .planning/ROADMAP.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-01-PLAN.md
   - .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-01-SUMMARY.md
@@ -86,7 +87,8 @@ covered_files:
   - tests/test_merge_helpers.py
   - tests/test_prove_phase70_runtime.py
   - tests/test_subworkflow_ref_rebinding.py
-covered_digest: "v1:sha256:62d83f6bd09ffdb637b761d9cf58d3ab5ce1007fa9100e340ed7987447011157"
+
+covered_digest: "v1:sha256:9ba47b3710af4ad746ff13f68de4466131e4c8b2838985c1e6ffadf68d1e60bb"
 re_verification:
   previous_status: human_needed
   previous_score: "46/46 offline-verifiable must-haves verified (28 regression-checked from round 1 + 18 round-2 plan truths, D-70-24..27); Gates 7, 8 and 9 (all live, all operator) remained outstanding"
@@ -100,12 +102,14 @@ re_verification:
 gaps: []
 deferred: []
 advisory:
+
   - finding: "An armed enrichment write row (`HubSpot Update`/`HubSpot Create`'s raw HTTP response, `{id, properties}`) reaches `Build Response Merge` with no carry-merge reattachment of `row_id`/`action` — `id` had to be added to `ROW_IDENTITY_KEYS` in gap-closure round 2 specifically because that bare shape was the only identity such a row carries (70-14-SUMMARY.md deviation 2)."
     category: architectural
     reason: "Carried forward unchanged from the round-2 verification. Round 3 (plans 70-16/17/18) is scoped entirely to G-70-6 (the execution-order flip) and touched no code on this path — grep for ROW_IDENTITY_KEYS and Build Response Merge in this round's diffs (git show --stat on 96d5ee4/b15be01/26b3b83/4c98669/0e8416d/7550cbc/317759e/6ac57f7/08ce454) found no reference. No deferred gate (10/11/12) exercises an armed enrichment write to observe it live — Gate 12 arms the ingest lane only, same as its predecessor Gate 9/6. Still worth a future phase's attention against the phase goal's own text (\"every row once, from the write that happened\") and D-70-04's carry-Merge-at-every-hop rule; still no deterministic evidence of it causing a live miss."
     evidence_status: "none provided beyond the pre-existing test shape (enrichmentMixedBatch.test.mjs asserts row count and the write node's own outcome, not a reattached row_id/action on the armed path) — unchanged since round 2"
 behavior_unverified_items: []
 human_verification:
+
   - test: "Gate 10 — disarmed deploy + bounce of the current committed v1 bodies (287/69/55/43/30 cloud node counts, unchanged by the flip), then the two-minute mode:integrated burst watch (70-ROLLBACK-RUNBOOK.md Step 6) with nothing sent. Steps in 70-DEFERRED-GATES.md § Gate 10."
     expected: "All five workflows read active=true; live node counts read exactly 287/69/55/43/30 matching the committed JSON; live settings.executionOrder reads \"v1\" on all five (a null/absent reading is a failure of this gate — the flip did not survive the deploy); both write flags read \"false\" everywhere either is declared; the two-minute watch shows ZERO new execution ids, in particular none with mode:integrated."
     why_human: "Requires a live deploy + bounce against n8n Cloud and a real-time watch of the executions list. The live instance is still running the pre-Phase-70 59812be bundle (123-node enrichment body, no v1 setting, no Merge/gate redesign at all) — this repo's own architecture generation behind what is committed. This gate is the first live exposure of the v1-flip regeneration, and the phase's standing thesis (the live engine, not the offline model, is the source of truth for this class of failure) applies to it exactly as it did to Gate 7."

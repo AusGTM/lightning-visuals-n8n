@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6), 70-VERIFICATION.md (round 3, gap closure 70-16..70-18: Gates 10/11/12)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T13:55:00Z
+updated: 2026-09-10T14:20:00Z
 ---
 
 ## Current Test
 
-number: 12
-name: Gate 12 — armed mixed-verdict re-run on the ingest lane (only after Gate 11 passes; supersedes Gate 9)
-expected: |
-  Armed for exactly one contact of a same-company pair; Build Ingest Response exactly 2 rows; permitted row action "update", association "associated"; refused row action "write_blocked"; HubSpot shows one update + one association; disarmed and read back after (executionOrder still "v1"). Steps in 70-DEFERRED-GATES.md § Gate 12.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -240,14 +236,27 @@ observed: |
 
 ### 12. Gate 12 — armed mixed-verdict re-run on the ingest lane (only after Gate 11 passes; supersedes Gate 9)
 expected: Armed for exactly one contact of a same-company pair; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after (`executionOrder` still `"v1"`). Steps in `70-DEFERRED-GATES.md` § Gate 12.
-result: [pending]
+result: pass
+observed: |
+  2026-09-10 14:10Z, execution 12363 (ingest, success, mode webhook), first armed write on the v1 graph.
+  Window armed via ALLOW_N8N_ARM=true june_run_arm.py --ids 7101 --workflow-name "LV Contact Ingest
+  (Cloud template)": all THREE declaring nodes (HubSpot Update Write Gate, HubSpot Create Write Gate,
+  Associate Lane Sentinel) read ALLOW_HUBSPOT_RECORD_WRITES="true", TEST_RECORD_IDS="7101"; bounce
+  script exited 1 as designed on the armed flag. Sent gdewsbury@ (7101) + staylor@ (2751) in ONE batch.
+  Build Ingest Response: exactly 2 rows. Permitted row 7101: action "update", association "associated",
+  outcome match ("single email match"). Refused row 2751: action "write_blocked", association
+  "not_confirmed", reason "allowlist denied this write". HubSpot: 7101 lastmodifieddate 02:13:59Z ->
+  14:10:38Z; 2751 unchanged (2026-07-17); both already associated with 9605267534 since 12203, so the
+  association PUT was idempotent. Disarmed after: all three nodes false / TEST_RECORD_IDS "", bounce
+  exit 0, executionOrder v1 on all five. The G-70-2 defect (12203: both rows "not_confirmed") is fixed
+  on the real engine. Preceding disarmed dry-run 12362 (wrong emails, net_new/review) wrote nothing.
 
 ## Summary
 
 total: 12
-passed: 3
+passed: 4
 issues: 6
-pending: 1
+pending: 0
 skipped: 0
 blocked: 2
 skipped: 0
