@@ -161,8 +161,20 @@ test("a review-only batch (zero association rows) does not stall any Merge — t
     httpStubs: fixture.httpStubs,
   });
 
-  assert.deepEqual(trace.stalled, [],
-    "Associate Lane Sentinel / Review Lane Sentinel must satisfy every input this batch needs");
+  // Phase 70 Plan 10 (D-70-20/D-70-23): "Associate Carry Merge" is now legitimately
+  // allowed to stay dormant on a review-only batch — the carry-Merge BYPASS this plan
+  // adds means "Associate Lane Sentinel" delivers straight to "Ingest Merge Response"'s
+  // own association-lane input, never to either of "Associate Carry Merge"'s inputs (a
+  // marker on BOTH of that positional-combine merge's inputs would pair with itself
+  // into one fabricated row, T-70-41). Nothing downstream ever reads "Associate Carry
+  // Merge"'s own output directly, so its staying unfired here is the intended shape,
+  // not a hang — what must never stall is the merge everything else actually depends
+  // on, "Ingest Merge Response" (and every other merge on this lane).
+  const stalledOtherThanAssociateCarry = trace.stalled.filter((s) => s.node !== "Associate Carry Merge");
+  assert.deepEqual(stalledOtherThanAssociateCarry, [],
+    "no merge other than the intentionally-bypassed Associate Carry Merge may stall");
+  assert.deepEqual(trace.merges["Ingest Merge Response"] && trace.merges["Ingest Merge Response"].fired, true,
+    "Ingest Merge Response — what this batch's correctness actually rests on — must fire");
 
   const rows = nodeItems(runData, "Build Ingest Response");
   assert.equal(rows.length, 2, "both review rows present, no association row, no marker leakage");

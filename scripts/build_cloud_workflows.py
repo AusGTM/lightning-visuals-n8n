@@ -53,6 +53,13 @@ else:
     JUNE_CANDIDATES_ROWS = {}
 JUNE_CANDIDATES_JS = "const JUNE_CANDIDATES = " + json.dumps(JUNE_CANDIDATES_ROWS) + ";\n"
 
+# Phase 70 Plan 10 (D-70-23): the reserved key a starved-lane sentinel's GATE stamps
+# onto its one marker item (`_add_starved_lane_sentinel`, `_sentinel_gate_js`), defined
+# once here — near the top, before any Code-node-body string that needs to reference it
+# as an f-string interpolation — and read by every consumer that must never mistake a
+# marker for a real row on a shared Merge input.
+SENTINEL_MARKER_KEY = "_gsd_sentinel_marker"
+
 # ---- module inliner ---------------------------------------------------------
 
 _REQUIRE_RE = re.compile(r"^\s*const\s*\{[^}]*\}\s*=\s*require\(")
@@ -578,7 +585,13 @@ BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row repo
 // is the literal, unique stamp only "Build Association Request" ever writes — never a
 // value Decide Action itself produces — so filtering on it (not merely "has an action")
 // admits a real association attempt and nothing else.
-const allItems = $input.all().map((it) => it.json).filter(Boolean);
+// Phase 70 Plan 10 (D-70-23): a starved-lane sentinel's marker is already excluded by
+// construction below (it carries neither `_decided_snapshot` nor a matching `action`),
+// but this is the explicit, defensive filter every consumer of the reserved key must
+// carry — belt-and-braces against a future change to the predicates below ever
+// admitting one by accident.
+const allItems = $input.all().map((it) => it.json).filter(Boolean)
+  .filter((row) => row.__SENTINEL_MARKER_KEY__ !== true);
 const decided = allItems.filter((row) => row._decided_snapshot === true);
 const arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === "enrich");
 // Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the write gates now EMIT the rows they
@@ -643,7 +656,7 @@ return decided.map((row) => {
     row_id: row.row_id ?? null,
   }};
 });
-"""
+""".replace("__SENTINEL_MARKER_KEY__", SENTINEL_MARKER_KEY)
 
 # Phase 70 Plan 02 (D-70-04): fed directly from "Set Config" — the ONE place the JSON
 # STRING form of the multipart `source_by_field` field (dispatch.py's `filename=None`
@@ -824,7 +837,24 @@ def nid(prefix="n"):
     return f"{prefix}{_idc[0]:04d}0000-0000-4000-8000-000000000000"
 
 
+
+# Phase 70 Plan 10 (D-70-23): every "identity-less sentinel marker" filter idiom that
+# predates the gated sentinel (a bare `{}` used to BE the marker, so `Object.keys(it.json
+# || {}).length > 0` was enough to drop it) now also excludes the reserved marker key —
+# a gated sentinel's marker is stamped with `SENTINEL_MARKER_KEY: true` so it is never
+# mistakable for a real row (D-70-23's own acceptance criterion), which means it is no
+# longer a bare `{}` and the OLD idiom alone would let it through. Rewritten in `code_node`
+# below, once, for every Code node this builder emits — never per call site — so every
+# response builder that already used this idiom keeps working without an edit at its own
+# definition.
+_OLD_MARKER_FILTER_JS = "Object.keys(it.json || {}).length > 0"
+_NEW_MARKER_FILTER_JS = (
+    f"{_OLD_MARKER_FILTER_JS} && it.json[{SENTINEL_MARKER_KEY!r}] !== true"
+)
+
+
 def code_node(name, js, x, y):
+    js = js.replace(_OLD_MARKER_FILTER_JS, _NEW_MARKER_FILTER_JS)
     return {
         "parameters": {"mode": "runOnceForAllItems", "jsCode": js},
         "id": nid("c"), "name": name,
@@ -1236,8 +1266,8 @@ return $input.all().map((it) => ({ json: { ...it.json, queue: "needs_review" } }
     # never race it.
     associate_sentinel_js = r"""// Associate Lane Sentinel — see build_cloud_workflows.py's own comment above this
 // node's call site for why this is a global, single-producer check rather than a
-// per-IF alwaysOutputData flag.
-const rows = $input.all().map((it) => it.json);
+// per-IF alwaysOutputData flag. `rows` is bound by `_add_starved_lane_sentinel`'s own
+// template, above this body.
 // Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With
 // the pre-write refusal precheck removed (D-70-06) a row can be action update/create and
 // still never reach "HubSpot Associate Company": "Build Association Request" drops any
@@ -1269,13 +1299,10 @@ return anyAssoc ? [] : [{}];
     review_sentinel_js = r"""// Review Lane Sentinel — the review-side twin of "Associate Lane Sentinel". Fires
 // only when EVERY row this execution decided is update/create (so "Set Review" would
 // otherwise never even be enqueued at all, on a create-only or update-only batch).
-const rows = $input.all().map((it) => it.json);
+// `rows` is bound by `_add_starved_lane_sentinel`'s own template, above this body.
 const anyNonWrite = rows.some((r) => r && r.action !== "update" && r.action !== "create");
 return anyNonWrite ? [] : [{}];
 """
-    nodes.append(code_node("Associate Lane Sentinel",
-                          WRITE_SAFETY_GATE_JS + associate_sentinel_js, x + 220, y - 260))
-    nodes.append(code_node("Review Lane Sentinel", review_sentinel_js, x + 220, y + 320))
 
     conns = chain([
         "Webhook Trigger", "Set Config", "Extract From File", "Map Columns",
@@ -1294,28 +1321,19 @@ return anyNonWrite ? [] : [{}];
     conns["Set Config"]["main"][0].append({"node": "Build Ingest Ack", "type": "main", "index": 0})
     conns["Set Config"]["main"][0].append({"node": "Set Config Fields", "type": "main", "index": 0})
     conns.update(chain(["Build Ingest Ack", "Respond to Webhook"]))
-    # D-70-01: "Decide Action" fans to "IF Update" (the existing pipeline, unchanged),
-    # both sentinels, AND "Decide Action Snapshot" (D-70-04's tagged full-row-set fan-out,
-    # "Ingest Merge Response"'s third input) — all four receive the SAME complete row
-    # set from Decide Action's single run.
-    conns["Decide Action"]["main"][0].append(
-        {"node": "Associate Lane Sentinel", "type": "main", "index": 0})
-    conns["Decide Action"]["main"][0].append(
-        {"node": "Review Lane Sentinel", "type": "main", "index": 0})
+    # D-70-01: "Decide Action" fans to "IF Update" (the existing pipeline, unchanged)
+    # and "Decide Action Snapshot" (D-70-04's tagged full-row-set fan-out, "Ingest
+    # Merge Response"'s third input) — both receive the SAME complete row set from
+    # Decide Action's single run. The two sentinels (Associate Lane, Review Lane) fan
+    # off the SAME node too, but that edge is wired by `_add_starved_lane_sentinel`
+    # itself, below, once their real targets (`ingest_merge_response`, "Associate
+    # Carry Merge") exist (Phase 70 Plan 10, D-70-23).
     conns["Decide Action"]["main"][0].append(
         {"node": "Decide Action Snapshot", "type": "main", "index": 0})
     conns["Decide Action Snapshot"] = {
         "main": [[{"node": "Build Ingest Response", "type": "main", "index": 0}]]}
 
     conns.update(chain(["Build Association Request", "HubSpot Associate Company", "Build Ingest Response"]))
-    # "Associate Carry Merge" itself is created by `splice_carry_merge_after` below
-    # (Task 3 generalises Task 2's hand-wired version into that one reusable
-    # mechanism) — this sentinel edge only needs the NAME, not the node object, to
-    # already exist yet.
-    conns["Associate Lane Sentinel"] = {"main": [[
-        {"node": "Associate Carry Merge", "type": "main", "index": 0},
-        {"node": "Associate Carry Merge", "type": "main", "index": 1},
-    ]]}
     for write_node in ("HubSpot Update", "HubSpot Create"):
         conns[write_node] = {"main": [
             [{"node": "Build Association Request", "type": "main", "index": 0}]
@@ -1329,7 +1347,6 @@ return anyNonWrite ? [] : [{}];
         [{"node": "HubSpot Create", "type": "main", "index": 0}],   # true (gated)
         [{"node": "Set Review", "type": "main", "index": 0}],       # false
     ]}
-    conns["Review Lane Sentinel"] = {"main": [[{"node": "Set Review", "type": "main", "index": 0}]]}
     # F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): a batch
     # where every row is held for review must still reach "Build Ingest Response" — the
     # explicit Merge in front of it (below) is what now makes that ONE run over every
@@ -1381,6 +1398,18 @@ return anyNonWrite ? [] : [{}];
                              merge_name="Update Carry Merge")
     splice_carry_merge_after(nodes, conns, "HubSpot Create", "HubSpot Create Write Gate IF",
                              merge_name="Create Carry Merge")
+    # Phase 70 Plan 10 (D-70-23) ingest-lane audit: the two calls above each fan the
+    # gate IF's TRUE branch straight onto its own carry Merge's second input
+    # (`splice_carry_merge_after`'s `carry_source` contract) — a routing IF with a
+    # direct edge to a Merge input, same class as the refusal-lane edge already
+    # retargeted below. Route it through a pass-through for the same reason: this repo
+    # has never observed whether the live engine treats an IF's own empty branch as a
+    # delivery, and a Merge input must not depend on the answer either way.
+    for _carry_write, _carry_merge_name in (
+            ("HubSpot Update", "Update Carry Merge"), ("HubSpot Create", "Create Carry Merge")):
+        _retarget_merge_edge_through_passthrough(
+            nodes, conns, f"{_carry_write} Write Gate IF", 0, _carry_merge_name,
+            f"{_carry_write} Permitted Pass-Through", 40, 760)
     splice_carry_merge_after(nodes, conns, "HubSpot Associate Company",
                              "Build Association Request",
                              merge_name="Associate Carry Merge")
@@ -1398,6 +1427,20 @@ return anyNonWrite ? [] : [{}];
     splice_carry_merge_after(nodes, conns, "Extract From File", "Set Config Fields",
                              merge_name="Source By Field Broadcast", combine_by="combineAll")
 
+    # D-70-01/D-70-23 (Phase 70 Plan 10): "Build Association Request" is fed by BOTH
+    # "Update Carry Merge" and "Create Carry Merge" — a genuine two-lane convergence
+    # this repo had left un-merged (each carry Merge's own delivery just dispatched the
+    # Code node separately). An explicit APPEND Merge here is what D-70-01 requires for
+    # any node fed by two lanes, and it is also the safe home for this plan's
+    # "never-stall" sentinels (below, via `carry_merge=`): a marker landing on an
+    # APPEND input is inert here (the node's own `if (!contactId) return null` drops
+    # it), unlike a marker forced onto either `combineByPosition` carry Merge's OWN
+    # input, which would pair with the OTHER input's real content into a fabricated
+    # write response (Rule 1, found running this task's own suite).
+    build_association_request_merge = splice_merge_before(
+        nodes, conns, "Build Association Request",
+        merge_name="Build Association Request Merge")
+
     # D-70-01: the three inbound edges into "Build Ingest Response" ("Associate Carry
     # Merge", "Set Review", "Decide Action Snapshot") become one explicit, append-mode
     # Merge — the converged node runs ONCE over every row instead of once per inbound
@@ -1405,23 +1448,67 @@ return anyNonWrite ? [] : [{}];
     ingest_merge_response = splice_merge_before(
         nodes, conns, "Build Ingest Response", merge_name="Ingest Merge Response")
 
+    # Phase 70 Plan 10 (D-70-23): the two ingest-lane sentinels, now wired through
+    # `_add_starved_lane_sentinel`'s gated "condition -> gate -> targets" shape (the
+    # class fix) rather than hand-wired straight to a Merge input. Created here,
+    # after `ingest_merge_response` and "Associate Carry Merge" both exist, because
+    # the association sentinel's real target is an INDEX on the former, resolved off
+    # the latter's own already-spliced edge.
+    #
+    # The association sentinel targets "Ingest Merge Response"'s own association-lane
+    # input — the SAME input "Associate Carry Merge" feeds — rather than either input
+    # of that carry Merge itself (D-70-20's carry-Merge bypass, D-70-23's amendment
+    # audited against this lane): a marker on BOTH inputs of a positional
+    # (combineByPosition) carry Merge would pair with itself into one fabricated row
+    # (T-70-41); a marker on the carry Merge's own CONSUMER is inert and mutually
+    # exclusive with the carry Merge's own real delivery by construction (the carry
+    # Merge only ever fires when an association actually ran).
+    assoc_carry_idx = _merge_input_index(conns, "Associate Carry Merge", ingest_merge_response)
+    _add_starved_lane_sentinel(
+        nodes, conns, "Review Lane Sentinel", "Decide Action", review_sentinel_js,
+        [("Set Review", 0)], 60, 1180)
+    _add_starved_lane_sentinel(
+        nodes, conns, "Associate Lane Sentinel", "Decide Action",
+        WRITE_SAFETY_GATE_JS + associate_sentinel_js,
+        [(ingest_merge_response, assoc_carry_idx)], 60, 1020)
+
     # Phase 70 Plan 05 Task 2 sub-step 2c (D-70-14): each write gate's REFUSAL lane gets
     # its OWN "Ingest Merge Response" input, never a share of the association lane's —
     # see wire_gate_refusal_lane's docstring for the armed-mixed-batch drop that ruled
     # sharing out. With the D-70-06 precheck gone this is the ONLY path a refused row has
     # to the response, and it is what lets "Build Ingest Response" report the gate's
     # actual verdict rather than the pre-write intention. No `mirror_index` here: this
-    # merge's write-lane input is fed by "Associate Lane Sentinel" into "Associate Carry
-    # Merge" (a node, not a merge index), so the "gate never ran" question is asked
-    # directly, off the same routing predicate "IF Update"/"IF Create" test.
-    for _gate_write, _routed_action in (("HubSpot Update", "update"),
-                                        ("HubSpot Create", "create")):
+    # merge's write-lane input is fed straight by "Associate Lane Sentinel" (Phase 70
+    # Plan 10, D-70-23 — the sentinel now bypasses "Associate Carry Merge" and targets
+    # this exact input), so the "gate never ran" question is asked directly, off the
+    # same routing predicate "IF Update"/"IF Create" test.
+    for _gate_write, _routed_action, _carry_merge_name in (
+            ("HubSpot Update", "update", "Update Carry Merge"),
+            ("HubSpot Create", "create", "Create Carry Merge")):
+        _bar_idx = _merge_input_index(
+            conns, _carry_merge_name, build_association_request_merge)
         wire_gate_refusal_lane(
             nodes, conns, _gate_write, ingest_merge_response, 40, 900,
             unreached_source="Decide Action",
             unreached_condition_js=(
                 'if (rows.length > 0 && !rows.some((r) => r.action === '
-                f'"{_routed_action}")) return [{{}}]; return [];'))
+                f'"{_routed_action}")) return [{{}}]; return [];'),
+            # Phase 70 Plan 10 (D-70-23): the write node's own carry Merge may
+            # legitimately never fire on a fully-refused (or write-unreached) batch —
+            # that is fine, since nothing downstream needs its OWN delivery directly.
+            # What must never starve is "Build Association Request Merge"'s own input
+            # for this write path, so the sentinels target THAT merge, never the
+            # `combineByPosition` carry Merge itself.
+            carry_merge=(build_association_request_merge, _bar_idx))
+        # Phase 70 Plan 10 (D-70-23) ingest-lane audit: retarget the write gate IF's
+        # false (refusal) branch, which `wire_gate_refusal_lane` just wired straight
+        # to `ingest_merge_response`, through a pass-through — no routing IF has a
+        # direct edge to a Merge input on this lane, so this input obeys the one rule
+        # this repo has observed (fed zero items, never runs) regardless of whether
+        # the live engine treats an IF's own empty branch as a delivery.
+        _retarget_merge_edge_through_passthrough(
+            nodes, conns, f"{_gate_write} Write Gate IF", 1, ingest_merge_response,
+            f"{_gate_write} Refusal Pass-Through", 40, 860)
 
     # Pre-probe placement (Task 2's human-check settles this live): "Set Review" is a
     # Code node and takes the flag directly per the plan's own literal suggestion; the
@@ -9428,9 +9515,50 @@ def _append_merge_input(nodes, conns, merge_name, source_name, *, source_out_idx
     return index
 
 
+def _add_merge_passthrough(nodes, conns, name, source, source_out_idx, x, y):
+    """A plain Code pass-through inserted between a routing IF's branch and whatever it
+    feeds (Phase 70 Plan 10, D-70-23's ingest-lane audit): this repo has never observed
+    whether the live engine treats an IF's own empty branch as a delivery the way it
+    does a Code node's empty output (D-70-01's addendum), and a routing IF must not
+    have a direct edge to a Merge input while that question is open. The pass-through
+    makes the answer irrelevant — fed zero items, IT never runs (the one rule this repo
+    HAS observed, execution 12200), so the Merge input it feeds obeys that rule
+    regardless of what the IF branch itself would have done. Returns the pass-through
+    node's name; callers re-point their own downstream edge at it."""
+    nodes.append(code_node(name,
+        "// Pass-through — see build_cloud_workflows.py's own comment at this node's "
+        "call site (_add_merge_passthrough).\n"
+        "return $input.all();\n", x, y))
+    conns.setdefault(source, {"main": [[]]})
+    while len(conns[source]["main"]) <= source_out_idx:
+        conns[source]["main"].append([])
+    conns[source]["main"][source_out_idx].append({"node": name, "type": "main", "index": 0})
+    return name
+
+
+def _retarget_merge_edge_through_passthrough(nodes, conns, source, source_out_idx,
+                                             merge_name, passthrough_name, px, py):
+    """Finds the edge `source`'s output `source_out_idx` already has straight to
+    `merge_name`, removes it, inserts a pass-through (`_add_merge_passthrough`) fed
+    from the same `(source, source_out_idx)`, and re-points ITS output at the exact
+    merge input index the direct edge used to occupy — so no merge input index moves,
+    only what feeds it."""
+    outputs = conns[source]["main"][source_out_idx]
+    match = next((c for c in outputs if c.get("node") == merge_name), None)
+    if match is None:
+        raise ValueError(
+            f"_retarget_merge_edge_through_passthrough: {source!r} output "
+            f"{source_out_idx} has no direct edge to {merge_name!r}")
+    outputs.remove(match)
+    _add_merge_passthrough(nodes, conns, passthrough_name, source, source_out_idx, px, py)
+    conns[passthrough_name] = {"main": [[
+        {"node": merge_name, "type": "main", "index": match["index"]}]]}
+    return match["index"]
+
+
 def wire_gate_refusal_lane(nodes, conns, write_name, merge_name, x, y, *,
                            mirror_index=None, unreached_source=None,
-                           unreached_condition_js=None):
+                           unreached_condition_js=None, carry_merge=None):
     """Give a spliced write gate's REFUSAL lane its own input on `merge_name`, plus the
     sentinels that keep that input fed (Phase 70 Plan 05 Task 2, D-70-14).
 
@@ -9459,14 +9587,45 @@ def wire_gate_refusal_lane(nodes, conns, write_name, merge_name, x, y, *,
     `mirror_index` is derived, never hand-listed: on the enrichment lane ~30 sentinels
     feed "Build Response Merge", several per terminal, and enumerating them by name here
     would go stale the first time one is added.
-    """
+
+    The gate IF's false output still lands on `merge_name` directly (unchanged by
+    Phase 70 Plan 10) — this repo's existing `writeGateShape.test.mjs` coverage pins
+    that edge by name for the enrichment lane's own gates, and that lane's own
+    pass-through audit is plan 70-11's job (D-70-20's IF-branch-delivery question stays
+    unobserved either way, unlike the ingest lane, which plan 70-10 converts via its own
+    `_add_merge_passthrough` call sites in `build_cloud`, not here).
+
+    `carry_merge` (Phase 70 Plan 10, D-70-23): `(downstream_merge_name, input_index)` — an
+    APPEND-mode Merge downstream of the write node's own per-hop carry Merge (never the
+    carry Merge itself: `splice_carry_merge_after`'s Merge is `combineByPosition`, and
+    feeding it a marker on only ONE of its two inputs would pair that marker with the
+    OTHER input's real content into one fabricated row — Rule 1, found running this
+    plan's own suite: the carry Merge's positional-combine input 0, the write node's own
+    HTTP response, has no producer at all whenever the write gate IF's true branch is
+    empty, and the carry Merge is then left waiting on the one input nothing will ever
+    feed, a fully-refused batch's own version of executions 12204-12206 — but making the
+    carry Merge itself fire on a marker corrupts a DIFFERENT convergence downstream,
+    where two per-action carry Merges land on one un-merged Code node
+    ("Build Association Request") and a marker-triggered SECOND run of that node races
+    the real one). The two sentinels below therefore target the downstream APPEND merge,
+    never the carry Merge: a marker landing there is inert (filtered by the downstream
+    Code node's own `if (!contactId) return null`), and the downstream merge's OWN input
+    is what needs covering on every way its own carry Merge can be silent."""
     idx = _append_merge_input(nodes, conns, merge_name, f"{write_name} Write Gate IF",
                               source_out_idx=1)
     if mirror_index is not None:
+        # Phase 70 Plan 10 (D-70-23): a mirrored sentinel's own outgoing edge no longer
+        # points at `merge_name` directly — it points at its gate (`_add_starved_lane_
+        # sentinel`'s "condition -> gate -> targets" shape). Follow the gate, or a
+        # refusal lane silently loses the mirrored coverage that keeps its input fed
+        # when the write gate never runs at all.
         for name, spec in list(conns.items()):
             if not name.endswith("Sentinel"):
                 continue
-            for outputs in spec.get("main", []):
+            gate_spec = conns.get(f"{name} Gate")
+            if gate_spec is None:
+                continue
+            for outputs in gate_spec.get("main", []):
                 if any(c.get("node") == merge_name and c.get("index") == mirror_index
                        for c in (outputs or [])):
                     outputs.append({"node": merge_name, "type": "main", "index": idx})
@@ -9496,7 +9655,43 @@ def wire_gate_refusal_lane(nodes, conns, write_name, merge_name, x, y, *,
             'if (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) '
             'return [{}]; return [];',
             [(merge_name, mirror_index)], x, y)
+    if carry_merge is not None:
+        carry_merge_name, carry_merge_idx = carry_merge
+        y += 120
+        if unreached_source is not None:
+            _add_starved_lane_sentinel(
+                nodes, conns, f"{write_name} Carry Unreached Sentinel",
+                unreached_source, unreached_condition_js,
+                [(carry_merge_name, carry_merge_idx)], x, y)
+            y += 120
+        _add_starved_lane_sentinel(
+            nodes, conns, f"{write_name} Carry All Refused Sentinel",
+            f"{write_name} Write Gate",
+            'if (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) '
+            'return [{}]; return [];',
+            [(carry_merge_name, carry_merge_idx)], x, y)
     return idx
+
+
+def _sentinel_gate_js():
+    """D-70-23's gate body. Fed ONLY by its sentinel condition node's own output —
+    never by `source` directly. Stamps `SENTINEL_MARKER_KEY` on whatever it passes
+    through so a marker is never mistakable for a real row."""
+    return (
+        "// Sentinel Gate — Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n"
+        "// node's own output. That output can be an empty array while the condition\n"
+        "// node itself still RAN (it is always fed the real lane's row set), and the\n"
+        "// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n"
+        "// (executions 12204-12206) — sharing a Merge input directly with the\n"
+        "// condition node therefore let an empty verdict pre-empt a real row. This\n"
+        "// gate is what the condition feeds instead: when the condition emits\n"
+        "// nothing, the gate itself is fed zero items and — per the engine's OWN\n"
+        "// other rule (execution 12200: a node fed zero items does not run) — never\n"
+        "// runs, making no delivery at all. Only the condition's one marker item ever\n"
+        "// reaches this gate, so it always runs it becomes the delivery.\n"
+        "return $input.all().map((it) => ({ json: { ...it.json, "
+        f"{SENTINEL_MARKER_KEY!r}: true }} }}));\n"
+    )
 
 
 def _add_starved_lane_sentinel(nodes, conns, name, source, condition_js, targets, x, y,
@@ -9511,11 +9706,12 @@ def _add_starved_lane_sentinel(nodes, conns, name, source, condition_js, targets
     plain `{...}` objects bound to `rows` inside `condition_js`. `condition_js` must
     `return` an array: `[{}]` when every one of `targets` would otherwise starve this
     execution, `[]` when real content already covers them (mutually exclusive with the
-    real lane by construction, never a race). Delivers directly to each `(node, index)`
-    pair in `targets` — bypassing every IF/HTTP/business node between `source` and the
-    merge, so a marker never re-enters a paid call or an HTTP node it would otherwise
-    have to route through. `targets` names are typically resolved via
-    `_merge_input_index` against a merge `splice_merge_before` already created."""
+    real lane by construction, never a race).
+
+    Phase 70 Plan 10 (D-70-23): the condition node's own output is NEVER wired directly
+    to `targets` any more — it feeds a gate node (`f"{name} Gate"`, `_sentinel_gate_js`)
+    that is the ONLY node with edges to `targets`. `targets` names are typically resolved
+    via `_merge_input_index` against a merge `splice_merge_before` already created."""
     nodes.append(code_node(name, f"""// {name} — Phase 70 Plan 03 starved-lane sentinel.
 // Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.
 const rows = $input.all().map((it) => it.json);
@@ -9525,7 +9721,10 @@ const rows = $input.all().map((it) => it.json);
     while len(conns[source]["main"]) <= source_out_idx:
         conns[source]["main"].append([])
     conns[source]["main"][source_out_idx].append({"node": name, "type": "main", "index": 0})
-    conns[name] = {"main": [[{"node": t, "type": "main", "index": i} for (t, i) in targets]]}
+    gate_name = f"{name} Gate"
+    nodes.append(code_node(gate_name, _sentinel_gate_js(), x + 110, y))
+    conns[name] = {"main": [[{"node": gate_name, "type": "main", "index": 0}]]}
+    conns[gate_name] = {"main": [[{"node": t, "type": "main", "index": i} for (t, i) in targets]]}
     return name
 
 

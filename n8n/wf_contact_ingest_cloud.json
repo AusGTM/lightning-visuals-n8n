@@ -506,7 +506,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Build Ingest Response \u2014 the lane's per-row report, now read from the settled\n// execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.\n// Phase 70 Plan 02 (D-70-01/D-70-04): sits behind \"Ingest Merge Response\", a\n// THREE-input append-mode Merge: the association lane, the review lane, and\n// \"Decide Action Snapshot\" \u2014 a tagged, literal fan-out of \"Decide Action\"'s own full\n// row set (a single-producer node, safe to fan out further; this is the full ground\n// truth this node needs even for a row that was written but never reached the\n// association lane at all, e.g. an update with no company to associate, dropped at\n// \"Build Association Request\"). No node is read by name any more \u2014 every input\n// arrives on $input, distinguished by the `_decided_snapshot` tag \"Decide Action\n// Snapshot\" stamps (a real association attempt never carries it; a starved lane's\n// harmless sentinel marker carries neither the tag nor an `action` field at all).\n//\n// [Rule 1 - Bug, found writing this task's own carry-merge test] `arrived` used to be\n// \"any item with an `action` field\" \u2014 but \"Set Review\" ALSO feeds this Merge (D-70-01),\n// and its contribution is the row's OWN ORIGINAL decided action/email/company_id\n// untouched. A review row that DOES resolve a company (association: \"not_confirmed\" is\n// the correct report \u2014 nothing ever tried to associate it) self-matched against its\n// OWN Set-Review contribution by email, misreporting \"associated\". `action: \"enrich\"`\n// is the literal, unique stamp only \"Build Association Request\" ever writes \u2014 never a\n// value Decide Action itself produces \u2014 so filtering on it (not merely \"has an action\")\n// admits a real association attempt and nothing else.\nconst allItems = $input.all().map((it) => it.json).filter(Boolean);\nconst decided = allItems.filter((row) => row._decided_snapshot === true);\nconst arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === \"enrich\");\n// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the write gates now EMIT the rows they\n// refuse (D-70-14) straight onto this Merge, carrying `action: \"write_blocked\"` plus a\n// reason. The decided snapshot still says \"update\"/\"create\" for those rows \u2014 reporting\n// it unchanged is exactly the misreport execution 12181 showed (Greg Purcell's blocked\n// update reported as landed). The gate's verdict is the write node's own answer, so it\n// wins here. This is what replaces the pre-write precheck: a report, not a prediction.\nconst blocked = allItems.filter((row) =>\n  row._decided_snapshot !== true && row.action === \"write_blocked\");\nconst blockedByRowId = {};\nconst blockedByContactId = {};\nconst blockedByEmail = {};\nfor (const row of blocked) {\n  if (row.row_id) blockedByRowId[String(row.row_id)] = row;\n  if (row.hs_object_id) blockedByContactId[String(row.hs_object_id)] = row;\n  if (row.email) blockedByEmail[String(row.email).toLowerCase()] = row;\n}\nconst byRowId = {};\nconst byContactId = {};\nconst byEmail = {};\nfor (const row of arrived) {\n  if (row.row_id) byRowId[String(row.row_id)] = row;\n  if (row.contact_id) byContactId[String(row.contact_id)] = row;\n  if (row.email) byEmail[String(row.email).toLowerCase()] = row;\n}\nreturn decided.map((row) => {\n  const email = String((row.properties && row.properties.email) || row.email || \"\").toLowerCase();\n  const assoc = (row.row_id && byRowId[String(row.row_id)]) ||\n                (row.hs_object_id && byContactId[String(row.hs_object_id)]) ||\n                (email && byEmail[email]) || null;\n  const contactId = (assoc && assoc.contact_id) || row.hs_object_id || row.contact_id || null;\n  const block = (row.row_id && blockedByRowId[String(row.row_id)]) ||\n                (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||\n                (email && blockedByEmail[email]) || null;\n  let association;\n  if (!row.company_id) {\n    association = \"none\";\n  } else if (assoc) {\n    association = \"associated\";\n  } else {\n    association = \"not_confirmed\";  // never reached the write gate, or HubSpot refused it\n  }\n  return { json: {\n    action: block ? \"write_blocked\" : row.action,\n    outcome: block ? \"write_blocked\" : (row.outcome || null),\n    contact_id: contactId,\n    hs_object_id: contactId,\n    email: email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    // A refused write never reached the association lane either \u2014 one verdict covers\n    // both (D-70-15), so it cannot report \"associated\".\n    association: block && association === \"associated\" ? \"not_confirmed\" : association,\n    reason: (block && block.write_blocked_reason) || row.reason || null,\n    email_status: row.email_status || null,\n    // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`\n    // pre-write. Closes the join for every lane whose rows carry `row_id` into the\n    // backend. Does NOT close it for the pair pipeline's FINAL ingest dispatch \u2014\n    // `extraction.strip_row_id` removes the key before `write_dispatch_csv`\n    // (enrich-before-ingest/SKILL.md:639), so those rows echo `null` here regardless.\n    row_id: row.row_id ?? null,\n  }};\n});\n"
+        "jsCode": "// Build Ingest Response \u2014 the lane's per-row report, now read from the settled\n// execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.\n// Phase 70 Plan 02 (D-70-01/D-70-04): sits behind \"Ingest Merge Response\", a\n// THREE-input append-mode Merge: the association lane, the review lane, and\n// \"Decide Action Snapshot\" \u2014 a tagged, literal fan-out of \"Decide Action\"'s own full\n// row set (a single-producer node, safe to fan out further; this is the full ground\n// truth this node needs even for a row that was written but never reached the\n// association lane at all, e.g. an update with no company to associate, dropped at\n// \"Build Association Request\"). No node is read by name any more \u2014 every input\n// arrives on $input, distinguished by the `_decided_snapshot` tag \"Decide Action\n// Snapshot\" stamps (a real association attempt never carries it; a starved lane's\n// harmless sentinel marker carries neither the tag nor an `action` field at all).\n//\n// [Rule 1 - Bug, found writing this task's own carry-merge test] `arrived` used to be\n// \"any item with an `action` field\" \u2014 but \"Set Review\" ALSO feeds this Merge (D-70-01),\n// and its contribution is the row's OWN ORIGINAL decided action/email/company_id\n// untouched. A review row that DOES resolve a company (association: \"not_confirmed\" is\n// the correct report \u2014 nothing ever tried to associate it) self-matched against its\n// OWN Set-Review contribution by email, misreporting \"associated\". `action: \"enrich\"`\n// is the literal, unique stamp only \"Build Association Request\" ever writes \u2014 never a\n// value Decide Action itself produces \u2014 so filtering on it (not merely \"has an action\")\n// admits a real association attempt and nothing else.\n// Phase 70 Plan 10 (D-70-23): a starved-lane sentinel's marker is already excluded by\n// construction below (it carries neither `_decided_snapshot` nor a matching `action`),\n// but this is the explicit, defensive filter every consumer of the reserved key must\n// carry \u2014 belt-and-braces against a future change to the predicates below ever\n// admitting one by accident.\nconst allItems = $input.all().map((it) => it.json).filter(Boolean)\n  .filter((row) => row._gsd_sentinel_marker !== true);\nconst decided = allItems.filter((row) => row._decided_snapshot === true);\nconst arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === \"enrich\");\n// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the write gates now EMIT the rows they\n// refuse (D-70-14) straight onto this Merge, carrying `action: \"write_blocked\"` plus a\n// reason. The decided snapshot still says \"update\"/\"create\" for those rows \u2014 reporting\n// it unchanged is exactly the misreport execution 12181 showed (Greg Purcell's blocked\n// update reported as landed). The gate's verdict is the write node's own answer, so it\n// wins here. This is what replaces the pre-write precheck: a report, not a prediction.\nconst blocked = allItems.filter((row) =>\n  row._decided_snapshot !== true && row.action === \"write_blocked\");\nconst blockedByRowId = {};\nconst blockedByContactId = {};\nconst blockedByEmail = {};\nfor (const row of blocked) {\n  if (row.row_id) blockedByRowId[String(row.row_id)] = row;\n  if (row.hs_object_id) blockedByContactId[String(row.hs_object_id)] = row;\n  if (row.email) blockedByEmail[String(row.email).toLowerCase()] = row;\n}\nconst byRowId = {};\nconst byContactId = {};\nconst byEmail = {};\nfor (const row of arrived) {\n  if (row.row_id) byRowId[String(row.row_id)] = row;\n  if (row.contact_id) byContactId[String(row.contact_id)] = row;\n  if (row.email) byEmail[String(row.email).toLowerCase()] = row;\n}\nreturn decided.map((row) => {\n  const email = String((row.properties && row.properties.email) || row.email || \"\").toLowerCase();\n  const assoc = (row.row_id && byRowId[String(row.row_id)]) ||\n                (row.hs_object_id && byContactId[String(row.hs_object_id)]) ||\n                (email && byEmail[email]) || null;\n  const contactId = (assoc && assoc.contact_id) || row.hs_object_id || row.contact_id || null;\n  const block = (row.row_id && blockedByRowId[String(row.row_id)]) ||\n                (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||\n                (email && blockedByEmail[email]) || null;\n  let association;\n  if (!row.company_id) {\n    association = \"none\";\n  } else if (assoc) {\n    association = \"associated\";\n  } else {\n    association = \"not_confirmed\";  // never reached the write gate, or HubSpot refused it\n  }\n  return { json: {\n    action: block ? \"write_blocked\" : row.action,\n    outcome: block ? \"write_blocked\" : (row.outcome || null),\n    contact_id: contactId,\n    hs_object_id: contactId,\n    email: email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    // A refused write never reached the association lane either \u2014 one verdict covers\n    // both (D-70-15), so it cannot report \"associated\".\n    association: block && association === \"associated\" ? \"not_confirmed\" : association,\n    reason: (block && block.write_blocked_reason) || row.reason || null,\n    email_status: row.email_status || null,\n    // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`\n    // pre-write. Closes the join for every lane whose rows carry `row_id` into the\n    // backend. Does NOT close it for the pair pipeline's FINAL ingest dispatch \u2014\n    // `extraction.strip_row_id` removes the key before `write_dispatch_csv`\n    // (enrich-before-ingest/SKILL.md:639), so those rows echo `null` here regardless.\n    row_id: row.row_id ?? null,\n  }};\n});\n"
       },
       "id": "c00320000-0000-4000-8000-000000000000",
       "name": "Build Ingest Response",
@@ -519,39 +519,11 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n// Associate Lane Sentinel \u2014 see build_cloud_workflows.py's own comment above this\n// node's call site for why this is a global, single-producer check rather than a\n// per-IF alwaysOutputData flag.\nconst rows = $input.all().map((it) => it.json);\n// Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With\n// the pre-write refusal precheck removed (D-70-06) a row can be action update/create and\n// still never reach \"HubSpot Associate Company\": \"Build Association Request\" drops any\n// row with no resolved company (CLAUDE.md \u00a713.0.1 \u2014 an update is never HELD for lack of\n// a company, it simply has nothing to associate). A batch of updates that all resolve no\n// company would otherwise leave \"Associate Carry Merge\" with zero deliveries on both\n// inputs and hang \"Ingest Merge Response\" forever. This stays a pre-gate check on\n// purpose: a row the GATE refuses is covered by the gate's own false branch, which\n// delivers to the very same \"Ingest Merge Response\" input this lane feeds.\n// The `_writeSafetyAllows` call below is a duplicate of the gates' predicate, and is\n// deliberately NOT a second authorization: it decides only whether this marker is needed\n// to keep a Merge input fed. The real gates remain the sole place a write is permitted.\n// Same pattern, for the same reason, as the review lane's own BUG-30 precheck. It is\n// required because the marker shares \"Ingest Merge Response\"'s association-lane input\n// with the real association delivery, so the two must be mutually EXCLUSIVE \u2014 a marker\n// that fires while a real association is still in flight would satisfy the Merge early\n// and the real arrival would be dropped (wire_gate_refusal_lane's docstring records the\n// walker run that caught exactly that).\nconst anyAssoc = rows.some((r) => {\n  if (!r || !r.company_id) return false;\n  if (r.action !== \"update\" && r.action !== \"create\") return false;\n  const wr = r.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows(r.action === \"create\" ? \"create\" : \"enrich\",\n                            wr.hs_object_id || null, wr.domain || null);\n});\nreturn anyAssoc ? [] : [{}];\n"
-      },
-      "id": "c00330000-0000-4000-8000-000000000000",
-      "name": "Associate Lane Sentinel",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        4400,
-        40
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Review Lane Sentinel \u2014 the review-side twin of \"Associate Lane Sentinel\". Fires\n// only when EVERY row this execution decided is update/create (so \"Set Review\" would\n// otherwise never even be enqueued at all, on a create-only or update-only batch).\nconst rows = $input.all().map((it) => it.json);\nconst anyNonWrite = rows.some((r) => r && r.action !== \"update\" && r.action !== \"create\");\nreturn anyNonWrite ? [] : [{}];\n"
-      },
-      "id": "c00340000-0000-4000-8000-000000000000",
-      "name": "Review Lane Sentinel",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        4400,
-        620
-      ]
-    },
-    {
-      "parameters": {
         "content": "## LV Contact Ingest \u2014 CLOUD template\nImport to n8n Cloud, then add **HubSpot credentials** on the three HubSpot nodes (search / update / create).\n\n**Flow:** Webhook upload -> Extract-from-File -> inlined Code nodes (map/normalize/resolve/merge) -> IF(action) -> HubSpot update / create (GATED, off by default) / Set review.\n\n**Email verify:** real HTTP node -> rapid-email-verifier batch API (up to 100/call); non-gating fallback if unreachable.\n\n**AU-phone DISCLAIMER:** the inline JS is an AU-only heuristic (no libphonenumber in Code nodes). Non-AU / ambiguous numbers -> null -> review. Swap in a phone-validation API for global coverage.",
         "height": 360,
         "width": 460
       },
-      "id": "s00350000-0000-4000-8000-000000000000",
+      "id": "s00330000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -565,7 +537,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('enrich', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00360000-0000-4000-8000-000000000000",
+      "id": "c00340000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -585,7 +557,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00370000-0000-4000-8000-000000000000",
+              "id": "i00350000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.write_allowed }}",
               "rightValue": true,
               "operator": {
@@ -596,7 +568,7 @@
           ]
         }
       },
-      "id": "if00380000-0000-4000-8000-000000000000",
+      "id": "if00360000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Write Gate IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -610,7 +582,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('create', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00390000-0000-4000-8000-000000000000",
+      "id": "c00370000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -630,7 +602,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00400000-0000-4000-8000-000000000000",
+              "id": "i00380000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.write_allowed }}",
               "rightValue": true,
               "operator": {
@@ -641,7 +613,7 @@
           ]
         }
       },
-      "id": "if00410000-0000-4000-8000-000000000000",
+      "id": "if00390000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Write Gate IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -663,7 +635,7 @@
           }
         }
       },
-      "id": "m00420000-0000-4000-8000-000000000000",
+      "id": "m00400000-0000-4000-8000-000000000000",
       "name": "Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -685,13 +657,41 @@
           }
         }
       },
-      "id": "m00430000-0000-4000-8000-000000000000",
+      "id": "m00410000-0000-4000-8000-000000000000",
       "name": "Create Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
         4730,
         280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00420000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Permitted Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00430000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Permitted Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        760
       ]
     },
     {
@@ -829,9 +829,23 @@
     {
       "parameters": {
         "mode": "append",
-        "numberInputs": 5
+        "numberInputs": 2
       },
       "id": "m00500000-0000-4000-8000-000000000000",
+      "name": "Build Association Request Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4680,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 5
+      },
+      "id": "m00510000-0000-4000-8000-000000000000",
       "name": "Ingest Merge Response",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -843,9 +857,65 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Review Lane Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\n// Review Lane Sentinel \u2014 the review-side twin of \"Associate Lane Sentinel\". Fires\n// only when EVERY row this execution decided is update/create (so \"Set Review\" would\n// otherwise never even be enqueued at all, on a create-only or update-only batch).\n// `rows` is bound by `_add_starved_lane_sentinel`'s own template, above this body.\nconst anyNonWrite = rows.some((r) => r && r.action !== \"update\" && r.action !== \"create\");\nreturn anyNonWrite ? [] : [{}];\n\n"
+      },
+      "id": "c00520000-0000-4000-8000-000000000000",
+      "name": "Review Lane Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00530000-0000-4000-8000-000000000000",
+      "name": "Review Lane Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        170,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Associate Lane Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nconst ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n// Associate Lane Sentinel \u2014 see build_cloud_workflows.py's own comment above this\n// node's call site for why this is a global, single-producer check rather than a\n// per-IF alwaysOutputData flag. `rows` is bound by `_add_starved_lane_sentinel`'s own\n// template, above this body.\n// Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With\n// the pre-write refusal precheck removed (D-70-06) a row can be action update/create and\n// still never reach \"HubSpot Associate Company\": \"Build Association Request\" drops any\n// row with no resolved company (CLAUDE.md \u00a713.0.1 \u2014 an update is never HELD for lack of\n// a company, it simply has nothing to associate). A batch of updates that all resolve no\n// company would otherwise leave \"Associate Carry Merge\" with zero deliveries on both\n// inputs and hang \"Ingest Merge Response\" forever. This stays a pre-gate check on\n// purpose: a row the GATE refuses is covered by the gate's own false branch, which\n// delivers to the very same \"Ingest Merge Response\" input this lane feeds.\n// The `_writeSafetyAllows` call below is a duplicate of the gates' predicate, and is\n// deliberately NOT a second authorization: it decides only whether this marker is needed\n// to keep a Merge input fed. The real gates remain the sole place a write is permitted.\n// Same pattern, for the same reason, as the review lane's own BUG-30 precheck. It is\n// required because the marker shares \"Ingest Merge Response\"'s association-lane input\n// with the real association delivery, so the two must be mutually EXCLUSIVE \u2014 a marker\n// that fires while a real association is still in flight would satisfy the Merge early\n// and the real arrival would be dropped (wire_gate_refusal_lane's docstring records the\n// walker run that caught exactly that).\nconst anyAssoc = rows.some((r) => {\n  if (!r || !r.company_id) return false;\n  if (r.action !== \"update\" && r.action !== \"create\") return false;\n  const wr = r.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows(r.action === \"create\" ? \"create\" : \"enrich\",\n                            wr.hs_object_id || null, wr.domain || null);\n});\nreturn anyAssoc ? [] : [{}];\n\n"
+      },
+      "id": "c00540000-0000-4000-8000-000000000000",
+      "name": "Associate Lane Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00550000-0000-4000-8000-000000000000",
+      "name": "Associate Lane Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        170,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Update Gate Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"update\")) return [{}]; return [];\n"
       },
-      "id": "c00510000-0000-4000-8000-000000000000",
+      "id": "c00560000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Gate Unreached Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -857,9 +927,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00570000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Gate Unreached Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c00520000-0000-4000-8000-000000000000",
+      "id": "c00580000-0000-4000-8000-000000000000",
       "name": "HubSpot Update No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -871,9 +955,93 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00590000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update No Refusal Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Update Carry Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"update\")) return [{}]; return [];\n"
+      },
+      "id": "c00600000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Carry Unreached Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00610000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Carry Unreached Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Update Carry All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c00620000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Carry All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00630000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Carry All Refused Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        1380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00640000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Refusal Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create Gate Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"create\")) return [{}]; return [];\n"
       },
-      "id": "c00530000-0000-4000-8000-000000000000",
+      "id": "c00650000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Gate Unreached Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -885,15 +1053,113 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00660000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Gate Unreached Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c00540000-0000-4000-8000-000000000000",
+      "id": "c00670000-0000-4000-8000-000000000000",
       "name": "HubSpot Create No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
         1020
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00680000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create No Refusal Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Create Carry Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"create\")) return [{}]; return [];\n"
+      },
+      "id": "c00690000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Carry Unreached Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00700000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Carry Unreached Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Create Carry All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c00710000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Carry All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00720000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Carry All Refused Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        1380
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00730000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Refusal Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        860
       ]
     }
   ],
@@ -1124,7 +1390,7 @@
             "index": 0
           },
           {
-            "node": "Associate Lane Sentinel",
+            "node": "Decide Action Snapshot",
             "type": "main",
             "index": 0
           },
@@ -1134,7 +1400,7 @@
             "index": 0
           },
           {
-            "node": "Decide Action Snapshot",
+            "node": "Associate Lane Sentinel",
             "type": "main",
             "index": 0
           },
@@ -1144,7 +1410,17 @@
             "index": 0
           },
           {
+            "node": "HubSpot Update Carry Unreached Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "HubSpot Create Gate Unreached Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Create Carry Unreached Sentinel",
             "type": "main",
             "index": 0
           }
@@ -1196,22 +1472,6 @@
             "node": "Associate Carry Merge",
             "type": "main",
             "index": 0
-          }
-        ]
-      ]
-    },
-    "Associate Lane Sentinel": {
-      "main": [
-        [
-          {
-            "node": "Associate Carry Merge",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Associate Carry Merge",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -1274,17 +1534,6 @@
         ]
       ]
     },
-    "Review Lane Sentinel": {
-      "main": [
-        [
-          {
-            "node": "Set Review",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Set Review": {
       "main": [
         [
@@ -1308,6 +1557,11 @@
             "node": "HubSpot Update No Refusal Sentinel",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "HubSpot Update Carry All Refused Sentinel",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1321,16 +1575,16 @@
             "index": 0
           },
           {
-            "node": "Update Carry Merge",
+            "node": "HubSpot Update Permitted Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
           {
-            "node": "Ingest Merge Response",
+            "node": "HubSpot Update Refusal Pass-Through",
             "type": "main",
-            "index": 3
+            "index": 0
           }
         ]
       ]
@@ -1347,6 +1601,11 @@
             "node": "HubSpot Create No Refusal Sentinel",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "HubSpot Create Carry All Refused Sentinel",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1360,16 +1619,16 @@
             "index": 0
           },
           {
-            "node": "Create Carry Merge",
+            "node": "HubSpot Create Permitted Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
           {
-            "node": "Ingest Merge Response",
+            "node": "HubSpot Create Refusal Pass-Through",
             "type": "main",
-            "index": 4
+            "index": 0
           }
         ]
       ]
@@ -1378,7 +1637,7 @@
       "main": [
         [
           {
-            "node": "Build Association Request",
+            "node": "Build Association Request Merge",
             "type": "main",
             "index": 0
           }
@@ -1389,9 +1648,31 @@
       "main": [
         [
           {
-            "node": "Build Association Request",
+            "node": "Build Association Request Merge",
             "type": "main",
-            "index": 0
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Permitted Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Update Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Permitted Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Create Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -1473,6 +1754,17 @@
         ]
       ]
     },
+    "Build Association Request Merge": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Ingest Merge Response": {
       "main": [
         [
@@ -1484,7 +1776,62 @@
         ]
       ]
     },
+    "Review Lane Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Review Lane Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Lane Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Set Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Associate Lane Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Associate Lane Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Associate Lane Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
     "HubSpot Update Gate Unreached Sentinel": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Update Gate Unreached Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Gate Unreached Sentinel Gate": {
       "main": [
         [
           {
@@ -1499,6 +1846,72 @@
       "main": [
         [
           {
+            "node": "HubSpot Update No Refusal Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update No Refusal Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Carry Unreached Sentinel": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Update Carry Unreached Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Carry Unreached Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Carry All Refused Sentinel": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Update Carry All Refused Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Carry All Refused Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Refusal Pass-Through": {
+      "main": [
+        [
+          {
             "node": "Ingest Merge Response",
             "type": "main",
             "index": 3
@@ -1510,6 +1923,17 @@
       "main": [
         [
           {
+            "node": "HubSpot Create Gate Unreached Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Gate Unreached Sentinel Gate": {
+      "main": [
+        [
+          {
             "node": "Ingest Merge Response",
             "type": "main",
             "index": 4
@@ -1518,6 +1942,72 @@
       ]
     },
     "HubSpot Create No Refusal Sentinel": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Create No Refusal Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create No Refusal Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Ingest Merge Response",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Carry Unreached Sentinel": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Create Carry Unreached Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Carry Unreached Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Carry All Refused Sentinel": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Create Carry All Refused Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Carry All Refused Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Refusal Pass-Through": {
       "main": [
         [
           {

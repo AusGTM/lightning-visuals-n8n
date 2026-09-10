@@ -152,15 +152,22 @@ def test_set_always_output_data_flags_named_nodes_and_raises_on_a_missing_one():
 
 def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_response():
     """D-70-01/D-70-04 (Phase 70 Plan 02 Task 3): "Ingest Merge Response" is still the
-    ONE append-mode convergence Merge in front of "Build Ingest Response" — every OTHER
-    Merge on this lane is a `combine`-mode carry merge across a specific HTTP hop
-    (D-70-04), never a second fan-in convergence."""
+    PRIMARY append-mode convergence Merge in front of "Build Ingest Response" — every
+    OTHER Merge on this lane is a `combine`-mode carry merge across a specific HTTP hop
+    (D-70-04), never a second fan-in convergence, WITH ONE EXCEPTION added by Phase 70
+    Plan 10 (D-70-01/D-70-23): "Build Association Request Merge", a genuine two-lane
+    (Update Carry Merge + Create Carry Merge) convergence D-70-01 requires an explicit
+    Merge for, found while making this lane's carry Merges never-stall-safe — see
+    `wire_gate_refusal_lane`'s own `carry_merge` docstring for why a marker must land
+    THERE (an APPEND input, safely filtered) rather than on either `combineByPosition`
+    carry Merge's own input (which would fabricate a paired row, Rule 1)."""
     wf = b.build_cloud()
     merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
     append_merges = [n for n in merges if n["parameters"]["mode"] == "append"]
-    assert [n["name"] for n in append_merges] == ["Ingest Merge Response"]
+    assert sorted(n["name"] for n in append_merges) == sorted(
+        ["Ingest Merge Response", "Build Association Request Merge"])
 
-    ingest_merge = append_merges[0]
+    ingest_merge = next(n for n in append_merges if n["name"] == "Ingest Merge Response")
     # Task 3: a THIRD input — "Decide Action Snapshot" — alongside "Associate Carry
     # Merge"'s output and "Set Review". Phase 70 Plan 05 Task 2 sub-step 2c (D-70-14)
     # adds a FOURTH and FIFTH: one per write gate's refusal lane. Each gets its OWN input

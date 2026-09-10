@@ -144,10 +144,25 @@ function assertEveryRowExactlyOnce(rows, emails) {
     "the returned identities are exactly the input identities");
 }
 
+// Phase 70 Plan 10 (D-70-20/D-70-23): the write node's own per-hop carry Merges
+// (`combineByPosition`, `splice_carry_merge_after`'s output) are legitimately allowed
+// to stay dormant when their own write path never runs at all on this batch — the
+// carry-Merge BYPASS this plan adds means the write path's sentinels deliver straight
+// to their real consumer ("Ingest Merge Response" or "Build Association Request
+// Merge"), never to either of a positional carry Merge's own two inputs (a marker on
+// BOTH would pair with itself into one fabricated row, T-70-41). Nothing downstream
+// reads these carry Merges' own output directly on a batch where they never fire, so
+// their staying unfired is the intended shape, never a hang.
+const BYPASSED_CARRY_MERGES = new Set(["Update Carry Merge", "Create Carry Merge", "Associate Carry Merge"]);
+
 // The lane answers with the D-70-07 ack ONLY — never a row-carrying body — and the
 // responder fires exactly once per request.
 function assertAckFiredOnce(trace) {
-  assert.deepEqual(trace.stalled, [], "no Merge may stall on this batch");
+  const unexpectedStalls = trace.stalled.filter((s) => !BYPASSED_CARRY_MERGES.has(s.node));
+  assert.deepEqual(unexpectedStalls, [],
+    "no merge other than the intentionally-bypassed per-write carry Merges may stall");
+  assert.equal(trace.merges["Ingest Merge Response"] && trace.merges["Ingest Merge Response"].fired, true,
+    "Ingest Merge Response — what every row's response actually rests on — must fire");
   assert.ok(trace.respond, "the responder must fire");
   assert.equal(trace.respondSuppressed.length, 0, "the responder must fire exactly once");
   assert.equal(trace.respond.items.length, 1, "one ack item");
@@ -241,4 +256,79 @@ test("ingest fully-refused batch (disarmed, every row a would-be update): every 
     assert.notEqual(row.association, "associated",
       "a refused write never claims an association");
   }
+});
+
+// =====================================================================================
+// D-70-23's own audit shape: an ARMED, PERMITTED update whose row resolves no company at
+// all — CLAUDE.md §13.0.1's "an update is never held for lack of a company" case,
+// combined with "the write is actually permitted". This is the shape that discriminates
+// the pre-70-10 wiring (sentinel padding BOTH inputs of "Associate Carry Merge") from
+// the D-70-23 bypass (sentinel delivering straight to "Ingest Merge Response"'s own
+// association-lane input): under the OLD wiring "Associate Carry Merge" fires with a
+// fabricated combined marker, and its own source for that input is itself; under the
+// bypass "Associate Carry Merge" never enters `trace.merges` at all — the marker never
+// touches it — and "Ingest Merge Response"'s association-lane input is satisfied
+// directly by the sentinel's own gate.
+// =====================================================================================
+
+const NOCO_EMAIL = "solo-nocompany@nowhere.example";
+const NOCO_CONTACT_ID = "777";
+
+test("ingest, ARMED with a permitted update that resolves NO company: the association lane input is satisfied by the sentinel, never by a padded carry Merge", () => {
+  const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
+  for (const name of ["HubSpot Update Write Gate", "Associate Lane Sentinel"]) {
+    const node = wf.nodes.find((n) => n.name === name);
+    assert.ok(node, `node present: ${name}`);
+    node.parameters.jsCode = node.parameters.jsCode
+      .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+               'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+      .replace('const TEST_RECORD_IDS = "";', `const TEST_RECORD_IDS = "${NOCO_CONTACT_ID}";`);
+  }
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ email: NOCO_EMAIL, firstname: "Solo", lastname: "NoCo", company: "Nowhere Pty" }],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: NOCO_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [{ id: NOCO_CONTACT_ID, properties: { email: NOCO_EMAIL } }] }],
+      "HubSpot Company Search by Domain": [{ results: [] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Update": [{ id: NOCO_CONTACT_ID, properties: { email: NOCO_EMAIL } }],
+      // No "HubSpot Associate Company" stub: an unstubbed HTTP node throws by name
+      // (walkWorkflow.mjs's own documented contract) — leaving it out is itself part of
+      // the proof that this node must never be dispatched on this batch.
+    },
+  });
+
+  // "Associate Carry Merge" is the intentionally-bypassed carry Merge here (see
+  // BYPASSED_CARRY_MERGES above) — it never fires because no association is ever
+  // attempted, and nothing downstream reads its output directly.
+  const unexpectedStalls = trace.stalled.filter((s) => !BYPASSED_CARRY_MERGES.has(s.node));
+  assert.deepEqual(unexpectedStalls, [], "no merge other than the bypassed carry Merge may stall");
+
+  const ingestMerge = trace.merges["Ingest Merge Response"];
+  assert.ok(ingestMerge && ingestMerge.fired, "Ingest Merge Response must fire");
+  const assocSource = Object.values(ingestMerge.sources).find((s) =>
+    s === "Associate Lane Sentinel Gate" || s === "Associate Carry Merge");
+  assert.equal(assocSource, "Associate Lane Sentinel Gate",
+    "the association-lane input must be satisfied by the sentinel's own gate, " +
+    "never by Associate Carry Merge (the pre-70-10 padded-carry-Merge shape)");
+  // "Associate Carry Merge" may still appear in `trace.merges` UNFIRED: its own input 1
+  // ("Build Association Request") legitimately runs and legitimately emits zero items
+  // (it drops any row with no resolved company), and that zero-item run still counts as
+  // a genuine delivery — but input 0 ("HubSpot Associate Company", never dispatched
+  // since there is nothing to associate) never arrives, so the Merge itself never
+  // fires. What the D-70-23 bypass guarantees is narrower and is asserted directly
+  // above: "Ingest Merge Response" is satisfied by the sentinel's gate, not by this
+  // Merge's own (non-)output.
+  assert.notEqual(trace.merges["Associate Carry Merge"] && trace.merges["Associate Carry Merge"].fired,
+    true, "Associate Carry Merge must never fire on this batch — nothing to associate");
+
+  assert.ok((runData["HubSpot Update"] || []).length > 0, "the permitted update must have run");
+  assert.equal(runData["HubSpot Associate Company"], undefined,
+    "the association write must never run when no company resolved");
+
+  const rows = nodeItems(runData, "Build Ingest Response");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].action, "update");
+  assert.equal(rows[0].association, "none", "nothing to associate, and nothing held");
 });

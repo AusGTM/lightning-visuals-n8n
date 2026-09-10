@@ -113,7 +113,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Review Extract Record \u2014 ENRICH_EXTRACT_SEARCH_ROWS's envelope handling plus the one\n// thing a SYNCHRONOUS lane needs that the scheduled lanes do not: a zero-hit search must\n// still emit exactly ONE item. On a scheduled branch zero rows means \"nothing to do\" and\n// the branch simply ends; here it would mean nothing ever reaches\n// `Respond Review Decision` and the caller waits out a Cloudflare timeout instead of\n// being told the record was not found.\n// Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge (\"Review Fetch\n// By Id\" / \"Review Contact Fetch By Id\" \u2014 exactly one ever runs per request) with a\n// starved-lane sentinel on whichever side would otherwise never fire; drop an\n// identity-less sentinel marker (never a genuine zero-hit envelope, which always\n// carries `results`/`properties`) before reading the one real item.\nconst items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);\nconst item = items[0];\nconst res = (item && item.json) || {};\nconst rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);\nif (!rows.length) return [{ json: { hs_object_id: null, record_found: false } }];\nconst r = rows[0];\nreturn [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: true } }];\n"
+        "jsCode": "// Review Extract Record \u2014 ENRICH_EXTRACT_SEARCH_ROWS's envelope handling plus the one\n// thing a SYNCHRONOUS lane needs that the scheduled lanes do not: a zero-hit search must\n// still emit exactly ONE item. On a scheduled branch zero rows means \"nothing to do\" and\n// the branch simply ends; here it would mean nothing ever reaches\n// `Respond Review Decision` and the caller waits out a Cloudflare timeout instead of\n// being told the record was not found.\n// Phase 70 Plan 03 Task 3 (D-70-01): this node sits behind a real Merge (\"Review Fetch\n// By Id\" / \"Review Contact Fetch By Id\" \u2014 exactly one ever runs per request) with a\n// starved-lane sentinel on whichever side would otherwise never fire; drop an\n// identity-less sentinel marker (never a genuine zero-hit envelope, which always\n// carries `results`/`properties`) before reading the one real item.\nconst items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0 && it.json['_gsd_sentinel_marker'] !== true);\nconst item = items[0];\nconst res = (item && item.json) || {};\nconst rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);\nif (!rows.length) return [{ json: { hs_object_id: null, record_found: false } }];\nconst r = rows[0];\nreturn [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: true } }];\n"
       },
       "id": "c00070000-0000-4000-8000-000000000000",
       "name": "Review Extract Record",
@@ -293,7 +293,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Build Review Response \u2014 the SINGLE node that shapes the response body. BOTH branches\n// route through it, so the client sees one contract regardless of path (D-19):\n//\n//   { outcome, message, would_write, verified_properties, verified }\n//\n// `verified_properties` holds the INDEPENDENTLY REFETCHED record's values for exactly the\n// `would_write` keys, read from `Review Verify Fetch` \u2014 a second HubSpot search issued\n// AFTER the PATCH, never the PATCH's own response body. HubSpot's PATCH echoes back the\n// record it just accepted, so comparing a write against its own echo proves the request\n// was well-formed and nothing else: precisely the \"an accepted response is not evidence\"\n// failure Phase 28 D-14 exists to prevent.\n//\n// It is null on the dry-run branch and on every non-writing outcome, and `verified` is\n// null wherever `verified_properties` is. A WRITTEN decision that arrives with\n// `verified_properties` null is a FAILURE for the client to report, never a success to\n// assume \u2014 which is why nothing here ever defaults `verified` to true. The client\n// re-derives the comparison itself; `verified` is a convenience, never the authority.\n//\n// Phase 70 Plan 03 Task 3 (D-70-01) + Phase 70 Plan 04 (D-70-04): this node sits behind\n// a real Merge (3 inputs \u2014 \"Review IF Dry Run\"'s true lane, \"Review Verify Fetch\",\n// \"Review Contact Verify Fetch\" \u2014 exactly ONE ever fires per request) with a\n// starved-lane sentinel on whichever OTHER two would otherwise never fire. The two\n// write-branch inputs are now ALSO carry-merged (D-70-04) so \"Build Review Decision\"'s\n// own row (would_write/outcome/message/dry_run) rides alongside each verify envelope \u2014\n// filter identity-less sentinel markers first, then take the one real item, which\n// carries EVERYTHING this node needs; no by-name lookup of a node upstream.\nconst items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);\nconst first = items[0];\nconst d = (first && first.json) || {};\nconst wouldWrite = d.would_write || {};\n\nlet verified_properties = null;\nlet verified = null;\n\nif (d.dry_run !== true) {\n  const env = d;\n  const rows = Array.isArray(env.results) ? env.results : (env.properties ? [env] : []);\n  const props = rows.length ? (rows[0].properties || {}) : null;\n  if (props) {\n    verified_properties = {};\n    for (const k of Object.keys(wouldWrite)) {\n      verified_properties[k] = props[k] === undefined ? null : props[k];\n    }\n    // HubSpot stores and returns every property as a string, so compare stringwise: a\n    // boolean or numeric intent must not read as a mismatch against its own stored form.\n    verified = Object.keys(wouldWrite).every(\n      (k) => String(verified_properties[k]) === String(wouldWrite[k]));\n  }\n}\n\nreturn [{ json: {\n  outcome: d.outcome,\n  message: d.message,\n  would_write: wouldWrite,\n  verified_properties,\n  verified,\n}}];\n"
+        "jsCode": "// Build Review Response \u2014 the SINGLE node that shapes the response body. BOTH branches\n// route through it, so the client sees one contract regardless of path (D-19):\n//\n//   { outcome, message, would_write, verified_properties, verified }\n//\n// `verified_properties` holds the INDEPENDENTLY REFETCHED record's values for exactly the\n// `would_write` keys, read from `Review Verify Fetch` \u2014 a second HubSpot search issued\n// AFTER the PATCH, never the PATCH's own response body. HubSpot's PATCH echoes back the\n// record it just accepted, so comparing a write against its own echo proves the request\n// was well-formed and nothing else: precisely the \"an accepted response is not evidence\"\n// failure Phase 28 D-14 exists to prevent.\n//\n// It is null on the dry-run branch and on every non-writing outcome, and `verified` is\n// null wherever `verified_properties` is. A WRITTEN decision that arrives with\n// `verified_properties` null is a FAILURE for the client to report, never a success to\n// assume \u2014 which is why nothing here ever defaults `verified` to true. The client\n// re-derives the comparison itself; `verified` is a convenience, never the authority.\n//\n// Phase 70 Plan 03 Task 3 (D-70-01) + Phase 70 Plan 04 (D-70-04): this node sits behind\n// a real Merge (3 inputs \u2014 \"Review IF Dry Run\"'s true lane, \"Review Verify Fetch\",\n// \"Review Contact Verify Fetch\" \u2014 exactly ONE ever fires per request) with a\n// starved-lane sentinel on whichever OTHER two would otherwise never fire. The two\n// write-branch inputs are now ALSO carry-merged (D-70-04) so \"Build Review Decision\"'s\n// own row (would_write/outcome/message/dry_run) rides alongside each verify envelope \u2014\n// filter identity-less sentinel markers first, then take the one real item, which\n// carries EVERYTHING this node needs; no by-name lookup of a node upstream.\nconst items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0 && it.json['_gsd_sentinel_marker'] !== true);\nconst first = items[0];\nconst d = (first && first.json) || {};\nconst wouldWrite = d.would_write || {};\n\nlet verified_properties = null;\nlet verified = null;\n\nif (d.dry_run !== true) {\n  const env = d;\n  const rows = Array.isArray(env.results) ? env.results : (env.properties ? [env] : []);\n  const props = rows.length ? (rows[0].properties || {}) : null;\n  if (props) {\n    verified_properties = {};\n    for (const k of Object.keys(wouldWrite)) {\n      verified_properties[k] = props[k] === undefined ? null : props[k];\n    }\n    // HubSpot stores and returns every property as a string, so compare stringwise: a\n    // boolean or numeric intent must not read as a mismatch against its own stored form.\n    verified = Object.keys(wouldWrite).every(\n      (k) => String(verified_properties[k]) === String(wouldWrite[k]));\n  }\n}\n\nreturn [{ json: {\n  outcome: d.outcome,\n  message: d.message,\n  would_write: wouldWrite,\n  verified_properties,\n  verified,\n}}];\n"
       },
       "id": "c00170000-0000-4000-8000-000000000000",
       "name": "Build Review Response",
@@ -429,7 +429,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Review Queue Rows \u2014 the search envelope becomes ONE item carrying every row, never one\n// item per row. Two reasons, both structural:\n//\n//   1. D-22: `rows.map(...)` emits ZERO items on a zero-hit search. On a `responseNode`\n//      webhook that means nothing reaches the responder and the caller waits out the ~100s\n//      Cloudflare ceiling instead of being told the queue is empty. An empty queue is the\n//      NORMAL end state of this phase's work, so this lane meets that case constantly.\n//   2. `Respond Review Queue` is `firstIncomingItem` (D-24), so a per-row emission would\n//      return the FIRST record and silently drop the rest.\n//\n// It parses nothing (D-11). The held candidate JSON and the provenance blob are passed\n// through as the exact strings HubSpot returned; the client parses them, so what the\n// operator sees is what the CRM holds rather than this node's opinion of it.\n//\n// `total` is the search envelope's own count, which is the whole queue \u2014 `returned` is\n// this page. A page shorter than the total is therefore visibly a page (REVIEW-01) instead\n// of being mistaken for the end of the backlog.\n//\n// `search_ok` distinguishes an EMPTY queue from a FAILED search. HubSpot search nodes run\n// `onError: continueRegularOutput`, so a 401 or a 429 arrives here as an item with no\n// `results` array \u2014 which, treated as an envelope, would render as \"0 flagged records\" and\n// tell the operator their backlog was clear when it was never read.\n// Phase 70 Plan 03 Task 3 (D-70-01) + Phase 70 Plan 04 (D-70-04): this node sits behind\n// a real Merge (\"Review Queue Search\" / \"Review Queue Contact Search\" \u2014 exactly one\n// ever runs per request) with a starved-lane sentinel on whichever side would\n// otherwise never fire. Each real search is now ALSO carry-merged with \"Parse Review\n// Queue Request\" (D-70-04), so `object_type` rides the same merged item as the search\n// envelope \u2014 drop an identity-less sentinel marker first, then read the one real item.\nconst items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0);\nconst item = items[0];\nconst res = (item && item.json) || {};\nconst search_ok = Array.isArray(res.results);\nconst rows = search_ok ? res.results : (res.properties ? [res] : []);\nconst total = typeof res.total === \"number\" ? res.total : rows.length;\n\nreturn [{ json: {\n  object_type: res.object_type,\n  search_ok: search_ok || Boolean(res.properties),\n  total,\n  returned: rows.length,\n  rows: rows.map((r) => ({ ...(r.properties || {}), hs_object_id: r.id })),\n}}];\n"
+        "jsCode": "// Review Queue Rows \u2014 the search envelope becomes ONE item carrying every row, never one\n// item per row. Two reasons, both structural:\n//\n//   1. D-22: `rows.map(...)` emits ZERO items on a zero-hit search. On a `responseNode`\n//      webhook that means nothing reaches the responder and the caller waits out the ~100s\n//      Cloudflare ceiling instead of being told the queue is empty. An empty queue is the\n//      NORMAL end state of this phase's work, so this lane meets that case constantly.\n//   2. `Respond Review Queue` is `firstIncomingItem` (D-24), so a per-row emission would\n//      return the FIRST record and silently drop the rest.\n//\n// It parses nothing (D-11). The held candidate JSON and the provenance blob are passed\n// through as the exact strings HubSpot returned; the client parses them, so what the\n// operator sees is what the CRM holds rather than this node's opinion of it.\n//\n// `total` is the search envelope's own count, which is the whole queue \u2014 `returned` is\n// this page. A page shorter than the total is therefore visibly a page (REVIEW-01) instead\n// of being mistaken for the end of the backlog.\n//\n// `search_ok` distinguishes an EMPTY queue from a FAILED search. HubSpot search nodes run\n// `onError: continueRegularOutput`, so a 401 or a 429 arrives here as an item with no\n// `results` array \u2014 which, treated as an envelope, would render as \"0 flagged records\" and\n// tell the operator their backlog was clear when it was never read.\n// Phase 70 Plan 03 Task 3 (D-70-01) + Phase 70 Plan 04 (D-70-04): this node sits behind\n// a real Merge (\"Review Queue Search\" / \"Review Queue Contact Search\" \u2014 exactly one\n// ever runs per request) with a starved-lane sentinel on whichever side would\n// otherwise never fire. Each real search is now ALSO carry-merged with \"Parse Review\n// Queue Request\" (D-70-04), so `object_type` rides the same merged item as the search\n// envelope \u2014 drop an identity-less sentinel marker first, then read the one real item.\nconst items = $input.all().filter((it) => Object.keys(it.json || {}).length > 0 && it.json['_gsd_sentinel_marker'] !== true);\nconst item = items[0];\nconst res = (item && item.json) || {};\nconst search_ok = Array.isArray(res.results);\nconst rows = search_ok ? res.results : (res.properties ? [res] : []);\nconst total = typeof res.total === \"number\" ? res.total : rows.length;\n\nreturn [{ json: {\n  object_type: res.object_type,\n  search_ok: search_ok || Boolean(res.properties),\n  total,\n  returned: rows.length,\n  rows: rows.map((r) => ({ ...(r.properties || {}), hs_object_id: r.id })),\n}}];\n"
       },
       "id": "c00250000-0000-4000-8000-000000000000",
       "name": "Review Queue Rows",
@@ -543,9 +543,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Review Contacts Fetch Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows[0].object_type !== \"contacts\") return [{}]; return [];\n"
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c00330000-0000-4000-8000-000000000000",
+      "name": "Review Companies Fetch Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3000
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Review Contacts Fetch Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows[0].object_type !== \"contacts\") return [{}]; return [];\n"
+      },
+      "id": "c00340000-0000-4000-8000-000000000000",
       "name": "Review Contacts Fetch Absent Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -557,9 +571,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00350000-0000-4000-8000-000000000000",
+      "name": "Review Contacts Fetch Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// Review Queue Companies Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows[0].object_type === \"contacts\") return [{}]; return [];\n"
       },
-      "id": "c00340000-0000-4000-8000-000000000000",
+      "id": "c00360000-0000-4000-8000-000000000000",
       "name": "Review Queue Companies Absent Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -571,9 +599,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00370000-0000-4000-8000-000000000000",
+      "name": "Review Queue Companies Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// Review Queue Contacts Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows[0].object_type !== \"contacts\") return [{}]; return [];\n"
       },
-      "id": "c00350000-0000-4000-8000-000000000000",
+      "id": "c00380000-0000-4000-8000-000000000000",
       "name": "Review Queue Contacts Absent Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -585,9 +627,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00390000-0000-4000-8000-000000000000",
+      "name": "Review Queue Contacts Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// Review Dry Run Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows[0].dry_run !== true) return [{}]; return [];\n"
       },
-      "id": "c00360000-0000-4000-8000-000000000000",
+      "id": "c00400000-0000-4000-8000-000000000000",
       "name": "Review Dry Run Absent Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -599,9 +655,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00410000-0000-4000-8000-000000000000",
+      "name": "Review Dry Run Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3480
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// Review Company Verify Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && (rows[0].dry_run === true || rows[0].object_type === \"contacts\")) return [{}]; return [];\n"
       },
-      "id": "c00370000-0000-4000-8000-000000000000",
+      "id": "c00420000-0000-4000-8000-000000000000",
       "name": "Review Company Verify Absent Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -613,9 +683,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00430000-0000-4000-8000-000000000000",
+      "name": "Review Company Verify Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "// Review Contact Verify Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && (rows[0].dry_run === true || rows[0].object_type !== \"contacts\")) return [{}]; return [];\n"
       },
-      "id": "c00380000-0000-4000-8000-000000000000",
+      "id": "c00440000-0000-4000-8000-000000000000",
       "name": "Review Contact Verify Absent Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -627,9 +711,23 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00450000-0000-4000-8000-000000000000",
+      "name": "Review Contact Verify Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        3720
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('review', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00390000-0000-4000-8000-000000000000",
+      "id": "c00460000-0000-4000-8000-000000000000",
       "name": "Review Decision Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -649,7 +747,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00400000-0000-4000-8000-000000000000",
+              "id": "i00470000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.write_allowed }}",
               "rightValue": true,
               "operator": {
@@ -660,7 +758,7 @@
           ]
         }
       },
-      "id": "if00410000-0000-4000-8000-000000000000",
+      "id": "if00480000-0000-4000-8000-000000000000",
       "name": "Review Decision Update Write Gate IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -674,7 +772,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('review', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00420000-0000-4000-8000-000000000000",
+      "id": "c00490000-0000-4000-8000-000000000000",
       "name": "Review Contact Decision Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -694,7 +792,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00430000-0000-4000-8000-000000000000",
+              "id": "i00500000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.write_allowed }}",
               "rightValue": true,
               "operator": {
@@ -705,7 +803,7 @@
           ]
         }
       },
-      "id": "if00440000-0000-4000-8000-000000000000",
+      "id": "if00510000-0000-4000-8000-000000000000",
       "name": "Review Contact Decision Update Write Gate IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -727,7 +825,7 @@
           }
         }
       },
-      "id": "m00450000-0000-4000-8000-000000000000",
+      "id": "m00520000-0000-4000-8000-000000000000",
       "name": "Review Decision Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -749,7 +847,7 @@
           }
         }
       },
-      "id": "m00460000-0000-4000-8000-000000000000",
+      "id": "m00530000-0000-4000-8000-000000000000",
       "name": "Review Verify Fetch Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -771,7 +869,7 @@
           }
         }
       },
-      "id": "m00470000-0000-4000-8000-000000000000",
+      "id": "m00540000-0000-4000-8000-000000000000",
       "name": "Review Contact Decision Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -793,7 +891,7 @@
           }
         }
       },
-      "id": "m00480000-0000-4000-8000-000000000000",
+      "id": "m00550000-0000-4000-8000-000000000000",
       "name": "Review Contact Verify Fetch Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -815,7 +913,7 @@
           }
         }
       },
-      "id": "m00490000-0000-4000-8000-000000000000",
+      "id": "m00560000-0000-4000-8000-000000000000",
       "name": "Review Extract Record Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -837,7 +935,7 @@
           }
         }
       },
-      "id": "m00500000-0000-4000-8000-000000000000",
+      "id": "m00570000-0000-4000-8000-000000000000",
       "name": "Review Queue Search Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -859,7 +957,7 @@
           }
         }
       },
-      "id": "m00510000-0000-4000-8000-000000000000",
+      "id": "m00580000-0000-4000-8000-000000000000",
       "name": "Review Queue Contact Search Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -1205,6 +1303,17 @@
       "main": [
         [
           {
+            "node": "Review Companies Fetch Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Companies Fetch Absent Sentinel Gate": {
+      "main": [
+        [
+          {
             "node": "Review Extract Record Merge",
             "type": "main",
             "index": 0
@@ -1213,6 +1322,17 @@
       ]
     },
     "Review Contacts Fetch Absent Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Review Contacts Fetch Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Contacts Fetch Absent Sentinel Gate": {
       "main": [
         [
           {
@@ -1227,6 +1347,17 @@
       "main": [
         [
           {
+            "node": "Review Queue Companies Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue Companies Absent Sentinel Gate": {
+      "main": [
+        [
+          {
             "node": "Review Queue Rows Merge",
             "type": "main",
             "index": 0
@@ -1235,6 +1366,17 @@
       ]
     },
     "Review Queue Contacts Absent Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Review Queue Contacts Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue Contacts Absent Sentinel Gate": {
       "main": [
         [
           {
@@ -1249,6 +1391,17 @@
       "main": [
         [
           {
+            "node": "Review Dry Run Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Dry Run Absent Sentinel Gate": {
+      "main": [
+        [
+          {
             "node": "Build Review Response Merge",
             "type": "main",
             "index": 0
@@ -1260,6 +1413,17 @@
       "main": [
         [
           {
+            "node": "Review Company Verify Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Company Verify Absent Sentinel Gate": {
+      "main": [
+        [
+          {
             "node": "Build Review Response Merge",
             "type": "main",
             "index": 1
@@ -1268,6 +1432,17 @@
       ]
     },
     "Review Contact Verify Absent Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Review Contact Verify Absent Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Contact Verify Absent Sentinel Gate": {
       "main": [
         [
           {

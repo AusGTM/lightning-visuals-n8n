@@ -224,13 +224,19 @@ test("the enrichment lane's gate IF false branch has its OWN Build Response Merg
     seen.add(refusal[0]);
 
     // ...and both inputs are covered on the ways their own producer can fail to deliver.
+    // Phase 70 Plan 10 (D-70-23): a sentinel's own outgoing edge no longer points at a
+    // Merge input directly — `_add_starved_lane_sentinel` now wires "condition -> gate
+    // -> targets", and the GATE is the only node with edges to `targets` (the class fix
+    // for the sentinel-pre-empts-a-real-row defect, executions 12204-12206). Assert the
+    // gate node's presence, not the sentinel Code node's — the OLD wiring this test used
+    // to pin is exactly the shape that no longer exists.
     const feeders = (idx) => Object.entries(ENRICHMENT.connections)
       .filter(([, spec]) => (spec.main || []).some((outs) =>
         (outs || []).some((c) => c.node === merge && c.index === idx)))
       .map(([src]) => src);
-    assert.ok(feeders(refusal[0]).includes(`${write} No Refusal Sentinel`),
+    assert.ok(feeders(refusal[0]).includes(`${write} No Refusal Sentinel Gate`),
       `${write}: the refusal input needs a marker when the gate refused nothing`);
-    assert.ok(feeders(real[0]).includes(`${write} All Refused Sentinel`),
+    assert.ok(feeders(real[0]).includes(`${write} All Refused Sentinel Gate`),
       `${write}: the write input needs a marker when the gate allowed nothing`);
   }
 });
@@ -251,28 +257,55 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
   // the permitted subset. A combineByPosition carry merge fed from the Code node would
   // pair row i of the HTTP response with row i of the FULL wave on any partially-refused
   // batch. The IF's true output is the wave that actually entered the write node.
+  //
+  // The enrichment lane's own gate IF still feeds its carry Merge directly (unchanged;
+  // that lane's own pass-through audit is plan 70-11's job, per `wire_gate_refusal_lane`'s
+  // own D-70-23 docstring note). The ingest lane's two write-gate carry Merges no longer
+  // work this way: Phase 70 Plan 10 (D-70-23)'s ingest-lane audit found the SAME
+  // routing-IF-direct-edge-to-Merge-input shape here too and retargeted it through a
+  // pass-through (`_retarget_merge_edge_through_passthrough`), so the direct feeder is
+  // now `f"{write} Permitted Pass-Through"`, itself fed from the IF's true branch.
   const carries = [
     ["wf_enrichment_cloud.json", ENRICHMENT, "HubSpot Company Create Carry Merge",
-     "HubSpot Company Create Write Gate IF"],
-    ["wf_contact_ingest_cloud.json", INGEST, "Update Carry Merge", "HubSpot Update Write Gate IF"],
-    ["wf_contact_ingest_cloud.json", INGEST, "Create Carry Merge", "HubSpot Create Write Gate IF"],
+     "HubSpot Company Create Write Gate IF", "direct"],
+    ["wf_contact_ingest_cloud.json", INGEST, "Update Carry Merge",
+     "HubSpot Update Write Gate IF", "passthrough"],
+    ["wf_contact_ingest_cloud.json", INGEST, "Create Carry Merge",
+     "HubSpot Create Write Gate IF", "passthrough"],
     // "Associate Carry Merge" carries from "Build Association Request": Task 3 (D-70-15)
     // removed the association's own second gate, so its direct predecessor IS the carry
-    // source again — one verdict, taken at the update/create gate upstream.
+    // source again — one verdict, taken at the update/create gate upstream. Not an IF,
+    // so no pass-through question applies.
     ["wf_contact_ingest_cloud.json", INGEST, "Associate Carry Merge",
-     "Build Association Request"],
+     "Build Association Request", "direct"],
   ];
-  for (const [file, wf, mergeName, expectedSource] of carries) {
-    const feeders = Object.entries(wf.connections).flatMap(([src, spec]) =>
-      (spec.main || []).flatMap((outs, idx) =>
-        (outs || []).filter((c) => c.node === mergeName && c.index === 1).map(() => [src, idx])));
-    // A starved-lane sentinel may ALSO feed this input (D-70-01) — what must not appear
-    // is the gate's Code node, whose item count includes the refused rows.
-    assert.ok(feeders.some(([src, idx]) => src === expectedSource && idx === 0),
-      `${file}: ${mergeName}'s carry input must come from ${expectedSource}'s true output`);
-    if (expectedSource.endsWith(" Write Gate IF")) {
-      assert.ok(!feeders.some(([src]) => src === expectedSource.slice(0, -3)),
-        `${file}: ${mergeName} must not be carried from the gate Code node (count mismatch)`);
+  const feedersOf = (wf, mergeName) => Object.entries(wf.connections).flatMap(([src, spec]) =>
+    (spec.main || []).flatMap((outs, idx) =>
+      (outs || []).filter((c) => c.node === mergeName && c.index === 1).map(() => [src, idx])));
+  for (const [file, wf, mergeName, expectedSource, shape] of carries) {
+    if (shape === "direct") {
+      const feeders = feedersOf(wf, mergeName);
+      // A starved-lane sentinel may ALSO feed this input (D-70-01) — what must not
+      // appear is the gate's Code node, whose item count includes the refused rows.
+      assert.ok(feeders.some(([src, idx]) => src === expectedSource && idx === 0),
+        `${file}: ${mergeName}'s carry input must come from ${expectedSource}'s true output`);
+      if (expectedSource.endsWith(" Write Gate IF")) {
+        assert.ok(!feeders.some(([src]) => src === expectedSource.slice(0, -3)),
+          `${file}: ${mergeName} must not be carried from the gate Code node (count mismatch)`);
+      }
+    } else {
+      // "passthrough": the IF's true branch feeds a pass-through, and the pass-through
+      // — never the IF itself — feeds the carry Merge's input 1.
+      const passthroughName = `${expectedSource.slice(0, -" Write Gate IF".length)} Permitted Pass-Through`;
+      const feeders = feedersOf(wf, mergeName);
+      assert.ok(feeders.some(([src]) => src === passthroughName),
+        `${file}: ${mergeName}'s carry input must come from ${passthroughName}`);
+      assert.ok(!feeders.some(([src]) => src === expectedSource),
+        `${file}: ${mergeName} must not be carried directly from ${expectedSource} any more`);
+      const ifTrueFeedsPassthrough = ((wf.connections[expectedSource] || {}).main || [])[0]
+        ?.some((c) => c.node === passthroughName);
+      assert.ok(ifTrueFeedsPassthrough,
+        `${file}: ${passthroughName} must be fed from ${expectedSource}'s true output`);
     }
   }
 });
@@ -344,6 +377,14 @@ test("ingest: ONE gate covers both the update and its association (D-70-15)", ()
 });
 
 test("ingest: each gate's refusal lane has its OWN Ingest Merge Response input, with both its sentinels", () => {
+  // Phase 70 Plan 10 (D-70-23): two structural changes to what this test pins.
+  // (1) The write gate IF's false branch no longer feeds `merge` directly — a
+  //     pass-through sits between them (`_retarget_merge_edge_through_passthrough`),
+  //     because no routing IF has a direct edge to a Merge input on this lane's
+  //     contract any more.
+  // (2) A sentinel's own outgoing edge no longer feeds `merge` directly either —
+  //     `_add_starved_lane_sentinel` now wires "condition -> gate -> targets", and
+  //     the gate is the only node with edges to `merge`.
   const merge = "Ingest Merge Response";
   const indexOf = (src, outIdx) =>
     ((INGEST.connections[src] || {}).main || [])[outIdx]
@@ -352,7 +393,7 @@ test("ingest: each gate's refusal lane has its OWN Ingest Merge Response input, 
   assert.equal(assocIdx.length, 1);
   const seen = new Set(assocIdx);
   for (const write of ["HubSpot Update", "HubSpot Create"]) {
-    const refusal = indexOf(write + " Write Gate IF", 1);
+    const refusal = indexOf(`${write} Refusal Pass-Through`, 0);
     assert.equal(refusal.length, 1);
     assert.ok(!seen.has(refusal[0]), `${write}'s refusal input is its own, never shared`);
     seen.add(refusal[0]);
@@ -361,9 +402,9 @@ test("ingest: each gate's refusal lane has its OWN Ingest Merge Response input, 
         (outs || []).some((c) => c.node === merge && c.index === refusal[0])))
       .map(([src]) => src).sort();
     assert.deepEqual(feeders, [
-      `${write} Gate Unreached Sentinel`,
-      `${write} No Refusal Sentinel`,
-      `${write} Write Gate IF`,
+      `${write} Gate Unreached Sentinel Gate`,
+      `${write} No Refusal Sentinel Gate`,
+      `${write} Refusal Pass-Through`,
     ].sort(), `${write}: the refusal input is fed on every way its producer can be silent`);
   }
 });
