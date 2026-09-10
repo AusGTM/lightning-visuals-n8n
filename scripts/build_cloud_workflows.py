@@ -60,6 +60,30 @@ JUNE_CANDIDATES_JS = "const JUNE_CANDIDATES = " + json.dumps(JUNE_CANDIDATES_ROW
 # marker for a real row on a shared Merge input.
 SENTINEL_MARKER_KEY = "_gsd_sentinel_marker"
 
+# Phase 70 gap-closure round 3, plan 70-16 (D-70-28/G-70-6, blocker): the workflow
+# `settings` object, defined ONCE and emitted as a fresh `dict()` copy of this constant
+# at all eight body-returning builders below — never hand-authored per workflow, never a
+# shared mutable object one body's later mutation could reach another through. Gate 8
+# (disarmed executions 12349-12353) put four symptoms on the record at once — `HubSpot
+# Update` ran with no real input item and PATCHed an empty id; `IF List Expanded` emitted
+# a refusal on an empty list lane; gated sentinels delivered markers on inputs whose
+# sentinel emitted zero items; `Enrichment Gate Merge` fired twice and dropped every real
+# row. One engine rule explains all four, and it is source-cited, not observed under v1
+# (CLAUDE.md 13.0.3's documented-vs-observed tagging: `[documented]` only):
+#   - `[documented]` n8n's LEGACY execution order (the default when `executionOrder` is
+#     absent or not `"v1"`) pushes every node on an empty branch onto the execution stack
+#     with ONE `{ json: {} }` item so a waiting multi-input node can finish —
+#     `addNodeToBeExecuted`'s `addEmptyItem` branch,
+#     `packages/core/src/execution-engine/workflow-execute.ts`.
+#   - `[documented]` under v1 there is no such push: a node on an empty branch does not
+#     run, and at end-of-run a still-waiting Merge executes with whatever arrived, gated
+#     on `requiredInputs` — for the Merge v3.2 node this repo generates, `[0, 1]` for
+#     `chooseBranch` and `1` for every other mode (`append`, `combine`) —
+#     `packages/nodes-base/nodes/Merge/v3/actions/versionDescription.ts`.
+# `settings.executionOrder` was ABSENT on every live body throughout; nobody chose
+# legacy, it was inherited. D-70-28 supersedes D-70-02 and rules the flip.
+WORKFLOW_SETTINGS = {"executionOrder": "v1"}
+
 # Phase 70 Plan 14 (D-70-25): a row's identity, defined ONCE and used at both response
 # builders (`ENRICH_BUILD_RESPONSE`, `BUILD_INGEST_RESPONSE`). Gate 5's disarmed
 # `enrichment_2x2` send recovered EIGHT rows for FOUR input rows (70-RUNTIME-VERDICT.json,
@@ -1019,7 +1043,7 @@ def build_local():
         "name": "LV Contact Ingest (local replica)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
     }
 
 
@@ -1564,7 +1588,7 @@ return anyNonWrite ? [] : [{}];
         "name": "LV Contact Ingest (Cloud template)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
     }
 
 
@@ -2555,7 +2579,7 @@ def build_enrichment_local():
         "name": "LV Enrichment (local replica)",
         "nodes": nodes,
         "connections": chain(order),
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
     }
 
 
@@ -4876,7 +4900,7 @@ def build_enrichment_local_live():
         "name": "LV Enrichment (local LIVE)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
     }
 
 
@@ -8200,7 +8224,7 @@ return $input.all().map((it) => {
         "name": "LV Enrichment (Cloud template)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
     }
 
 
@@ -8560,7 +8584,7 @@ def build_backend_status_cloud():
         "name": "LV Backend Status (Cloud template)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
     }
 
 
@@ -10143,7 +10167,7 @@ def build_scheduled_maintenance_cloud():
         "name": "LV Scheduled Maintenance (Cloud)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
         # Phase 16.1 Plan 02 (SC-7, reviews A5) — explicit intent marker + test hook, not
         # itself a runtime gate (n8n's Public API ignores `active` on create). The
         # FUNCTIONAL guarantee is deploy_n8n_workflows.py never POSTing to `/activate`
@@ -11021,7 +11045,7 @@ def build_review_decision_cloud():
         "name": "LV Review Decision (Cloud)",
         "nodes": nodes,
         "connections": conns,
-        "settings": {},
+        "settings": dict(WORKFLOW_SETTINGS),
         # Same explicit intent marker every other committed Cloud workflow carries; the
         # functional guarantee is deploy_n8n_workflows.py never POSTing to /activate.
         "active": False,
@@ -11349,15 +11373,38 @@ def assert_no_self_dispatch(wf: dict, name: str) -> dict:
     return wf
 
 
+def assert_execution_order_v1(wf: dict, name: str) -> dict:
+    """Phase 70 gap-closure round 3, plan 70-16 (D-70-28/G-70-6): the fourth
+    generation-time refusal, in the same style as `assert_no_by_name_reads`/
+    `assert_merge_input_contract`/`assert_no_self_dispatch` (raises `ValueError` naming
+    the workflow and the value found, composes at the same insertion point, returns `wf`
+    unchanged).
+
+    Refuses to write a body whose `settings.executionOrder` is not `"v1"` — the
+    generation-time backstop for `WORKFLOW_SETTINGS` (defined near the top of this file)
+    so a future workflow can never ship on n8n's legacy execution order by omission."""
+    found = (wf.get("settings") or {}).get("executionOrder")
+    if found != "v1":
+        raise ValueError(
+            f"{name}: settings.executionOrder = {found!r}, want \"v1\" — D-70-28 forbids "
+            "shipping a workflow on n8n's legacy execution order."
+        )
+    return wf
+
+
 def _assert_generation_contracts(wf: dict, name: str) -> dict:
     """Phase 70 Plan 11 (D-70-20): composes `assert_merge_input_contract` alongside
     the pre-existing `assert_no_by_name_reads` at every write site — one call, both
     generation-time refusals, in the same order every time so a violation of either
     stops generation before the other ever gets a chance to also fire on stale state.
     Phase 70 Plan 13 Task 2 (D-70-26a): `assert_no_self_dispatch` joins them as the
-    third, outermost, in the same fixed order."""
-    return assert_no_self_dispatch(
-        assert_merge_input_contract(assert_no_by_name_reads(wf, name), name), name)
+    third, outermost, in the same fixed order. Phase 70 gap-closure round 3, plan 70-16
+    (D-70-28): `assert_execution_order_v1` joins them as the fourth, outermost of all,
+    in the same fixed order."""
+    return assert_execution_order_v1(
+        assert_no_self_dispatch(
+            assert_merge_input_contract(assert_no_by_name_reads(wf, name), name), name),
+        name)
 
 
 def main():

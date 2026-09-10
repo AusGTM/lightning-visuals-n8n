@@ -2522,5 +2522,7 @@
       ]
     }
   },
-  "settings": {}
+  "settings": {
+    "executionOrder": "v1"
+  }
 }
