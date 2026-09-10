@@ -66,3 +66,12 @@ that is safe.
 Out of scope for this todo to resolve unilaterally: this is a builder/architecture decision
 (Phase 46 parity rule; never hand-edit `n8n/wf_*.json`), the operator's call, not an
 executor's.
+
+## Open question (MN-01, quick task 260911-1z5)
+
+Does the engine drain a SECOND pending run of the same Merge at end of run? 12354-12356 only
+ever observed ONE drained run, and CLAUDE.md §13.0.3's `requiredInputs` row says a waiting
+node "executes once". The walker now CAPS the drain at one run per Merge and reports any
+leftover pending run as `merge_pending_runs_undrained` rather than firing or dropping it.
+Resolving this needs a live observation of a Merge left with two partially-filled pending
+runs — not available from any recording in this repo.
