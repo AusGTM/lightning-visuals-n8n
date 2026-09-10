@@ -111,16 +111,23 @@ its last activation until it is bounced. Do not skip Step 5.
 This deactivates then reactivates each of the five workflows (forcing it to reload the
 just-deployed body) and prints a table reading back, per workflow: whether it is active,
 its live node count vs. the count in the working tree's `n8n/` file (still the pre-70
-body at this point — do not run Step 7 before this step), and every
-`ALLOW_HUBSPOT_RECORD_WRITES` / `ALLOW_HUBSPOT_CREATE` literal found in its live jsCode.
+body at this point — do not run Step 7 before this step), every
+`ALLOW_HUBSPOT_RECORD_WRITES` / `ALLOW_HUBSPOT_CREATE` literal found in its live jsCode,
+and (D-70-31) `settings.executionOrder` as read from the live body.
 
-**What to check in the printed table** (these are the four facts to report back):
+**What to check in the printed table** (these are the five facts to report back):
 - all five rows show `active = True`
 - live node counts read exactly `17 / 29 / 123 / 26 / 39` (backend_status / contact_ingest
   / enrichment / review_decision / scheduled_maintenance) and match the "committed nodes"
   column (they will, since the working tree still holds the pre-70 bodies)
 - every write-flag column reads `false` (or `[-]`, meaning the flag is not declared in
   that workflow at all — `wf_backend_status_cloud.json` has neither flag)
+- **`settings.executionOrder` reads `null`/absent on all five** — this rollback deploys the
+  pre-Phase-70 `59812be` bodies, which PREDATE the v1 flip (D-70-28), so a `null`/absent
+  reading here is the EXPECTED, correct outcome of a rollback, not a failed one. Read a
+  `null`/absent reading here differently from the same reading after a Gate 10 v1 deploy:
+  after Gate 10, `null`/absent is a gate failure (D-70-31); after THIS rollback, it is
+  confirmation the rollback landed the pre-flip bundle it was meant to land.
 - the script prints `OK — all active, node counts match, write flags false.` and exits 0
 
 If it prints `MISMATCH` for any row, **stop and report exactly what mismatched** — do not
