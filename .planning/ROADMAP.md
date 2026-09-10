@@ -62,7 +62,7 @@ carrying its live evidence.
 - [x] Phase 67: An autonomy flag with sensible defaults (completed 2026-09-07)
 - [x] Phase 68: State the price and keep moving (completed 2026-09-07)
 - [x] Phase 69: Held rows survive the round (completed 2026-09-08)
-- [ ] Phase 70: One merge, one result channel — n8n runtime truth (added 2026-09-09 from the first live batch UAT)
+- [x] Phase 70: One merge, one result channel — n8n runtime truth (added 2026-09-09 from the first live batch UAT) (completed 2026-09-11)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -297,7 +297,7 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 7/7 executed (planned 2026-09-09) + 5 gap-closure plans (planned 2026-09-10, waves 0–4)
+**Plans:** 18/18 plans complete
 
 + 3 round-2 gap-closure plans (planned 2026-09-10, waves 1–2),
 
