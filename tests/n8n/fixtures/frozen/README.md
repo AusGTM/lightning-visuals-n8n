@@ -13,6 +13,7 @@ they were written.
 | `exec_12316.runData.json` | `12316` — a runData excerpt for the eleven nodes `walkerEngineFidelity.test.mjs`'s D-70-26(b) case reasons about, each carrying the engine's recorded `source` beside the `declared_producers` read from the frozen connections |
 | `exec_12354.runData.json`, `exec_12355.runData.json`, `exec_12356.runData.json` | `12354`/`12355` (Gate 11 `enrichment_2x2`, 2 chunks), `12356` (Gate 11 `enrichment_single_lane`) — FULL runData recordings of the enrichment lane's first runs under `executionOrder: "v1"`, 2026-09-10 ~13:55Z, disarmed |
 | `exec_12357.runData.json`, `exec_12358.runData.json` | `12357` (Gate 11 `ingest_2x2`), `12358` (Gate 11 `ingest_single_lane`) — the same, for the contact-ingest lane |
+| `wf_enrichment_cloud.v1.2026-09-10.json` | `12354`/`12355`/`12356` (quick task 260911-0tz, `walkerEngineFidelityV1.test.mjs`) — a byte copy of the COMMITTED `n8n/wf_enrichment_cloud.json` at commit `ec102a4` (287 nodes, `settings.executionOrder: "v1"`, verified identical to the committed file at freeze time via `git diff ec102a4 -- n8n/wf_enrichment_cloud.json`), added so these three v1 executions can be WALKED rather than only read as runData. Unlike the three legacy fixtures above, this copy IS v1 and so needs no `allowLegacy` — it is the opposite case from them, not a fourth member of their set. |
 
 The full runData account of each is in
 `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-UAT.md`.

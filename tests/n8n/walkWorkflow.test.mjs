@@ -135,30 +135,41 @@ test("merge case: the same lanes into a Merge before the Gate — the reader see
     "both rows survive, in one run, once the fan-in happens through a real Merge");
 });
 
-test("zero-item delivery case: a lane that RAN and emitted nothing still satisfies its " +
-  "Merge input — the Merge fires and the empty input contributes no items", () => {
+test("zero-item delivery case, LEGACY-ONLY (quick task 260911-0tz, D-70-30 rule (c) v1 " +
+  "flip): a lane that RAN and emitted nothing still satisfies its Merge input under the " +
+  "LEGACY engine — the Merge fires and the empty input contributes no items", () => {
   // CHANGED by Phase 70 plan 70-09 (D-70-20). This case used to be the "hang case" and
   // asserted that `return []` never delivers, so the Merge stalled. Execution 12203
-  // (70-UAT.md § Test 2) proved the live engine does the opposite: `Associate Lane
+  // (70-UAT.md § Test 2) proved the live LEGACY engine does the opposite: `Associate Lane
   // Sentinel` returned `[]` and the runData `source` array names it as the producer that
   // TOOK the Merge's input. The genuine hang shape — a producer that never RAN — is the
   // case immediately below, and it is the one that still stalls.
+  //
+  // MOVED to legacy-only (quick task 260911-0tz, plan Step 5): Gate 11 (executions
+  // 12354/12355/12356, `tests/n8n/v1RuntimeRecordings.test.mjs`,
+  // `tests/n8n/walkerEngineFidelityV1.test.mjs`) observed the OPPOSITE under v1 — `Merge
+  // Company` ran with 0 items and never appeared as a Merge source. This case still
+  // documents the recorded LEGACY mechanism (D-70-19: a fidelity case against a frozen
+  // recording, never deleted just because the default engine moved on), so it now
+  // declares legacy settings and passes `allowLegacy: true` rather than asserting
+  // something the v1 engine no longer does.
   const graph = wf(
     [
       triggerNode("Trigger"),
       codeNode("LaneA", "return [{ json: { id: 'row-A' } }];"),
-      codeNode("LaneB", "return [];"), // RAN, emitted nothing -> still a delivery
+      codeNode("LaneB", "return [];"), // RAN, emitted nothing -> still a delivery, LEGACY only
       mergeNode("Merge", 2),
     ],
     {
       Trigger: { main: [[edge("LaneA"), edge("LaneB")]] },
       LaneA: { main: [[edge("Merge", 0)]] },
       LaneB: { main: [[edge("Merge", 1)]] },
-    }
+    },
+    {} // no executionOrder declared — the LEGACY body execution 12203 actually ran on
   );
-  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}], allowLegacy: true });
   assert.deepEqual(trace.stalled, [],
-    "execution 12203: a zero-item output is a DELIVERY, so nothing stalls here");
+    "execution 12203: a zero-item output is a DELIVERY under legacy, so nothing stalls here");
   assert.equal(runData.Merge.length, 1, "the Merge fired exactly once");
   assert.deepEqual(runData.Merge[0], [{ id: "row-A" }],
     "the empty input satisfied readiness and contributed no items of its own");
@@ -167,11 +178,20 @@ test("zero-item delivery case: a lane that RAN and emitted nothing still satisfi
     "`source` reading execution 12203 was diagnosed from");
 });
 
-test("hang case: a Merge whose second configured input never DELIVERS never fires", () => {
+test("hang case, RE-DERIVED for v1 (quick task 260911-0tz, D-70-30 rule (b) drain): a " +
+  "Merge whose second configured input never DELIVERS no longer stalls — it DRAINS at " +
+  "end-of-run and fires on the one input that did arrive, absent input contributing " +
+  "nothing", () => {
   // research Pitfall 1, restated after D-70-20: the walker must still be able to say WHY
-  // a graph would hang live. The shape that hangs is now a producer that never RAN —
-  // execution 12200 (70-UAT.md § Test 1), where "HubSpot Associate Company" was fed zero
-  // items, never ran, and contributed nothing at all to its carry Merge.
+  // a graph would hang live. execution 12200 (70-UAT.md § Test 1): "HubSpot Associate
+  // Company" was fed zero items, never ran, and contributed nothing at all to its carry
+  // Merge — that half of this case (LaneB never running) is UNCHANGED.
+  //
+  // RE-DERIVED for v1 (Gate 11, executions 12354/12355/12356): a Merge with only ONE of
+  // its two inputs ever filled no longer stalls — it drains at end-of-run once its
+  // filled-input count reaches `requiredInputs` (1, for every append/combine Merge this
+  // repo emits). `Decide Company Action Merge` run 1 fired on input 0 alone, input 1
+  // forever absent — this is that exact shape on a synthetic graph.
   const graph = wf(
     [
       triggerNode("Trigger"),
@@ -190,9 +210,13 @@ test("hang case: a Merge whose second configured input never DELIVERS never fire
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
   assert.equal(runData.LaneB, undefined,
     "execution 12200: a node fed zero items does not run, and records no run entry");
-  assert.equal(trace.stalled.length, 1);
-  assert.equal(trace.stalled[0].node, "Merge");
-  assert.deepEqual(trace.stalled[0].missingInputs, [1]);
+  assert.equal(trace.stalled.length, 0,
+    "v1: a Merge with at least one filled input drains at end-of-run instead of stalling");
+  assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
+  assert.deepEqual(runData.Merge[0], [{ id: "row-A" }],
+    "only input 0's row survives — input 1 never delivered, so it contributes nothing");
+  assert.equal(trace.merges.Merge.runs[0].sources[1], undefined,
+    "input 1 is absent from the fired run's sources — nobody ever claimed it");
 });
 
 test("always-output-data case: the flag on the node that ran empty satisfies the Merge exactly once", () => {
@@ -216,8 +240,10 @@ test("always-output-data case: the flag on the node that ran empty satisfies the
     "the converged run carries lane A's real row plus one empty marker item");
 });
 
-test("mutually-exclusive-branch case: alwaysOutputData on the downstream node of the empty " +
-  "branch does NOT help — that node never ran, so the Merge stalls", () => {
+test("mutually-exclusive-branch case, RE-DERIVED for v1 (quick task 260911-0tz, D-70-30 " +
+  "rule (b) drain): alwaysOutputData on the downstream node of the empty branch still " +
+  "doesn't help it run, but the Merge no longer stalls — it drains and fires on the " +
+  "live branch alone", () => {
   const graph = wf(
     [
       triggerNode("Trigger"),
@@ -237,9 +263,11 @@ test("mutually-exclusive-branch case: alwaysOutputData on the downstream node of
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{ id: "row-A" }] });
   assert.equal(runData.FalseSink, undefined, "FalseSink never ran — it never received a delivery");
-  assert.equal(trace.stalled.length, 1);
-  assert.equal(trace.stalled[0].node, "Merge");
-  assert.deepEqual(trace.stalled[0].missingInputs, [1]);
+  assert.equal(trace.stalled.length, 0,
+    "v1: the end-of-run drain fires the Merge on TrueSink's single filled input");
+  assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
+  assert.deepEqual(runData.Merge[0], [{ id: "row-A" }],
+    "only the live branch's row survives — the dead branch's input is absent");
 });
 
 test("mutually-exclusive-branch case: alwaysOutputData on the IF itself DOES fire the Merge", () => {
@@ -354,14 +382,23 @@ test("mixed-batch case: a 2-lane x 2-action graph through a Merge returns exactl
 // against Gate 1's own rule (execution 12200, 70-UAT.md § Test 1: a node fed zero items
 // does not run) rather than assumed.
 
-test("D-70-20 mechanism price (1/2): a sentinel on its OWN dedicated input, always " +
-  "emitting one marker, does NOT rescue a Merge whose real-producer input has no " +
-  "producer that ran", () => {
+test("D-70-20 mechanism price (1/2), RE-DERIVED for v1 (quick task 260911-0tz, D-70-30 " +
+  "rule (b) drain): a sentinel on its OWN dedicated input still cannot deliver the real " +
+  "producer's row, but the end-of-run drain now FIRES the Merge anyway — carrying the " +
+  "marker alone, the real lane silently absent rather than stalling the Merge", () => {
   // D-70-20 literally describes "a sentinel always emits exactly one marker item on its
   // own dedicated append-mode input" (70-CONTEXT.md). This prices that literal shape:
-  // a dedicated input only ever guarantees ITS OWN arrival, never a sibling input's —
-  // so when the real producer's lane dies upstream (execution 12200's rule), the Merge
-  // still starves, unconditional marker or not.
+  // a dedicated input only ever guarantees ITS OWN arrival, never a sibling input's — so
+  // when the real producer's lane dies upstream (execution 12200's rule), the real row is
+  // never there to be merged.
+  //
+  // RE-DERIVED for v1 (Gate 11, executions 12354/12355/12356): the PRICE changed. Under
+  // the pre-70-16 model this starved the whole Merge (no data reaches downstream at all).
+  // Under v1's end-of-run drain, AlwaysMarker's single filled input satisfies
+  // `requiredInputs` (1) on its own — the Merge FIRES, carrying only the marker, with the
+  // real lane's absence silent rather than visible as a stall. This is the more
+  // dangerous shape, not the safer one: it is exactly the mechanism behind `Decide
+  // Company Action Merge`'s run 1 firing on one input alone.
   const graph = wf(
     [
       triggerNode("Trigger"),
@@ -379,12 +416,15 @@ test("D-70-20 mechanism price (1/2): a sentinel on its OWN dedicated input, alwa
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
   assert.equal(runData.RealLane, undefined, "the real producer's own lane never ran");
-  assert.equal(trace.merges.Merge.fired, false,
-    "priced: a dedicated always-marking input never rescues a sibling input's starvation");
-  assert.equal(trace.stalled.length, 1);
-  assert.equal(trace.stalled[0].node, "Merge");
-  assert.deepEqual(trace.stalled[0].missingInputs, [0],
-    "input 1 (the dedicated sentinel) is satisfied; input 0 (the real producer) is not");
+  assert.equal(trace.stalled.length, 0,
+    "v1: the Merge no longer stalls — AlwaysMarker's single filled input satisfies the " +
+    "end-of-run drain (requiredInputs 1)");
+  assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
+  assert.deepEqual(runData.Merge[0], [{}],
+    "only the sentinel's marker survives — input 0's absence contributes nothing, and " +
+    "is silently missing rather than stalling the Merge");
+  assert.equal(trace.merges.Merge.runs[0].sources[0], undefined,
+    "input 0 has no source — the real lane never delivered");
 });
 
 test("D-70-20 mechanism price (2/2): the Wave 2 alternative -- a sentinel gated to fire " +
