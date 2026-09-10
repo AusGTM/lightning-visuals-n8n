@@ -16,6 +16,20 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-09-11
+
+### Changed
+- **Backend parity release — no client code changes.** Cut so the marketplace clone carries
+  the Phase 70 complete state (the 0.43.0 cut was never fetched into the local marketplace
+  clone, which sat at 0.42.0 / `81d7b67`). What this client now talks to, as of 2026-09-10
+  Gates 10/11/12: all five n8n Cloud workflows on the committed v1 bodies
+  (`settings.executionOrder: "v1"`, 30/69/287/55/43 nodes), active, disarmed; the ack-only
+  responders and runData recovery this client adopted in 0.43.0 are now proved on the real
+  engine (executions `12354`-`12358` disarmed, `12363` armed). Client behaviour is
+  unchanged: `all_node_items` (`scripts/report.py`) already concatenates every run of a
+  node, which is exactly what the newly observed v1 rule — a Merge can fire more than once
+  per execution — requires of a reader. Root `CHANGELOG.md` carries the backend record.
+
 ## [0.43.0] - 2026-09-09
 
 ### Changed
