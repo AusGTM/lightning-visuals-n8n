@@ -250,3 +250,125 @@ def test_parse_hubspot_event_is_entry_points_and_splice_merge_before_refuses_it(
     assert b.classify_convergence(nodes_by_name, conns, "Parse HubSpot Event") == "entry_points"
     with pytest.raises(ValueError, match="(?i)entry points"):
         b.splice_merge_before(wf["nodes"], conns, "Parse HubSpot Event")
+
+
+# =============================================================================================
+# Phase 70 Plan 11 (D-70-20): assert_merge_input_contract — the generation-time refusal
+# mirroring assert_no_by_name_reads/assert_write_request_emitters. Each test below builds a
+# SMALL offending graph in memory (never the committed JSON — that proof is
+# tests/n8n/mergeInputContract.test.mjs, over the real workflows) and asserts the builder
+# refuses it, naming the input index the refusal test's own acceptance criterion requires.
+# =============================================================================================
+
+def _if_node(name, x=0, y=0):
+    return {"parameters": {"conditions": {"conditions": []}}, "id": f"id-{name}",
+            "name": name, "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [x, y]}
+
+
+def test_assert_merge_input_contract_passes_on_a_clean_graph():
+    a = _code_node("A")
+    b_ = _code_node("B")
+    target = _code_node("Target")
+    nodes = [a, b_, target]
+    conns = {
+        "A": {"main": [[{"node": "Target", "type": "main", "index": 0}]]},
+        "B": {"main": [[{"node": "Target", "type": "main", "index": 0}]]},
+    }
+    b.splice_merge_before(nodes, conns, "Target")
+    wf = {"nodes": nodes, "connections": conns}
+    assert b.assert_merge_input_contract(wf, "clean_graph") is wf
+
+
+def test_assert_merge_input_contract_raises_on_over_wide_merge():
+    merge = b.merge_node("Wide Merge", 0, 0, inputs=11, mode="append")
+    wf = {"nodes": [merge], "connections": {}}
+    with pytest.raises(ValueError, match=r"Wide Merge.*declares 11 inputs"):
+        b.assert_merge_input_contract(wf, "over_wide_graph")
+
+
+def test_assert_merge_input_contract_raises_on_sentinel_direct_edge_naming_the_input_index():
+    sentinel = _code_node("Foo Sentinel")
+    real_producer = _code_node("Real Producer")
+    merge = b.merge_node("Target Merge", 0, 0, inputs=2, mode="append")
+    nodes = [sentinel, real_producer, merge]
+    conns = {
+        "Foo Sentinel": {"main": [[{"node": "Target Merge", "type": "main", "index": 0}]]},
+        "Real Producer": {"main": [[{"node": "Target Merge", "type": "main", "index": 1}]]},
+    }
+    wf = {"nodes": nodes, "connections": conns}
+    with pytest.raises(ValueError, match=r"Target Merge\[0\].*Foo Sentinel"):
+        b.assert_merge_input_contract(wf, "sentinel_direct_graph")
+
+
+def test_assert_merge_input_contract_raises_on_routing_if_direct_edge_naming_the_input_index():
+    routing_if = _if_node("IF Routing")
+    real_producer = _code_node("Real Producer")
+    merge = b.merge_node("Target Merge", 0, 0, inputs=2, mode="append")
+    nodes = [routing_if, real_producer, merge]
+    conns = {
+        "IF Routing": {"main": [
+            [{"node": "Target Merge", "type": "main", "index": 1}],
+            [],
+        ]},
+        "Real Producer": {"main": [[{"node": "Target Merge", "type": "main", "index": 0}]]},
+    }
+    wf = {"nodes": nodes, "connections": conns}
+    with pytest.raises(ValueError, match=r"Target Merge\[1\].*IF Routing"):
+        b.assert_merge_input_contract(wf, "if_direct_graph")
+
+
+def test_assert_merge_input_contract_raises_on_an_unfed_input_naming_the_input_index():
+    real_producer = _code_node("Real Producer")
+    merge = b.merge_node("Target Merge", 0, 0, inputs=2, mode="append")
+    nodes = [real_producer, merge]
+    conns = {"Real Producer": {"main": [[{"node": "Target Merge", "type": "main", "index": 0}]]}}
+    wf = {"nodes": nodes, "connections": conns}
+    with pytest.raises(ValueError, match=r"Target Merge\[1\].*no producer at all"):
+        b.assert_merge_input_contract(wf, "unfed_input_graph")
+
+
+def test_split_merge_into_stages_reconverges_on_the_original_merge_name():
+    """Phase 70 Plan 11 (D-70-20): split an 11-input Merge into two stages that
+    reconverge on the ORIGINAL node name — every downstream consumer that already
+    named it keeps working unchanged."""
+    producers = [_code_node(f"P{i}") for i in range(11)]
+    target = _code_node("Target")
+    nodes = producers + [target]
+    conns = {f"P{i}": {"main": [[{"node": "Target", "type": "main", "index": 0}]]} for i in range(11)}
+    merge_name = b.splice_merge_before(nodes, conns, "Target")
+    assert merge_name == "Target Merge"
+    b.split_merge_into_stages(nodes, conns, merge_name, groups=[list(range(6)), list(range(6, 11))])
+
+    merge_node = next(n for n in nodes if n["name"] == "Target Merge")
+    assert merge_node["parameters"]["numberInputs"] == 2
+    # The original node's own OUTPUT (what it feeds) is completely untouched.
+    assert conns["Target Merge"]["main"] == [[{"node": "Target", "type": "main", "index": 0}]]
+    stage_names = {n["name"] for n in nodes if n["type"] == "n8n-nodes-base.merge"} - {"Target Merge"}
+    assert stage_names == {"Target Merge Stage 1", "Target Merge Stage 2"}
+    for i in range(6):
+        assert conns[f"P{i}"]["main"][0][0]["node"] == "Target Merge Stage 1"
+    for i in range(6, 11):
+        assert conns[f"P{i}"]["main"][0][0]["node"] == "Target Merge Stage 2"
+    # Refusing to ship this now passes cleanly — the very obligation this task exists for.
+    wf = {"nodes": nodes, "connections": conns}
+    assert b.assert_merge_input_contract(wf, "split_stages_graph") is wf
+
+
+def test_split_merge_into_stages_raises_on_a_group_over_max_inputs():
+    producers = [_code_node(f"P{i}") for i in range(11)]
+    target = _code_node("Target")
+    nodes = producers + [target]
+    conns = {f"P{i}": {"main": [[{"node": "Target", "type": "main", "index": 0}]]} for i in range(11)}
+    merge_name = b.splice_merge_before(nodes, conns, "Target")
+    with pytest.raises(ValueError, match="exceeds max_inputs"):
+        b.split_merge_into_stages(nodes, conns, merge_name, groups=[list(range(11))])
+
+
+def test_split_merge_into_stages_raises_on_a_dropped_index():
+    producers = [_code_node(f"P{i}") for i in range(11)]
+    target = _code_node("Target")
+    nodes = producers + [target]
+    conns = {f"P{i}": {"main": [[{"node": "Target", "type": "main", "index": 0}]]} for i in range(11)}
+    merge_name = b.splice_merge_before(nodes, conns, "Target")
+    with pytest.raises(ValueError, match="must partition every current index"):
+        b.split_merge_into_stages(nodes, conns, merge_name, groups=[list(range(6)), list(range(6, 10))])
