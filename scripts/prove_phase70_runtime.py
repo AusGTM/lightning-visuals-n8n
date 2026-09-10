@@ -44,8 +44,10 @@ this repo runs today: the live half is deferred to the end-of-phase UAT (Gate 3 
 `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`).
 **An offline run never writes `shapes_equal: true`.**
 
-TWO GATES, BOTH BEFORE ANY TRANSPORT IS CONSTRUCTED — the shape
-`scripts/prove_async_recovery.py` established and this file follows:
+TWO GATES, BOTH BEFORE ANY TRANSPORT IS CONSTRUCTED — the shape the retired
+`scripts/prove_async_recovery.py` established and this file carries forward (that script
+was deleted 2026-09-10, review WR-03: D-70-07 retired `async_ack`, erasing the
+synchronous/asynchronous differential it existed to assert — this file is its successor):
   1. `ALLOW_PHASE70_RUNTIME_PROOF` must read EXACTLY `true`.
   2. The wrong-instance guard, copied from `deploy_n8n_workflows.py::_instance_ok()`.
 Plus a THIRD, specific to this proof (T-70-19): every write flag read back from the LIVE
@@ -423,7 +425,7 @@ def run_live() -> dict:
     require_gates()
     import csv
     import requests
-    import chunking          # noqa: E402 — plugin modules; see prove_async_recovery.py
+    import chunking          # noqa: E402 — plugin modules; see this module's docstring
     import config_gate       # noqa: E402
     import dispatch          # noqa: E402
     import executions_client  # noqa: E402

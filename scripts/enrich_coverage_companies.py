@@ -716,7 +716,7 @@ def _independent_disarm_reread(cfg, workflow_id):
 
 
 def _recover_rows(config, run_id, **kwargs):
-    """D-70-08: the cross-package import precedent `scripts/prove_async_recovery.py`
+    """D-70-08: the cross-package import precedent `scripts/prove_phase70_runtime.py`
     establishes -- the plugin's `watch.py` is the ONE bounded poll site in this repo and
     no driver grows a wait of its own."""
     import sys

@@ -139,7 +139,7 @@ def _describe_target(config: dict) -> str:
 # D-70-05/D-70-08 (Phase 70 Plan 06): the webhook answers with an ack, so this driver's
 # rows come from the settled execution's runData, correlated on the run id
 # `post_webhook_event` minted. The cross-package import is the precedent
-# `scripts/prove_async_recovery.py` already establishes -- the plugin's `watch.py` is
+# `scripts/prove_phase70_runtime.py` already establishes -- the plugin's `watch.py` is
 # the ONE bounded poll site in this repo and no driver grows a wait of its own.
 def _recover_rows(config, run_id, **kwargs):
     import sys
