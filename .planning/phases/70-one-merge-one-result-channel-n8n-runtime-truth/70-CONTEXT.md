@@ -297,6 +297,37 @@ builder.
 </decisions>
 
 <canonical_refs>
+### Gap-closure decisions (operator, 2026-09-10, after /gsd-verify-work 70)
+
+Source of truth for the gaps: `70-UAT.md` § Gaps (G-70-1 resolved; G-70-2, G-70-3 blocker;
+G-70-4 minor) and `70-RUNTIME-VERDICT.json` (`status: observed`, `shapes_equal: false`,
+executions 12203, 12204–12208).
+
+- **D-70-20 — Approach: fix graph + walker, keep the Phase 70 design.** The walker
+  (`tests/n8n/lib/walkWorkflow.mjs`) must model what the engine did: a zero-item output IS a
+  delivery to a Merge input; the first delivery per input wins; a Merge fires once. The walker
+  change lands RED first — it must reproduce executions 12203 (`Associate Carry Merge` 1×0,
+  `write_blocked` row dropped) and 12206 (`Enrichment Gate Merge` fired on `Contacts Absent
+  Sentinel`'s `[]`; `Build Response Merge` never fired) against the CURRENT committed JSON
+  before any graph change. Then regenerate every lane in `scripts/build_cloud_workflows.py` so
+  NO Merge input is shared between a sentinel and a real producer: a sentinel always emits
+  exactly one marker item on its own dedicated append-mode input, markers are filtered at the
+  response builder; a starved carry Merge (combineByPosition) is BYPASSED by the sentinel lane,
+  never padded with a marker that could pair with a real row. `Build Response Merge` (15
+  inputs) is split so no Merge declares more than 10 inputs. Every offline suite must go RED
+  under the corrected walker before it goes GREEN under the regenerated graph.
+- **D-70-21 — Roll back the live instance FIRST.** Wave 0: deploy + bounce the pre-Phase-70
+  `n8n/wf_*_cloud.json` from git commit `59812be` (node counts 17/29/123/26/39), disarmed,
+  read back node counts and both write flags `"false"`. The live enrichment lane's `Build
+  Response` is dead on the Phase 70 JSON; the rollback restores it while the gap is fixed.
+  Redeploying the fixed JSON is a deferred live gate at the end of gap closure, like Gates 1–3.
+- **D-70-22 — The proof driver compares like with like (G-70-4).** On the ingest lane
+  `scripts/prove_phase70_runtime.py` compares the RAW recovery rows (`watch.recover_dispatch`
+  responses), not the client-reconciled rows, or `row_shape` excludes client-added keys — with a
+  test that fails on execution 12207's shape first.
+- **Unchanged:** every locked decision D-70-01..19 stands. D-70-19's rule stands verbatim: the
+  walker is corrected toward the engine, never toward the plans.
+
 ## Canonical References
 
 **Downstream agents MUST read these before planning or implementing.**
