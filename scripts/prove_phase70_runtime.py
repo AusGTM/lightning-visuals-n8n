@@ -358,22 +358,40 @@ def _now_iso():
 def build_verdict(*, per_send, live_execution_order, write_flag_reading, predict_only):
     """The D-70-19 verdict. Records execution ids and row shapes only — never a
     credential and never a webhook secret (T-70-03).
+
+    D-70-31: `execution_order_all_v1` is true only when `live_execution_order` is a
+    non-empty mapping AND every value in it equals "v1" — a null reading (absent key,
+    the engine's legacy default) or an empty mapping both make it false, never null,
+    except in predict-only mode where nothing was contacted at all. It folds into
+    `answer` alongside shape agreement; `shapes_equal` keeps meaning shape agreement
+    ALONE, so a run can distinguish "the model was right but the instance was on the
+    wrong order" from "the model was wrong".
     """
     settled = [s for s in per_send if s.get("settled") is False]
-    all_equal = (
+    shapes_ok = (
         None if predict_only
         else all(s.get("shapes_equal") is True for s in per_send) and not settled
+    )
+    execution_order_all_v1 = (
+        None if predict_only
+        else bool(live_execution_order) and all(v == "v1" for v in live_execution_order.values())
+    )
+    answer = (
+        None if predict_only
+        else bool(shapes_ok) and bool(execution_order_all_v1)
     )
     return {
         "premise": "phase-70-runtime-truth",
         "question": (
             "do the rows recovered from a disarmed live run's runData match, shape for "
-            "shape, the rows the committed walker predicts for the same input?"
+            "shape, the rows the committed walker predicts for the same input, AND is "
+            "the live instance running the v1 execution order on every workflow?"
         ),
         "status": "predicted_only_awaiting_gate_3" if predict_only else "observed",
         "basis": "predicted (offline, nothing contacted)" if predict_only else "observed",
-        "answer": all_equal,
-        "shapes_equal": all_equal,
+        "answer": answer,
+        "shapes_equal": shapes_ok,
+        "execution_order_all_v1": execution_order_all_v1,
         "generated_at": _now_iso(),
         "live_settings_execution_order": live_execution_order,
         "execution_ids": [s.get("execution_id") for s in per_send if s.get("execution_id")],
@@ -453,8 +471,10 @@ def run_live() -> dict:
             cfg, f"{executions_client._base_url(cfg)}/api/v1/workflows/{wf_id}", None,
             requests.get)
         live_bodies[wf_name] = body
-        # D-70-02's observed-live upgrade: record what it ACTUALLY is, not what it was
-        # expected to be. An absent key is recorded as None — the engine default.
+        # D-70-02 is superseded by D-70-28/D-70-31: this reading is now a PASS CRITERION,
+        # not a curiosity. Record what it ACTUALLY is, not what it was expected to be — an
+        # absent key is recorded as None (the engine's legacy default) — and a null or
+        # non-v1 reading here is a GATE FAILURE via execution_order_all_v1 in the verdict.
         execution_order[wf_name] = (body.get("settings") or {}).get("executionOrder")
     flag_reading = require_disarmed(live_bodies)
 
@@ -525,15 +545,25 @@ def main(argv=None):
         print("PREDICTION ONLY — shapes_equal is null. The live half is Gate 3 "
               "(70-DEFERRED-GATES.md).")
         return 0
-    if verdict["shapes_equal"] is not True:
-        print(
-            "FINDING: the recovered rows are NOT shape-equal to the walker's prediction, "
-            "or an execution did not settle. This is a finding to REPORT — do not adjust "
-            "the walker to match. See the verdict file.",
-            file=sys.stderr,
-        )
+    if verdict["answer"] is not True:
+        if verdict["shapes_equal"] is not True:
+            print(
+                "FINDING: the recovered rows are NOT shape-equal to the walker's "
+                "prediction, or an execution did not settle. This is a finding to "
+                "REPORT — do not adjust the walker to match. See the verdict file.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "FINDING: the row shapes matched, but the live instance is NOT running "
+                "the v1 execution order on every workflow (execution_order_all_v1 is "
+                "false). The walker's prediction was right; the instance is on the "
+                "legacy order. See the verdict file.",
+                file=sys.stderr,
+            )
         return 1
-    print("PROVEN: the live rows match the walker's prediction on every send.")
+    print("PROVEN: the live rows match the walker's prediction on every send, and every "
+          "live workflow is running the v1 execution order.")
     return 0
 
 

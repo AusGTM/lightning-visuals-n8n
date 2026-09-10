@@ -234,3 +234,75 @@ def test_ingest_recovered_rows_defaults_to_empty_when_the_key_is_absent():
     never crash — it degrades to zero recovered rows, same discipline as every other
     `.get(...) or []` read in this driver."""
     assert driver._ingest_recovered_rows({"rows": [_12207_RECONCILED_ROW]}) == []
+
+
+# --------------------------------------------------------------------------- D-70-29 / D-70-31
+#
+# execution_order_all_v1 and its fold into `answer`. build_verdict is called directly in
+# every case below — no network, no subprocess.
+
+_OK_SEND = {"settled": True, "shapes_equal": True}
+
+
+def test_build_verdict_answer_true_when_shapes_equal_and_every_order_is_v1():
+    verdict = driver.build_verdict(
+        per_send=[_OK_SEND], live_execution_order={"wf-a": "v1", "wf-b": "v1"},
+        write_flag_reading={}, predict_only=False,
+    )
+    assert verdict["shapes_equal"] is True
+    assert verdict["execution_order_all_v1"] is True
+    assert verdict["answer"] is True
+
+
+def test_build_verdict_answer_false_when_one_order_reading_is_null_shapes_equal_stays_true():
+    """A null reading (absent settings key, the engine's legacy default) must fail the
+    verdict WITHOUT corrupting shapes_equal's own meaning — shape agreement alone."""
+    verdict = driver.build_verdict(
+        per_send=[_OK_SEND], live_execution_order={"wf-a": "v1", "wf-b": None},
+        write_flag_reading={}, predict_only=False,
+    )
+    assert verdict["shapes_equal"] is True
+    assert verdict["execution_order_all_v1"] is False
+    assert verdict["answer"] is False
+
+
+def test_build_verdict_answer_false_when_one_order_reading_is_a_non_v1_value():
+    verdict = driver.build_verdict(
+        per_send=[_OK_SEND], live_execution_order={"wf-a": "v1", "wf-b": "v0"},
+        write_flag_reading={}, predict_only=False,
+    )
+    assert verdict["execution_order_all_v1"] is False
+    assert verdict["answer"] is False
+
+
+def test_build_verdict_predict_only_leaves_answer_shapes_equal_and_order_all_null():
+    verdict = driver.build_verdict(
+        per_send=[], live_execution_order=None, write_flag_reading=None, predict_only=True,
+    )
+    assert verdict["answer"] is None
+    assert verdict["shapes_equal"] is None
+    assert verdict["execution_order_all_v1"] is None
+
+
+def test_build_verdict_empty_order_mapping_is_not_all_v1():
+    verdict = driver.build_verdict(
+        per_send=[_OK_SEND], live_execution_order={}, write_flag_reading={}, predict_only=False,
+    )
+    assert verdict["execution_order_all_v1"] is False
+    assert verdict["answer"] is False
+
+
+def test_main_exit_follows_answer_not_shapes_equal_alone(monkeypatch, capsys):
+    """D-70-31: without this, `execution_order_all_v1` is decorative — a run against a
+    legacy instance whose shapes happened to agree would print a reason and still exit 0.
+    A verdict with shapes_equal true and execution_order_all_v1 false must exit non-zero,
+    and the printed reason must name the ORDER, not the shapes, so an operator does not
+    conclude the walker was wrong when the instance was simply not on v1."""
+    fake_verdict = {"shapes_equal": True, "execution_order_all_v1": False, "answer": False}
+    monkeypatch.setattr(driver, "run_live", lambda: fake_verdict)
+    monkeypatch.setattr(driver, "write_verdict", lambda v, path=None: Path("/dev/null"))
+    rc = driver.main([])
+    assert rc == 1
+    err = capsys.readouterr().err.lower()
+    assert "order" in err or "v1" in err
+    assert "not shape-equal" not in err  # must not blame shapes when shapes_equal was true
