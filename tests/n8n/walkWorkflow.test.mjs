@@ -310,3 +310,85 @@ test("mixed-batch case: a 2-lane x 2-action graph through a Merge returns exactl
   assert.equal(rows.length, 4);
   assert.equal(new Set(rows.map((r) => r.id)).size, 4, "no duplicates");
 });
+
+// --- Plan 70-09 Task 3: pricing the literal D-70-20 mechanism -----------------------
+//
+// Neither case below asserts a preference. Both are MEASUREMENTS of a mechanism under
+// consideration for Wave 2 (70-CONTEXT.md's "Gap-closure decisions", D-70-20), priced
+// against Gate 1's own rule (execution 12200, 70-UAT.md § Test 1: a node fed zero items
+// does not run) rather than assumed.
+
+test("D-70-20 mechanism price (1/2): a sentinel on its OWN dedicated input, always " +
+  "emitting one marker, does NOT rescue a Merge whose real-producer input has no " +
+  "producer that ran", () => {
+  // D-70-20 literally describes "a sentinel always emits exactly one marker item on its
+  // own dedicated append-mode input" (70-CONTEXT.md). This prices that literal shape:
+  // a dedicated input only ever guarantees ITS OWN arrival, never a sibling input's —
+  // so when the real producer's lane dies upstream (execution 12200's rule), the Merge
+  // still starves, unconditional marker or not.
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      codeNode("Upstream", "return [];"), // ran, emitted nothing -> RealLane below never runs
+      codeNode("RealLane", PASSTHROUGH),  // fed zero items -> never runs -> input 0 starves
+      codeNode("AlwaysMarker", "return [{ json: {} }];"), // unconditional -- the literal mechanism
+      mergeNode("Merge", 2),
+    ],
+    {
+      Trigger: { main: [[edge("Upstream"), edge("AlwaysMarker")]] },
+      Upstream: { main: [[edge("RealLane")]] },
+      RealLane: { main: [[edge("Merge", 0)]] },
+      AlwaysMarker: { main: [[edge("Merge", 1)]] },
+    }
+  );
+  const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
+  assert.equal(runData.RealLane, undefined, "the real producer's own lane never ran");
+  assert.equal(trace.merges.Merge.fired, false,
+    "priced: a dedicated always-marking input never rescues a sibling input's starvation");
+  assert.equal(trace.stalled.length, 1);
+  assert.equal(trace.stalled[0].node, "Merge");
+  assert.deepEqual(trace.stalled[0].missingInputs, [0],
+    "input 1 (the dedicated sentinel) is satisfied; input 0 (the real producer) is not");
+});
+
+test("D-70-20 mechanism price (2/2): the Wave 2 alternative -- a sentinel gated to fire " +
+  "only when the real lane is dead, SHARING the real producer's input -- fires the " +
+  "Merge in both shapes, preserving the real row when live and the marker when dead", () => {
+  // Mutually exclusive with the real lane by construction (the SAME routing predicate
+  // sends a row to exactly one of the two branches, never both, mirroring
+  // wire_gate_refusal_lane's "unreached_source" sentinels in scripts/build_cloud_
+  // workflows.py) -- so sharing the input is safe precisely because the two producers
+  // can never both deliver in the same execution.
+  function build(live) {
+    return wf(
+      [
+        triggerNode("Trigger"),
+        ifNode("Router", "={{ $json.live }}", "true"),
+        codeNode("RealLane", "return [{ json: { id: 'row-real' } }];"),
+        // Fed from Router's FALSE branch ONLY -- it is fed at all exactly when the real
+        // lane is dead, so its own condition can emit unconditionally once run.
+        codeNode("Sentinel", "return [{ json: {} }];"),
+        codeNode("LaneB", "return [{ json: { id: 'row-B' } }];"),
+        mergeNode("Merge", 2),
+      ],
+      {
+        Trigger: { main: [[edge("Router"), edge("LaneB")]] },
+        Router: { main: [[edge("RealLane")], [edge("Sentinel")]] },
+        RealLane: { main: [[edge("Merge", 0)]] },
+        Sentinel: { main: [[edge("Merge", 0)]] }, // SHARED input -- the point being priced
+        LaneB: { main: [[edge("Merge", 1)]] },
+      }
+    );
+  }
+
+  const liveRun = walkWorkflow(build(true), { triggerNode: "Trigger", triggerItems: [{ live: "true" }] });
+  assert.equal(liveRun.trace.merges.Merge.fired, true, "live shape: the Merge fires");
+  assert.deepEqual(liveRun.runData.Merge[0].map((r) => r.id).sort(), ["row-B", "row-real"],
+    "the real row survives -- the gated sentinel never ran (fed zero items on the dead branch)");
+
+  const deadRun = walkWorkflow(build(false), { triggerNode: "Trigger", triggerItems: [{ live: "false" }] });
+  assert.equal(deadRun.trace.merges.Merge.fired, true, "dead shape: the Merge still fires");
+  const deadRows = deadRun.runData.Merge[0];
+  assert.ok(deadRows.some((r) => r.id === "row-B"), "LaneB's real row still arrives");
+  assert.equal(deadRows.length, 2, "the marker fills the starved input instead of stalling the Merge");
+});
