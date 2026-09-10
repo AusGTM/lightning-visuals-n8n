@@ -350,6 +350,45 @@ executions 12203, 12204–12208).
 - **Unchanged:** every locked decision D-70-01..19 stands. D-70-19's rule stands verbatim: the
   walker is corrected toward the engine, never toward the plans.
 
+### Gap-closure round 2 decisions (operator, 2026-09-10, after Gate 5)
+
+Source of truth: `70-UAT.md` tests 4–6 and gap G-70-5 (blocker). Gate 5 facts: the ingest lane
+PASSED live (`shapes_equal: true`, executions 12293/12309); the enrichment gap-closure body
+LOOPED — `Dispatch Self` ran once per execution with a marker item though its only declared
+producer emitted 0 items, 135 child executions in six minutes, stopped by deactivate + a PUT of
+the pre-70 `59812be` body. The live instance is MIXED: enrichment = `59812be` (123 nodes,
+active), the other four = gap-closure JSON.
+
+- **D-70-24 — Remove the scale-up fan-out from the enrichment graph.** `Dispatch Self`,
+  `Build Scale Up Fan-Out`, `Build Scale Up Ack`, `IF Scale Up Route` and every sentinel/gate
+  that exists only for them are deleted from `scripts/build_cloud_workflows.py`'s enrichment
+  build (and from `wf_enrichment_local_live.json` if it carries them). A request with
+  `scale_up: true` is REFUSED by `Parse HubSpot Event` (recorded as a refusal row, like the
+  existing list-expansion refusal), never fanned. The plugin's `dispatch_plan(scale_up=...)`
+  path and `IF Scale Up Route`-dependent tests are retired or converted to refusal tests.
+  Reason: after Gate 5 no in-graph guard is trusted on this engine; only the absence of a
+  self-referencing `Execute Workflow` node makes recursion impossible. The feature may return
+  in a later phase once the engine rule behind G-70-5 is understood. CLAUDE.md §13.0.2's
+  `scale_up` row is amended to say RETIRED with the execution ids.
+- **D-70-25 — Markers never reach the wire.** `Build Response` (enrichment) and
+  `Build Ingest Response` (ingest) drop every marker item (an item with none of the row
+  identity keys) BEFORE emitting, so a recovered row set can only contain real rows. Pinned by
+  a test that fails on Gate 5's recovered shape (marker-shaped items in `12209`/`12210`).
+- **D-70-26 — The walker records, not guesses, the G-70-5 rule.** The walker must NOT be
+  taught a mechanism that was not isolated. Instead: (a) any `executeWorkflow` node in a
+  committed graph is a generation-time refusal (`assert_no_self_dispatch`, mirroring
+  `assert_merge_input_contract`), so the walker never needs to model it; (b) the walker's
+  engine-fidelity suite gains a frozen-fixture reproduction of execution `12316` that asserts
+  the walker CANNOT reproduce the observed `Dispatch Self` run — recorded as a documented
+  divergence (`[observed live]`, cause unknown), not a green test that pretends to model it.
+- **D-70-27 — Live gates for this round, all deferred per the standing ruling:** Gate 7 =
+  disarmed deploy + bounce of the loop-free enrichment body, then WATCH the executions list
+  for `mode: integrated` bursts for two minutes BEFORE any send; Gate 8 = the D-70-19 proof
+  re-run (all four sends must be `shapes_equal: true`); Gate 9 = the armed mixed-verdict re-run
+  (formerly Gate 6), only after Gate 8. Every deploy in this repo now carries the two-minute
+  integrated-burst watch as a runbook step.
+- **Unchanged:** D-70-01..23 stand. D-70-19 stands verbatim.
+
 ## Canonical References
 
 **Downstream agents MUST read these before planning or implementing.**
