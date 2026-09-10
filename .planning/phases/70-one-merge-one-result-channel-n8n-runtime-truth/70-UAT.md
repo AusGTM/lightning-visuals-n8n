@@ -3,15 +3,15 @@ status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6), 70-VERIFICATION.md (round 3, gap closure 70-16..70-18: Gates 10/11/12)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T13:45:00Z
+updated: 2026-09-10T13:55:00Z
 ---
 
 ## Current Test
 
-number: 11
-name: Gate 11 — disarmed D-70-19 proof re-run under v1 (the test of round 3's hypothesis)
+number: 12
+name: Gate 12 — armed mixed-verdict re-run on the ingest lane (only after Gate 11 passes; supersedes Gate 9)
 expected: |
-  ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py -> 70-RUNTIME-VERDICT.json execution_order_all_v1: true (null/absent = FAILURE), all four sends shapes_equal: true, every execution settled, writes_performed: 0, every recovered enrichment row carrying a non-null row_id, runData-source-vs-declared-connections check clean, and none of Gate 8's symptoms. If legacy symptoms persist under v1: STOP and report. Steps in 70-DEFERRED-GATES.md § Gate 11.
+  Armed for exactly one contact of a same-company pair; Build Ingest Response exactly 2 rows; permitted row action "update", association "associated"; refused row action "write_blocked"; HubSpot shows one update + one association; disarmed and read back after (executionOrder still "v1"). Steps in 70-DEFERRED-GATES.md § Gate 12.
 awaiting: user response
 
 ## Tests
@@ -214,7 +214,29 @@ observed: |
 
 ### 11. Gate 11 — disarmed D-70-19 proof re-run under v1 (the test of round 3's hypothesis)
 expected: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` `execution_order_all_v1: true` (a `null`/absent reading is a FAILURE — inverts Gate 8), all four sends `shapes_equal: true`, every execution settled, `writes_performed: 0`, every recovered enrichment row carrying a non-null `row_id`, runData-source-vs-declared-connections check clean, and NONE of Gate 8's symptoms (`HubSpot Update` on an empty lane, gated sentinels delivering on zero-item inputs, `Enrichment Gate Merge` firing twice). If legacy symptoms persist under v1: STOP and report; do not adjust the walker or driver. Steps in `70-DEFERRED-GATES.md` § Gate 11.
-result: [pending]
+result: pass
+observed: |
+  2026-09-10 ~13:50Z, first runtime observation under executionOrder v1. Live read before send: order=v1
+  on all five. Driver: "PROVEN", driver_exit=0, verdict status observed, answer true, shapes_equal true,
+  execution_order_all_v1 true, live_settings_execution_order v1 on both lanes, writes_performed 0, every
+  write flag 'false'. Executions 12354/12355 (enrichment_2x2, 2 chunks), 12356 (enrichment_single_lane),
+  12357 (ingest_2x2), 12358 (ingest_single_lane) — all status success, mode webhook, settled.
+  Rows: enrichment 4/4 and 2/2 predicted/recovered with non-null row_ids (e-li-a, e-li-b, e-email-a,
+  e-email-b; e-single-a, e-single-b), all action proposed; ingest 4/4 and 2/2, action review (row_id
+  null on both predicted and recovered — the walker's own prediction for net_new identities).
+  runData-source-vs-declared-connections: 0 violations across all five executions (93/94/93/45/45 nodes
+  ran). NONE of Gate 8's symptoms: HubSpot Update never ran (no 405), IF List Expanded / Build Refusal
+  Row / Apply Contact Judge Verdict never ran, Enrichment Gate Merge fired exactly ONCE per execution
+  with 6 items = 4 absent-lane gated-sentinel markers + 2 real rows from the live lane (Adapt Search or
+  Adapt Linkedin Search), Enrichment Gate emitted the 2 real rows, Build Response emitted 2 rows per
+  execution. The live lane's own sentinel gate did NOT run — the D-70-23 gated sentinel behaves as
+  designed under v1 (a gate fed zero items does not run). Ingest: Build Ingest Response 4 and 2 rows,
+  Build Association Request ran with 0 items (net_new rows, nothing to associate).
+  New observation, not a failure: Decide Company Action ran TWICE per enrichment execution with 0 items
+  each time, both runs sourced from Decide Company Action Merge (Company Gate emitted 0 — no companies in
+  the send). Under v1 that Merge fired twice; the legacy-observed "a Merge fires at most once" row in
+  CLAUDE.md §13.0.3 does not hold unchanged under v1 and needs its own row. Follow-on (Gate 11 text):
+  upgrade CLAUDE.md's v1 rows to [observed live] citing 12354-12358; freeze these five runData files.
 
 ### 12. Gate 12 — armed mixed-verdict re-run on the ingest lane (only after Gate 11 passes; supersedes Gate 9)
 expected: Armed for exactly one contact of a same-company pair; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after (`executionOrder` still `"v1"`). Steps in `70-DEFERRED-GATES.md` § Gate 12.
@@ -223,9 +245,9 @@ result: [pending]
 ## Summary
 
 total: 12
-passed: 2
+passed: 3
 issues: 6
-pending: 2
+pending: 1
 skipped: 0
 blocked: 2
 skipped: 0

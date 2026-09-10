@@ -1,20 +1,21 @@
 {
   "premise": "phase-70-runtime-truth",
-  "question": "do the rows recovered from a disarmed live run's runData match, shape for shape, the rows the committed walker predicts for the same input?",
+  "question": "do the rows recovered from a disarmed live run's runData match, shape for shape, the rows the committed walker predicts for the same input, AND is the live instance running the v1 execution order on every workflow?",
   "status": "observed",
   "basis": "observed",
-  "answer": false,
-  "shapes_equal": false,
-  "generated_at": "2026-09-10T09:09:38.703661+00:00",
+  "answer": true,
+  "shapes_equal": true,
+  "execution_order_all_v1": true,
+  "generated_at": "2026-09-10T13:57:22.724664+00:00",
   "live_settings_execution_order": {
-    "LV Enrichment (Cloud template)": null,
-    "LV Contact Ingest (Cloud template)": null
+    "LV Enrichment (Cloud template)": "v1",
+    "LV Contact Ingest (Cloud template)": "v1"
   },
   "execution_ids": [
-    "12350",
-    "12351",
-    "12352",
-    "12353"
+    "12355",
+    "12356",
+    "12357",
+    "12358"
   ],
   "writes_performed": 0,
   "write_flags_read_from_live_bodies": {
@@ -58,10 +59,10 @@
     {
       "name": "enrichment_2x2",
       "lane": "enrichment",
-      "run_id": "3043e962d29a493f8b13de6c5eaa37c4",
+      "run_id": "3239fb0b7f4845498fe1888751e6a167",
       "input_row_count": 4,
       "predicted_row_count": 4,
-      "recovered_row_count": 2,
+      "recovered_row_count": 4,
       "predicted_shapes": [
         {
           "keys": [
@@ -199,19 +200,30 @@
             "candidate_count",
             "contactability",
             "contactability_fields",
+            "existingRecord",
+            "gap_flag",
+            "hs_object_id",
             "judge_adjudicated_fields",
+            "judge_confidence_by_field",
+            "match",
             "material_conflicts",
+            "merge",
+            "mode",
+            "needs_review",
             "num_associated_contacts",
+            "object_type",
             "outcome_contract_version",
+            "properties",
             "provider_agreement",
             "reason",
             "remaining_credits",
             "row_id",
-            "run_id"
+            "scored",
+            "write_request"
           ],
-          "row_id": null,
+          "row_id": "e-li-a",
           "email": null,
-          "action": "list_expansion_refused",
+          "action": "proposed",
           "outcome": null
         },
         {
@@ -220,37 +232,112 @@
             "candidate_count",
             "contactability",
             "contactability_fields",
+            "existingRecord",
+            "gap_flag",
+            "hs_object_id",
             "judge_adjudicated_fields",
+            "judge_confidence_by_field",
+            "match",
             "material_conflicts",
+            "merge",
+            "mode",
+            "needs_review",
             "num_associated_contacts",
+            "object_type",
             "outcome_contract_version",
+            "properties",
             "provider_agreement",
             "reason",
             "remaining_credits",
             "row_id",
-            "run_id"
+            "scored",
+            "write_request"
           ],
-          "row_id": null,
+          "row_id": "e-li-b",
           "email": null,
-          "action": "list_expansion_refused",
+          "action": "proposed",
+          "outcome": null
+        },
+        {
+          "keys": [
+            "action",
+            "candidate_count",
+            "contactability",
+            "contactability_fields",
+            "existingRecord",
+            "gap_flag",
+            "hs_object_id",
+            "judge_adjudicated_fields",
+            "judge_confidence_by_field",
+            "match",
+            "material_conflicts",
+            "merge",
+            "mode",
+            "needs_review",
+            "num_associated_contacts",
+            "object_type",
+            "outcome_contract_version",
+            "properties",
+            "provider_agreement",
+            "reason",
+            "remaining_credits",
+            "row_id",
+            "scored",
+            "write_request"
+          ],
+          "row_id": "e-email-a",
+          "email": null,
+          "action": "proposed",
+          "outcome": null
+        },
+        {
+          "keys": [
+            "action",
+            "candidate_count",
+            "contactability",
+            "contactability_fields",
+            "existingRecord",
+            "gap_flag",
+            "hs_object_id",
+            "judge_adjudicated_fields",
+            "judge_confidence_by_field",
+            "match",
+            "material_conflicts",
+            "merge",
+            "mode",
+            "needs_review",
+            "num_associated_contacts",
+            "object_type",
+            "outcome_contract_version",
+            "properties",
+            "provider_agreement",
+            "reason",
+            "remaining_credits",
+            "row_id",
+            "scored",
+            "write_request"
+          ],
+          "row_id": "e-email-b",
+          "email": null,
+          "action": "proposed",
           "outcome": null
         }
       ],
-      "shapes_equal": false,
-      "execution_id": "12350",
+      "shapes_equal": true,
+      "execution_id": "12355",
       "execution_ids": [
-        "12350",
-        "12349"
+        "12355",
+        "12354"
       ],
       "settled": true
     },
     {
       "name": "enrichment_single_lane",
       "lane": "enrichment",
-      "run_id": "a90600a1fd5246619d2eccea5e516242",
+      "run_id": "17130ffe433c468b99d0eef03b1ff40a",
       "input_row_count": 2,
       "predicted_row_count": 2,
-      "recovered_row_count": 1,
+      "recovered_row_count": 2,
       "predicted_shapes": [
         {
           "keys": [
@@ -324,33 +411,76 @@
             "candidate_count",
             "contactability",
             "contactability_fields",
+            "existingRecord",
+            "gap_flag",
+            "hs_object_id",
             "judge_adjudicated_fields",
+            "judge_confidence_by_field",
+            "match",
             "material_conflicts",
+            "merge",
+            "mode",
+            "needs_review",
             "num_associated_contacts",
+            "object_type",
             "outcome_contract_version",
+            "properties",
             "provider_agreement",
             "reason",
             "remaining_credits",
             "row_id",
-            "run_id"
+            "scored",
+            "write_request"
           ],
-          "row_id": null,
+          "row_id": "e-single-a",
           "email": null,
-          "action": "list_expansion_refused",
+          "action": "proposed",
+          "outcome": null
+        },
+        {
+          "keys": [
+            "action",
+            "candidate_count",
+            "contactability",
+            "contactability_fields",
+            "existingRecord",
+            "gap_flag",
+            "hs_object_id",
+            "judge_adjudicated_fields",
+            "judge_confidence_by_field",
+            "match",
+            "material_conflicts",
+            "merge",
+            "mode",
+            "needs_review",
+            "num_associated_contacts",
+            "object_type",
+            "outcome_contract_version",
+            "properties",
+            "provider_agreement",
+            "reason",
+            "remaining_credits",
+            "row_id",
+            "scored",
+            "write_request"
+          ],
+          "row_id": "e-single-b",
+          "email": null,
+          "action": "proposed",
           "outcome": null
         }
       ],
-      "shapes_equal": false,
-      "execution_id": "12351",
+      "shapes_equal": true,
+      "execution_id": "12356",
       "execution_ids": [
-        "12351"
+        "12356"
       ],
       "settled": true
     },
     {
       "name": "ingest_2x2",
       "lane": "ingest",
-      "run_id": "7e14b5d961f841cb9af375cbbaddff75",
+      "run_id": "df7a2b07b4a240d7bfa36e2123b9c112",
       "input_row_count": 4,
       "predicted_row_count": 4,
       "recovered_row_count": 4,
@@ -511,16 +641,16 @@
         }
       ],
       "shapes_equal": true,
-      "execution_id": "12352",
+      "execution_id": "12357",
       "execution_ids": [
-        "12352"
+        "12357"
       ],
       "settled": true
     },
     {
       "name": "ingest_single_lane",
       "lane": "ingest",
-      "run_id": "dc896d298d0e44119113b8cb9d9cf8b8",
+      "run_id": "cf67924d603340fab32e19a2c9ded1e3",
       "input_row_count": 2,
       "predicted_row_count": 2,
       "recovered_row_count": 2,
@@ -605,9 +735,9 @@
         }
       ],
       "shapes_equal": true,
-      "execution_id": "12353",
+      "execution_id": "12358",
       "execution_ids": [
-        "12353"
+        "12358"
       ],
       "settled": true
     }
