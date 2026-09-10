@@ -7,6 +7,9 @@ severity: major
 files:
   - tests/n8n/lib/walkWorkflow.mjs
   - tests/n8n/walkWorkflow.test.mjs
+kind: question
+trigger: a live execution where one Merge is left with two partially-filled pending runs (MN-01) or two grouped producers overlapping on an input both deliver (NF-MJ-01); freeze its runData (headers redacted) and run tests/n8n/walkerEngineFidelityV1.test.mjs against it
+owner: operator (first supervised armed batch, post-run freeze)
 ---
 
 Carried out of

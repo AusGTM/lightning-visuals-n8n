@@ -12,6 +12,8 @@ files:
   - operator-claude-plugin/scripts/run_report.py
   - operator-claude-plugin/scripts/written_records.py
   - operator-claude-plugin/scripts/remainder_queue.py
+kind: defect
+evidence: operator-claude-plugin/tests/test_forbidden_marker_parity.py (Grant/Token recorded as still-refused); no live row has hit it yet
 ---
 
 ## Found during quick 260911-any (2026-09-11), while closing the Secretary/Armidale todo

@@ -8,6 +8,8 @@ files:
   - operator-claude-plugin/scripts/held_queue.py
   - operator-claude-plugin/scripts/preingest.py
   - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
+kind: design
+decision_needed: the approve verb's shape in held_queue and how partition_for_ingest takes approved rows; decide after the first live batch produces real held rows so the path is built against them
 ---
 
 ## Found 2026-09-11, quick task 260911-anz, while closing todo

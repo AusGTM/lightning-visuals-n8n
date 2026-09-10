@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Todo triage rules (2026-09-11, CLAUDE.md §31).** `scripts/todo_triage.py` classifies
+  every pending todo by `kind:` (`defect` with `evidence:`, `question` with `trigger:` +
+  `owner:`, `design` with `decision_needed:`, `accepted` only in `completed/`);
+  `tests/test_todo_triage.py` fails the root suite on an untriaged one. `--since <rev>`
+  lists a batch's residuals for the zero-inbox review. The five pending todos are tagged:
+  1 defect, 2 questions (both close on the first supervised armed batch), 2 design.
 - **Merge-input contract rule 5 — a Merge input with more than one producer edge is a
   generation-time refusal unless the Merge is on an explicit tolerant-allowlist** (quick
   task 260911-ao1, 2026-09-11, operator ruling option A on todo

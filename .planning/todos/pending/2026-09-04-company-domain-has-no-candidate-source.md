@@ -13,6 +13,8 @@ files:
 audit_acknowledged:
   milestone: v1.1
   at: 2026-09-04
+kind: design
+decision_needed: which candidate source (provider raw field / research question / held-contact evidence) and whether a REFUSED candidate preserves the create_seed provenance entry; needs one live provider probe and a HubSpot domain read-back (precondition 4)
 ---
 
 ## The gap

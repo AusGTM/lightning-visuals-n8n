@@ -14,6 +14,9 @@ files:
 audit_acknowledged:
   milestone: v1.1
   at: 2026-09-04
+kind: question
+trigger: n8n retention holds provider-enabled executions (a real enrichment batch); run scripts/judge_reason_distribution.py over them, then rule on lever 1 (band bounds)
+owner: operator (first supervised armed batch)
 ---
 
 ## Amendment 2026-09-03 — `resolves_phase: 63` REMOVED; this todo stays OPEN

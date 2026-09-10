@@ -4326,3 +4326,27 @@ Sonnet 5 handles conflict validation and high-risk reasoning.
 The merge policy prevents clobbering.
 
 The ICP scoring engine converts enriched signals into sales-operational A/B/C/D prioritization.
+
+---
+
+# 31. Todo triage rules (operator ruling 2026-09-11)
+
+Pending todos and `WINDOWS.md` grew with every quick-task batch because a todo was free
+to open and only a live run or a ruling could close most of them. Three rules, enforced
+by `scripts/todo_triage.py` and `tests/test_todo_triage.py` (an untriaged pending todo
+fails the root suite).
+
+1. **Triage at creation.** Every file in `.planning/todos/pending/` declares `kind:`.
+   Only `defect` is debt. `defect` needs `evidence:` (a test path or a recorded run /
+   execution id). `question` needs `trigger:` (the observation that closes it) and
+   `owner:`. `design` needs `decision_needed:`. `accepted` (won't-fix) lives in
+   `completed/` with its reason, never in `pending/`. A residual with no test and no
+   recorded hit is a sentence in the SUMMARY, not a todo.
+2. **Zero-inbox at batch close.** Before a quick task or quick batch reports complete,
+   run `scripts/todo_triage.py --since <base_revision>` and take one operator decision per
+   new todo: fix now (append an item), keep as `question`/`design` with its trigger or
+   decision named, or `accepted` into `completed/`. A batch never ends with an untriaged
+   residual.
+3. **Widen scope for an adjacent residual.** A planner may fold one residual in the same
+   file/function into the task when a ruling exists. When it does not, the ruling is asked
+   BEFORE planning (the step-0 rulings pattern of 2026-09-11), not filed as a todo after.
