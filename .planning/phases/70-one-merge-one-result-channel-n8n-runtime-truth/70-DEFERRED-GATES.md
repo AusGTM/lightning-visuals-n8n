@@ -352,7 +352,15 @@ execution ids, or a description of what the run showed instead.
 
 ---
 
-## Gate 6 — the first ARMED mixed-verdict batch against the fixed graph
+## Gate 6 — the first ARMED mixed-verdict batch against the fixed graph — SUPERSEDED
+
+**SUPERSEDED by Gate 9 (D-70-27, gap closure round 2, 2026-09-10).** Gate 5 never passed on
+the enrichment lane (G-70-5 — the 135-child-execution runaway) so this gate was never reached;
+the graph it was written against has since changed again (the scale-up fan-out that caused the
+runaway is deleted, D-70-24). Gate 9 is the same armed mixed-verdict re-run, re-pointed at the
+fixed body, with Gate 8 (not Gate 5) as its precondition. **Do not run the steps below** — they
+are kept verbatim for history and for Gate 9 to reference, not as a live procedure. Go to
+Gate 9.
 
 **Deferred by:** Phase 70 Plan 12 Task 3 (`type="checkpoint:human-verify"`,
 `gate="blocking-human"`). Nothing is armed today. **Runs only after Gate 5 passes** — this
@@ -403,7 +411,7 @@ description of what the run showed instead.
 
 ---
 
-### Ordering rule, stated once for both
+### Ordering rule, stated once for both (historical — see Gates 7/8/9 below for the current rule)
 
 **Gate 5 before Gate 6, always.** Gate 5 is the disarmed proof that the fixed graph behaves
 the way the offline suite now predicts; Gate 6 is the one armed write this phase's close makes,
@@ -411,3 +419,208 @@ and it is never run against a graph that has not itself been proven disarmed fir
 was already run (the pre-Phase-70 rollback to commit `59812be`), Gate 5 supersedes it: Gate 5
 deploys the gap-closure JSON — forward of both the pre-Phase-70 bodies Gate 4 rolled back to
 and the pre-gap-closure Phase 70 JSON currently live — over whatever Gate 4 left running.
+
+**Superseded 2026-09-10 (D-70-27, gap closure round 2).** Gate 5 did not pass on the
+enrichment lane (G-70-5, the 135-child-execution runaway) so Gate 6 was never reached. The
+graph has changed again since (the scale-up fan-out that caused the runaway is deleted,
+D-70-24). Gates 7, 8 and 9 below are the current gates; Gate 6 is kept above verbatim for
+history and for Gate 9 to reference, not as a live procedure.
+
+---
+
+## Gate 7 — disarmed deploy + bounce of the loop-free body, then the two-minute burst watch, nothing sent
+
+**Deferred by:** Phase 70 Plan 15 (D-70-27, the operator's standing 2026-09-09 ruling to
+back-load `blocking-human` live gates to end-of-phase UAT). Nothing is deployed, bounced,
+armed or sent by any executor.
+
+**Reached:** 2026-09-10, plan 70-15. The offline half is DONE: the fan-out lane that caused
+the 2026-09-10 runaway is deleted from the enrichment graph (D-70-24, plan 70-13; zero
+`executeWorkflow` nodes remain, enforced at generation time by `assert_no_self_dispatch`), a
+positive row-identity filter drops any marker item before either response builder projects a
+row (D-70-25, plan 70-14), and the two-minute burst watch this incident made a standing rule is
+written into `70-ROLLBACK-RUNBOOK.md` Step 6.
+
+**Why this gate exists.** Gate 4/5's deploy attempt (2026-09-10T07:03Z–07:10Z) put a graph with
+a self-referencing `Execute Workflow` node live and it began self-dispatching within a minute
+of the first disarmed proof send — 135 child executions in six minutes, none of them requested.
+That graph no longer exists (it is deleted, not patched), but this gate is the first time the
+**loop-free** body is deployed live, and the whole reason the phase's own thesis exists — trust
+the live engine's observation over the offline model — means the redeploy itself needs to be
+watched, not assumed safe because the offline suite is green.
+
+**Nothing is sent in this gate. No proof driver, no client request.** Gate 7 is deploy, bounce,
+watch, read-back — nothing else.
+
+**Steps (operator):**
+1. Confirm the working tree is on HEAD with the current committed JSON (no `git checkout` to a
+   historical commit — this deploys what is already committed, the same pattern Gate 5 used
+   against Gate 4's checked-out-commit pattern). Expected node counts: `wf_enrichment_cloud.json`
+   **287** (zero `executeWorkflow`), `wf_contact_ingest_cloud.json` **69**,
+   `wf_review_decision_cloud.json` **55**, `wf_scheduled_maintenance_cloud.json` **43**
+   (unchanged), `wf_backend_status_cloud.json` **30** (unchanged).
+2. Dry-run first: `.venv/bin/python scripts/deploy_n8n_workflows.py` (no write; sanity-checks
+   the diff against what is live — the enrichment lane's diff will be large, since live is
+   still the pre-Phase-70 123-node body).
+3. The armed deploy: `DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python
+   scripts/deploy_n8n_workflows.py`.
+4. Bounce (mandatory — a stored update never reloads a running workflow):
+   `.venv/bin/python scripts/bounce_n8n_workflows.py`.
+5. Read back all five live node counts (expect 287/69/55/43/30, matching the printed
+   "committed nodes" column) and both write flags (`ALLOW_HUBSPOT_RECORD_WRITES`,
+   `ALLOW_HUBSPOT_CREATE`) on every node that declares them — expect the disarmed `"false"`
+   literal everywhere. The bounce script's own `OK — all active, node counts match, write flags
+   false.` line and exit 0 is the read-back passing.
+6. **Immediately after the bounce, run the two-minute burst watch** — `70-ROLLBACK-RUNBOOK.md`
+   Step 6, verbatim: list the enrichment workflow's executions, note the ids, wait two minutes
+   with **nothing sent**, list again. Zero new execution ids is the pass condition, with
+   particular attention to `mode: integrated` (the field that marks an `Execute Workflow`
+   child — the exact signature the 2026-09-10 runaway carried).
+
+**Pass criteria:**
+- All five workflows read `active = True`.
+- Live node counts read exactly `287 / 69 / 55 / 43 / 30` and match the committed JSON.
+- Both write flags read `"false"` everywhere either is declared.
+- The two-minute watch shows **zero** new execution ids appearing — no execution the operator
+  did not request, and in particular none with `mode: integrated`.
+
+**If the watch shows a new execution appearing on its own:** STOP. Do not proceed to Gate 8.
+Run the stop procedure in `70-ROLLBACK-RUNBOOK.md` Step 6 (deactivate first, then PUT the
+previous known-good body, then confirm no further executions), and report it as a finding —
+the loop-free graph produced a loop that was supposed to be impossible by the node's absence,
+which would mean the mechanism behind G-70-5 is not what the removal assumed it was.
+
+**Resume signal:** "gate 7 passed" with the five node counts, the two write-flag reads, and the
+two-minute watch's before/after execution id lists, or a description of what the read-back or
+the watch showed instead.
+
+---
+
+## Gate 8 — disarmed live re-proof on the loop-free graph (D-70-19 proof re-run)
+
+**Deferred by:** Phase 70 Plan 15 (D-70-27, standing ruling). **Runs only after Gate 7
+passes** — sending the proof driver's four batches before the burst watch has confirmed the
+freshly deployed graph is not self-dispatching would repeat the exact sequence that produced
+the 2026-09-10 runaway (deploy, bounce, then send).
+
+**Why this gate exists.** Gate 5 (the previous attempt at this exact proof, against the
+pre-deletion gap-closure graph) never passed on the enrichment lane: `enrichment_2x2` recovered
+8 rows against 4 predicted, `enrichment_single_lane` recovered 4 against 2 predicted, and —
+this is the fact this gate exists to re-check, not assume fixed — **every recovered row on the
+enrichment lane had `row_id: null`.** None of the rows Gate 5 got back could be matched to a
+specific input row at all; the 8-vs-4 and 4-vs-2 overcounts came from runaway children whose
+executions were swept in by matching the same client-minted `run_id` (`70-RUNTIME-VERDICT.json`
+`sends[].execution_ids` for `enrichment_2x2` lists FOUR execution ids — `12209`, `12210`, and
+the first two runaway children, `12211`/`12212` — behind what the driver reports as ONE
+`settled: true` send). The driver's `settled` flag is read from the send's primary execution
+only; the additional matched executions swept in by the run_id echo were never individually
+checked for their own run status, and the runaway's own tail (`12346`–`12348`) is independently
+known to have errored rather than executed. **Removing the phantom rows (the scale-up deletion)
+does not by itself prove the four real rows will now come back with real row ids — it only
+removes the mechanism that was polluting the count.** A marker-free but EMPTY result on this
+lane is still a FAILURE of this gate, not progress toward passing it — do not read "no more
+phantom rows" as "the real rows are now present" without checking.
+
+**Steps (operator), reusing the SAME driver Gate 3 and Gate 5 used, against the graph Gate 7
+just deployed:**
+1. Confirm Gate 7 passed (all five workflows active, node counts 287/69/55/43/30, both write
+   flags `"false"` everywhere, the two-minute watch clean) before sending anything.
+2. Read `settings.executionOrder` from each live workflow body again and record it (expected
+   `null`/absent on both lanes, matching every prior reading — this gap-closure round did not
+   touch `settings`).
+3. Run the proof driver, disarmed, with its permission variable set:
+   ```bash
+   set -a; source .env; set +a
+   ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py
+   ```
+   Same four sends as Gates 3 and 5: `enrichment_2x2`, `enrichment_single_lane`, `ingest_2x2`,
+   `ingest_single_lane`. Same refusal gates (refuses before sending if any live write flag
+   reads anything but `"false"`). `70-RUNTIME-VERDICT.json` is overwritten with this run's
+   result.
+4. **New step, added by this round — for each of the four executions the driver used (its
+   primary execution id, not only the send-level result), fetch the execution's full runData
+   via `executions_client.get_execution(config, execution_id)` (`includeData=true`) and
+   compare every node's runData `source` field against that workflow's own declared
+   `connections` map.** Reuse the exact producer-computation pattern
+   `tests/n8n/walkerEngineFidelity.test.mjs`'s `declaredProducersOf(wf, targetName)` already
+   implements (walk `wf.connections`, collect every `srcName` whose `main` branch edges name
+   `targetName`) — write a short one-off script following that pattern rather than reinventing
+   the walk, and read `wf` from the SAME committed JSON Gate 7 just deployed. Report any node
+   whose runData `source` names a node not in its own declared-producers set. This is the exact
+   detector for the mechanism execution `12316` exhibited (a node ran with an item no declared
+   connection delivered) — the mechanism was never isolated, only the node that could act on it
+   was removed, so this check must be run and reported, not assumed clean because the fan-out
+   node no longer exists.
+
+**Pass criteria — ALL of the following, not a subset:**
+- `70-RUNTIME-VERDICT.json` records `shapes_equal: true` on **all four** sends, including both
+  enrichment sends this time (Gate 5 passed only the two ingest sends).
+- Every recovered row on the enrichment lane carries a non-null `row_id` matching its input row
+  — an empty or marker-shaped recovery is a failure of this gate even if the row COUNT happens
+  to look right.
+- All four (primary) executions `settled: true` — no execution stuck `running`, on either lane.
+- The runData-source-vs-declared-connections check (step 4) finds nothing — no node ran with a
+  source its own workflow's `connections` map does not declare.
+- `writes_performed: 0`, every write flag in `write_flags_read_from_live_bodies` reads
+  `"false"`, HubSpot shows no write.
+- `live_settings_execution_order` recorded again (expected `null`/absent on both workflows).
+
+**If this gate fails** — any of the above, including a clean row count with a null row_id, or
+the connections check finding an unexplained node run — STOP and report it as a finding, exactly
+as Gates 3 and 5 required. Do not adjust the walker or the driver to match and call it passed.
+
+**Resume signal:** "gate 8 passed" with the verdict's `shapes_equal` result, the four execution
+ids, and the connections-check result, or a description of what the run showed instead.
+
+### Follow-on, once this gate passes
+
+Upgrade CLAUDE.md's Merge-behaviour statements and §13.0.3's platform-facts table for whatever
+this run newly observes, citing this verdict file and its execution ids — the same follow-on
+Gate 3 already names, now actually exercised on the loop-free graph. This is the first Merge
+observation since 2026-09-10's Gate 1/Gate 3 UAT session; nothing about Merge was touched by
+plan 70-15's CLAUDE.md edits (see CLAUDE.md §13.0.3's note next to the Merge rows).
+
+---
+
+## Gate 9 — the armed mixed-verdict re-run, against the fixed graph (formerly Gate 6)
+
+**Deferred by:** Phase 70 Plan 15 (D-70-27, standing ruling). **Runs only after Gate 8
+passes.** This is Gate 6 above, re-pointed at the graph Gate 7 deployed and Gate 8 proved,
+with two things changed from Gate 6's text and nothing else: the body it runs against (the
+current committed JSON, not the pre-runaway gap-closure JSON Gate 6 was written for), and its
+precondition (Gate 8, not Gate 5).
+
+**Do not restate Gate 6's procedure here.** Follow Gate 6's steps 1–6 verbatim, above, with
+these two substitutions:
+- Wherever Gate 6's text says "Gate 5 passed" or "the 291/69/55/43/30 JSON", read "Gate 8
+  passed" and "the current committed JSON (the loop-free 287/69/55/43/30 body)".
+- Wherever Gate 6's text says "Confirm Gate 5 passed... before touching anything below", the
+  precondition is Gate 8, not Gate 5.
+
+Everything else — the pair (Darwin Turf Club `9605267534`, contacts `7101`/`2751`, or an
+equivalent pair), the arming tool (`june_run_arm.py --ids <one-id>`), the three declaring nodes
+to read back (`HubSpot Update Write Gate`, `HubSpot Create Write Gate`, `Associate Lane
+Sentinel`), the exact row count (2, never 4), the exact field values (`action: "update"` /
+`association: "associated"` for the permitted row, `action: "write_blocked"` for the refused
+row), and the disarm-and-read-back at the end — is Gate 6's text, unchanged.
+
+**Resume signal:** "gate 9 passed" with the two row outcomes and the HubSpot read-back, or a
+description of what the run showed instead.
+
+---
+
+### Ordering rule for Gates 7, 8 and 9, stated once for all three
+
+**7 before 8, 8 before 9 — no exceptions, and nothing is armed until 8 has passed.**
+
+- Gate 7 proves the redeploy itself is safe — that a freshly deployed, loop-free graph does not
+  start running on its own. It sends nothing.
+- Gate 8 proves the graph behaves the way the offline suite predicts, on a real disarmed
+  batch, including the specific check (runData source vs. declared connections) for the
+  mechanism the 2026-09-10 runaway exhibited. It writes nothing to HubSpot.
+- Gate 9 is the one armed write this phase's close makes. It is never run against a graph that
+  has not itself been proven both non-self-dispatching (Gate 7) and disarmed-correct (Gate 8).
+
+**The operator alone opens the armed window.** No step in Gates 7 or 8 arms anything; arming
+happens only inside Gate 9, only after Gate 8's pass criteria are all met, and is closed again
+(disarmed, read back) before the gate is signed off.
