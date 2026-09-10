@@ -33,18 +33,27 @@
 //     never fire (execution 12206's `Build Response Merge`, never fired, zero rows,
 //     execution still reported `success`).
 //
-// Deliberately NOT asserted: that every Merge input has exactly one producer. Two
-// producers sharing an input is legitimate and sometimes required when they are
-// mutually exclusive — the credit collector on the enrichment lane already does it
-// correctly (a fetched usage figure on one branch, a "check was skipped" marker on the
-// other, never both in the same execution) — and D-70-23's own gated-sentinel mechanism
-// is now a SECOND legitimate instance: a sentinel's gate and a real producer sharing one
-// Merge input, safe because the gate makes NO delivery at all whenever the real producer
-// would. Static analysis cannot tell a safe share from an unsafe one; only a replay can,
-// because under the corrected walker a double delivery visibly loses rows (D-70-19's
-// rule: the walker is corrected toward the engine, never toward the plans). Do not
-// "tighten" this file into asserting one-producer-per-input — that would fail the two
-// safe shares above and every future one shaped like them.
+// A fifth rule, added by quick task 260911-ao1 closing the operator's Option A ruling on
+// `.planning/todos/completed/2026-09-11-merge-input-contract-allows-many-producers-per-input.md`:
+//
+//   - A Merge input fed by MORE than one producer edge is a violation unless the pair
+//     (workflow name, Merge name) is named in MULTI_PRODUCER_TOLERANT below, carrying a
+//     reason string. Under n8n v1 a Merge input fed by two producers that are not
+//     mutually exclusive can open a second pending run that the end-of-run drain fires
+//     (observed live on `Decide Company Action Merge`, executions 12354/12355/12356).
+//     Static analysis cannot tell a safe share from an unsafe one — the credit collector
+//     on the enrichment lane shares an input safely (a fetched usage figure on one
+//     branch, a "check was skipped" marker on the other, mutually exclusive by
+//     construction, proven in `creditsSummaryUnderV1.test.mjs`) while
+//     `Decide Company Action Merge`'s two inputs are NOT mutually exclusive in the same
+//     way and DO multi-fire live — only a replay can tell them apart (D-70-19's rule:
+//     the walker is corrected toward the engine, never toward the plans). So the rule is
+//     refuse by default, admit by name with a written reason — never a blanket
+//     one-producer-per-input tightening, which would also refuse the safe shares above.
+//
+// `MULTI_PRODUCER_TOLERANT` mirrors `_MERGE_MULTI_PRODUCER_TOLERANT` in
+// `scripts/build_cloud_workflows.py` — not importable across languages, so mirrored,
+// the same reason this file already mirrors `WALKER_TRIGGER_TYPES` below.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -69,9 +78,80 @@ const PENDING = [].sort();
 
 const SENTINEL_NAME_RE = /Sentinel$/;
 
+// Rule 5's tolerant allowlist — mirrors `_MERGE_MULTI_PRODUCER_TOLERANT` in
+// scripts/build_cloud_workflows.py exactly (same 16 (workflow name, Merge name) pairs,
+// same reason-string content). Not importable across languages, so kept in sync by
+// hand and pinned by the census test below: an edge added without an entry fails here,
+// an entry left after its edge is removed fails in the builder's own rule 5.
+const MULTI_PRODUCER_TOLERANT = new Map([
+  [["LV Enrichment (Cloud template)", "Decide Company Action Merge"].join(" "),
+    "Decide Company Action filters markers out of its own input, so only a marker-only " +
+    "run multi-fires — observed live on executions 12354/12355/12356 and pinned by " +
+    "walkerEngineFidelityV1.test.mjs."],
+  [["LV Enrichment (Cloud template)", "Collect Credits"].join(" "),
+    "The two producers sharing each input are mutually exclusive by construction — a " +
+    "provider is either enabled or not — proven GREEN by creditsSummaryUnderV1.test.mjs."],
+  [["LV Enrichment (Cloud template)", "Build Response Merge Stage 1"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (Cloud template)", "Build Response Merge Stage 2"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (Cloud template)", "Build Response Merge Stage 3"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (Cloud template)", "Company Gate Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (Cloud template)", "Enrichment Gate Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (Cloud template)", "Merge Company Fan-In"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (Cloud template)", "Merge Winners Fan-In"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{4,5,6}.runData.json — none shows this Merge multi-firing."],
+  [["LV Contact Ingest (Cloud template)", "Build Association Request Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{7,8}.runData.json — none shows this Merge multi-firing."],
+  [["LV Contact Ingest (Cloud template)", "Ingest Merge Response"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
+    "exec_1235{7,8}.runData.json — none shows this Merge multi-firing."],
+  [["LV Enrichment (local LIVE)", "Merge Company Fan-In"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +
+    "workflow at all."],
+  [["LV Enrichment (local LIVE)", "Merge Winners Fan-In"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +
+    "workflow at all."],
+  [["LV Review Decision (Cloud)", "Build Review Response Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +
+    "workflow at all."],
+  [["LV Review Decision (Cloud)", "Review Extract Record Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +
+    "workflow at all."],
+  [["LV Review Decision (Cloud)", "Review Queue Rows Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
+    "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +
+    "workflow at all."],
+]);
+
 /** Computes the structural violations named in this file's header for one committed
- * workflow. Returns `{overWide, sentinelDirect, ifDirect, unfed}` — each an array of
- * human-readable strings, empty when the workflow satisfies the contract. */
+ * workflow. Returns `{overWide, sentinelDirect, ifDirect, unfed, multiProducer}` — each
+ * an array of human-readable strings, empty when the workflow satisfies the contract. */
 function structuralViolations(wf) {
   const nodesByName = new Map(wf.nodes.map((n) => [n.name, n]));
   const merges = wf.nodes.filter((n) => n.type === "n8n-nodes-base.merge");
@@ -84,7 +164,8 @@ function structuralViolations(wf) {
     if (ni > 10) overWide.push(`${m.name} declares ${ni} inputs (n8n's own cap is ten)`);
   }
 
-  const fedInputs = new Map(merges.map((m) => [m.name, new Set()]));
+  // merge name -> input index -> [producer names]
+  const fedInputs = new Map(merges.map((m) => [m.name, new Map()]));
   const sentinelDirect = [];
   const ifDirect = [];
   for (const [src, spec] of Object.entries(conns)) {
@@ -92,7 +173,9 @@ function structuralViolations(wf) {
     for (const outs of (spec.main || [])) {
       for (const c of (outs || [])) {
         if (!mergeNames.has(c.node)) continue;
-        fedInputs.get(c.node).add(c.index);
+        const perInput = fedInputs.get(c.node);
+        if (!perInput.has(c.index)) perInput.set(c.index, []);
+        perInput.get(c.index).push(src);
         if (SENTINEL_NAME_RE.test(src)) {
           sentinelDirect.push(`${src} -> ${c.node}[${c.index}] (sentinel's own Code node, not its gate)`);
         }
@@ -104,20 +187,28 @@ function structuralViolations(wf) {
   }
 
   const unfed = [];
+  const multiProducer = [];
   for (const m of merges) {
     const ni = (m.parameters && m.parameters.numberInputs) || 2;
     const fed = fedInputs.get(m.name);
     for (let i = 0; i < ni; i += 1) {
-      if (!fed.has(i)) unfed.push(`${m.name}[${i}] has no producer at all`);
+      const producers = fed.get(i);
+      if (!producers || producers.length === 0) {
+        unfed.push(`${m.name}[${i}] has no producer at all`);
+      } else if (producers.length > 1 && !MULTI_PRODUCER_TOLERANT.has([wf.name, m.name].join(" "))) {
+        multiProducer.push(
+          `${m.name}[${i}] fed by ${producers.length} producers ${JSON.stringify([...producers].sort())} ` +
+          "— not on MULTI_PRODUCER_TOLERANT, needs a named, reasoned exemption (2026-09-11 ruling)");
+      }
     }
   }
 
-  return { overWide, sentinelDirect, ifDirect, unfed };
+  return { overWide, sentinelDirect, ifDirect, unfed, multiProducer };
 }
 
 function isEmpty(v) {
   return v.overWide.length === 0 && v.sentinelDirect.length === 0
-    && v.ifDirect.length === 0 && v.unfed.length === 0;
+    && v.ifDirect.length === 0 && v.unfed.length === 0 && v.multiProducer.length === 0;
 }
 
 // =====================================================================================
@@ -148,6 +239,42 @@ test("PENDING names exactly the workflows that violate the contract, in both dir
   assert.deepEqual(actual, PENDING,
     "the pending list must be exactly the set of workflows currently violating the " +
     "contract — emptying it is plan 70-11's acceptance");
+});
+
+test("MULTI_PRODUCER_TOLERANT names exactly the (workflow, Merge) pairs with a multi-producer input, in both directions", () => {
+  // Recomputes the census independently of MULTI_PRODUCER_TOLERANT — walks every
+  // committed workflow's connections and records which (workflow name, Merge name)
+  // pairs actually have an input fed by more than one producer, with no allowlist
+  // applied at all. An entry admitted here but no longer backed by a real
+  // multi-producer edge (the edge was removed) fails just as loudly as a real
+  // multi-producer edge with no entry (a new one was added) — this is what keeps the
+  // two mirrored lists (this file and scripts/build_cloud_workflows.py) from rotting
+  // without a cross-language parser.
+  const actual = new Set();
+  for (const file of WORKFLOW_FILES) {
+    const wf = loadWorkflow(path.join(N8N_DIR, file));
+    const merges = wf.nodes.filter((n) => n.type === "n8n-nodes-base.merge");
+    const mergeNames = new Set(merges.map((m) => m.name));
+    const fedInputs = new Map(merges.map((m) => [m.name, new Map()]));
+    for (const [src, spec] of Object.entries(wf.connections || {})) {
+      for (const outs of (spec.main || [])) {
+        for (const c of (outs || [])) {
+          if (!mergeNames.has(c.node)) continue;
+          const perInput = fedInputs.get(c.node);
+          if (!perInput.has(c.index)) perInput.set(c.index, 0);
+          perInput.set(c.index, perInput.get(c.index) + 1);
+        }
+      }
+    }
+    for (const m of merges) {
+      const counts = [...fedInputs.get(m.name).values()];
+      if (counts.some((n) => n > 1)) actual.add([wf.name, m.name].join(" "));
+    }
+  }
+  assert.deepEqual([...actual].sort(), [...MULTI_PRODUCER_TOLERANT.keys()].sort(),
+    "MULTI_PRODUCER_TOLERANT must be exactly the census of (workflow, Merge) pairs " +
+    "with a multi-producer input across every committed n8n/wf_*.json — an entry with " +
+    "no real multi-producer edge, or a real multi-producer edge with no entry, both fail");
 });
 
 // =====================================================================================
