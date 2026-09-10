@@ -1,14 +1,22 @@
 ---
-status: complete
+status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
-source: [70-VERIFICATION.md]
+source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T02:24:23Z
+updated: 2026-09-10T06:26:10Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 4
+name: Gate 4 / Gate 5 — put a working graph on the live instance (operator: rollback OR redeploy)
+expected: |
+  The live instance currently runs the PRE-gap-closure Phase 70 JSON: every enrichment request
+  silently returns 0 rows. Either run Gate 4 (rollback to `59812be`, `70-ROLLBACK-RUNBOOK.md`)
+  or go straight to Gate 5: deploy + bounce the gap-closure JSON disarmed
+  (`scripts/deploy_n8n_workflows.py`, `scripts/bounce_n8n_workflows.py`), node counts
+  291/69/55/43/30 match, both write flags false. Steps in `70-DEFERRED-GATES.md` § Gate 4 / § Gate 5.
+awaiting: user response
 
 ## Tests
 
@@ -91,12 +99,24 @@ observed: |
   observation, cause not isolated.
   CLAUDE.md follow-on `[observed live]` edits NOT applied — the gate did not pass.
 
+### 4. Gate 4 / Gate 5 (deploy) — a working graph on the live instance
+expected: Live instance no longer runs the defective pre-gap-closure JSON. EITHER Gate 4 rollback to `59812be` (17/29/123/26/39 nodes) OR Gate 5's deploy + bounce of the gap-closure JSON (291/69/55/43/30 nodes), disarmed, both write flags `"false"` read back. Steps in `70-DEFERRED-GATES.md` § Gate 4 / § Gate 5.
+result: [pending]
+
+### 5. Gate 5 — disarmed re-proof on the fixed graph (D-70-19)
+expected: With the gap-closure JSON live and bounced: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` `shapes_equal: true`, four executions settled, `writes_performed: 0`, every `Build Response` / `Build Ingest Response` run reached (no starved Merge), live `settings.executionOrder` recorded. Steps in `70-DEFERRED-GATES.md` § Gate 5.
+result: [pending]
+
+### 6. Gate 6 — armed mixed-verdict re-run on the fixed graph (only after Gate 5 passes)
+expected: Same pair as Gate 70-05-A (or equivalent): armed for exactly one contact; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after. Steps in `70-DEFERRED-GATES.md` § Gate 6.
+result: [pending]
+
 ## Summary
 
-total: 3
+total: 6
 passed: 0
 issues: 3
-pending: 0
+pending: 3
 skipped: 0
 blocked: 0
 
@@ -122,7 +142,10 @@ blocked: 0
 
 - gap_id: G-70-2
   truth: "On an armed mixed-verdict ingest batch the permitted row reports association: associated and the refused row reports action: write_blocked"
-  status: failed
+  status: resolved
+  resolved_by: "70-10-PLAN.md (+70-09, 70-11)"
+  resolved_at: 2026-09-10
+  live_confirmation: "pending Gates 5/6"
   reason: "Observed on execution 12203: both rows reported action: update, association: not_confirmed; HubSpot itself was written correctly (one update, one association, blocked row untouched)"
   severity: major
   test: 2
@@ -141,7 +164,10 @@ blocked: 0
 
 - gap_id: G-70-3
   truth: "On a disarmed enrichment batch every row reaches Build Response and the recovered rows are shape-equal to the walker's prediction"
-  status: failed
+  status: resolved
+  resolved_by: "70-11-PLAN.md (+70-09)"
+  resolved_at: 2026-09-10
+  live_confirmation: "pending Gates 5/6"
   reason: "Executions 12204/12205/12206: 0 rows recovered vs 4/2 predicted; Build Response Merge (15 inputs) never executed; Enrichment Gate Merge fired early on Contacts Absent Sentinel's zero-item output and dropped the real rows"
   severity: blocker
   test: 3
@@ -160,7 +186,10 @@ blocked: 0
 
 - gap_id: G-70-4
   truth: "prove_phase70_runtime.py compares like with like on the ingest lane"
-  status: failed
+  status: resolved
+  resolved_by: "70-12-PLAN.md"
+  resolved_at: 2026-09-10
+  live_confirmation: "pending Gates 5/6"
   reason: "Ingest sends differ from the walker only by the client-added reported_outcome key (report.reconcile), so a correct runtime would still read shapes_equal: false"
   severity: minor
   test: 3

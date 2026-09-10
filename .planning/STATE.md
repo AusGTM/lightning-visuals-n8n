@@ -5,10 +5,10 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: one-merge-one-result-channel-n8n-runtime-truth
 status: executing
-stopped_at: "Phase 70 gap closure planned 2026-09-10 — 5 plans (70-08..70-12), checker VERIFICATION PASSED; Wave 0 = live rollback to 59812be (operator gate 4)"
-last_updated: "2026-09-10T03:35:21.738Z"
+stopped_at: "Phase 70 gap closure executed 2026-09-10 (70-08..70-12, 5/5); verification human_needed 28/28 offline; live Gates 4/5/6 pending in 70-UAT.md (tests 4-6)"
+last_updated: "2026-09-10T06:26:10Z"
 last_activity: 2026-09-10
-last_activity_desc: Phase 70 gap-closure plans 70-08..70-12 planned and checker-passed (G-70-2/3/4); next /gsd-execute-phase 70 --gaps-only
+last_activity_desc: Phase 70 gap closure executed; review 0 critical/6 warnings/4 info; VERIFICATION human_needed; live instance still on defective pre-gap JSON until Gate 4/5
 state_head: 6d8da7214078fb91989e7786415f5823f00d84cc
 progress:
   total_phases: 7
@@ -508,7 +508,7 @@ pre-gate anyWrite check needs to account for gate refusal once the ingest preche
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
 `blocked` (operator could not run a live test) on an earlier phase's UAT; Phase 62 verified
 13/13 but awaiting live UAT.
-**Resume file:** .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-UAT.md
+**Resume file:** .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-UAT.md (tests 4–6 = Gates 4/5/6)
 
 ## Performance Metrics
 
