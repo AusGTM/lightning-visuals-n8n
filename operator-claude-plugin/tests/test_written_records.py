@@ -730,6 +730,7 @@ def test_classify_read_never_raises_on_any_input(tmp_path):
 
 import chunking  # noqa: E402
 import pytest  # noqa: E402
+import run_report  # noqa: E402
 
 
 class _RecordingLedger:
@@ -827,3 +828,74 @@ def test_the_ingest_leg_still_creates_its_ledger_entry(
                              transport=stub_module_transport_factory().post)
 
     assert len(ledger_double.appends) == 1
+
+# =====================================================================================
+# quick-260911-ao0 (Task 1) — closing todo 2026-09-09-written-records-labels-propose-
+# and-enrich-legs-failed.md by pinning the D-70-09 gate above against the EXACT row
+# shape run `2bc3617b` recorded, end to end through the rendered report — the gate
+# tests above assert on a ledger double's append count, never on the report string the
+# todo actually quoted.
+# =====================================================================================
+
+# Reconstructed from `run_report._lane_for_entry` and `written_records.outcome_for_action`,
+# not from a captured body — no frozen body of run `2bc3617b`'s propose leg exists
+# anywhere in the repo (`.planning/uat/UAT-autonomous-batch-2026-09-09.md` records it in
+# prose only). `[contacts:unknown]` is `_lane_for_entry`'s `object_type or "unknown"` /
+# `action or "unknown"` pair: `object_type` absent (so `classify_item`'s `"contacts"`
+# default fires) and `action` absent. `None -> failed` is the entry's own null `action`
+# rendered literally, resolved by `outcome_for_action(None)` falling through
+# `ACTION_TO_OUTCOME`'s fallback to `FAILED`.
+_RECORDED_ROW_2BC3617B = {"row_id": "row-2"}
+
+
+def test_the_recorded_shape_renders_failed_when_it_reaches_the_ledger(tmp_path, monkeypatch):
+    """Control for the gate test below (todo 2026-09-09-written-records-labels-propose-
+    and-enrich-legs-failed.md, run `2bc3617b`, D-70-09). Seeds the ledger DIRECTLY with
+    the recorded shape — no gate, no dispatch — to prove the shape is genuinely
+    pathological and this test harness can genuinely see the ledger: if the row reaches
+    `written_records` at all, `run_report.build_run_report` renders exactly the line the
+    todo quoted."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    run_id = "2bc3617b-control"
+
+    written_records.append_chunk(run_id, 0, [_RECORDED_ROW_2BC3617B])
+
+    report = run_report.build_run_report(run_id, {})
+
+    assert "row-2 [contacts:unknown]: None -> failed" in report["block"]
+
+
+@pytest.mark.parametrize("spec_form, run_id, on_a_write_leg", [
+    # a propose leg (a contacts `rows` form is pinned to mode: propose by construction) —
+    # the recorded shape must never reach the ledger from here.
+    ({"rows": [{"row_id": "row-2", "email": "a@b.com"}], "object_type": "contacts"},
+     "2bc3617b-propose", False),
+    # a write leg, same recorded row — must still land and still render as failed, so the
+    # propose-leg assertion above is attributable to the D-70-09 gate, never to a harness
+    # that cannot reach the ledger.
+    ({"record_ids": ["1"], "object_type": "companies"},
+     "2bc3617b-write", True),
+])
+def test_the_recorded_shape_reaches_the_ledger_only_from_a_write_capable_leg(
+        spec_form, run_id, on_a_write_leg, tmp_path, monkeypatch, fake_config,
+        stub_module_transport_factory, _stub_channel):
+    """The D-70-09 gate (`chunking.dispatch_and_recover`'s `if can_write and rows:`),
+    driven end to end on the recorded `2bc3617b` shape and asserted on the RENDERED
+    report — not a ledger-double append count — closing todo
+    2026-09-09-written-records-labels-propose-and-enrich-legs-failed.md's own acceptance
+    sentence: "the report must never say failed for a row that was not sent"."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    _stub_channel([_RECORDED_ROW_2BC3617B])
+    plan = chunking.plan_chunks(spec_form, 10)
+
+    chunking.dispatch_and_recover(
+        plan, ["zoominfo"], True, fake_config,
+        transport=stub_module_transport_factory(), run_id=run_id)
+
+    block = run_report.build_run_report(run_id, {})["block"]
+
+    if on_a_write_leg:
+        assert "row-2 [contacts:unknown]: None -> failed" in block
+    else:
+        assert "- (no records)" in block
+        assert "row-2 [contacts:unknown]" not in block
