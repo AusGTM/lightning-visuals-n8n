@@ -60,6 +60,36 @@ JUNE_CANDIDATES_JS = "const JUNE_CANDIDATES = " + json.dumps(JUNE_CANDIDATES_ROW
 # marker for a real row on a shared Merge input.
 SENTINEL_MARKER_KEY = "_gsd_sentinel_marker"
 
+# Phase 70 Plan 14 (D-70-25): a row's identity, defined ONCE and used at both response
+# builders (`ENRICH_BUILD_RESPONSE`, `BUILD_INGEST_RESPONSE`). Gate 5's disarmed
+# `enrichment_2x2` send recovered EIGHT rows for FOUR input rows (70-RUNTIME-VERDICT.json,
+# executions 12209/12210) — the negative filters above (a bare `{}`, or the sentinel's own
+# reserved key) drop an EMPTY marker, but a "Credits Broadcast" combineAll splice runs
+# BEFORE this node and stamps shared fields (`remaining_credits` and friends) onto every
+# item on its input, phantom marker included — so by the time the negative filter runs,
+# the marker is no longer empty and sails through, picking up a full outcome projection
+# that makes it indistinguishable from a real row to a caller reading runData. Only a
+# POSITIVE test — "does this item carry anything that identifies it as a row" — catches
+# that class. A real row is always identified by one of: the caller's own client-minted
+# row id, the row's action, its outcome (the shape a request-level refusal carries — no
+# action, no row id, no object id), the raw webhook object id ("Unsupported Object Type"
+# rows never resolve an identity match, so `object_id` — not `hs_object_id` — is the only
+# identity a real unsupported-type event carries), the HubSpot object id a resolved match
+# stamped, or a raw HubSpot write response's own `id` — the armed write cases in
+# `enrichmentMixedBatch.test.mjs` proved this last one is load-bearing: "HubSpot
+# Update"/"HubSpot Create"'s carried-through response reaches this node as `{id,
+# properties}` with none of the other four keys, and dropping it as a marker would delete
+# the one row this whole node exists to report. `null`/`undefined` never counts, which is
+# what lets a genuinely unsupported event (a real, non-null object id) survive while the
+# phantom raw-parsed-event marker recorded in the verdict (`object_id: null` — it entered
+# through an empty self-dispatch seed, never a real webhook body) does not.
+ROW_IDENTITY_KEYS_JS = r"""
+const ROW_IDENTITY_KEYS = ["row_id", "action", "outcome", "object_id", "hs_object_id", "id"];
+function hasRowIdentity(row) {
+  return ROW_IDENTITY_KEYS.some((k) => row && row[k] !== undefined && row[k] !== null);
+}
+"""
+
 # ---- module inliner ---------------------------------------------------------
 
 _REQUIRE_RE = re.compile(r"^\s*const\s*\{[^}]*\}\s*=\s*require\(")
@@ -563,7 +593,7 @@ return $input.all().map((it) => {
 }).filter(Boolean);
 """
 
-BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row report, now read from the settled
+BUILD_INGEST_RESPONSE = ROW_IDENTITY_KEYS_JS + r"""// Build Ingest Response — the lane's per-row report, now read from the settled
 // execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.
 // Phase 70 Plan 02 (D-70-01/D-70-04): sits behind "Ingest Merge Response", a
 // THREE-input append-mode Merge: the association lane, the review lane, and
@@ -618,6 +648,10 @@ for (const row of arrived) {
   if (row.contact_id) byContactId[String(row.contact_id)] = row;
   if (row.email) byEmail[String(row.email).toLowerCase()] = row;
 }
+// Phase 70 Plan 14 (D-70-25): the same positive identity test `ENRICH_BUILD_RESPONSE`
+// applies, at the emit point — `decided` is already every row `Decide Action` produced
+// (always action-bearing), so this is expected to change nothing here today; kept as a
+// defensive belt-and-braces match to the enrichment lane rather than assumed safe.
 return decided.map((row) => {
   const email = String((row.properties && row.properties.email) || row.email || "").toLowerCase();
   const assoc = (row.row_id && byRowId[String(row.row_id)]) ||
@@ -655,7 +689,7 @@ return decided.map((row) => {
     // (enrich-before-ingest/SKILL.md:639), so those rows echo `null` here regardless.
     row_id: row.row_id ?? null,
   }};
-});
+}).filter((item) => hasRowIdentity(item.json));
 """.replace("__SENTINEL_MARKER_KEY__", SENTINEL_MARKER_KEY)
 
 # Phase 70 Plan 02 (D-70-04): fed directly from "Set Config" — the ONE place the JSON
@@ -5648,7 +5682,7 @@ return out;
 # guarantee across a mixed create/update/skip batch. The true 0-event/empty-body case and
 # the exact multi-terminal arrival ordering are Track B execution-level test items, not
 # provable by this Code node or the static graph.
-ENRICH_BUILD_RESPONSE = inline("providerSelection.js") + r"""
+ENRICH_BUILD_RESPONSE = inline("providerSelection.js") + ROW_IDENTITY_KEYS_JS + r"""
 
 // --- n8n wrapper: Build Response (Phase 16.1 Plan 02) ---
 // Phase 70 Plan 04 (D-70-04): `remaining_credits` is precomputed by "Build Credits
@@ -5725,9 +5759,16 @@ function _contactability(row) {
 // Phase 70 Plan 03 (D-70-01): this node ("Build Response") sits behind a real Merge with
 // a starved-lane sentinel on every one of its 11 terminal inputs that could otherwise
 // never fire on a given batch; drop an identity-less sentinel marker before it is
-// reported back to the caller as a phantom row.
-return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((item) => {
-  const row = item.json || {};
+// reported back to the caller as a phantom row. Phase 70 Plan 14 (D-70-25): that
+// negative test alone is not enough — see `hasRowIdentity`'s own comment above the
+// caller — so a POSITIVE identity test runs immediately after it, in front of the
+// projection below, so a marker is never given an outcome contract version, a
+// contactability verdict or a credits list in the first place.
+return $input.all()
+  .filter((it) => Object.keys(it.json || {}).length > 0)
+  .map((it) => it.json || {})
+  .filter(hasRowIdentity)
+  .map((row) => {
   const match = row.match || null;
   // Meaningful for tier "medium" only (REVIEW-C9) — "high"/"none"/"unknown" already
   // encode their own cardinality in the tier itself, and summarizeMatch deliberately
