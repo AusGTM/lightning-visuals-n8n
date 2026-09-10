@@ -329,16 +329,21 @@ export function runNode(node, items, ctx) {
  *     generates: every committed n8n/wf_*.json runs on v1 (D-70-28), and every synthetic
  *     graph this test suite builds now declares v1 too (`wf()`'s settings default).
  *
- * Returns `{ runData, trace }`. `trace.unhandledTypes`, `trace.stalled`, `trace.respond`,
+ * Returns `{ runData, trace }`. `trace.unhandledTypes`, `trace.respond`,
  * `trace.respondSuppressed`, `trace.trigger`, `trace.orderingUsed` — see 70-01-PLAN.md —
  * plus `trace.merges` (Phase 70 plan 70-09, extended by quick task 260911-0tz's v1
  * fidelity work): per Merge node, `{fired, sources, itemCounts, runs}`. `runs` is the
- * primary representation — `[{sources, itemCounts}, ...]` in fire order; under v1 a Merge
+ * primary representation — `[{sources, itemCounts}, ...]` in fire order — under v1 a Merge
  * can fire more than once per execution (see propagate()'s rule (c) note below and the
  * v1 end-of-run drain). `fired` (now "at least one run fired"), `sources` and
  * `itemCounts` are RETAINED and carry run 0's values, for six existing consumer files
  * that read the flat shape. Added because the defect executions 12203 and 12206 exposed
  * is invisible in item counts alone: which node took input 0 IS the finding.
+ *
+ * `trace.stalled` — see the BL-01 comment above the v1 stall pass below (quick task
+ * 260911-1z5): the v1 shapes it can report are NOT, on their own, evidence of a lost
+ * row — read `starvedWithData(trace)` (exported below) for that question, never
+ * `trace.stalled` directly, on a v1 walk.
  *
  * Throws (D-70-30) when `wf.settings.executionOrder` is not `"v1"` and `opts.allowLegacy`
  * was not passed — this walker models the v1 contract only; it does not, and after
@@ -507,17 +512,63 @@ export function walkWorkflow(wf, opts) {
     // by the rule just observed, so there is nothing left to infer for that consumer.
     // Under legacy the inference stands unverified, unchanged from before this task.
     if (order === "v1" && outItems.length === 0) return;
+
+    // BL-02 (quick task 260911-1z5): ONE producer node-run's deliveries to SEVERAL inputs
+    // of the SAME Merge land in ONE pending run (Gate 11, 12354/12355/12356:
+    // `Companies Absent Sentinel Gate`'s single node-run filled BOTH inputs of `Decide
+    // Company Action Merge`'s run 0). Grouping unit is ONE propagate() call — one
+    // node-run, one output index — so two different output indexes of one IF landing on
+    // the same Merge stay two separate deliveries (unobserved either way, not modelled).
+    // Edges to a non-Merge target are unaffected, one delivery per edge as always.
+    // Applies to BOTH engines: these edges are always enqueued directly adjacent to each
+    // other (nothing else can interleave within one connectionsFrom() loop), so grouping
+    // them into one delivery changes nothing observable for the LEGACY arrival rules
+    // (three legacy fixtures 12203/12206/12316 stay green under it) — it only becomes
+    // load-bearing where the v1 run-indexed model needs to fill several inputs of one
+    // pending run ATOMICALLY, which an ungrouped one-delivery-per-edge model cannot do.
+    const mergeGroups = new Map(); // targetName -> delivery with inputIndexes: [...]
     for (const edge of connectionsFrom(fromName, outputIndex)) {
-      enqueue({
-        targetName: edge.node, inputIndex: edge.index || 0,
-        items: outItems.slice(), fromName,
-      });
+      const targetNode = nodesByName[edge.node];
+      if (targetNode && targetNode.type === "n8n-nodes-base.merge") {
+        let grouped = mergeGroups.get(edge.node);
+        if (!grouped) {
+          grouped = { targetName: edge.node, inputIndexes: [], items: outItems.slice(), fromName };
+          mergeGroups.set(edge.node, grouped);
+        }
+        grouped.inputIndexes.push(edge.index || 0);
+      } else {
+        enqueue({
+          targetName: edge.node, inputIndex: edge.index || 0,
+          items: outItems.slice(), fromName,
+        });
+      }
     }
+    for (const grouped of mergeGroups.values()) enqueue(grouped);
   }
 
   // Seed the ONE trigger.
   runData[triggerNode] = [triggerItems.slice()];
   propagate(triggerNode, 0, triggerItems);
+
+  // v1FiresCount / FIRE_CAP (MN-02, quick task 260911-1z5): a SINGLE counter shared by
+  // every v1 Merge fire, main-loop AND drain alike. Scoping the guard to the drain alone
+  // (as the review's own snippet did) can never fire once MN-01's per-Merge drain cap is
+  // in place — drain fires are bounded by the number of Merge nodes in the graph, always
+  // <= FIRE_CAP. The real hang risk is a Merge whose own output re-completes its own
+  // input(s): the MAIN LOOP's arrival code fires a v1 Merge as many times as genuine
+  // complete deliveries arrive (uncapped, correctly — `Decide Company Action Merge`'s own
+  // run 0 is exactly this shape, a real double-fire), so a feedback edge there has no
+  // per-Merge cap to stop it. One shared counter catches either shape.
+  let v1FiresCount = 0;
+  const FIRE_CAP = (wf.nodes || []).length * 4;
+  function recordV1Fire(nodeName) {
+    v1FiresCount += 1;
+    if (v1FiresCount > FIRE_CAP) {
+      throw new Error(
+        `walkWorkflow: end-of-run drain did not converge at "${nodeName}" — feedback ` +
+        `edge into a Merge input?`);
+    }
+  }
 
   // processQueue() drains `queue` to empty. Factored out (quick task 260911-0tz, Step 3c)
   // so the v1 end-of-run drain below can RESUME it after firing a pending Merge run — a
@@ -532,8 +583,12 @@ export function walkWorkflow(wf, opts) {
         const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
 
         if (order === "legacy") {
-          // LEGACY arrival state machine — UNCHANGED (byte-identical to the pre-70-16
-          // behaviour save for calling the extracted `mergeBuffers` maths helper).
+          // LEGACY arrival state machine — UNCHANGED RULES (byte-identical to the
+          // pre-70-16 behaviour save for calling the extracted `mergeBuffers` maths
+          // helper, and looping a grouped delivery's `inputIndexes` — BL-02 above — which
+          // changes nothing observable here: those indexes are always enqueued adjacent
+          // to each other, so processing them together is the same as processing them
+          // back-to-back with nothing else able to interleave).
           const state = mergeState[node.name]
             || (mergeState[node.name] = { buffers: {}, arrived: {}, sources: {}, fired: false });
           // ENGINE RULE (executions 12203 and 12206): a Merge fires AT MOST ONCE per
@@ -542,13 +597,15 @@ export function walkWorkflow(wf, opts) {
           // Linkedin Search" (2 items) reached "Enrichment Gate Merge" AFTER it had
           // already fired on the sentinels' deliveries, and the real rows were dropped.
           if (state.fired) continue;
-          // ENGINE RULE (executions 12203 and 12206): the FIRST delivery to an input
-          // wins. A later delivery to an already-arrived input is discarded — this is
-          // what let a sentinel's `[]` claim an input ahead of the real producer's row.
-          if (state.arrived[delivery.inputIndex]) continue;
-          state.arrived[delivery.inputIndex] = true;
-          state.sources[delivery.inputIndex] = delivery.fromName;
-          state.buffers[delivery.inputIndex] = delivery.items.slice();
+          for (const inputIndex of delivery.inputIndexes) {
+            // ENGINE RULE (executions 12203 and 12206): the FIRST delivery to an input
+            // wins. A later delivery to an already-arrived input is discarded — this is
+            // what let a sentinel's `[]` claim an input ahead of the real producer's row.
+            if (state.arrived[inputIndex]) continue;
+            state.arrived[inputIndex] = true;
+            state.sources[inputIndex] = delivery.fromName;
+            state.buffers[inputIndex] = delivery.items.slice();
+          }
           // Readiness is ARRIVAL, tracked separately from the items buffered, because
           // after the delivery change an arrived input can legitimately hold zero items
           // (execution 12203: "Associate Carry Merge" input 1 arrived carrying nothing
@@ -577,14 +634,31 @@ export function walkWorkflow(wf, opts) {
         // reach input 0 first; under run-indexed buffering `[2, 1]` holds in EITHER
         // arrival order and only the source NAMES swap — the engine is the target, not
         // the walker's own queue order.
-        const state = mergeState[node.name] || (mergeState[node.name] = { pending: [], runs: [] });
-        let target = state.pending.find((p) => p.filled[delivery.inputIndex] === undefined);
-        if (!target) {
-          target = { filled: {}, sources: {} };
-          state.pending.push(target);
+        //
+        // BL-02 (quick task 260911-1z5): a GROUPED delivery (one producer node-run
+        // filling several inputs of this Merge at once, via `propagate`'s grouping above)
+        // fills ALL of its `inputIndexes` in ONE pending run, ATOMICALLY — the earliest
+        // pending run in which every one of those inputs is unfilled, else a new one. This
+        // is what lets `Companies Absent Sentinel Gate`'s single node-run claim BOTH
+        // inputs of one engine run instead of being split across two walker runs.
+        let state = mergeState[node.name];
+        if (!state) {
+          // MN-07 (quick task 260911-1z5): refuse a `chooseBranch` Merge on the common
+          // (first-delivery) path too, not only from the end-of-run drain below.
+          requiredInputsFor(node);
+          state = mergeState[node.name] = { pending: [], runs: [] };
         }
-        target.filled[delivery.inputIndex] = delivery.items.slice();
-        target.sources[delivery.inputIndex] = delivery.fromName;
+        const target = state.pending.find(
+          (p) => delivery.inputIndexes.every((i) => p.filled[i] === undefined))
+          || (() => {
+            const created = { filled: {}, sources: {} };
+            state.pending.push(created);
+            return created;
+          })();
+        for (const inputIndex of delivery.inputIndexes) {
+          target.filled[inputIndex] = delivery.items.slice();
+          target.sources[inputIndex] = delivery.fromName;
+        }
 
         let complete = true;
         for (let i = 0; i < numberInputs; i += 1) {
@@ -602,6 +676,9 @@ export function walkWorkflow(wf, opts) {
           itemCounts: Object.fromEntries(
             Object.entries(target.filled).map(([i, items]) => [i, items.length])),
         });
+        recordV1Fire(node.name); // MN-02: shared cap — a real double-complete-fire like
+        // this one is observed engine behaviour and stays uncapped by count, but a
+        // feedback edge that keeps re-completing must still be bounded.
         propagate(node.name, 0, merged);
         continue;
       }
@@ -650,35 +727,51 @@ export function walkWorkflow(wf, opts) {
 
   processQueue();
 
-  // D-70-30 rule (b), v1 half — IMPLEMENTED (Step 3c, quick task 260911-0tz). The open
-  // question this pass used to defer ("does a zero-item arrival count toward
-  // `inputsWithData`") is now closed by observation: it does not, because under v1 a
-  // zero-item output is not a delivery AT ALL (rule (c) above) — there is no zero-item
-  // arrival left to count. What IS observed (Gate 11, 12354/12355/12356): a Merge with
-  // only SOME of its inputs ever filled still fires at end-of-run, once its filled-input
-  // count reaches `requiredInputs` (always `1` here — see `requiredInputsFor` above).
-  // `Decide Company Action Merge` run 1 fired on input 0 alone, input 1 forever absent.
+  // D-70-30 rule (b), v1 half — IMPLEMENTED (Step 3c, quick task 260911-0tz), CAPPED
+  // (MN-01) and GUARDED (MN-02) by quick task 260911-1z5. The open question this pass
+  // used to defer ("does a zero-item arrival count toward `inputsWithData`") is closed by
+  // observation: it does not, because under v1 a zero-item output is not a delivery AT
+  // ALL (rule (c) above) — there is no zero-item arrival left to count. What IS observed
+  // (Gate 11, 12354/12355/12356): a Merge with only SOME of its inputs ever filled still
+  // fires at end-of-run, once its filled-input count reaches `requiredInputs` (always `1`
+  // here — see `requiredInputsFor` above). `Decide Company Action Merge` run 1 fired on
+  // input 0 alone, input 1 forever absent.
   //
-  // Repeat: fire the EARLIEST pending run of any Merge whose filled-input count is
-  // `>= requiredInputs`, scanning `mergeState` in `Object.entries` insertion order (i.e.
-  // first-delivery order) when two Merges both qualify — never left to accident, because
-  // which one fires first can change which producer claims a downstream input's Merge
-  // (`Build Response Merge Stage 1/2/3` -> `Build Response Merge`). Propagate it, then
-  // RESUME `processQueue()` (a drained Merge's output can start work downstream,
-  // including another Merge), then rescan — `mergeState` may have grown. Repeat until no
-  // pending run qualifies. Absent inputs contribute `[]` to the merge maths (via
-  // `mergeBuffers`'s `|| []` fallback) and `undefined` to that run's `sources`/
-  // `itemCounts` (the key is simply never set).
+  // MN-01 (quick task 260911-1z5): the drain fires AT MOST ONE pending run per Merge —
+  // 12354-12356 only ever observed ONE drained run, and CLAUDE.md §13.0.3's
+  // `requiredInputs` row says a waiting node "executes once". `drainedOnce` enforces this;
+  // any pending run left over once a Merge is in `drainedOnce` is reported by the stall
+  // pass below as `merge_pending_runs_undrained` — never fired, never dropped silently.
   //
-  // `trace.stalled` (below) therefore now only ever reports a Merge that received ZERO
-  // deliveries on every input, for the whole execution — the only shape left that can
-  // still stall under v1, since any Merge that gets even one delivery drains and fires.
+  // Repeat: fire the EARLIEST pending run of any Merge NOT already in `drainedOnce` whose
+  // filled-input count is `>= requiredInputs`, scanning `mergeState` in `Object.entries`
+  // insertion order when two Merges both qualify. This scan order is DETERMINISTIC, but it
+  // is derived from THIS WALKER's own queue/insertion order, never from any observed
+  // engine ordering — BL-02 (quick task 260911-1z5) is the proof: the walker's rule for
+  // WHICH pending run an input fills matches the engine, but the walker's own dequeue
+  // order does not always match which producer's delivery arrives first, and that is what
+  // determines which name ends up in `sources`. Propagate a fired run's output, then
+  // RESUME `processQueue()` (a drained Merge's output can start work downstream, including
+  // another Merge), then rescan — `mergeState` may have grown. Repeat until no pending run
+  // qualifies. Absent inputs contribute `[]` to the merge maths (via `mergeBuffers`'s
+  // `|| []` fallback) and `undefined` to that run's `sources`/`itemCounts` (the key is
+  // simply never set).
   if (order === "v1") {
+    const drainedOnce = new Set();
     let progressed = true;
     while (progressed) {
       progressed = false;
       for (const [name, state] of Object.entries(mergeState)) {
-        if (!state.pending) continue; // not a v1-shaped state — should not happen here
+        // NT-01 (quick task 260911-1z5): every mergeState entry is v1-shaped under v1
+        // (the two shapes are keyed on `order`, fixed for the whole walk) — reaching a
+        // non-pending-shaped state here is an impossible state and must be loud, not
+        // silently skipped.
+        if (!state.pending) {
+          throw new Error(
+            `walkWorkflow: merge state for "${name}" is not v1-shaped during the v1 ` +
+            `drain — impossible state`);
+        }
+        if (drainedOnce.has(name)) continue; // MN-01 cap
         const node = nodesByName[name];
         const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
         const requiredInputs = requiredInputsFor(node);
@@ -694,6 +787,8 @@ export function walkWorkflow(wf, opts) {
           itemCounts: Object.fromEntries(
             Object.entries(target.filled).map(([i, items]) => [i, items.length])),
         });
+        drainedOnce.add(name);
+        recordV1Fire(name); // MN-02: shared cap with the main-loop fire site above
         propagate(name, 0, merged);
         progressed = true;
         processQueue();
@@ -702,30 +797,67 @@ export function walkWorkflow(wf, opts) {
     }
   }
 
-  // trace.stalled — Merges that received ZERO deliveries, for the entire execution.
-  for (const [name, state] of Object.entries(mergeState)) {
-    const node = nodesByName[name];
-    const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
-    if (state.runs) {
-      // v1: after the drain above, every Merge that ever received even one delivery has
-      // fired (requiredInputs is always 1 in this repo — see requiredInputsFor). A Merge
-      // still un-fired here received not one single delivery on any input, ever.
-      if (state.runs.length > 0) continue;
-      const missingInputs = [];
-      for (let i = 0; i < numberInputs; i += 1) missingInputs.push(i);
-      trace.stalled.push({ node: name, reason: "merge_input_never_fired", missingInputs });
-      continue;
+  // trace.stalled — BL-01 (quick task 260911-1z5): the v1-native starvation detector.
+  // The pre-existing v1 pass ("a Merge is stalled iff it received zero deliveries, ever")
+  // was structurally unreachable: every Merge in `mergeState` fires at least once (the
+  // drain guarantees a Merge with even ONE filled input fires at end-of-run), so
+  // `state.runs.length > 0` was always true and the old push was dead code. The v1 half
+  // below enumerates the GRAPH's Merge nodes (not `mergeState`, which only ever contains
+  // Merges that received at least one delivery) and reports three shapes:
+  //   - `merge_never_delivered_to` — absent from `mergeState` entirely;
+  //   - `merge_fired_with_unfilled_input` — a fired run whose `sources[k]` is undefined;
+  //   - `merge_pending_runs_undrained` (MN-01) — a leftover pending run the one-run-per-
+  //     Merge cap left un-fired.
+  // None of these three is, on its own, evidence of a lost row: the first two are the
+  // BY-DESIGN D-70-23 gated-sentinel shapes (a lane the batch never drove, or an input
+  // nobody ever delivered to). `starvedWithData(trace)` (below) is the ONE shared filter
+  // that narrows this list to genuine loss — read that, not `trace.stalled` directly,
+  // when the question is "did a row get dropped". Entries are pushed in graph node order,
+  // then run index, so a `deepEqual` assertion against this array is stable. The LEGACY
+  // branch's `merge_input_never_fired` semantics are UNCHANGED.
+  if (order === "v1") {
+    for (const n of (wf.nodes || []).filter((x) => x.type === "n8n-nodes-base.merge")) {
+      const state = mergeState[n.name];
+      const numberInputs = (n.parameters && n.parameters.numberInputs) || 2;
+      if (!state) {
+        trace.stalled.push({
+          node: n.name, reason: "merge_never_delivered_to",
+          missingInputs: [...Array(numberInputs).keys()],
+        });
+        continue;
+      }
+      state.runs.forEach((r, i) => {
+        const missing = [...Array(numberInputs).keys()].filter((k) => r.sources[k] === undefined);
+        if (missing.length) {
+          trace.stalled.push({
+            node: n.name, reason: "merge_fired_with_unfilled_input", run: i, missingInputs: missing,
+          });
+        }
+      });
+      state.pending.forEach((p, i) => {
+        trace.stalled.push({
+          node: n.name, reason: "merge_pending_runs_undrained", run: i,
+          filledInputs: Object.keys(p.filled).map(Number),
+          itemCounts: Object.fromEntries(
+            Object.entries(p.filled).map(([k, items]) => [k, items.length])),
+        });
+      });
     }
+  } else {
     // legacy — UNCHANGED.
-    if (state.fired) continue;
-    // Keyed on ARRIVAL, never on an empty buffer: an input that arrived carrying zero
-    // items is satisfied (execution 12203), and reporting it as missing would name the
-    // wrong inputs and hide the starvation this trace exists to expose.
-    const missingInputs = [];
-    for (let i = 0; i < numberInputs; i += 1) {
-      if (!state.arrived[i]) missingInputs.push(i);
+    for (const [name, state] of Object.entries(mergeState)) {
+      const node = nodesByName[name];
+      const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
+      if (state.fired) continue;
+      // Keyed on ARRIVAL, never on an empty buffer: an input that arrived carrying zero
+      // items is satisfied (execution 12203), and reporting it as missing would name the
+      // wrong inputs and hide the starvation this trace exists to expose.
+      const missingInputs = [];
+      for (let i = 0; i < numberInputs; i += 1) {
+        if (!state.arrived[i]) missingInputs.push(i);
+      }
+      trace.stalled.push({ node: name, reason: "merge_input_never_fired", missingInputs });
     }
-    trace.stalled.push({ node: name, reason: "merge_input_never_fired", missingInputs });
   }
 
   // trace.merges — which producer took each Merge input, and whether the Merge fired.
@@ -735,7 +867,11 @@ export function walkWorkflow(wf, opts) {
   // given source belongs to. `fired`/`sources`/`itemCounts` are RETAINED, carrying run
   // 0's values, for the six existing consumer files that read the flat shape
   // (ingestMixedBatch, ingestTracerFlow, mergeInputContract, walkerEngineFidelity,
-  // walkWorkflow, zoominfoLaneFlow) — rewriting them is not this task.
+  // walkWorkflow, zoominfoLaneFlow) — rewriting them is not this task. MJ-02 (quick task
+  // 260911-1z5): under v1, `fired` is equivalent to key presence in `trace.merges` and
+  // carries no information of its own (every Merge that ever entered `mergeState` fires
+  // at least once — see the drain above) — it is RETAINED here only for the legacy
+  // consumers and for the unfired-legacy diagnostic MJ-01 restores just below.
   trace.merges = {};
   for (const [name, state] of Object.entries(mergeState)) {
     let runs;
@@ -750,15 +886,50 @@ export function walkWorkflow(wf, opts) {
           }]
         : [];
     }
+    // MJ-01 (quick task 260911-1z5): an unfired LEGACY Merge still reports which inputs
+    // HAD arrived — the pre-70-16 partial view, restored. The 12203/12206 diagnostic is
+    // "who claimed input 0 before it starved", and that is most needed exactly when the
+    // Merge never fired. A v1 Merge that never fired has no `state.sources`/`state.
+    // buffers` to fall back to (v1 only ever tracks pending runs), so this fallback is a
+    // no-op there — the "byte-identical to the pre-70-16 legacy behaviour" claim below
+    // now holds for `trace.merges` too, not only the arrival state machine.
     trace.merges[name] = {
       fired: runs.length > 0,
-      sources: runs[0] ? { ...runs[0].sources } : {},
-      itemCounts: runs[0] ? { ...runs[0].itemCounts } : {},
+      sources: runs[0] ? { ...runs[0].sources } : { ...(state.sources || {}) },
+      itemCounts: runs[0] ? { ...runs[0].itemCounts } : Object.fromEntries(
+        Object.entries(state.buffers || {}).map(([i, items]) => [i, items.length])),
       runs,
     };
   }
 
   return { runData, trace };
+}
+
+// starvedWithData(trace) — BL-01 (quick task 260911-1z5), the ONE definition the ~30
+// class-(a) `trace.stalled` consumers share. Under legacy, `trace.stalled` semantics are
+// unchanged (not this task's subject) and this is a pass-through. Under v1: only a
+// `merge_pending_runs_undrained` entry whose `itemCounts` total >= 1 is a genuine loss —
+// under the run-indexed pending model a delivery carrying items ALWAYS lands in SOME
+// pending run, so that is the only shape where a real row went in and never came out.
+// `merge_never_delivered_to` (a lane the batch never drove) and `merge_fired_with_
+// unfilled_input` (an input nobody ever delivered to) are the BY-DESIGN D-70-23 gated-
+// sentinel shapes, not losses.
+//
+// The naive "declared producers ran with items" predicate the orchestrator's brief
+// proposed false-positives twice against the very recording this task reproduces:
+// (1) on 12354, `Companies Absent Sentinel Gate` is a declared producer of `Decide
+// Company Action Merge` input 1, ran with items, and run 1 reads input 1 unfilled — its
+// items in fact landed in run 0, so flagging it would name a loss that never happened;
+// (2) `runData[ifNode]` records an IF's PRE-SPLIT input (this walker's own convention), so
+// an IF that routed every item to its TRUE branch still reads as "emitted >= 1 item" while
+// its FALSE branch — the one feeding the Merge — delivered nothing at all.
+export function starvedWithData(trace) {
+  if (trace.orderingUsed === "legacy") return trace.stalled;
+  return trace.stalled.filter((s) => {
+    if (s.reason !== "merge_pending_runs_undrained") return false;
+    const total = Object.values(s.itemCounts || {}).reduce((sum, n) => sum + n, 0);
+    return total >= 1;
+  });
 }
 
 // --- CLI -------------------------------------------------------------------------------
