@@ -297,8 +297,8 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 7/7 plans executed (planned 2026-09-09), waves 0–5, sequential on the builder file except
-70-05 ∥ 70-06.
+**Plans:** 7/7 executed (planned 2026-09-09) + 5 gap-closure plans (planned 2026-09-10, waves 0–4),
+sequential on the builder file except 70-05 ∥ 70-06.
 
 Plans:
 **Wave 1**
@@ -322,3 +322,11 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 70-07-PLAN.md — Wave 5: the two mixed-batch acceptance tests, the operator-facing docs and version bump, and the disarmed live run whose rows must match the walker
+
+**Gap closure** *(planned 2026-09-10 from `70-UAT.md` — G-70-2/G-70-3 blockers, G-70-4 minor; D-70-20/21/22)*
+
+- [ ] 70-08-PLAN.md — Wave 0: D-70-21 live rollback prepared — the pre-Phase-70 bundle pinned and tested, an operator runbook, a zero-write dry-run diff, and Gate 4 recorded
+- [ ] 70-09-PLAN.md — Wave 1: the walker corrected toward the engine, RED first — executions 12203 and 12206 reproduced against frozen copies of the graph that ran them, the literal D-70-20 mechanism priced, and the RED inventory taken
+- [ ] 70-10-PLAN.md — Wave 2: D-70-23 decided, then the sentinel mechanism gated in the generator, the starved carry Merge bypassed, the ingest lane green, and the Merge-input contract test landed
+- [ ] 70-11-PLAN.md — Wave 3: the enrichment, review and local lanes converted, the fifteen-input response Merge split, the contract made a generation-time refusal, and the whole harness green
+- [ ] 70-12-PLAN.md — Wave 4: G-70-4's like-with-like comparator, the observed-live platform facts recorded with their execution ids, and Gates 5 and 6 written up
