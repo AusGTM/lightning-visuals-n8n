@@ -48,3 +48,18 @@ new lane or action multiplies runs; each by-name read silently picks one.
 ## Out of scope
 Confidence policy (new contacts held by design, D-61-03); named-account scoring; anything
 in the ICP engines.
+
+## Closed 2026-09-11 (resume session) — resolved by Phase 70
+
+This todo was Phase 70's brief (`ROADMAP.md` § Phase 70). 18/18 plans complete,
+`70-VERIFICATION.md` `status: passed`, Gates 10/11/12 passed live 2026-09-10. All five
+structural items landed: (1) walker models the v1 engine (`tests/n8n/walkWorkflow.mjs`,
+fidelity tests pinned to executions 12354-12356); (2) native Merge at every convergence and
+HTTP hop, `nodeRunRecovery.js` deleted, by-name reads a generation-time refusal
+(`assert_no_by_name_reads`; 0 `$('X').all()` in committed cloud JSON); (3) one write-gate
+contract (D-70-15); (4) one client result channel — runData by `run_id`, ack-only responders
+(D-70-05/07); (5) mixed-lane mixed-action batches are the acceptance shape (70-07, Gate 12).
+
+Carried forward separately, not reopened here: `Associate Carry Merge` row drop (RED-pinned
+in `tests/n8n/writeGateShape.test.mjs`, builder follow-on) and todo
+`2026-09-11-merge-input-contract-allows-many-producers-per-input.md`.

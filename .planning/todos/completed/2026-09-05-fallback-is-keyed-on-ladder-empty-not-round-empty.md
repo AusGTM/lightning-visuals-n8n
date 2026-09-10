@@ -81,3 +81,16 @@ where spending cannot help. Design the re-entry to name its cause.
 succeeded. On this segment — AU sporting clubs, which reliably publish a committee or contact
 page — ladder-empty is rare while round-empty is common. Keying the fallback on the rarer event
 is why the code path has never run outside its offline tests.
+
+## Closed 2026-09-11 (resume session) — resolved by Phases 64 and 65
+
+Both halves shipped. First half (ladder stops at the best page, not the first): Phase 64,
+LADDER-01/02 ticked. Second half (round-empty re-entry keyed on the cause, no `while` loop,
+caps never reset, refusal terminal): Phase 65 Plan 01, LADDER-03/04 ticked. The two
+cause-specific fixes this todo routed to (role matcher, alternate-domain set) landed as quick
+tasks 260904-* and 260905-ad2. Neither phase carried `resolves_phase` for this file, so
+`close_phase_todos` never retired it.
+
+What this todo does NOT close: **LADDER-05** (the search fallback observed reachable in a
+REAL round) stays unticked in `REQUIREMENTS.md`. That is a live-proof requirement, tracked
+there, not a defect this todo owns.
