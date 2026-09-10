@@ -298,7 +298,9 @@ locked decisions are D-70-01..19 in
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
 **Plans:** 7/7 executed (planned 2026-09-09) + 5 gap-closure plans (planned 2026-09-10, waves 0–4)
+
 + 3 round-2 gap-closure plans (planned 2026-09-10, waves 1–2),
+
 sequential on the builder file except 70-05 ∥ 70-06.
 
 Plans:
@@ -326,20 +328,20 @@ Plans:
 
 **Gap closure** *(planned 2026-09-10 from `70-UAT.md` — G-70-2/G-70-3 blockers, G-70-4 minor; D-70-20/21/22)*
 
-- [ ] 70-08-PLAN.md — Wave 0: D-70-21 live rollback prepared — the pre-Phase-70 bundle pinned and tested, an operator runbook, a zero-write dry-run diff, and Gate 4 recorded
-- [ ] 70-09-PLAN.md — Wave 1: the walker corrected toward the engine, RED first — executions 12203 and 12206 reproduced against frozen copies of the graph that ran them, the literal D-70-20 mechanism priced, and the RED inventory taken
-- [ ] 70-10-PLAN.md — Wave 2: D-70-23 decided, then the sentinel mechanism gated in the generator, the starved carry Merge bypassed, the ingest lane green, and the Merge-input contract test landed
-- [ ] 70-11-PLAN.md — Wave 3: the enrichment, review and local lanes converted, the fifteen-input response Merge split, the contract made a generation-time refusal, and the whole harness green
-- [ ] 70-12-PLAN.md — Wave 4: G-70-4's like-with-like comparator, the observed-live platform facts recorded with their execution ids, and Gates 5 and 6 written up
+- [x] 70-08-PLAN.md — Wave 0: D-70-21 live rollback prepared — the pre-Phase-70 bundle pinned and tested, an operator runbook, a zero-write dry-run diff, and Gate 4 recorded
+- [x] 70-09-PLAN.md — Wave 1: the walker corrected toward the engine, RED first — executions 12203 and 12206 reproduced against frozen copies of the graph that ran them, the literal D-70-20 mechanism priced, and the RED inventory taken
+- [x] 70-10-PLAN.md — Wave 2: D-70-23 decided, then the sentinel mechanism gated in the generator, the starved carry Merge bypassed, the ingest lane green, and the Merge-input contract test landed
+- [x] 70-11-PLAN.md — Wave 3: the enrichment, review and local lanes converted, the fifteen-input response Merge split, the contract made a generation-time refusal, and the whole harness green
+- [x] 70-12-PLAN.md — Wave 4: G-70-4's like-with-like comparator, the observed-live platform facts recorded with their execution ids, and Gates 5 and 6 written up
 
 **Gap closure, round 2** *(planned 2026-09-10 from `70-UAT.md` — G-70-5 blocker; D-70-24/25/26/27)*
 
-- [ ] 70-13-PLAN.md — Wave 1: TRACER — the self-referencing fan-out deleted from the enrichment graph, `scale_up: true` refused as a row, a self-dispatching node made a generation-time refusal, and the client's ability to ask for one retired
-- [ ] 70-14-PLAN.md — Wave 2: D-70-25 marker filtering at both response builders, RED-first on Gate 5's recorded recovered shape, plus execution 12316 frozen as a documented walker divergence
-- [ ] 70-15-PLAN.md — Wave 2: the retirement and the runaway's platform facts recorded with their execution ids, the two-minute burst watch made a standing deploy step, and Gates 7/8/9 written up
+- [x] 70-13-PLAN.md — Wave 1: TRACER — the self-referencing fan-out deleted from the enrichment graph, `scale_up: true` refused as a row, a self-dispatching node made a generation-time refusal, and the client's ability to ask for one retired
+- [x] 70-14-PLAN.md — Wave 2: D-70-25 marker filtering at both response builders, RED-first on Gate 5's recorded recovered shape, plus execution 12316 frozen as a documented walker divergence
+- [x] 70-15-PLAN.md — Wave 2: the retirement and the runaway's platform facts recorded with their execution ids, the two-minute burst watch made a standing deploy step, and Gates 7/8/9 written up
 
 **Gap closure, round 3** *(planned 2026-09-10 from `70-UAT.md` — G-70-6 blocker; D-70-28/29/30/31)*
 
-- [ ] 70-16-PLAN.md — Wave 1: TRACER — every generated workflow flipped onto n8n's v1 execution order from one generator constant, a non-v1 body made a generation-time refusal, and the walker stopped claiming to model the legacy engine it was never observed to model correctly
+- [x] 70-16-PLAN.md — Wave 1: TRACER — every generated workflow flipped onto n8n's v1 execution order from one generator constant, a non-v1 body made a generation-time refusal, and the walker stopped claiming to model the legacy engine it was never observed to model correctly
 - [ ] 70-17-PLAN.md — Wave 2: the v1 setting pinned against every path that can revert it — both PUT paths, the bind pipeline, the bounce read-back and the proof driver's verdict
 - [ ] 70-18-PLAN.md — Wave 3: the source-cited engine rule and Gate 8's observations recorded with their tags and execution ids, the stale live-state note corrected, and Gates 10/11/12 written up with Gate 9 superseded

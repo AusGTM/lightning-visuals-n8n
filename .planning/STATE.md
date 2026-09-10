@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
-current_phase_name: one-merge-one-result-channel-n8n-runtime-truth
+current_phase_name: One merge, one result channel — n8n runtime truth
 status: executing
-stopped_at: "2026-09-10 gap-closure round 3 PLANNED (70-16..70-18, waves 1-3, verified 0 blockers): operator ruling D-70-28..31 flips settings.executionOrder to v1 on every generated workflow (supersedes D-70-02); live still pre-70 59812be bundle, disarmed; next: /gsd-execute-phase 70 --gaps-only"
-last_updated: "2026-09-10T10:20:40.510Z"
+stopped_at: Completed 70-16-PLAN.md
+last_updated: "2026-09-10T11:21:59.064Z"
 last_activity: 2026-09-10
-last_activity_desc: Gap-closure round 3 planned for G-70-6 — n8n legacy executionOrder pushes one empty item down every empty branch (workflow-execute.ts addEmptyItem), explaining G-70-2/3/5/6; D-70-28..31 flip v1, pin PUT preservation, walker records the v1 contract, Gates 10/11/12 replace 9
-state_head: 3744aa3e9cc6defad31e4af0250139c09029c89a
+last_activity_desc: Phase 70 execution started
+state_head: 26b3b83fa7f6f78d764e988a203ab3dc49c0d388
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 34
-  completed_plans: 23
+  completed_plans: 32
   percent: 29
 ---
 
@@ -358,10 +358,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 70 (one-merge-one-result-channel-n8n-runtime-truth) — READY TO EXECUTE
-Plan: 7 of 7
+Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
+Plan: 2 of 18
 Status: Ready to execute
-Last activity: 2026-09-10 — Phase 70 UAT run (3 gates) and gap-closure plans 70-08..70-12 created
+Last activity: 2026-09-10 — Phase 70 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -501,14 +501,14 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-10T00:00:00Z (resumed)
-**Stopped at:** /gsd-verify-work 70 complete 2026-09-10 — see 70-UAT.md Gaps (G-70-2/G-70-3 blocker). Next: /gsd-plan-phase 70 --gaps. Prior note
+**Last session:** 2026-09-10T11:21:58.823Z
+**Stopped at:** Completed 70-16-PLAN.md
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
 `blocked` (operator could not run a live test) on an earlier phase's UAT; Phase 62 verified
 13/13 but awaiting live UAT.
-**Resume file:** .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-UAT.md (tests 4–6 = Gates 4/5/6)
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -652,6 +652,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 70 P05 | 6h | 3 tasks | 30 files |
 | Phase 70 P06 | 46 min | 3 tasks | 38 files |
 | Phase 70 P07 | 1h | 3 tasks | 18 files |
+| Phase 70 P16 | 45min | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -806,6 +807,8 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 70]: 70-07: the ingest lane's two identity lanes are the two COMPANY-resolution keys (domain, name); contact identity there is email-only
 - [Phase 70]: 70-07: a predicted-only verdict writes shapes_equal: null and is test-pinned never to write true — an offline run must not fabricate the field the live gate turns on
 - [Phase 70]: 70-07: async_ack retired from every operator-facing document; three request-level flags remain (recompute, scale_up, source_by_field)
+- [Phase 70]: D-70-28/D-70-30 implemented exactly as specified: settings.executionOrder=v1 on all 8 generated workflows via one WORKFLOW_SETTINGS constant + generation-time refusal; walker refuses a non-v1 graph with allowLegacy confined to walkerEngineFidelity.test.mjs's 3 frozen fixtures. — Closes gap G-70-6's generator half offline; live deploy/bounce/arm deferred to Gates 10-12 (plan 70-18).
+- [Phase 70]: Three walkWorkflow.test.mjs assertions (collapse/respond/paired-item cases) were re-derived under v1's pop-order dequeue, per the plan's own instruction, not treated as failures to route around. — wf() helper's synthetic-graph default flipped from legacy to v1; ordering-dependent expected values changed with it (dequeue direction is the walker's only legacy/v1 behavioral difference).
 
 ### Roadmap Evolution
 
