@@ -58,6 +58,25 @@ def test_every_row_shows_source_values_enriched_values_source_and_verdict():
     assert entry["reason"] is None
 
 
+def test_a_replaced_value_shows_in_enriched_values_beside_the_original_in_source_values():
+    # jobtitle is protect_if_current_present: false (ruling 2026-09-11) -- merge_
+    # enriched can replace a present value, and the operator's one pre-arm look must
+    # show the NEW value under enriched_values, not just the superseded one under
+    # source_values (which still shows what the operator originally had).
+    rows = [_row("row-1", firstname="Amy", email="amy@x.com", jobtitle="Head of Marketing")]
+    merge_report = preingest.MergeResult(
+        rows=(_merged("row-1", firstname="Amy", email="amy@x.com",
+                       jobtitle="Head of Marketing and Content"),),
+    )
+
+    result = _preview(rows, merge_report)
+
+    entry = result["send_rows"][0]
+    assert entry["source_values"]["jobtitle"] == "Head of Marketing"
+    assert entry["enriched_values"] == {"jobtitle": "Head of Marketing and Content"}
+    assert entry["source"] == "the enrichment waterfall"
+
+
 def test_a_row_enrichment_added_nothing_to_carries_no_source_and_no_enriched_values():
     rows = [_row("row-1", firstname="Amy", email="amy@x.com")]
     merge_report = preingest.MergeResult(

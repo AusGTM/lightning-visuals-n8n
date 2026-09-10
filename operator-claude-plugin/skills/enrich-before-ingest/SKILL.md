@@ -779,10 +779,12 @@ whatever seven columns happened to be in the source file.
    batch size — a count is not enough for a row that names an actual contact. For
    every row that will be sent, show what the source file supplied, what the
    enrichment waterfall added, and its SEND verdict. Show any merge conflicts the
-   report carries — a case where the source's own value and a provider's differing
-   value both exist, and the source's value was kept. This is the moment the operator
-   is actually deciding something, not a status update on the way to a decision
-   already made.
+   report carries — a source value and a differing provider value both existed for
+   that field. The report says, for each one, which value the row now carries: most
+   fields keep the source's own value, but a field the policy marks refreshable takes
+   the provider's newer value instead — say plainly which happened, never assume the
+   source value survived. This is the moment the operator is actually deciding
+   something, not a status update on the way to a decision already made.
 
 7. **Ask for the HubSpot write, then ingest.** Skip this step entirely if step 1 reported
    `can_send: false`. Otherwise: disarmed is the default here too. Say plainly that sending

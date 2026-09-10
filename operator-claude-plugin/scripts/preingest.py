@@ -1167,7 +1167,8 @@ def render_enriched_preview(rows, merge_report=None, responses=None):
         }
         enriched_values = {
             key: value for key, value in merged_row.items()
-            if key != "row_id" and _present(value) and not _present(original.get(key))
+            if key != "row_id" and _present(value)
+            and str(value).strip() != str(source_values.get(key, "")).strip()
         }
         return {
             "row_id": row_id,

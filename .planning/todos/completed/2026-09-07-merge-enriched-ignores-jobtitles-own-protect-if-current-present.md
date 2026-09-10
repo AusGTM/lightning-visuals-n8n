@@ -73,3 +73,17 @@ from `field_policy.yaml` (plugin's shipped copy) for BOTH `enrich-before-ingest`
 `email` and the location fields (`true`) stay never-replaced. The policy file is the one
 source; the `conflicts` list still records every replaced value. Per-field `min_confidence`
 in the merge is NOT part of this ruling — separate follow-on if wanted.
+
+## Resolved 2026-09-11
+
+Fixed in quick task `260911-anx` (`260911-anx-SUMMARY.md`). Added
+`preingest.refreshable_contact_props()` (a sibling read on the same RICH-04
+`_load_contacts_policy` seam `promotable_contact_props()` uses, degrading in the
+OPPOSITE, safer direction on an unresolvable policy). `merge_enriched`'s fill-vs-conflict
+branch now writes a differing response value only when the field is in that set;
+`jobtitle` is the only member today. Conflict entries rename `kept` -> `source_value`
+and add `replaced: bool` so both outcomes are distinguishable. `render_enriched_preview`'s
+`_row_view` was fixed to compute `enriched_values` by "differs from the original" rather
+than "absent from the original", so a replaced value shows correctly in the pre-arm
+preview instead of only the superseded value showing under `source_values`. SKILL.md
+step 6's conflict sentence no longer claims the source value is always kept.
