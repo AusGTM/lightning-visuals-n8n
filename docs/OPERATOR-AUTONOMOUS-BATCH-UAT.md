@@ -27,7 +27,7 @@ writes; every command that could is yours to run.
 | `max_records_per_chunk` | `2` | `operator.local.json` |
 | Live enrichment `950HPb7a1GgSAIyZ` | active; `ALLOW_HUBSPOT_RECORD_WRITES`/`ALLOW_HUBSPOT_CREATE` both `"false"`; last execution `12123` (2026-09-03) | `status.describe_workflow` |
 | Live contact ingest `AwbBeShdPgV48eiY` | active; both flags `"false"`; last execution `12121` | same |
-| Committed vs live JSON | **Level as of 2026-09-09** — the operator deployed Phase 66 + quick 260904-5a8/-pav disarmed and bounced all five (see 1c); live `updatedAt` 2026-09-08T23:16Z | git + n8n API |
+| Committed vs live JSON | **Level as of 2026-09-10 (Phase 70 Gate 10)** — the v1 bodies (30/69/287/55/43 nodes, `settings.executionOrder: "v1"`) deployed disarmed and bounced on all five (see 1c); Gates 11 and 12 passed on them. Re-read live before every batch — this row is a moment, not a standing fact | git + n8n API |
 | Provider balances | not readable from this session (`.env` is permission-blocked) | — |
 
 Guardrail A (dirty-backend refusal) will pass: both flags read `"false"` at rest.

@@ -6,14 +6,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The offline walker models n8n's v1 execution order, proved against Gate 11's own
+  recordings (quick task 260911-0tz, 2026-09-11).** `tests/n8n/lib/walkWorkflow.mjs` now
+  carries two explicit engine branches keyed on `settings.executionOrder`: the legacy branch
+  is unchanged behind `allowLegacy` (the three legacy fidelity cases 12203/12206/12316 pass
+  with zero diff), and the new v1 branch implements the two rules Gate 11 established —
+  a node's zero-item output is NOT a delivery to a Merge input, and Merge inputs buffer
+  run-indexed pending deliveries with an end-of-run drain at `requiredInputs: 1`, so a Merge
+  can fire more than once. `tests/n8n/walkerEngineFidelityV1.test.mjs` reproduces executions
+  `12354`/`12355`/`12356` verbatim (`Decide Company Action Merge` two runs, item counts
+  `[2, 1]`, the drained input's `source` null; `Enrichment Gate Merge` once with 6 items;
+  `HubSpot Update` never runs) by walking a frozen byte-identical v1 graph copy,
+  `tests/n8n/fixtures/frozen/wf_enrichment_cloud.v1.2026-09-10.json`. RED was observed
+  first against the unmodified walker. `trace.merges[name].runs` is now the primary per-fire
+  representation; `fired`/`sources`/`itemCounts` keep run-0 semantics for the six existing
+  consumers. Four synthetic cases in `walkWorkflow.test.mjs` that encoded the legacy model
+  were re-derived from the v1 rules (one kept as an explicitly legacy-only case), not
+  deleted.
+- **The credit-check lane does not multi-fire under v1.**
+  `tests/n8n/creditsSummaryUnderV1.test.mjs` walks the enrichment graph with all three
+  providers enabled and pins `Collect Credits` firing exactly once and `Build Credits
+  Summary` emitting one summary — its two-producers-per-input shape (real adapter vs. skip
+  sentinel) is mutually exclusive by construction, unlike `Decide Company Action Merge`'s
+  six-producer shape. Whether the builder's Merge-input contract should forbid non-exclusive
+  multi-producer inputs is carried as a pending todo
+  (`.planning/todos/pending/2026-09-11-merge-input-contract-allows-many-producers-per-input.md`),
+  not decided here.
+- **Gate 11's five v1 recordings are frozen and pinned** — see "Verified live" below.
+
 ### Changed
-- **One Merge, one result channel (Phase 70, 2026-09-09) — deployed disarmed 2026-09-10, then
-  superseded by gap closure (committed, not yet redeployed).** Every convergence point and
+- **One Merge, one result channel (Phase 70, 2026-09-09; complete 2026-09-11 — the final v1
+  bodies deployed disarmed at Gate 10, proved at Gate 11 and armed once at Gate 12, all
+  2026-09-10).** Every convergence point and
   every HTTP hop in the cloud workflows now carries a native n8n `Merge` node instead of a
   by-name run read, write gates are IF-shaped and EMIT their refusals as rows, and both
   row-outcome lanes answer with an ack only. Node counts moved as an expected consequence
   (Merges plus the starved-lane sentinels each Merge input needs):
-  `wf_enrichment_cloud` 123 → 218 → **291**, `wf_contact_ingest_cloud` 29 → 50 → **69**,
+  `wf_enrichment_cloud` 123 → 218 → 291 → **287** (the fan-out lane deleted, see Removed),
+  `wf_contact_ingest_cloud` 29 → 50 → **69**,
   `wf_review_decision_cloud` 26 → 45 → **55**, `wf_scheduled_maintenance_cloud` 39 → **43**,
   `wf_backend_status_cloud` 17 → **30**, `wf_enrichment_local_live` 46 → 70 → **82**,
   `wf_contact_ingest_local` 12 → **13**.
@@ -95,23 +126,31 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The walker (`tests/n8n/lib/walkWorkflow.mjs`) now refuses a non-v1 graph outside its own
   frozen-fixture engine-fidelity tests (D-70-30) rather than continuing to claim it models an
   engine it was never observed to model correctly. Node counts did not move — settings only.
-  **Nothing was deployed, bounced, or armed by this round.** The committed JSON is ahead of
-  live by the whole of Phase 70 plus this flip; redeploying it is Gate 10, followed by Gate 11
-  (the D-70-19 proof re-run, now expecting v1 on every workflow) and Gate 12 (the armed
-  mixed-verdict re-run) — see `70-DEFERRED-GATES.md`.
+  Deployed, bounced and proved the same day (below).
 
-### Not yet done
-- **Gates 10, 11 and 12 remain, all deferred to the operator.** Gate 7 (disarmed deploy +
-  bounce of the loop-free, pre-flip body) PASSED 2026-09-10. Gate 8 (the D-70-19 proof re-run
-  against that body) FAILED on the same date — the legacy `addEmptyItem` symptoms above — and
-  Gate 9 was blocked. The operator then rolled the live instance back to the pre-Phase-70
-  `59812be` bundle on all five workflows (17/29/123/26/39, active, disarmed) — see CLAUDE.md
-  §13.0.2's corrected live-state table. Gate 10 is the disarmed deploy + bounce of the v1
-  bodies plus the two-minute burst watch; Gate 11 is the D-70-19 proof re-run, now REQUIRING
-  `execution_order_all_v1: true` (a null reading is a failure, the inverse of Gate 8); Gate 12
-  is the armed mixed-verdict re-run, only after Gate 11 passes — see
-  `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`.
-  Nothing is armed anywhere in this chain.
+### Verified live (2026-09-10, Gates 10/11/12 — Phase 70 complete 2026-09-11)
+- **Gate 10 PASS:** the v1 bodies (30/69/287/55/43 nodes) deployed and bounced disarmed;
+  `settings.executionOrder: "v1"` read back on all five; two-minute burst watch clean. Gate 7
+  had passed and Gate 8 FAILED earlier the same day (the legacy `addEmptyItem` symptoms,
+  executions `12349`-`12353`), after which the operator rolled back to `59812be` and then
+  went forward again to the v1 bodies — the rollback bundle was exercised, not merely held.
+- **Gate 11 PASS:** the D-70-19 proof re-run under v1 — executions `12354`/`12355`
+  (enrichment 2x2), `12356` (enrichment single lane), `12357`/`12358` (ingest);
+  `execution_order_all_v1: true`, `shapes_equal: true` on all four sends, 0 writes, 0
+  runData-source-vs-declared-connections violations, and NONE of Gate 8's symptoms: no
+  `HubSpot Update` on an empty lane, no gated sentinel delivering on a zero-item input,
+  `Enrichment Gate Merge` firing exactly once. Two observations beyond the pass criteria are
+  recorded in CLAUDE.md §13.0.3 as `[observed live]`: under v1 a Merge CAN fire twice (the
+  end-of-run drain on a single arrived input — `Decide Company Action Merge`, marker-only,
+  consumer ran twice with 0 items), and under v1 a node that ran with zero items is NOT a
+  delivery to a Merge input. The five recordings are frozen (request headers redacted) at
+  `tests/n8n/fixtures/frozen/exec_1235{4..8}.runData.json` and pinned by
+  `tests/n8n/v1RuntimeRecordings.test.mjs`.
+- **Gate 12 PASS:** the first armed write on the v1 graph, execution `12363` — one contact of
+  a same-company pair permitted (`update`, `associated`), the other refused (`write_blocked`),
+  HubSpot showing exactly one update; window disarmed and read back after. The G-70-2 defect
+  (12203: both rows `not_confirmed`) is fixed on the real engine. **Still not done: the first
+  live UNATTENDED, credit-spending batch.** Nothing is armed.
 
 ## [0.21.0] - 2026-09-07
 

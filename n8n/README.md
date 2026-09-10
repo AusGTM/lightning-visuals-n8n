@@ -35,13 +35,15 @@ orientation, and **the committed `wf_*.json` as authority** for what a node cont
 
 **Two further currency facts, both load-bearing:**
 
-- **The committed JSON is itself AHEAD of the running n8n Cloud instance** — regenerated and
-  committed without deploying since 2026-09-02 (CLAUDE.md §13.0.2). So the file is not
-  evidence of what n8n is executing either. Only a live read is. As of 2026-09-10 the live
-  enrichment lane is further behind than the other four workflows: it is running the
-  pre-Phase-70 body (123 nodes, no Merge nodes at all), restored after the runaway above; the
-  committed JSON carries the full Phase-70 redesign at 287 nodes. See CLAUDE.md §13.0.2 for the
-  per-workflow live-vs-committed table.
+- **Committed and live are LEVEL as of Gate 10, 2026-09-10** (CLAUDE.md §13.0.2's dated
+  addendum): all five cloud workflows run the committed v1 bodies — 287/69/55/43/30 nodes,
+  `settings.executionOrder: "v1"` read back on every one — active and disarmed. Gate 11
+  (executions `12354`-`12358`) and Gate 12 (`12363`, one armed contact write) passed on those
+  bodies. The pre-Phase-70 `59812be` bundle is no longer live anywhere. This is still a
+  statement about a moment: the file is never evidence of what n8n is executing — only a live
+  read is (`scripts/bounce_n8n_workflows.py`'s read-back, or the plugin's backend-status
+  skill). Between 2026-09-02 and 2026-09-10 the committed JSON ran ahead of live by up to a
+  whole generation; expect that to recur after the next regenerate-and-commit round.
 - **Never hand-edit `wf_*.json`.** Change `n8n/code/*.js` (or the builder) and re-run
   `.venv/bin/python scripts/build_cloud_workflows.py`.
 
