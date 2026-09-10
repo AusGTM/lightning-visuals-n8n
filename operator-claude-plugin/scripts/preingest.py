@@ -57,12 +57,35 @@ def resolve_policy_path(policy_path=None):
     return None
 
 
+def _load_contacts_policy(policy_path=None) -> dict:
+    """The one YAML load `promotable_contact_props` and `refreshable_contact_props`
+    both need: resolves `policy_path` through `resolve_policy_path`, reads it, and
+    returns its `contacts:` mapping -- or `{}` on any failure (unresolvable,
+    unreadable, not a mapping, or `contacts:` missing/not a mapping). Re-reads the
+    YAML fresh on every call, exactly as `extraction.canonical_props()` re-reads its
+    own mapping: no module-level cache, so there is no shared mutable state for two
+    concurrent merges to interfere through. Exactly one load path exists for this
+    file; callers differ only in what they do with the mapping once they have it.
+    """
+    resolved = resolve_policy_path(policy_path)
+    if resolved is None:
+        return {}
+    try:
+        with Path(resolved).open(encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    contacts = data.get("contacts")
+    if not isinstance(contacts, dict):
+        return {}
+    return contacts
+
+
 def promotable_contact_props(policy_path=None) -> list[str]:
     """The sorted `contacts:` keys of `config/field_policy.yaml` whose entry carries
-    `promote_to_canonical: true` -- the waterfall's promotable contact output. Re-reads
-    the YAML fresh on every call, exactly as `extraction.canonical_props()` re-reads
-    its own mapping: no module-level cache, so there is no shared mutable state for two
-    concurrent merges to interfere through.
+    `promote_to_canonical: true` -- the waterfall's promotable contact output.
 
     Returns `[]` when the policy cannot be resolved, cannot be read, or is malformed
     (not a mapping, or its `contacts:` section is missing or not a mapping) -- this
@@ -76,22 +99,31 @@ def promotable_contact_props(policy_path=None) -> list[str]:
     canonical set there would make every row's key look unknown), while this is a
     widening whose absence costs nothing but the widening itself.
     """
-    resolved = resolve_policy_path(policy_path)
-    if resolved is None:
-        return []
-    try:
-        with Path(resolved).open(encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-    except Exception:
-        return []
-    if not isinstance(data, dict):
-        return []
-    contacts = data.get("contacts")
-    if not isinstance(contacts, dict):
-        return []
+    contacts = _load_contacts_policy(policy_path)
     return sorted(
         key for key, entry in contacts.items()
         if isinstance(entry, dict) and entry.get("promote_to_canonical") is True
+    )
+
+
+def refreshable_contact_props(policy_path=None) -> list[str]:
+    """The sorted `contacts:` keys of `config/field_policy.yaml` whose entry carries
+    `protect_if_current_present: false` -- the literal boolean, never a truthiness
+    test, so a missing key, a `null`, or a string never opts a field in. `jobtitle`
+    is the only member of this set today (`stale_refreshable`, ruling 2026-09-11).
+
+    Degrades in the OPPOSITE direction from `promotable_contact_props()`: an empty
+    result here means "nothing is refreshable", which collapses `merge_enriched`'s
+    fill-versus-conflict branch back to protect-everything -- today's behaviour, and
+    the SAFER of the two possible failure directions. A widening read may safely
+    degrade to a smaller set; this read, which controls whether an operator's own
+    typed value can be silently replaced, must always degrade to the set that
+    protects more, never the set that replaces more.
+    """
+    contacts = _load_contacts_policy(policy_path)
+    return sorted(
+        key for key, entry in contacts.items()
+        if isinstance(entry, dict) and entry.get("protect_if_current_present") is False
     )
 
 # The six keys the backend's own `mediumCandidates()` ships (n8n/code/matchProposal.js)
@@ -723,11 +755,18 @@ def merge_enriched(rows, responses):
     `strip_enrichment_extras`, defined below, rather than reaching `write_dispatch_csv`
     and raising there with a message about canonical keys instead of about enrichment.
 
-    Fill-not-overwrite: a `properties` value only fills a key the row currently holds
-    empty or absent. A DIFFERING value for a key the row already holds non-empty is
-    never written — it is recorded in `conflicts` instead. The spreadsheet is the
-    operator's own assertion about their own data; silently replacing it with a
-    vendor's guess is a change they would have no way to notice.
+    Fill-not-overwrite, PER FIELD (operator ruling, 2026-09-11): a `properties` value
+    always fills a key the row currently holds empty or absent. A DIFFERING value for
+    a key the row already holds non-empty is written ONLY when that field's
+    `config/field_policy.yaml` `contacts:` entry carries `protect_if_current_present:
+    false` (`refreshable_contact_props()` — today, `jobtitle` alone); every other
+    field, including one with no policy entry at all, keeps the old blanket rule and
+    is never overwritten. The policy file is the ONE source of this per-field
+    behaviour — no field name is hardcoded here. Both callers of this function
+    (`enrich-before-ingest` and `suggest-contacts`) get the same rule, since both
+    share this one `merge_enriched`. Either way, every differing value is recorded in
+    `conflicts`, which says whether it was written. Per-field `min_confidence` is
+    deliberately NOT read here — out of scope for this ruling.
 
     Never mutates an input row — every merged row is a fresh dict.
     """
@@ -757,6 +796,7 @@ def merge_enriched(rows, responses):
     unknown_response_row_ids = sorted(set(index) - known_row_ids)
 
     allowed_keys = set(extraction.canonical_props()) | set(promotable_contact_props())
+    refreshable_keys = set(refreshable_contact_props())
 
     merged_rows = []
     dropped_property_keys = []
@@ -780,10 +820,14 @@ def merge_enriched(rows, responses):
             current = merged.get(key)
             if _present(current):
                 if str(value).strip() != str(current).strip():
+                    replaced = key in refreshable_keys
                     conflicts.append({
                         "row_id": row_id, "field": key,
-                        "kept": current, "provider_value": value,
+                        "source_value": current, "provider_value": value,
+                        "replaced": replaced,
                     })
+                    if replaced:
+                        merged[key] = value
                 continue
             merged[key] = value
 

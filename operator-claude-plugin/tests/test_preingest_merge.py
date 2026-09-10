@@ -226,17 +226,57 @@ def test_a_properties_key_outside_canonical_props_is_dropped_and_reported():
         result.dropped_property_keys
 
 
+# Ruling 2026-09-11: `email` is `protect_if_current_present: true` in
+# config/field_policy.yaml and stays the "operator-typed value is never replaced"
+# example -- `jobtitle` is `protect_if_current_present: false` and now behaves
+# differently (see test_a_present_jobtitle_is_replaced_by_a_differing_response_value
+# below).
 def test_a_non_empty_source_value_is_never_overwritten_and_is_reported_as_conflict():
     rows = _rows(1)
-    rows[0]["jobtitle"] = "Director"
-    responses = [_response(rows[0]["row_id"], {"jobtitle": "Analyst"})]
+    rows[0]["email"] = "amy@x.com"
+    responses = [_response(rows[0]["row_id"], {"email": "amy@other.com"})]
 
     result = preingest.merge_enriched(rows, responses)
 
-    assert result.rows[0]["jobtitle"] == "Director"
+    assert result.rows[0]["email"] == "amy@x.com"
+    assert result.conflicts == (
+        {"row_id": rows[0]["row_id"], "field": "email",
+         "source_value": "amy@x.com", "provider_value": "amy@other.com",
+         "replaced": False},
+    )
+
+
+def test_a_present_jobtitle_is_replaced_by_a_differing_response_value():
+    # jobtitle is the one contacts: entry with protect_if_current_present: false
+    # (stale_refreshable, ruling 2026-09-11) -- a differing waterfall value wins.
+    rows = _rows(1)
+    rows[0]["jobtitle"] = "Head of Marketing"
+    responses = [_response(rows[0]["row_id"], {"jobtitle": "Head of Marketing and Content"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert result.rows[0]["jobtitle"] == "Head of Marketing and Content"
     assert result.conflicts == (
         {"row_id": rows[0]["row_id"], "field": "jobtitle",
-         "kept": "Director", "provider_value": "Analyst"},
+         "source_value": "Head of Marketing",
+         "provider_value": "Head of Marketing and Content", "replaced": True},
+    )
+
+
+def test_a_field_absent_from_policy_entirely_keeps_fill_only_behaviour():
+    # firstname/lastname have NO contacts: entry in field_policy.yaml at all --
+    # refreshable_contact_props() cannot name a key it never saw, so this must
+    # keep today's protect behaviour exactly like a policy-key-less field.
+    rows = _rows(1)
+    rows[0]["firstname"] = "Amy"
+    responses = [_response(rows[0]["row_id"], {"firstname": "Amelia"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert result.rows[0]["firstname"] == "Amy"
+    assert result.conflicts == (
+        {"row_id": rows[0]["row_id"], "field": "firstname",
+         "source_value": "Amy", "provider_value": "Amelia", "replaced": False},
     )
 
 
@@ -555,10 +595,16 @@ def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unread
     monkeypatch.setattr(preingest, "REPO_POLICY_PATH", tmp_path / "no-repo-copy.yaml")
 
     assert preingest.promotable_contact_props() == []
+    assert preingest.refreshable_contact_props() == [], (
+        "an unresolvable policy must degrade to protect-everything, never to "
+        "replace-everything -- the opposite direction from promotable_contact_props()"
+    )
 
     rows = _rows(1)
+    rows[0]["jobtitle"] = "Director"
     responses = [_response(rows[0]["row_id"], {
         "email": "a@x.com", "phone": "555", "seniority": "Director",
+        "jobtitle": "Analyst",
     })]
     result = preingest.merge_enriched(rows, responses)
 
@@ -566,24 +612,33 @@ def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unread
     for row in result.rows:
         assert set(row) <= allowed
     assert {"row_id": rows[0]["row_id"], "key": "seniority"} in result.dropped_property_keys
+    assert result.rows[0]["jobtitle"] == "Director", (
+        "with the policy unresolvable, even jobtitle -- normally refreshable -- "
+        "must NOT be replaced"
+    )
 
 
 def test_the_allowlist_is_a_union_and_a_shared_key_behaves_as_before():
     # RICH-04 adjacency: email/phone/jobtitle are in BOTH sets -- they must appear
-    # once in the union (never a second pass) and behave byte-identically to today.
+    # once in the union (never a second pass). `email` is still fill-only and
+    # unchanged by this plan, so it still stands in for "the union changes nothing
+    # about whether a present value is overwritten" -- `jobtitle`, the third shared
+    # key, deliberately no longer behaves this way (ruling 2026-09-11, see
+    # test_a_present_jobtitle_is_replaced_by_a_differing_response_value above).
     shared = set(extraction.canonical_props()) & set(preingest.promotable_contact_props())
     assert shared == {"email", "phone", "jobtitle"}
 
     rows = _rows(1)
-    rows[0]["jobtitle"] = "Director"
-    responses = [_response(rows[0]["row_id"], {"jobtitle": "Analyst"})]
+    rows[0]["email"] = "amy@x.com"
+    responses = [_response(rows[0]["row_id"], {"email": "amy@other.com"})]
 
     result = preingest.merge_enriched(rows, responses)
 
-    assert result.rows[0]["jobtitle"] == "Director"
+    assert result.rows[0]["email"] == "amy@x.com"
     assert result.conflicts == (
-        {"row_id": rows[0]["row_id"], "field": "jobtitle",
-         "kept": "Director", "provider_value": "Analyst"},
+        {"row_id": rows[0]["row_id"], "field": "email",
+         "source_value": "amy@x.com", "provider_value": "amy@other.com",
+         "replaced": False},
     )
 
 
@@ -669,18 +724,25 @@ def test_a_present_widened_key_is_never_overwritten_and_records_a_conflict():
     assert result.rows[0]["seniority"] == "Director"
     assert result.conflicts == (
         {"row_id": rows[0]["row_id"], "field": "seniority",
-         "kept": "Director", "provider_value": "Manager"},
+         "source_value": "Director", "provider_value": "Manager", "replaced": False},
     )
 
 
 def test_a_byte_equal_widened_key_records_no_conflict_and_writes_nothing():
     rows = _rows(1)
     rows[0]["seniority"] = "Director"
-    responses = [_response(rows[0]["row_id"], {"seniority": "Director"})]
+    rows[0]["jobtitle"] = "Director"
+    responses = [_response(rows[0]["row_id"], {
+        "seniority": "Director", "jobtitle": "Director",
+    })]
 
     result = preingest.merge_enriched(rows, responses)
 
     assert result.rows[0]["seniority"] == "Director"
+    assert result.rows[0]["jobtitle"] == "Director", (
+        "a byte-equal response value records no conflict and writes nothing, even "
+        "for a refreshable field like jobtitle"
+    )
     assert result.conflicts == ()
 
 
