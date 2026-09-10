@@ -268,3 +268,146 @@ It does not fix the Phase 70 graph defect (D-70-20 does that, offline, across th
 waves) — it reverts the live instance PAST the defect to the last known-working graph. The
 fixed Phase 70 JSON is redeployed later, at a separate gate, once the offline suite is green
 and this phase's own live-observation gates (1, 70-05-A, 3) are exercised at end-of-phase UAT.
+
+---
+
+## Gate 5 — redeploy the gap-closure JSON and re-run the phase-closing proof (disarmed)
+
+**Deferred by:** Phase 70 Plan 12 Task 3 (`type="checkpoint:human-verify"`,
+`gate="blocking-human"` — the operator's standing 2026-09-09 ruling to back-load
+`blocking-human` live gates to end-of-phase UAT). Nothing was deployed, bounced or armed by
+the executor. Answered per the standing ruling exactly as Gates 1, 70-05-A, 3 and 4 were:
+recorded here and the plan continued to completion, not waited on mid-flight.
+
+**Reached:** 2026-09-10, plan 70-12. The offline half is DONE: the walker reproduces
+executions 12203 and 12206 (D-70-20/D-70-23, plans 70-09/70-10), the Merge-input contract is
+enforced at generation time and empty (plan 70-11), the ingest-lane comparator now compares
+like with like (D-70-22, plan 70-12 Task 1), and the whole offline harness is green (node
+1064/1064, root Python 4690 passed/154 skipped, plugin Python 2865 passed/5 skipped).
+
+**Why this gate exists.** Gate 3's disarmed run (2026-09-10, executions `12204`–`12208`)
+found the graph itself wrong — G-70-2/G-70-3, a live engine rule (a zero-item Code output IS a
+Merge-input delivery) the walker did not model, causing `Enrichment Gate Merge` and
+`Associate Carry Merge`/`Ingest Merge Response` to fire on a starved-lane sentinel's empty
+output before the real row arrived. That defect is fixed in the COMMITTED JSON only — the
+LIVE instance still runs the pre-gap-closure Phase 70 bodies (node counts 218/50/45/43/30,
+deployed and bounced disarmed on 2026-09-10 for Gates 1 and 3) and still has the defect. Gate
+5 is the redeploy that puts the fix live, and the disarmed re-run of exactly the same D-70-19
+proof Gate 3 ran, against the fixed graph, so the phase's own closing question — "is the
+walker now a faithful model of what the live engine does?" — gets answered a second time,
+after the fix, not assumed from the offline suite alone.
+
+**Node counts this gate deploys** (committed now, gap closure): `wf_enrichment_cloud.json`
+**291**, `wf_contact_ingest_cloud.json` **69**, `wf_review_decision_cloud.json` **55**,
+`wf_scheduled_maintenance_cloud.json` **43** (unchanged), `wf_backend_status_cloud.json`
+**30** (unchanged), `wf_enrichment_local_live.json` **82**, `wf_enrichment_local.json` **10**
+(unchanged), `wf_contact_ingest_local.json` **13** (unchanged).
+
+**Steps (operator), reusing the SAME deploy/bounce sequence `70-ROLLBACK-RUNBOOK.md` uses,
+pointed at the committed HEAD instead of a checked-out historical commit:**
+1. Confirm the working tree is on HEAD with the gap-closure JSON (no `git checkout` to a
+   historical commit needed here — unlike Gate 4, this gate deploys what is already
+   committed).
+2. Dry-run first: `.venv/bin/python scripts/deploy_n8n_workflows.py` (no write; sanity-checks
+   the diff against what is live).
+3. The armed deploy: `DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python
+   scripts/deploy_n8n_workflows.py`.
+4. Bounce (mandatory — a stored update never reloads a running workflow):
+   `.venv/bin/python scripts/bounce_n8n_workflows.py`.
+5. Read back all five live node counts (expect 291/69/55/43/30) and both write flags
+   (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`) on every node that declares them —
+   expect the disarmed `"false"` literal everywhere.
+6. Run the proof driver, disarmed, with its permission variable set:
+   ```bash
+   set -a; source .env; set +a
+   ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py
+   ```
+   Same four sends as Gate 3 (`enrichment_2x2`, `enrichment_single_lane`, `ingest_2x2`,
+   `ingest_single_lane`), same refusal gates (T-70-19: refuses before sending if any live
+   write flag reads anything but `"false"`), same verdict shape written to
+   `70-RUNTIME-VERDICT.json`.
+
+**Pass criteria:**
+- `70-RUNTIME-VERDICT.json` records `shapes_equal: true` on all four sends.
+- All four executions `settled: true` — no execution stuck `running`, on either lane.
+- `writes_performed: 0`, every write flag in `write_flags_read_from_live_bodies` reads
+  `"false"`, HubSpot shows no write.
+- `live_settings_execution_order` recorded again from the running bodies (expected `null` /
+  absent on both workflows, matching the committed JSON and Gate 3's own reading — the
+  gap-closure regeneration did not touch `settings`).
+- The three stage Merges that replaced the 15-input `Build Response Merge` (plan 70-11) all
+  fire and `Build Response` runs — answering the question the 15-input Merge's live behaviour
+  was never observed to settle (§13.0.3's CONFOUNDED row): this gate proves the split design,
+  not the un-split one.
+
+**If this gate fails** — a shape mismatch, an unsettled execution, or a Merge that hangs on a
+single-lane batch — STOP and report it as a finding. Per the standing discipline this whole
+phase has followed (Gate 3's own instructions, unchanged here): do not adjust the walker to
+match and call it passed; a mismatch here means the offline suite that gap closure turned
+green is not yet a faithful model, and the correct response is another debug round, not a
+patched assertion.
+
+**Resume signal:** "gate 5 passed" with the verdict's `shapes_equal` result and the four
+execution ids, or a description of what the run showed instead.
+
+---
+
+## Gate 6 — the first ARMED mixed-verdict batch against the fixed graph
+
+**Deferred by:** Phase 70 Plan 12 Task 3 (`type="checkpoint:human-verify"`,
+`gate="blocking-human"`). Nothing is armed today. **Runs only after Gate 5 passes** — this
+gate is the armed re-run of the exact shape Gate 70-05-A already ran once (2026-09-10,
+execution `12203`) and found wrong: the permitted row and the refused row both came back
+`action: "update"` / `association: "not_confirmed"` instead of reporting what actually
+happened, because the starved-lane sentinel's empty output beat the real row to a shared
+Merge input. That defect is what plans 70-09/70-10/70-11 fixed in the graph Gate 5 deploys.
+Gate 6 is the proof the fix holds on a REAL armed write, not only offline.
+
+**Why the ordering rule is absolute.** Arming a window and sending a real mixed batch against
+a graph that has not itself been proven disarmed first (Gate 5) would repeat exactly the
+mistake this phase's own thesis warns against: trusting the offline harness's GREEN over an
+observation of the real engine. Gate 5 must read `shapes_equal: true` before Gate 6 is run.
+
+**Steps (operator), reusing the SAME arming and send shape Gate 70-05-A used:**
+1. Confirm Gate 5 passed (`shapes_equal: true`, all four executions settled, live instance
+   running the 291/69/55/43/30 JSON) before touching anything below.
+2. Pick a pair of contacts that resolve the SAME company, exactly as Gate 70-05-A did
+   (Darwin Turf Club `9605267534`, contacts `7101` Grant Dewsbury and `2751` Steve Taylor, is
+   the precedent pair and may be reused if still in that state, or any equivalent pair).
+3. Arm ONE window with `TEST_RECORD_IDS` naming exactly ONE of the two contacts
+   (`june_run_arm.py --ids <one-id>` is the precedent tool). Read back: all THREE declaring
+   nodes on the ingest lane (`HubSpot Update Write Gate`, `HubSpot Create Write Gate`,
+   `Associate Lane Sentinel`) show `ALLOW_HUBSPOT_RECORD_WRITES="true"`, `TEST_RECORD_IDS`
+   naming only that one contact.
+4. Send both contacts in ONE ingest batch.
+5. Record:
+   - `Build Ingest Response` row count — must be exactly **2**, never 4 (a second Merge run
+     would double every reported row).
+   - the permitted row: `action: "update"`, `association: "associated"` (NOT
+     `"not_confirmed"` — this is the exact field Gate 70-05-A found wrong).
+   - the refused row: `action: "write_blocked"` with a reason, `association` NOT
+     `"associated"`.
+   - the execution `settled: true` (not stuck `running`).
+   - HubSpot itself shows exactly one contact updated and one association created; the other
+     contact untouched.
+6. Disarm afterward and read every flag back at its disarmed literal: `ALLOW_HUBSPOT_RECORD_
+   WRITES="false"` and `TEST_RECORD_IDS=""` on all three declaring nodes.
+
+**Pass criteria:** every point in step 5 holds as stated, and step 6's disarm-and-read-back
+confirms the window is closed. Any row still reporting `"not_confirmed"` where the fix
+predicts `"associated"`/`"write_blocked"` is the SAME finding Gate 70-05-A raised, now against
+the graph that was supposed to fix it — report it, do not re-interpret the result to fit.
+
+**Resume signal:** "gate 6 passed" with the two row outcomes and the HubSpot read-back, or a
+description of what the run showed instead.
+
+---
+
+### Ordering rule, stated once for both
+
+**Gate 5 before Gate 6, always.** Gate 5 is the disarmed proof that the fixed graph behaves
+the way the offline suite now predicts; Gate 6 is the one armed write this phase's close makes,
+and it is never run against a graph that has not itself been proven disarmed first. If Gate 4
+was already run (the pre-Phase-70 rollback to commit `59812be`), Gate 5 supersedes it: Gate 5
+deploys the gap-closure JSON — forward of both the pre-Phase-70 bodies Gate 4 rolled back to
+and the pre-gap-closure Phase 70 JSON currently live — over whatever Gate 4 left running.
