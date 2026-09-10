@@ -576,3 +576,57 @@ test("ingest, ARMED with a mixed verdict: the permitted row keeps its associatio
   assert.equal(byEmail[MIX_B].action, "write_blocked");
   assert.notEqual(byEmail[MIX_B].association, "associated");
 });
+
+// NF3-BL-01 (260911-3mu review): the committed ingest graph reaches a loss shape the loss
+// filter could not see — every input of `Associate Carry Merge` FILLED, with unequal counts.
+// `HubSpot Associate Company` carries `alwaysOutputData: true`; when it returns nothing its
+// substitution contributes ONE marker item against the carry lane's TWO rows, and
+// `combineByPosition` (Math.min) emits one. Row 444's association result is destroyed at the
+// Merge, and `Build Ingest Response` then reports it `not_confirmed` — byte-identical to a
+// row that was never attempted. RED-first: against the walker at 42d8442e this batch reported
+// `starvedWithData(trace) === []`.
+test("ingest, ARMED, both rows permitted, HubSpot Associate Company returns nothing: the dropped association result is REPORTED as a loss (merge_dropped_rows)", async () => {
+  const { walkWorkflow, loadWorkflow: loadWf, nodeItems, starvedWithData } =
+    await import("./lib/walkWorkflow.mjs");
+  const wf = loadWf(path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json"));
+  for (const name of ["HubSpot Update Write Gate", "Associate Lane Sentinel"]) {
+    const n = wf.nodes.find((x) => x.name === name);
+    n.parameters.jsCode = n.parameters.jsCode
+      .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+               'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+      .replace('const TEST_RECORD_IDS = "";', 'const TEST_RECORD_IDS = "111,444";');
+  }
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      { email: MIX_A, firstname: "Al", lastname: "Lowed", company: "Acme Domain Co" },
+      { email: MIX_B, firstname: "Re", lastname: "Fused", company: "Acme Domain Co" },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [
+        { email: MIX_A, status: "VALID" }, { email: MIX_B, status: "VALID" }] }],
+      "HubSpot Search by Email": [
+        { results: [{ id: "111", properties: { email: MIX_A } }] },
+        { results: [{ id: "444", properties: { email: MIX_B } }] },
+      ],
+      "HubSpot Company Search by Domain": [
+        { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
+        { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
+      ],
+      "HubSpot Company Search by Name": [{ results: [] }, { results: [] }],
+      "HubSpot Update": [
+        { id: "111", properties: { email: MIX_A } },
+        { id: "444", properties: { email: MIX_B } },
+      ],
+      "HubSpot Associate Company": () => [], // nothing back — alwaysOutputData substitutes ONE marker
+    },
+  });
+  const lost = starvedWithData(trace);
+  assert.equal(lost.length, 1, "one Merge lost rows on this batch");
+  assert.equal(lost[0].node, "Associate Carry Merge");
+  assert.equal(lost[0].reason, "merge_dropped_rows");
+  assert.deepEqual(lost[0].itemCounts, { 0: 1, 1: 2 });
+  assert.equal(lost[0].outputCount, 1);
+  const rows = nodeItems(runData, "Build Ingest Response");
+  assert.equal(rows.length, 2, "both rows still return — the loss is a WRONG outcome, not a missing row");
+});

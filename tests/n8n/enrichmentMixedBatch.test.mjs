@@ -207,12 +207,13 @@ for (const [lane, events, matchedRowId, matchedId] of [
 // =====================================================================================
 
 test("enrichment single-lane-only batch (email identity only, no companies lane, no linkedin lane): rows return and no Merge stalls", () => {
-  const { rows, trace } = run(EMAIL_ROWS, { mode: "write", allowlist: CONTACT_BY_EMAIL });
+  const { rows, trace, runData } = run(EMAIL_ROWS, { mode: "write", allowlist: CONTACT_BY_EMAIL });
 
   assertAckFiredOnce(trace, { rowIds: EMAIL_ROWS.map((e) => e.row_id) });
+  assert.equal(runData["Build Response"].length, 1, "Build Response fires exactly once (NF3-NT-02)");
   assert.equal(rows.length, 2, "both rows return with every companies-side merge input silent");
   assert.equal(starvedWithData(trace).length, 0,
-    "no Merge lost a row on this batch (starvedWithData); the Build Response fire itself is asserted above");
+    "no Merge lost a row on this batch (starvedWithData)");
 });
 
 // =====================================================================================

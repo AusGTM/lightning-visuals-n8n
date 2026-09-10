@@ -276,8 +276,11 @@ test("the six converged nodes' jsCode changes are the identity-drop filter only"
 });
 
 // =============================================================================================
-// Companies-only batch: contacts side entirely absent — every contacts-side merge input
-// must still be satisfied by a starved-lane sentinel, never left stalled.
+// Single-side batches: the other side's Merges are never reached AT ALL under v1 (a lane
+// that never runs delivers nothing — D-70-23 gated sentinels emit nothing for a live lane
+// and nothing reaches a dead one). What is pinned: no row lost (`starvedWithData`), the
+// exact set of never-reached Merges as a snapshot, which Merges drained on a lone input,
+// and the response row count.
 // =============================================================================================
 
 // NF-MN-01 (260911-1z5 review): `starvedWithData` alone cannot see an unsatisfied Merge input
@@ -309,23 +312,26 @@ const neverDelivered = (trace) =>
 const firedUnfilled = (trace) =>
   trace.stalled.filter((s) => s.reason === "merge_fired_with_unfilled_input").map((s) => `${s.node}#${s.run}`).sort();
 
-test("a companies-only batch does not stall any contacts-side merge input", () => {
+test("a companies-only batch loses no row; the contacts-side Merges it never reaches are exactly this set", () => {
   const { trace, runData } = run([companyEvent("1", "existing.com", { recompute: true })], {
     "HubSpot Company Search": () => [{ results: [{ id: "555", properties: { domain: "existing.com" } }] }],
   });
   assert.deepEqual(starvedWithData(trace), [], "no Merge lost a row");
   assert.deepEqual(neverDelivered(trace), NEVER_DELIVERED_COMPANIES_ONLY,
-    "the set of Merges this batch never reaches is fixed — a contacts-side Merge starting to starve moves it");
+    "snapshot of the Merges this batch never reaches on today's committed graph (a builder rename moves it; " +
+    "a lane starting to starve MAY move it — NF3-MN-02: some starvation shapes leave this set unchanged and " +
+    "are caught by the starvedWithData / row-count assertions instead)");
   assert.deepEqual(firedUnfilled(trace), ["Build Response Merge Stage 2#1", "Build Response Merge#1"],
     "the response stage Merges drain once each on the lone companies lane (the by-design D-70-23 shape)");
   assert.deepEqual((runData["Build Response"] || []).map((r) => r.length), [1], "the one company row returns");
 });
 
-test("a contacts-only batch does not stall any companies-side merge input", () => {
+test("a contacts-only batch loses no row; the companies-side Merges it never reaches are exactly this set", () => {
   const { trace, runData } = run([contactEvent("1", "a@example.com")]);
   assert.deepEqual(starvedWithData(trace), [], "no Merge lost a row");
   assert.deepEqual(neverDelivered(trace), NEVER_DELIVERED_CONTACTS_ONLY,
-    "the set of Merges this batch never reaches is fixed — a companies-side Merge starting to starve moves it");
+    "snapshot of the Merges this batch never reaches on today's committed graph (see the companies-only " +
+    "case's note on what this does and does not detect)");
   assert.deepEqual(firedUnfilled(trace), ["Decide Company Action Merge#1"],
     "only the companies-side decide Merge drains on a lone input (the 12354 shape)");
   assert.deepEqual((runData["Build Response"] || []).map((r) => r.length), [1], "the one contact row returns");

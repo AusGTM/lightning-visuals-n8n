@@ -526,10 +526,13 @@ export function walkWorkflow(wf, opts) {
     // node-run, one output index — so two different output indexes of one IF landing on
     // the same Merge stay two separate deliveries (unobserved either way, not modelled).
     // Edges to a non-Merge target are unaffected, one delivery per edge as always.
-    // Applies to BOTH engines: these edges are always enqueued directly adjacent to each
-    // other (nothing else can interleave within one connectionsFrom() loop), so grouping
-    // them into one delivery changes nothing observable for the LEGACY arrival rules
-    // (three legacy fixtures 12203/12206/12316 stay green under it) — it only becomes
+    // Applies to BOTH engines. Note the queue ORDER this changes: non-Merge edges are
+    // enqueued inside the loop and every Merge group AFTER it, so a Merge delivery moves
+    // to the end of its producer's batch (under v1's `queue.pop()` that means dequeued
+    // FIRST). Under legacy (FIFO) the batch's relative order is preserved and a grouped
+    // delivery is consumed as ONE unit at the Merge, so nothing observable changes for
+    // the LEGACY arrival rules (three legacy fixtures 12203/12206/12316 stay green under
+    // it, zero code diff to their file) — it only becomes
     // load-bearing where the v1 run-indexed model needs to fill several inputs of one
     // pending run ATOMICALLY, which an ungrouped one-delivery-per-edge model cannot do.
     const mergeGroups = new Map(); // targetName -> delivery with inputIndexes: [...]
@@ -565,8 +568,14 @@ export function walkWorkflow(wf, opts) {
   // complete deliveries arrive (uncapped, correctly — `Decide Company Action Merge`'s own
   // run 0 is exactly this shape, a real double-fire), so a feedback edge there has no
   // per-Merge cap to stop it. One shared counter catches either shape.
+  // Both caps below (FIRE_CAP, DELIVERY_CAP) share one rationale: they bound a walk that
+  // would otherwise never return, and they sit far above any measured legitimate walk —
+  // the committed 287-node enrichment graph dequeues ~111 deliveries and fires ~13 Merges
+  // per batch, independent of row count (no splitInBatches node exists in any committed
+  // workflow). The `max(1000, …)` floors keep a SMALL graph with a genuinely high-fan-in
+  // Merge from tripping a size-derived bound (NF-NT-06).
   let v1FiresCount = 0;
-  const FIRE_CAP = (wf.nodes || []).length * 4;
+  const FIRE_CAP = Math.max(1000, (wf.nodes || []).length * 4);
   function recordV1Fire(nodeName, site) {
     v1FiresCount += 1;
     if (v1FiresCount > FIRE_CAP) {
@@ -581,7 +590,9 @@ export function walkWorkflow(wf, opts) {
   // with a 2x2 batch dequeues a few hundred deliveries, so 50 per node is far above any
   // legitimate shape and far below "forever".
   let deliveriesProcessed = 0;
-  const DELIVERY_CAP = Math.max(1000, (wf.nodes || []).length * 50);
+  // Strictly above FIRE_CAP: a Merge-driven cycle must trip the Merge-naming guard first,
+  // so this one only ever names a cycle with NO Merge on it.
+  const DELIVERY_CAP = Math.max(FIRE_CAP * 4, (wf.nodes || []).length * 50);
 
   // processQueue() drains `queue` to empty. Factored out (quick task 260911-0tz, Step 3c)
   // so the v1 end-of-run drain below can RESUME it after firing a pending Merge run — a
@@ -605,9 +616,9 @@ export function walkWorkflow(wf, opts) {
           // LEGACY arrival state machine — UNCHANGED RULES (byte-identical to the
           // pre-70-16 behaviour save for calling the extracted `mergeBuffers` maths
           // helper, and looping a grouped delivery's `inputIndexes` — BL-02 above — which
-          // changes nothing observable here: those indexes are always enqueued adjacent
-          // to each other, so processing them together is the same as processing them
-          // back-to-back with nothing else able to interleave).
+          // changes nothing observable here: a grouped delivery is one queue entry
+          // consumed as one unit, and under FIFO its position relative to the rest of
+          // its producer's batch is what the ungrouped edges had (see propagate)).
           const state = mergeState[node.name]
             || (mergeState[node.name] = { buffers: {}, arrived: {}, sources: {}, fired: false });
           // ENGINE RULE (executions 12203 and 12206): a Merge fires AT MOST ONCE per
@@ -854,6 +865,23 @@ export function walkWorkflow(wf, opts) {
             node: n.name, reason: "merge_fired_with_unfilled_input", run: i, missingInputs: missing,
           });
         }
+        // NF3-BL-01 (260911-3mu review): `merge_dropped_rows` — the merge maths let OUT
+        // fewer items than the largest input carried IN. For `combineByPosition`
+        // (`Math.min` across inputs) and `combineAll` this is every unequal-count pairing,
+        // including the annihilation case (`outputCount === 0`) and the case where EVERY
+        // input is filled but with different counts — e.g. an `alwaysOutputData` HTTP node
+        // that returned nothing contributing ONE marker against a carry lane's TWO rows
+        // (`Associate Carry Merge` on the committed ingest graph, pinned in
+        // writeGateShape.test.mjs). `append`'s output is the SUM of its inputs, so this
+        // never fires for append. The entry carries the counts it was judged on, so
+        // `starvedWithData` needs no cross-lookup into `trace.merges` (NF3-MN-03).
+        const maxIn = Math.max(0, ...Object.values(r.itemCounts));
+        if (typeof r.outputCount === "number" && r.outputCount < maxIn) {
+          trace.stalled.push({
+            node: n.name, reason: "merge_dropped_rows", run: i,
+            itemCounts: { ...r.itemCounts }, outputCount: r.outputCount,
+          });
+        }
       });
       state.pending.forEach((p, i) => {
         trace.stalled.push({
@@ -936,14 +964,16 @@ export function walkWorkflow(wf, opts) {
 // unfilled_input` (an input nobody ever delivered to) are the BY-DESIGN D-70-23 gated-
 // sentinel shapes, not losses.
 //
-// NF-BL-01 (260911-1z5 review): the paragraph above was TRUE of delivery and FALSE of
-// the merge maths. A `combine`/`combineByPosition` Merge fired with an unfilled input
-// computes `Math.min(...counts)` with the absent input contributing `[]` — rows IN, ZERO
-// out — and `combineAll` collapses the same way. 23 of the enrichment graph's 33 Merges
-// are `combine`. So a `merge_fired_with_unfilled_input` run whose filled inputs carried
-// >= 1 item and whose `outputCount` is 0 is a loss too: ANNIHILATION, not starvation.
-// This arm is mode-agnostic and does not fire on 12354's `Decide Company Action Merge`
-// run 1 (append: 1 in, 1 out) — the case the narrowing above was written to protect.
+// NF-BL-01 (260911-1z5 review) then NF3-BL-01 (260911-3mu review): the paragraph above
+// was TRUE of delivery and FALSE of the merge maths. A `combine`/`combineByPosition`
+// Merge computes `Math.min(...counts)` across its inputs — an unfilled input contributes
+// `[]` (rows IN, ZERO out: annihilation), and two FILLED inputs with unequal counts drop
+// the difference (rows in, fewer out) with no unfilled input to report at all. 23 of the
+// enrichment graph's 33 Merges are `combine`. The stall pass therefore emits
+// `merge_dropped_rows` whenever a fired run's `outputCount` is below its largest input
+// count, and THAT is the second loss shape here — it subsumes the earlier
+// `outputCount === 0` arm and never fires for `append` (sum of inputs). It does not fire
+// on 12354's `Decide Company Action Merge` run 1 (append: 1 in, 1 out).
 // (NF-NT-01: under v1 every delivery carries >= 1 item — `alwaysOutputData`'s `[{}]`
 // substitution runs before rule (c)'s `return` — so the `total >= 1` test on the
 // undrained arm is currently always true; it is kept as the stated predicate, not as a
@@ -967,12 +997,7 @@ export function starvedWithData(trace) {
       const total = Object.values(s.itemCounts || {}).reduce((sum, n) => sum + n, 0);
       return total >= 1;
     }
-    if (s.reason === "merge_fired_with_unfilled_input") {
-      const run = ((trace.merges[s.node] || {}).runs || [])[s.run];
-      if (!run) return false;
-      const carried = Object.values(run.itemCounts || {}).reduce((sum, n) => sum + n, 0);
-      return carried >= 1 && run.outputCount === 0; // rows in, nothing out — annihilation
-    }
+    if (s.reason === "merge_dropped_rows") return true; // rows in, fewer out — self-contained entry
     return false;
   });
 }
