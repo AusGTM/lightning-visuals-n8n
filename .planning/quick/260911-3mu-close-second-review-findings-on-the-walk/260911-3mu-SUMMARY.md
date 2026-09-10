@@ -4,7 +4,7 @@ type: execute
 status: complete
 subsystem: n8n-tests
 tags: [walker, v1, starvation-detector, review-closure]
-commits: [dbb987e5, 42d8442e, 5ca774a0, see git log]
+commits: [dbb987e5, 42d8442e, c007734a, 5ca774a0, c3539ce7, d30cad69]
 completed: 2026-09-11
 ---
 
