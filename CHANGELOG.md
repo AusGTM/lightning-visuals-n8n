@@ -79,18 +79,37 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   modelled. CLAUDE.md §13.0.2/§13.0.3 record the retirement and the three new observed-live
   facts this incident established, each with its execution ids.
 
+### Changed
+- **`settings.executionOrder` flipped to `"v1"` on every generated workflow body (D-70-28,
+  gap closure round 3, plans 70-16/70-17).** Gate 8's disarmed re-proof (executions
+  `12349`-`12353`) reproduced n8n's legacy execution order pushing one empty item onto every
+  node of an empty branch (`addNodeToBeExecuted`'s `addEmptyItem` branch), which is now the
+  source-cited explanation for every Gate 8 symptom and for G-70-2/G-70-3/G-70-5 — a write
+  node firing on an empty lane, a gate stamping a marker with nothing to gate, a Merge firing
+  on an empty delivery. `scripts/build_cloud_workflows.py` now emits
+  `"settings": {"executionOrder": "v1"}` on all eight `n8n/wf_*.json` bodies from one generator
+  constant; a non-v1 body is a generation-time refusal. Both live-write paths that could revert
+  the setting — the deploy script's PUT/POST and the plugin's arming PUT — are now pinned
+  value-level to preserve it (D-70-29), and the bounce script's read-back and the proof
+  driver's verdict (`execution_order_all_v1`) both fail loudly on a live legacy-order reading.
+  The walker (`tests/n8n/lib/walkWorkflow.mjs`) now refuses a non-v1 graph outside its own
+  frozen-fixture engine-fidelity tests (D-70-30) rather than continuing to claim it models an
+  engine it was never observed to model correctly. Node counts did not move — settings only.
+  **Nothing was deployed, bounced, or armed by this round.** The committed JSON is ahead of
+  live by the whole of Phase 70 plus this flip; redeploying it is Gate 10, followed by Gate 11
+  (the D-70-19 proof re-run, now expecting v1 on every workflow) and Gate 12 (the armed
+  mixed-verdict re-run) — see `70-DEFERRED-GATES.md`.
+
 ### Not yet done
-- **The gap-closure JSON is committed but NOT fully redeployed, and the live instance is now
-  MIXED across five different generations.** As of 2026-09-10, after the runaway stop: the live
-  enrichment lane runs the pre-Phase-70 body (123 nodes, no Merge nodes at all — the incident
-  stop's belt-and-braces PUT), while the other four workflows run the gap-closure round-1 JSON
-  (69/55/43/30, deployed disarmed the same day). The current committed JSON — 287-node
-  enrichment (zero `executeWorkflow`), 69-node ingest with the marker filter — is ahead of ALL
-  five live bodies by varying degrees. Three gates remain, all deferred to the operator: Gate 7
-  (disarmed deploy + bounce of the loop-free body, then the two-minute `mode: integrated` burst
-  watch this incident made a standing runbook step, BEFORE any send), Gate 8 (the D-70-19 proof
-  re-run, all four sends `shapes_equal: true`), and Gate 9 (the armed mixed-verdict re-run,
-  formerly Gate 6, only after Gate 8 passes) — see
+- **Gates 10, 11 and 12 remain, all deferred to the operator.** Gate 7 (disarmed deploy +
+  bounce of the loop-free, pre-flip body) PASSED 2026-09-10. Gate 8 (the D-70-19 proof re-run
+  against that body) FAILED on the same date — the legacy `addEmptyItem` symptoms above — and
+  Gate 9 was blocked. The operator then rolled the live instance back to the pre-Phase-70
+  `59812be` bundle on all five workflows (17/29/123/26/39, active, disarmed) — see CLAUDE.md
+  §13.0.2's corrected live-state table. Gate 10 is the disarmed deploy + bounce of the v1
+  bodies plus the two-minute burst watch; Gate 11 is the D-70-19 proof re-run, now REQUIRING
+  `execution_order_all_v1: true` (a null reading is a failure, the inverse of Gate 8); Gate 12
+  is the armed mixed-verdict re-run, only after Gate 11 passes — see
   `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`.
   Nothing is armed anywhere in this chain.
 

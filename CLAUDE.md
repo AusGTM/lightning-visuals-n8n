@@ -2642,25 +2642,38 @@ start) and AFTER-03 (full end-of-run report).
 > **69** nodes but had its `Build Response`/`Build Ingest Response` jsCode changed (D-70-25, the
 > marker filter) — every other committed workflow is unchanged from the row above.
 >
-> **Live state as of this writing, five workflows, three different generations —
-> read this before assuming any single "committed vs. live" statement covers all five:**
+> **Live state as of this writing, corrected 2026-09-10 after Gate 8 — all FIVE workflows are
+> on the pre-Phase-70 `59812be` bundle.** (The table this replaced described the state between
+> the runaway stop and Gate 7's redeploy; that state no longer holds — Gate 7 ran, then Gate 8
+> failed, then the operator rolled everything back past both.)
 >
 > | Workflow | Live right now | Committed now (this round) | Gap |
 > | --- | --- | --- | --- |
-> | `wf_enrichment_cloud.json` | pre-Phase-70 `59812be` body, **123 nodes**, restored ~07:14Z during the incident stop | **287 nodes**, zero `executeWorkflow` | a full generation — no Merge nodes at all live, vs. the full Phase-70 Merge/gate redesign committed |
-> | `wf_contact_ingest_cloud.json` | gap-closure round-1 JSON, **69 nodes**, deployed 2026-09-10T07:03Z | **69 nodes**, marker-filter jsCode only | jsCode-only (D-70-25 not yet live) |
-> | `wf_review_decision_cloud.json` | gap-closure round-1 JSON, **55 nodes** | **55 nodes**, unchanged | none |
-> | `wf_scheduled_maintenance_cloud.json` | gap-closure JSON, **43 nodes** | **43 nodes**, unchanged | none |
-> | `wf_backend_status_cloud.json` | gap-closure JSON, **30 nodes** | **30 nodes**, unchanged | none |
+> | `wf_backend_status_cloud.json` | pre-Phase-70 `59812be` body, **17 nodes**, active, disarmed | **30 nodes** + `settings.executionOrder: "v1"` | a full generation behind |
+> | `wf_contact_ingest_cloud.json` | pre-Phase-70 `59812be` body, **29 nodes**, active, disarmed | **69 nodes** + v1, marker-filter jsCode | a full generation behind |
+> | `wf_enrichment_cloud.json` | pre-Phase-70 `59812be` body, **123 nodes**, active, disarmed | **287 nodes** + v1, zero `executeWorkflow` | a full generation — no Merge nodes at all live |
+> | `wf_review_decision_cloud.json` | pre-Phase-70 `59812be` body, **26 nodes**, active, disarmed | **55 nodes** + v1 | a full generation behind |
+> | `wf_scheduled_maintenance_cloud.json` | pre-Phase-70 `59812be` body, **39 nodes**, active, disarmed | **43 nodes** + v1 | a full generation behind |
 >
-> **Nothing is armed anywhere in this chain, on any of the five live bodies.** The committed
-> JSON is ahead of live by the whole of this gap-closure round (plans 70-13 and 70-14) — most of
-> that gap sits on the enrichment lane, which is currently running an architecture generation
-> behind (the pre-Phase-70 body has no Merge nodes, no IF-shaped write gates, and no marker
-> filter at all; it predates this entire phase). The deploy that would put the current committed
-> JSON live is deferred to the operator as Gate 7 in `70-DEFERRED-GATES.md`, and Gate 7 is
-> followed immediately — before any send — by the two-minute burst watch this incident made a
-> standing rule (`70-ROLLBACK-RUNBOOK.md`).
+> **What happened, in order:** Gate 7 (2026-09-10) deployed and bounced the loop-free
+> 287/69/55/43/30 JSON live — all five active, both write flags `"false"` everywhere, the
+> two-minute burst watch clean — PASS. Gate 8 then re-ran the D-70-19 proof against that live
+> body and FAILED (executions `12349`-`12353`): `HubSpot Update` executed with no real input
+> item and PATCHed an empty id (405) on both ingest sends; `IF List Expanded` emitted a refusal
+> on an empty list lane; gated sentinels delivered markers on inputs whose own sentinel emitted
+> zero items; `Enrichment Gate Merge` fired twice and dropped every real row; `Apply Contact
+> Judge Verdict` crashed reading a marker — `settings.executionOrder` was ABSENT on every live
+> body throughout (see §13.0.3). Gate 9 was blocked. The operator then rolled the live instance
+> back PAST the loop-free body to the pre-Phase-70 `59812be` bundle on all FIVE workflows —
+> this is the live state as of this writing. **Nothing is armed anywhere.**
+>
+> **This round (gap closure round 3, D-70-28..31) flips `settings.executionOrder` to `"v1"` on
+> EVERY generated body — five cloud plus three local — from one generator constant
+> (`scripts/build_cloud_workflows.py`), never per-workflow, never hand-edited.** Node counts do
+> NOT move for the flip — 287/69/55/43/30 cloud and 82/10/13 local are the same counts as
+> before this round; only `settings` changed (plans 70-16/70-17). The committed JSON is
+> therefore ahead of live by the whole of Phase 70 PLUS this round's v1 flip. Redeploying it
+> live is Gate 10 in `70-DEFERRED-GATES.md` — not done. Nothing is armed.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
@@ -2680,8 +2693,11 @@ it happen. Documentation is not evidence of as-built behaviour — do not upgrad
 | A parent workflow **cannot activate while a referenced child is unpublished** (400: "Please publish all referenced sub-workflows first"). Publish children before parents. | `[observed live]` (P-13 probe) |
 | A **self-referencing `Execute Workflow` node publishes, runs, and terminates** — the in-workflow depth guard stopped recursion, zero grandchildren. | `[observed live, disarmed]` (`12045` → children `12046`/`12047`, `61-SCALE-UP-VERDICT.json`, `depth_guard_stopped_recursion: true`) |
 | **`settings.executionOrder` is ABSENT on all five running cloud workflow bodies** (the engine's own legacy-v0 default, not a value anyone set). Read directly from the LIVE workflow bodies via the executions API, not from the committed JSON (which also omits it — see D-70-02). | `[observed live]` (2026-09-10, `LV Enrichment (Cloud template)` and `LV Contact Ingest (Cloud template)` both `null`, `70-RUNTIME-VERDICT.json`) |
-| A **Merge node's zero-item output IS a delivery to its consumer's input** — not silence, not a non-event. A Code/IF/NoOp node that legitimately produces nothing still satisfies whichever Merge input it feeds. | `[observed live]` (`12203`: `Associate Carry Merge`, `Ingest Merge Response`; `12206`: `Enrichment Gate Merge`) |
-| **The first delivery to a Merge input is the one kept; a later arrival on the same input is discarded**, even when the later arrival is the real row and the first was an empty sentinel output. | `[observed live]` (`12203`: `Associate Carry Merge` fired 1×0 on the sentinel's `[]` before `Build Association Request`'s real item arrived; `Ingest Merge Response` fired on `HubSpot Update Gate Unreached Sentinel`'s `[]` before the gate IF's refusal row arrived — both the real association result and the `write_blocked` row were dropped) |
+| **Legacy execution order (`executionOrder` absent or not `"v1"`) pushes ONE empty item (`{ json: {} }`) onto every node on an empty branch via `addNodeToBeExecuted`'s `addEmptyItem` branch, so a waiting multi-input node can still execute** — the mechanism behind every Gate 8 symptom and G-70-2/G-70-3/G-70-5: a gate Code node fed the empty item runs and stamps its marker, an HTTP node fed it sends a request with an empty id, an `Execute Workflow` node fed it dispatches. | `[documented]` (`packages/core/src/execution-engine/workflow-execute.ts`, `addNodeToBeExecuted`, the `addEmptyItem` branch — n8n's own execution-order docs page describes only branch ordering and says nothing about empty-input execution at all) |
+| **Under v1 there is no such push: a node on an empty branch does not run, and at end-of-run every node still `waitingExecution` executes once with whatever inputs arrived, gated on `requiredInputs`** — `[0, 1]` for `chooseBranch` mode, `1` for every other mode. Every Merge this repo generates is typeVersion 3.2 in `append` or `combine` mode, so `requiredInputs` is always `1` here: enrichment 10 `append` + 23 `combine`, ingest 2 + 8, review 3 + 7, backend_status 7 `combine`, maintenance none. | `[documented]` (`packages/nodes-base/nodes/Merge/v3/actions/versionDescription.ts`, `requiredInputs`) |
+| **Gate 8 (executions `12349`-`12353`) reproduced the legacy `addEmptyItem` push end to end, with `settings.executionOrder` ABSENT on every live body throughout**: `HubSpot Update` executed with no real input item and PATCHed an empty id (405); `IF List Expanded` emitted a refusal on an empty list lane; gated sentinels delivered markers on inputs whose own sentinel emitted zero items; `Enrichment Gate Merge` fired twice and dropped every real row; `Apply Contact Judge Verdict` crashed reading `judge_flags` off a marker item. | `[observed live]` (2026-09-10, executions `12349`-`12353`, `70-UAT.md` Test 8, `settings.executionOrder` absent on both lanes) |
+| A **Merge node's zero-item output IS a delivery to its consumer's input** — not silence, not a non-event. A Code/IF/NoOp node that legitimately produces nothing still satisfies whichever Merge input it feeds. Observed under the LEGACY execution order only (`settings.executionOrder` absent on both bodies) — the legacy `addEmptyItem` push (two rows above) is the likelier mechanism than a genuine Merge delivery; the observation and its execution ids stand. | `[observed live]` (`12203`: `Associate Carry Merge`, `Ingest Merge Response`; `12206`: `Enrichment Gate Merge`) |
+| **The first delivery to a Merge input is the one kept; a later arrival on the same input is discarded**, even when the later arrival is the real row and the first was an empty sentinel output. Observed under the LEGACY execution order only (`settings.executionOrder` absent on both bodies) — the legacy `addEmptyItem` push above is the likelier mechanism than a genuine Merge delivery; the observation and its execution ids stand. | `[observed live]` (`12203`: `Associate Carry Merge` fired 1×0 on the sentinel's `[]` before `Build Association Request`'s real item arrived; `Ingest Merge Response` fired on `HubSpot Update Gate Unreached Sentinel`'s `[]` before the gate IF's refusal row arrived — both the real association result and the `write_blocked` row were dropped) |
 | **A Merge fires at most once per execution.** Once every declared input has received its first delivery (empty or not), the Merge runs and locks; nothing arriving afterward re-triggers it. | `[observed live]` (`12203`, `12206` — both Merges ran exactly once) |
 | **A Merge with an input that NEVER receives any delivery at all never fires — and its downstream terminates silently, with the execution still reporting `success`.** This is starvation, not a hang: no execution in this repo's UAT ever got stuck `running`. | `[observed live]` (`12204`/`12205`/`12206`: the then-15-input `Build Response Merge` never fired on any execution — `Build Response` never ran, 0 rows recovered vs 4/2 predicted, status `success`) |
 | **A node fed zero items does not run at all, and so contributes no delivery to anything it feeds.** First demonstrated with an HTTP node at Gate 1 (`12200`); the SAME rule, in Code/NoOp gate form, was only first observed at Gate 3/70-05-A (`12203`, `12206`) — recorded separately rather than assumed identical in every node type until each was actually seen. | `[observed live]` (HTTP form: `12200`, `HubSpot Associate Company` never ran when its lane was starved; Code/NoOp gate form: `12203`, `12206`) |
@@ -2691,12 +2707,17 @@ it happen. Documentation is not evidence of as-built behaviour — do not upgrad
 | **A node can execute with an item that no declared connection delivered.** Child execution `12316`'s `Dispatch Self` (an `executeWorkflow` node) ran ONCE with 1 marker item, though its ONLY declared producer, `Build Scale Up Fan-Out`, emitted 0 items on that run. The stored workflow's `connections` matched the committed JSON exactly (no duplicate node names, no stray edge). runData `source` for `Dispatch Self` named `Recompute Requested Sentinel Gate` — a Code node with NO declared edge to `Dispatch Self` at all — and `source` for `Build Scale Up Fan-Out` named `Refusal Row Absent Sentinel Gate`; both are D-70-23 gate Code nodes that returned `[]`. **The cause is NOT isolated.** This is a documented divergence, not a modelled mechanism: `tests/n8n/walkerEngineFidelity.test.mjs` pins execution `12316` as a case the walker does NOT reproduce, and no code in this repo claims to explain it. Do not read this row as resolved by the retirement above — the retirement removed the node the mechanism could act on; it did not identify the mechanism. | `[observed live]`, cause not isolated (2026-09-10, child execution `12316`, `70-14-SUMMARY.md`, `tests/n8n/fixtures/frozen/exec_12316.runData.json`) |
 | **Scale of the 2026-09-10 runaway.** 135 self-dispatched `Execute Workflow` child executions (`12211`–`12348`) in six minutes, ~3 in flight continuously, each child dispatching one more before any guard caught it. 138 enrichment executions consumed in total (`12209`–`12348`) against the Starter 2.5K/month budget — roughly 5.5% of one month's allotment in six minutes, from four disarmed proof sends that themselves should have produced 4 executions. | `[observed live]` (2026-09-10T07:04Z–07:10Z, executions `12209`–`12348`) |
 
-**No Merge-behaviour row above was touched by this round.** Every Merge-related fact in this
-table (zero-item delivery, first-delivery-wins, fires-at-most-once, input starvation, the
-15-input CONFOUNDED row) is exactly as Gate 1/Gate 3's 2026-09-10 UAT session left it. This
-round's three new rows are about self-dispatch and deactivation, not Merge semantics. The next
-Merge observation is Gate 8 in `70-DEFERRED-GATES.md` — a re-run of the same disarmed proof
-against the loop-free body, not yet exercised.
+**This round (gap closure round 3, D-70-28..31) added three rows and annotated two.** Two new
+`[documented]` rows record n8n's legacy `addEmptyItem` push and the v1 `requiredInputs`
+contract, each citing its own source file and symbol. One new `[observed live]` row records
+Gate 8's reproduction of the legacy push on executions `12349`-`12353`. The two pre-existing
+Merge rows (zero-item delivery, first-delivery-wins) are now annotated as observed under the
+LEGACY execution order only — their scope is narrowed, neither row nor its execution ids is
+deleted; the empty-item push above is the likelier mechanism for both. Every other
+Merge-related fact in this table (fires-at-most-once, input starvation, the 15-input
+CONFOUNDED row) is untouched, exactly as the previous round left it. **No row in this table
+claims v1 behaviour has been observed on this instance** — that upgrade is Gate 11's job
+(`70-DEFERRED-GATES.md`).
 
 **Do not read the fan-out as cheaper.** The same 2-synthetic-row batch listed **1** execution
 inline (substrate 1, `12044`) and **3** with `scale_up: true` (`12045` + two children). The
