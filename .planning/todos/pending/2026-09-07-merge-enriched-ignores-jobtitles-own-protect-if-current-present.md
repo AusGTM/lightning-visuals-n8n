@@ -64,3 +64,12 @@ not modified; no per-field `protect_if_current_present` branch is added in this 
   today's fill-versus-conflict rule has no confidence gate at all — a response's
   `properties` map carries no confidence value for `merge_enriched` to read in the
   first place, so that may be its own, separate follow-on.
+
+## Operator ruling 2026-09-11 (resume session)
+
+**Per-field, both callers.** `merge_enriched` reads `protect_if_current_present` per field
+from `field_policy.yaml` (plugin's shipped copy) for BOTH `enrich-before-ingest` and
+`suggest-contacts`. `jobtitle` (`protect_if_current_present: false`) accepts a refresh;
+`email` and the location fields (`true`) stay never-replaced. The policy file is the one
+source; the `conflicts` list still records every replaced value. Per-field `min_confidence`
+in the merge is NOT part of this ruling — separate follow-on if wanted.

@@ -90,3 +90,13 @@ producer feeding multiple inputs with a second producer on one of those inputs (
 Merge Stage 1/2`, `Merge Winners Fan-In`, `Merge Company Fan-In`, ...). Pinned as a
 KNOWN-UNOBSERVED case in `tests/n8n/walkWorkflow.test.mjs` (NF-MJ-01). Resolving it needs a
 live recording of a Merge with overlapping grouped producers both delivering.
+
+## Operator ruling 2026-09-11 (resume session)
+
+**Option A: allowlist + assert.** `assert_merge_input_contract` gains rule 5: a Merge input
+with more than one producer edge is a build-time violation unless the Merge is named in an
+explicit tolerant-allowlist in `scripts/build_cloud_workflows.py` carrying a reason string
+(`Decide Company Action Merge`: consumer filters markers, only marker-only runs multi-fire).
+`Collect Credits` is admitted either by the same allowlist or by a shared-upstream-gate
+exclusivity check — implementer's choice, must be tested. No graph change, no regenerated
+JSON, no redeploy. MN-01 and NF-MJ-01 stay open as recorded.

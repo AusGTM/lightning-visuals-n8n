@@ -148,3 +148,11 @@ concurrency, but **the Anthropic and Lusha figures do not change**: they are per
 fan-out spends them faster rather than less. A single bulk run still consumes half the Lusha
 balance and cannot be repeated twice in a month. That constraint is untouched by Phase 61 and is
 the reason levers 1–3 still matter.
+
+## Operator ruling 2026-09-11 (resume session)
+
+**Measure first.** No gate change yet. Quick task scope: log `reasons[]` from `Judge Gate`
+over a handful of records so `confidence_band`'s share becomes a measured distribution, and
+confirm the `max_uses` actually in effect in the deployed workflow against
+`WEB_RESEARCH_MAX_SEARCHES=5` (lever 3). Lever 1 (band bounds) is NOT authorised until the
+measurement is in hand.
