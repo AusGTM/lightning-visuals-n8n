@@ -325,6 +325,28 @@ executions 12203, 12204–12208).
   `scripts/prove_phase70_runtime.py` compares the RAW recovery rows (`watch.recover_dispatch`
   responses), not the client-reconciled rows, or `row_shape` excludes client-added keys — with a
   test that fails on execution 12207's shape first.
+- **D-70-23 — Sentinel mechanism: Option B, gated sentinel (amends D-70-20).** D-70-20's
+  stated mechanism — a sentinel on its own dedicated append-mode input, always emitting exactly
+  one marker — does not hold: the engine requires a delivery on every declared Merge input, and
+  a sentinel on its own input leaves the REAL producer's input unfed whenever that lane is dead,
+  so the Merge never fires. This is executions 12204–12206 (`Build Response Merge` had inputs
+  with no delivery at all and never fired; the run reported success with zero rows), reproduced
+  synthetically by Wave 1's dedicated-input marker case in `tests/n8n/walkWorkflow.test.mjs`.
+  Operator ruling 2026-09-10: **Option B — gated sentinel.** The sentinel keeps SHARING the real
+  producer's Merge input; a gate node sits between the sentinel's condition node and its
+  targets, and the gate emits nothing at all when the lane is live — a node fed zero items never
+  runs, so no delivery is made and the real row cannot be pre-empted. This is the same mechanism
+  the engine already demonstrated at Gate 1 (execution 12200), where a write node received zero
+  items, never ran, and contributed no delivery, and it matches the one shared input in this
+  repo that already behaves correctly (the credit collector: a fetched result and a skipped
+  result feed one input, and exactly one of them ever runs). Wave 1's gated-sentinel synthetic
+  case does not stall, confirming the mechanism offline before any regeneration.
+  Every other clause of D-70-20 stands unchanged: the carry Merge is bypassed rather than
+  padded, no Merge declares more than ten inputs, and markers are filtered at the response
+  builders. Cost, taken on deliberately: every sentinel condition is now load-bearing — a
+  wrongly-silent sentinel now starves the input it used to satisfy by accident merely by
+  emitting an (empty) delivery — so each sentinel condition must be audited to be the exact
+  complement of its real producer's own delivery predicate (plan 70-10's Task 2 audit).
 - **Unchanged:** every locked decision D-70-01..19 stands. D-70-19's rule stands verbatim: the
   walker is corrected toward the engine, never toward the plans.
 
