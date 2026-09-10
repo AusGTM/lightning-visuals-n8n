@@ -400,7 +400,7 @@ def envelope_can_write(envelope) -> bool:
 
 
 def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None,
-                   scale_up=False, execution_ceiling=None, **_ignored_legacy_kwargs):
+                   execution_ceiling=None, **_ignored_legacy_kwargs):
     """Send every chunk of an approved plan, in plan order, one at a time.
 
     `armed` has NO default and is passed to each `dispatch_enrichment` call rather than
@@ -429,7 +429,9 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     opt-in this function used to accept (and any other stale keyword a caller has not
     yet stopped passing) is swallowed here rather than rejected — "a caller that still
     passes it is ignored, not rejected", so a stale caller degrades to the new
-    behaviour instead of erroring on a `TypeError`.
+    behaviour instead of erroring on a `TypeError`. Phase 70 Plan 13 Task 3 (D-70-24)
+    retired a second keyword the same way: the scale-up fan-out opt-in, after the
+    self-dispatch lane it drove looped live on 2026-09-10 (executions 12211-12348).
 
     `execution_ceiling` (Phase 57, D-57-01), keyword-only, defaults to `None`: today's
     behaviour, byte-identical envelope, byte-identical `DispatchOutcome` with
@@ -447,18 +449,6 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     construction, so there is nothing mid-run to stop — the tally is skipped for it and
     `ceiling_stop` stays `None`; that one shape is genuinely unbounded by this mechanism,
     not silently guessed at.
-
-    `scale_up` (Phase 61 Plan 06 Task 5, T-61-25, substrate-3 of 61-SPIKE-VERDICT.md — see
-    `scripts/build_cloud_workflows.py`'s `SCALE_UP_MAX_FAN_DEPTH`/`ENRICH_BUILD_SCALE_UP_
-    FAN_OUT` for the n8n-side mechanism): keyword-only, defaults to `False`, so every
-    existing caller sends the byte-identical envelope it sends today. When `True`, rides
-    the envelope as `scale_up: true` — the SAME opt-in-flag idiom `recompute` already
-    established, "a pattern, not an invention." THERE IS NO `fan_depth` PARAMETER HERE,
-    DELIBERATELY: the depth bound this feature's safety rests on (T-61-25) is a
-    workflow-internal counter this workflow's OWN "Build Scale Up Fan-Out" node owns
-    and increments — the client has no knob to request a depth, and cannot ask for one,
-    structurally (see
-    `test_scale_up_runtime.py::test_dispatch_plan_has_no_depth_parameter_to_forge`).
 
     D-70-07 (Phase 70 Plan 03 Task 2): this function no longer flushes `body` into
     `written_records` at all — the sync-body-trusting branch it used to take, skipped
@@ -558,8 +548,6 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
             # unconditionally, and every leg's rows are recovered from runData by this
             # id, not from this call's own synchronous response.
             envelope["run_id"] = run_id
-            if scale_up:
-                envelope["scale_up"] = True
             body = enrichment.dispatch_enrichment(envelope, armed, config, transport=watcher)
         except NotArmedError:
             # Not a chunk failure — nothing was sent and nothing should be. Let it out.

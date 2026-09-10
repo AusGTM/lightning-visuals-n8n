@@ -1457,7 +1457,7 @@ def test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_
 # the time-proximity lookup.
 # =====================================================================================
 
-def _scale_up_free_execution(run_id, rows):
+def _settled_execution(run_id, rows):
     return {
         "id": "exec-1", "status": "success",
         "data": {"resultData": {"runData": {
@@ -1470,7 +1470,7 @@ def _scale_up_free_execution(run_id, rows):
 def _recovering_get_transport(stub_get_transport_factory, run_id, rows):
     return stub_get_transport_factory([
         {"data": [{"id": "exec-1"}]},
-        _scale_up_free_execution(run_id, rows),
+        _settled_execution(run_id, rows),
     ])
 
 
@@ -1571,8 +1571,8 @@ def test_a_failed_chunk_does_not_erase_the_rows_of_the_chunks_that_landed(
     # Two executions carrying this run id — one per chunk that actually landed.
     get_transport = stub_get_transport_factory([
         {"data": [{"id": "exec-a"}, {"id": "exec-b"}]},
-        _scale_up_free_execution(run_id, [{"row_id": "1", "action": "update"}]),
-        _scale_up_free_execution(run_id, [{"row_id": "5", "action": "update"}]),
+        _settled_execution(run_id, [{"row_id": "1", "action": "update"}]),
+        _settled_execution(run_id, [{"row_id": "5", "action": "update"}]),
     ])
 
     result = chunking.dispatch_and_recover(

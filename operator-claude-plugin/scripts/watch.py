@@ -497,35 +497,14 @@ def require_executions_api(config) -> None:
         )
 
 
-# The `scale_up` fan-out node (CLAUDE.md 13.0.2). A dispatched child is named on the
-# parent's OWN output item as `metadata.subExecution.executionId` — the key path the
-# phase-61 premise probe measured live (parent `12036` -> child `12037`,
-# `61-PREMISE-PROBE-VERDICT.json` P-13; CLAUDE.md 13.0.3 records it as `[observed live]`),
-# and it is carried even with wait-for-completion off, so detachment costs no correlation.
-SCALE_UP_DISPATCH_NODE = "Dispatch Self"
-
-
-def child_execution_ids(execution) -> list:
-    """Every child execution this execution dispatched, in order, de-duplicated.
-
-    Structured extraction off the item's own `metadata`, never a raw-text id scan —
-    the same discipline the phase-61 scale-up probe driver used against the live
-    instance. An execution that never fanned out returns `[]`, which is what makes
-    `include_children` free for the overwhelming majority of runs.
-    """
-    run_data = report._run_data(execution)
-    if not isinstance(run_data, dict):
-        return []
-    found = []
-    for item in report.all_node_items(run_data, SCALE_UP_DISPATCH_NODE):
-        if not isinstance(item, dict):
-            continue
-        sub = ((item.get("metadata") or {}).get("subExecution") or {}) \
-            if isinstance(item.get("metadata"), dict) else {}
-        child_id = sub.get("executionId") if isinstance(sub, dict) else None
-        if child_id is not None and child_id not in found:
-            found.append(child_id)
-    return found
+# Phase 70 Plan 13 Task 3 (G-70-5, D-70-24): the child-execution recovery that stood here
+# is deleted. It read the parent's own output for the self-dispatch node, extracting each
+# dispatched child's `metadata.subExecution.executionId`. That node's lane looped live on
+# 2026-09-10 (135 child executions in six minutes, executions 12211-12348) and was removed
+# from the enrichment graph, so this recovery could only ever have returned nothing — and
+# a recovery path keyed on a node that no longer exists is exactly the stale mechanism
+# this phase removes. Every execution a run produces is now a top-level one, found by the
+# run-id scan below.
 
 
 def find_executions_by_run_id(config, run_id, *, workflow_id=None, workflow_name=None,
@@ -561,8 +540,8 @@ def find_executions_by_run_id(config, run_id, *, workflow_id=None, workflow_name
 def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=None,
                             workflow_name=None, echo_node=None, response_node=None,
                             transport=requests.get, now=None, sleep=None,
-                            bound_seconds=None, backoff_schedule=BACKOFF_SCHEDULE_SECONDS,
-                            include_children=True) -> dict:
+                            bound_seconds=None,
+                            backoff_schedule=BACKOFF_SCHEDULE_SECONDS) -> dict:
     """Waits — bounded, THIS module's own sanctioned poll site — for `expected_chunk_count`
     executions carrying `run_id` to settle, then returns their flattened `response_node`
     (default: the enrichment lane's `Build Response`) rows: exactly the shape
@@ -602,51 +581,35 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
         )
         settled = [e for e in executions if _is_settled(e)]
         if len(settled) >= expected_chunk_count:
-            # D-70-08a (Phase 70 Plan 06): a `scale_up` batch's rows live in the
-            # CHILDREN — the parent detaches (`waitForSubWorkflow: false`) and settles
-            # at once, so returning on the parent alone drops every fanned row on the
-            # sole result channel. Each child is fetched by the id the PARENT itself
-            # named; a child that has not settled yet keeps the whole recovery waiting,
-            # because a partial fan-out is a short read, not a result.
-            children = []
-            child_still_running = False
-            if include_children:
-                for execution in settled:
-                    for child_id in child_execution_ids(execution):
-                        child = executions_client.get_execution(
-                            config, child_id, transport=transport)
-                        if _is_settled(child):
-                            children.append(child)
+            responses = []
+            merged_run_data = {}
+            for execution in settled:
+                responses.extend(_response_rows(execution, response_node))
+                rd = report._run_data(execution)
+                if isinstance(rd, dict):
+                    # UNION, never replacement (Phase 70 review WR-01): each execution
+                    # carries its OWN runs for the same node, and `dict.update` would
+                    # let whichever is folded last speak for it — one execution that
+                    # never wrote erasing a sibling that did, so `report.reconcile`
+                    # downgrades a real write to `not_confirmed`. Concatenating is
+                    # exactly the shape n8n itself produces for a node that ran more
+                    # than once (see `report.all_node_items`), so every reader already
+                    # handles it. A multi-chunk dispatch is what produces this shape now
+                    # (Phase 70 Plan 13, D-70-24 — the fan-out parent/child pair that
+                    # also produced it is deleted).
+                    for node, runs in rd.items():
+                        if isinstance(runs, list) and isinstance(
+                                merged_run_data.get(node), list):
+                            merged_run_data[node].extend(runs)
                         else:
-                            child_still_running = True
-            if not child_still_running:
-                responses = []
-                merged_run_data = {}
-                for execution in list(settled) + children:
-                    responses.extend(_response_rows(execution, response_node))
-                    rd = report._run_data(execution)
-                    if isinstance(rd, dict):
-                        # UNION, never replacement (Phase 70 review WR-01): each
-                        # execution carries its OWN runs for the same node, and
-                        # `dict.update` would let whichever is folded last speak for
-                        # it — a child that never wrote erasing a parent that did, so
-                        # `report.reconcile` downgrades a real write to
-                        # `not_confirmed`. Concatenating is exactly the shape n8n
-                        # itself produces for a node that ran more than once (see
-                        # `report.all_node_items`), so every reader already handles it.
-                        for node, runs in rd.items():
-                            if isinstance(runs, list) and isinstance(
-                                    merged_run_data.get(node), list):
-                                merged_run_data[node].extend(runs)
-                            else:
-                                merged_run_data[node] = (
-                                    list(runs) if isinstance(runs, list) else runs)
-                return {
-                    "recovered": True, "responses": responses,
-                    "matched_executions": len(settled) + len(children),
-                    "execution_ids": [e.get("id") for e in list(settled) + children],
-                    "run_data": merged_run_data,
-                }
+                            merged_run_data[node] = (
+                                list(runs) if isinstance(runs, list) else runs)
+            return {
+                "recovered": True, "responses": responses,
+                "matched_executions": len(settled),
+                "execution_ids": [e.get("id") for e in settled],
+                "run_data": merged_run_data,
+            }
 
         elapsed = _now() - start
         if elapsed >= bound:
