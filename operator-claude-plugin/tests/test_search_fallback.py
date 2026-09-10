@@ -179,6 +179,46 @@ def test_an_attempt_entry_that_is_not_a_dict_is_ineligible():
     assert verdict["eligible"] is False
 
 
+# --- eligible_after_ladder: ladder_built=False (260911-ao2, no usable website) ------------
+
+
+def test_no_ladder_and_no_attempts_is_eligible_as_absence_of_information():
+    """A company with no usable website on record never built a ladder. That is absence
+    of information about the company, not a fence — the operator ruling of 2026-09-11."""
+    verdict = eligible_after_ladder([], ladder_built=False)
+    assert verdict["eligible"] is True
+    assert "absence" in verdict["reason"].lower()
+    assert "fence" in verdict["reason"].lower()
+
+
+def test_no_ladder_with_a_refused_attempt_is_a_contradiction_and_ineligible():
+    """attempts cannot exist without a ladder — ladder_built=False cannot launder a
+    recorded refusal into eligibility."""
+    verdict = eligible_after_ladder(
+        [_attempt("https://a.example/x", "refused")], ladder_built=False
+    )
+    assert verdict["eligible"] is False
+    assert "contradiction" in verdict["reason"].lower()
+
+
+def test_no_ladder_with_an_empty_attempt_is_also_a_contradiction_and_ineligible():
+    """Same contradiction, same reason, regardless of what the (impossible) attempt
+    records — the flag is not a shortcut past the disposition read."""
+    verdict = eligible_after_ladder(
+        [_attempt("https://a.example/x", "empty")], ladder_built=False
+    )
+    assert verdict["eligible"] is False
+    assert "contradiction" in verdict["reason"].lower()
+
+
+def test_ladder_built_defaults_true_and_no_second_argument_is_unchanged():
+    """Every existing caller passes one argument; the default must reproduce today's
+    empty-record refusal byte-for-byte."""
+    verdict = eligible_after_ladder([])
+    assert verdict["eligible"] is False
+    assert "attempt was recorded" in verdict["reason"].lower()
+
+
 # --- rank_results: the D-5sd-02 tier ranking ----------------------------------------------
 
 
@@ -333,6 +373,36 @@ def test_an_unlisted_host_is_rejected_for_being_unlisted_not_for_a_budget_it_nev
     outcome = _rank(["https://random-blog.example/x"], already_searched=MAX_FALLBACK_SEARCHES)
     assert "random-blog.example" in outcome["rejected"][0]["reason"]
     assert str(MAX_FALLBACK_SEARCHES) not in outcome["rejected"][0]["reason"]
+
+
+# --- rank_results: no company_url (260911-ao2, no usable website — rank 1 unreachable) ----
+
+
+def test_no_company_url_ranks_linkedin_and_allowlisted_third_party_with_no_rank_one():
+    """A website-less company has no own-host, so no result can be rank 1 — LinkedIn and
+    the tier-3 allowlist still rank, at 2 and 3 respectively."""
+    outcome = rank_results(
+        [
+            {"url": "https://linkedin.com/in/someone"},
+            {"url": "https://racingvictoria.example/about/board"},
+        ],
+        None,
+        sources=FIXTURE_SOURCES,
+    )
+    assert [entry["tier"] for entry in outcome["accepted"]] == [2, 3]
+    assert all(entry["tier"] != 1 for entry in outcome["accepted"])
+
+
+def test_no_company_url_rejects_a_result_that_would_have_been_the_companys_own_host():
+    """With no company URL there is no own-host to be rank 1 by — nothing substitutes,
+    and an otherwise-unlisted host is rejected exactly like any other unlisted host."""
+    outcome = rank_results(
+        [{"url": "https://example-club.example/about/our-people"}],
+        None,
+        sources=FIXTURE_SOURCES,
+    )
+    assert outcome["accepted"] == []
+    assert "example-club.example" in outcome["rejected"][0]["reason"]
 
 
 # --- load_sources: the shipped config contract --------------------------------------------
@@ -622,6 +692,45 @@ def test_the_cli_agrees_with_the_in_process_function(tmp_path):
     in_process = eligible_after_ladder(attempts)
     assert parsed["eligible"] == in_process["eligible"]
     assert parsed["reason"] == in_process["reason"]
+
+
+# --- CLI: --no-ladder (260911-ao2, no usable website) --------------------------------------
+
+
+def test_the_cli_no_ladder_eligible_flag_agrees_with_the_in_process_call(tmp_path):
+    attempts_path = tmp_path / "attempts.json"
+    attempts_path.write_text(json.dumps([]), encoding="utf-8")
+    returncode, parsed = _run_search_cli(
+        tmp_path, "--eligible", str(attempts_path), "--no-ladder"
+    )
+    in_process = eligible_after_ladder([], ladder_built=False)
+    assert returncode == 0
+    assert parsed["eligible"] == in_process["eligible"] is True
+    assert parsed["reason"] == in_process["reason"]
+
+
+def test_the_cli_no_ladder_rank_flag_succeeds_without_a_company_url(tmp_path):
+    results_path = tmp_path / "results.json"
+    results_path.write_text(
+        json.dumps([{"url": "https://linkedin.com/in/someone"}]), encoding="utf-8"
+    )
+    returncode, parsed = _run_search_cli(
+        tmp_path, "--rank", str(results_path), "--no-ladder"
+    )
+    assert returncode == 0
+    assert parsed["ok"] is True
+    assert [entry["tier"] for entry in parsed["accepted"]] == [2]
+
+
+def test_the_cli_rank_without_no_ladder_still_requires_company_url(tmp_path):
+    results_path = tmp_path / "results.json"
+    results_path.write_text(
+        json.dumps([{"url": "https://linkedin.com/in/someone"}]), encoding="utf-8"
+    )
+    returncode, parsed = _run_search_cli(tmp_path, "--rank", str(results_path))
+    assert returncode == 1
+    assert parsed["ok"] is False
+    assert "--company-url" in parsed["error"]
 
 
 # --- AST purity guards --------------------------------------------------------------------

@@ -168,7 +168,7 @@ def load_sources(path=None):
     return document
 
 
-def eligible_after_ladder(attempts):
+def eligible_after_ladder(attempts, ladder_built=True):
     """`{"eligible": bool, "reason": str}` -- may the round look past the ladder at all?
 
     FAIL-CLOSED, and deliberately so (D-5sd-06): an `attempts` entry whose disposition is
@@ -188,7 +188,41 @@ def eligible_after_ladder(attempts):
 
     An EMPTY list is ineligible: with no attempt on record, nothing establishes that the
     crawl completed rather than never running.
+
+    `ladder_built` is a CLAIM THE CALLER MAKES about discovery, not a disposition read off
+    an attempt -- it says "there was no usable website on record, so no ladder was ever
+    built for this company" (operator ruling 2026-09-11). It defaults `True`, so every
+    existing caller and every existing test above is byte-identical. When falsy: an EMPTY
+    `attempts` is eligible -- a company with no usable website had no ladder to be refused
+    BY, so this is absence of information, not a fence. A NON-empty (or non-list)
+    `attempts` alongside `ladder_built=False` is a CONTRADICTION -- attempts cannot exist
+    without a ladder -- and is refused outright, because admitting it would be the one way
+    a recorded refusal could be laundered into eligibility. The D-5sd-04 refusal fence is
+    untouched: a refusal only ever exists on an attempts entry, and any attempts entry
+    combined with this flag refuses for that reason alone, never reaching the disposition
+    read below.
     """
+    if not ladder_built:
+        if isinstance(attempts, list) and not attempts:
+            return {
+                "eligible": True,
+                "reason": (
+                    "no ladder was built for this company -- there was no usable "
+                    "website on record to walk, so this is absence of information "
+                    "about the company, not a fence the ladder ran into (operator "
+                    "ruling 2026-09-11)."
+                ),
+            }
+        return {
+            "eligible": False,
+            "reason": (
+                f"ladder_built is False but attempts is {attempts!r} -- attempts "
+                f"cannot exist without a ladder, so this is a contradiction rather "
+                f"than a claim to trust; refusing rather than laundering a recorded "
+                f"ladder into eligibility."
+            ),
+        }
+
     if not isinstance(attempts, list) or not attempts:
         return {
             "eligible": False,
@@ -283,6 +317,14 @@ def rank_results(results, company_url, sources=None, already_searched=0):
     TRANSCRIPTION and its fidelity cannot be verified offline, so no search snippet is
     ever allowed to become a row field. A person comes from a real `web_fetch` of an
     accepted URL; a fabricated URL simply fails to fetch or yields nobody.
+
+    A falsy `company_url` (a company with no usable website on record, operator ruling
+    2026-09-11) makes rank 1 STRUCTURALLY UNREACHABLE, not merely unused: `company_host`
+    becomes the empty string and `_host_matches` returns False for an empty listed host
+    (`bool(listed)` guards it), so no result can be ranked 1 and nothing substitutes
+    upward -- no logic change was needed here, this paragraph just names the consequence.
+    Such a round is LinkedIn-or-held by construction: only tier 2 and tier 3 remain
+    reachable, and D-5sd-05 still holds tier 3.
     """
     if sources is None:
         sources = load_sources()
@@ -462,6 +504,7 @@ if __name__ == "__main__":
         _rank_path = None
         _company_url = None
         _already_searched = 0
+        _no_ladder = False
         for _i, _a in enumerate(_args):
             if _a == "--eligible" and _i + 1 < len(_args):
                 _eligible_path = _args[_i + 1]
@@ -471,17 +514,23 @@ if __name__ == "__main__":
                 _company_url = _args[_i + 1]
             elif _a == "--already-searched" and _i + 1 < len(_args):
                 _already_searched = int(_args[_i + 1])
+            elif _a == "--no-ladder":
+                _no_ladder = True
 
         if _eligible_path:
             _attempts = json.loads(pathlib.Path(_eligible_path).read_text(encoding="utf-8"))
-            print(json.dumps({"ok": True, **eligible_after_ladder(_attempts)}))
-        elif _rank_path:
-            if not _company_url:
-                raise ValueError("--rank needs --company-url (tier 1 is computed from it)")
-            _results = json.loads(pathlib.Path(_rank_path).read_text(encoding="utf-8"))
             print(json.dumps({
                 "ok": True,
-                **rank_results(_results, _company_url, already_searched=_already_searched),
+                **eligible_after_ladder(_attempts, ladder_built=not _no_ladder),
+            }))
+        elif _rank_path:
+            if not _company_url and not _no_ladder:
+                raise ValueError("--rank needs --company-url (tier 1 is computed from it)")
+            _results = json.loads(pathlib.Path(_rank_path).read_text(encoding="utf-8"))
+            _url_for_rank = None if _no_ladder else _company_url
+            print(json.dumps({
+                "ok": True,
+                **rank_results(_results, _url_for_rank, already_searched=_already_searched),
             }))
         else:
             raise ValueError("nothing to do: pass --eligible or --rank")
