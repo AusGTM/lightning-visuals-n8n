@@ -389,6 +389,82 @@ active), the other four = gap-closure JSON.
   integrated-burst watch as a runbook step.
 - **Unchanged:** D-70-01..23 stand. D-70-19 stands verbatim.
 
+### Gap-closure round 3 decisions (operator, 2026-09-10, after Gates 7 and 8)
+
+Source of truth: `70-UAT.md` tests 7–9 and gap G-70-6 (blocker). Gate 7 PASSED (loop-free
+287-node enrichment body deployed disarmed, two-minute burst watch clean, zero
+`mode: integrated` executions). Gate 8 FAILED on executions `12349`–`12353`: `HubSpot Update`
+executed with no real input item and PATCHed an empty id (405) on both ingest sends;
+`IF List Expanded` emitted a refusal on an empty list lane; gated sentinels delivered markers on
+inputs whose sentinel emitted 0 items; `Enrichment Gate Merge` fired twice and dropped every real
+row; `Apply Contact Judge Verdict` crashed on a marker. Gate 9 blocked. Live rolled back to the
+pre-Phase-70 `59812be` bundle (17/29/123/26/39, active, disarmed). `settings.executionOrder` was
+ABSENT on every live body throughout.
+
+**Engine rule, now source-cited (`[documented]`, not yet `[observed live]` under v1):** n8n's
+legacy execution order (`executionOrder` absent or not `"v1"`) — in
+`packages/core/src/execution-engine/workflow-execute.ts`, `addNodeToBeExecuted`, the
+`addEmptyItem` branch — pushes every node on an empty branch onto the execution stack with ONE
+`{ json: {} }` item so that a waiting multi-input node (a Merge) can finish. That single item is
+the shape of every Gate 8 symptom and of G-70-2/3/5: a gate Code node fed one empty item runs
+and stamps its marker; an HTTP node fed one empty item sends a request with an empty id; an
+`Execute Workflow` node fed one empty item dispatches. Under v1 there is no such push: nodes on
+an empty branch do not run, and at end-of-run every node still in `waitingExecution` executes
+with the inputs that arrived, gated on `requiredInputs` — which, for the Merge node v3.2 this
+repo generates (`versionDescription.ts`), is `[0, 1]` for `chooseBranch` and `1` for every other
+mode (`append`, `combine`). The n8n docs page on execution order describes only branch ordering
+and says nothing about empty-input execution; the source is the citation.
+
+- **D-70-28 — Flip `settings.executionOrder` to `"v1"` on EVERY generated workflow
+  (supersedes D-70-02).** `scripts/build_cloud_workflows.py` emits `"settings":
+  {"executionOrder": "v1"}` on all eight `n8n/wf_*.json` bodies (five cloud, three local);
+  never per-workflow, never hand-edited. RED first: a test that asserts every committed
+  `n8n/wf_*.json` carries `settings.executionOrder === "v1"` fails before regeneration and
+  passes after. Node counts do not move (settings only) — 287/69/55/43/30 and 82/10/13 are
+  NOT a regression signal for this round. D-70-02's reasoning (a second all-five behaviour
+  change in one proof run) is retired by four live observations that the legacy order itself
+  is the defect; its reversibility rating (one-way in effect) stands and is discharged by this
+  ruling, not by a mid-run checkpoint. Rejected: keep legacy and make every gate/IF/HTTP/write
+  node tolerate the forced empty item (fights a source-cited engine rule, touches every node,
+  and the walker would have to model "always executes"); flip the ingest lane alone first
+  (two behaviour generations live at once).
+- **D-70-29 — `executionOrder` survives every PUT, and every read-back asserts it.**
+  `scripts/deploy_n8n_workflows.py` already forwards `settings`;
+  `operator-claude-plugin/scripts/n8n_control.py::put_body` already forwards `settings` and
+  refuses a PUT whose `settings` differ from the live original (so an arming/disarming rewrite
+  can never revert a workflow to legacy). Both facts are pinned by tests, and every deploy/bounce
+  read-back in this repo (deploy script, bounce script, the proof driver's
+  `live_settings_execution_order`) reports the live value. A live body reading anything but
+  `"v1"` after this round's deploy is a gate failure.
+- **D-70-30 — The walker records the v1 contract; it does not model legacy.** The walker
+  (`tests/n8n/lib/walkWorkflow.mjs`) keeps its `order` branch but the legacy branch stops
+  claiming to model the engine: a non-v1 body is refused unless the caller passes an explicit
+  escape used only by the engine-fidelity suite, whose frozen fixtures (`settings: {}`,
+  executions 12203/12206/12316) stay as RECORDED legacy divergences with their execution ids.
+  Nothing is added to model the legacy empty-item push — the body it acted on is retired.
+  Under v1 the walker's rules are `[documented]` until Gate 11 observes them: (a) a node fed
+  zero items does not run; (b) a waiting Merge drains at end-of-run with the inputs that
+  arrived (`requiredInputs` 1, or `[0,1]` for chooseBranch); (c) whether a Code node that RAN
+  and emitted `[]` counts as a Merge-input delivery under v1 is UNOBSERVED — the 70-09 rule was
+  observed under legacy and may have been the empty-item push, not a delivery. The walker's
+  own comments say which rule is which and cite this decision. Freezing executions
+  `12349`–`12353` needs the operator's API key and is an operator step, not an executor task;
+  `70-UAT.md` § Test 8 already records the observations.
+- **D-70-31 — Live gates for this round, all deferred per the standing ruling (re-points
+  D-70-27; Gates 7/8/9 stay in the record as run/failed/blocked):** Gate 10 = disarmed deploy +
+  bounce of the v1 bodies (same node counts, both write flags `"false"`), read back
+  `settings.executionOrder === "v1"` on all five, then the two-minute integrated-burst watch
+  with nothing sent; Gate 11 = the D-70-19 proof re-run (all four sends `shapes_equal: true`,
+  every execution settled, `writes_performed: 0`, every recovered enrichment row carrying a
+  non-null `row_id`, the runData-source-vs-declared-connections check clean, AND
+  `live_settings_execution_order` reading `"v1"` on every workflow — a `null` reading is a
+  failure of this gate, the opposite of Gate 8's expectation); Gate 12 = the armed
+  mixed-verdict re-run (formerly Gate 9), only after Gate 11. If Gate 11 shows the legacy
+  symptoms persist under v1, STOP and report — do not adjust the walker or the driver to match.
+- **Unchanged:** D-70-01, D-70-03..26 stand. D-70-19 stands verbatim. D-70-23's gated
+  sentinel mechanism stands — under v1 it is the design that was always intended (a gate fed
+  zero items never runs).
+
 ## Canonical References
 
 **Downstream agents MUST read these before planning or implementing.**
