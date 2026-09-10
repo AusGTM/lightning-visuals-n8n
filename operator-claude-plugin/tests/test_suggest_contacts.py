@@ -1094,13 +1094,25 @@ def test_walk_pages_requires_a_candidates_dict_carrying_accepted_and_budget_rema
         )
 
 
-def test_walk_ending_vocabulary_is_the_closed_four_value_tuple():
+def test_walk_ending_vocabulary_is_the_closed_five_value_tuple():
     assert suggest_contacts.WALK_ENDINGS == (
         suggest_contacts.WALK_GOOD_ENOUGH,
         suggest_contacts.WALK_LADDER_EXHAUSTED,
         suggest_contacts.WALK_CAP_EXHAUSTED,
         suggest_contacts.WALK_REFUSED,
+        suggest_contacts.WALK_NO_LADDER,
     )
+
+
+def test_walk_pages_never_returns_walk_no_ladder():
+    """`WALK_NO_LADDER` is stated by a caller that never built a ladder; `walk_pages`
+    itself never produces it, including on an empty walk with an empty accepted list."""
+    walk = suggest_contacts.walk_pages(
+        [], {"accepted": [], "budget_remaining": 0}, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert walk["ended"] != suggest_contacts.WALK_NO_LADDER
+    assert walk["ended"] in suggest_contacts.WALK_ENDINGS
 
 
 def test_walk_pages_end_to_end_into_extraction_validate():
@@ -1377,9 +1389,10 @@ def _empty_walk(bar=2, ended=suggest_contacts.WALK_LADDER_EXHAUSTED):
     }
 
 
-def test_round_outcome_cause_vocabulary_is_the_closed_six_value_tuple():
+def test_round_outcome_cause_vocabulary_is_the_closed_seven_value_tuple():
     assert suggest_contacts.ROUND_CAUSES == (
         suggest_contacts.CAUSE_UNKNOWN,
+        suggest_contacts.CAUSE_NO_LADDER,
         suggest_contacts.CAUSE_NO_PEOPLE_FOUND,
         suggest_contacts.CAUSE_NONE_CLASSIFIED,
         suggest_contacts.CAUSE_ALL_HELD_ON_EMAIL,
@@ -1400,6 +1413,48 @@ def test_round_outcome_routes_an_empty_walk_to_the_search_fallback():
     assert outcome["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
     assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
     assert outcome["reason"]
+
+
+# --- CAUSE_NO_LADDER: the website-less terminal (260911-ao2) --------------------------
+
+def test_round_outcome_routes_a_no_ladder_walk_to_the_search_fallback():
+    outcome = suggest_contacts.round_outcome(
+        _empty_walk(ended=suggest_contacts.WALK_NO_LADDER)
+    )
+    assert outcome["cause"] == suggest_contacts.CAUSE_NO_LADDER
+    assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+    assert "no ladder" in outcome["reason"].lower()
+    assert "discovered nobody" not in outcome["reason"].lower()
+
+
+def test_round_outcome_no_ladder_terminal_call_never_routes():
+    walk = _empty_walk(ended=suggest_contacts.WALK_NO_LADDER)
+    outcome = suggest_contacts.round_outcome(walk, rows=[], sendable=[], held=[])
+    assert outcome["cause"] == suggest_contacts.CAUSE_NO_LADDER
+    assert outcome["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+def test_round_outcome_ladder_exhausted_still_reports_no_people_found():
+    """The pre-existing routing test is unchanged: only WALK_NO_LADDER names the new
+    cause, every other empty-walk ending keeps naming CAUSE_NO_PEOPLE_FOUND."""
+    outcome = suggest_contacts.round_outcome(
+        _empty_walk(ended=suggest_contacts.WALK_LADDER_EXHAUSTED)
+    )
+    assert outcome["cause"] == suggest_contacts.CAUSE_NO_PEOPLE_FOUND
+    assert outcome["reentry"] == suggest_contacts.REENTRY_SEARCH_FALLBACK
+
+
+def test_round_outcome_no_ladder_walk_with_fallback_selection_never_names_no_ladder():
+    """The no-ladder cause survives only while nothing at all was found -- a fallback
+    round that selected people reaches the later causes by the existing precedence."""
+    walk = _empty_walk(bar=1, ended=suggest_contacts.WALK_NO_LADDER)
+    fallback = {
+        "selected": [{"firstname": "Robin", "lastname": "Lee"}],
+        "dropped": [],
+    }
+    outcome = suggest_contacts.round_outcome(walk, fallback=fallback)
+    assert outcome["cause"] == suggest_contacts.CAUSE_PROPOSED
+    assert outcome["cause"] != suggest_contacts.CAUSE_NO_LADDER
 
 
 def test_round_outcome_never_routes_a_walk_that_found_one_person():
@@ -1677,6 +1732,8 @@ def _walk_for_cause(cause):
         return None, {}
     if cause == suggest_contacts.CAUSE_NO_PEOPLE_FOUND:
         return _empty_walk(bar=1), {}
+    if cause == suggest_contacts.CAUSE_NO_LADDER:
+        return _empty_walk(bar=1, ended=suggest_contacts.WALK_NO_LADDER), {}
     if cause == suggest_contacts.CAUSE_NONE_CLASSIFIED:
         walk = {
             "people": [{"firstname": "A", "lastname": "B"}], "selected": [],

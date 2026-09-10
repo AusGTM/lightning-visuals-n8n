@@ -219,21 +219,31 @@ WALK_GOOD_ENOUGH = "good_enough"
 WALK_LADDER_EXHAUSTED = "ladder_exhausted"
 WALK_CAP_EXHAUSTED = "cap_exhausted"
 WALK_REFUSED = "refused"
-WALK_ENDINGS = (WALK_GOOD_ENOUGH, WALK_LADDER_EXHAUSTED, WALK_CAP_EXHAUSTED, WALK_REFUSED)
+# `WALK_NO_LADDER` is the one ending `walk_pages` itself never produces (nothing in its
+# body references it) -- it is STATED by a caller that had nothing to walk at all: a
+# company with no usable website on record never builds a ladder (260911-ao2, operator
+# ruling 2026-09-11). It means "there was no page walk", not "the page walk ended this
+# way", which is why it is last in the tuple rather than slotted by outcome severity.
+WALK_NO_LADDER = "no_ladder"
+WALK_ENDINGS = (
+    WALK_GOOD_ENOUGH, WALK_LADDER_EXHAUSTED, WALK_CAP_EXHAUSTED, WALK_REFUSED,
+    WALK_NO_LADDER,
+)
 
 
 # The closed vocabulary for WHY a round ends with nothing usable (D-65-01/D-65-02,
-# Phase 65). Six named causes, in PRECEDENCE ORDER -- `round_outcome`'s fixed-order
-# first-match-wins rule below, pinned here as a tuple so a silent addition or
-# reordering fails a test rather than drifting quietly.
+# Phase 65; extended 260911-ao2). Seven named causes, in PRECEDENCE ORDER --
+# `round_outcome`'s fixed-order first-match-wins rule below, pinned here as a tuple so
+# a silent addition or reordering fails a test rather than drifting quietly.
 CAUSE_UNKNOWN = "unknown"
+CAUSE_NO_LADDER = "no_ladder"
 CAUSE_NO_PEOPLE_FOUND = "no_people_found"
 CAUSE_NONE_CLASSIFIED = "none_classified"
 CAUSE_ALL_HELD_ON_EMAIL = "all_held_on_email"
 CAUSE_PEOPLE_THIN = "people_thin"
 CAUSE_PROPOSED = "proposed"
 ROUND_CAUSES = (
-    CAUSE_UNKNOWN, CAUSE_NO_PEOPLE_FOUND, CAUSE_NONE_CLASSIFIED,
+    CAUSE_UNKNOWN, CAUSE_NO_LADDER, CAUSE_NO_PEOPLE_FOUND, CAUSE_NONE_CLASSIFIED,
     CAUSE_ALL_HELD_ON_EMAIL, CAUSE_PEOPLE_THIN, CAUSE_PROPOSED,
 )
 
@@ -991,14 +1001,23 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
     silently skipped.
 
     THE ROUTING CALL VS THE TERMINAL CALL. `reentry` is `REENTRY_SEARCH_FALLBACK`
-    only when the cause is `CAUSE_NO_PEOPLE_FOUND` AND all four of `rows`, `sendable`,
-    `held` and `fallback` are `None` -- a call handed any one of them is a terminal
-    call BY CONSTRUCTION and returns `REENTRY_NONE` regardless of cause (D-65-08,
-    D-65-12): this is what makes a second route structurally impossible, not merely
-    untested. This function asks for no fetch itself, performs no eligibility,
-    disposition or refusal check of its own, and re-implements no part of
-    `eligible_after_ladder` -- routing to the search fallback means the CALLER asks
+    only when the cause is `CAUSE_NO_PEOPLE_FOUND` OR `CAUSE_NO_LADDER` AND all four
+    of `rows`, `sendable`, `held` and `fallback` are `None` -- a call handed any one
+    of them is a terminal call BY CONSTRUCTION and returns `REENTRY_NONE` regardless
+    of cause (D-65-08, D-65-12): this is what makes a second route structurally
+    impossible, not merely untested. This function asks for no fetch itself, performs
+    no eligibility, disposition or refusal check of its own, and re-implements no part
+    of `eligible_after_ladder` -- routing to the search fallback means the CALLER asks
     that function, which stays the single fail-closed gate.
+
+    `CAUSE_NO_LADDER` (260911-ao2) is named when `walk["ended"] == WALK_NO_LADDER` and
+    `people_count == 0` -- a company with no usable website on record has no attempts
+    list to be eligible about (there was never a ladder to record one on), so the
+    CALLER states the ending and this function still decides the cause, under the
+    IDENTICAL routing-vs-terminal rule as every other cause. This is why the case
+    enters the machinery here rather than at a second call site: one gate
+    (`eligible_after_ladder`), one router (`round_outcome`), regardless of which
+    terminal fed it.
 
     Returns `{"cause", "reentry", "reason", "breakdown"}` and nothing else. `breakdown`
     tallies `dropped` (keyed on each entry's own `reason`) and `held` (keyed on each
@@ -1095,8 +1114,15 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
     sendable_count = len(this_sendable) if sendable_given else None
 
     if people_count == 0:
-        cause = CAUSE_NO_PEOPLE_FOUND
-        reason = "the ladder walk discovered nobody at all"
+        if walk.get("ended") == WALK_NO_LADDER:
+            cause = CAUSE_NO_LADDER
+            reason = (
+                "no ladder was ever built for this company -- there was no usable "
+                "website on record to walk"
+            )
+        else:
+            cause = CAUSE_NO_PEOPLE_FOUND
+            reason = "the ladder walk discovered nobody at all"
     elif selected_count == 0:
         cause = CAUSE_NONE_CLASSIFIED
         reason = "people were found but none were selected -- every one was dropped"
@@ -1111,7 +1137,7 @@ def round_outcome(walk, rows=None, sendable=None, held=None, fallback=None):
         reason = f"{selected_count} people were proposed, reaching the bar of {bar}"
 
     if (
-        cause == CAUSE_NO_PEOPLE_FOUND
+        cause in (CAUSE_NO_PEOPLE_FOUND, CAUSE_NO_LADDER)
         and rows is None and sendable is None and held is None and fallback is None
     ):
         reentry = REENTRY_SEARCH_FALLBACK
