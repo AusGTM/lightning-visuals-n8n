@@ -3498,7 +3498,7 @@
     {
       "parameters": {
         "mode": "append",
-        "numberInputs": 15
+        "numberInputs": 3
       },
       "id": "m02070000-0000-4000-8000-000000000000",
       "name": "Build Response Merge",
@@ -4790,6 +4790,440 @@
         110,
         0
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c02990000-0000-4000-8000-000000000000",
+      "name": "IF List Input -> List By Name Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03000000-0000-4000-8000-000000000000",
+      "name": "IF Bare Event -> HubSpot Fetch By Id Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6840
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03010000-0000-4000-8000-000000000000",
+      "name": "IF Has Email -> HubSpot Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6920
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03020000-0000-4000-8000-000000000000",
+      "name": "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7000
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03030000-0000-4000-8000-000000000000",
+      "name": "IF Name Searchable -> HubSpot Name Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7080
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03040000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Enabled -> Lusha Result Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03050000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Enabled -> Apollo Result Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03060000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Needs Mint -> ZoomInfo Mint Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03070000-0000-4000-8000-000000000000",
+      "name": "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03080000-0000-4000-8000-000000000000",
+      "name": "IF Company Bare Event -> HubSpot Company Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7480
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03090000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Company Enabled -> Lusha Company Result Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03100000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Org Enabled -> Apollo Org Result Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7640
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03110000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Company Needs Mint -> ZoomInfo Mint Company Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7720
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03120000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Usage Needs Mint -> ZoomInfo Usage Mint Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7800
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03130000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create Write Gate IF -> HubSpot Company Create Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7880
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03140000-0000-4000-8000-000000000000",
+      "name": "IF Name Searchable -> Enrichment Gate Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        7960
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03150000-0000-4000-8000-000000000000",
+      "name": "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8040
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03160000-0000-4000-8000-000000000000",
+      "name": "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03170000-0000-4000-8000-000000000000",
+      "name": "IF Enrich -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03180000-0000-4000-8000-000000000000",
+      "name": "IF Company Recompute -> Decide Company Action Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03190000-0000-4000-8000-000000000000",
+      "name": "IF Company Skip -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03200000-0000-4000-8000-000000000000",
+      "name": "IF Research Needed -> Merge Company Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8440
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03210000-0000-4000-8000-000000000000",
+      "name": "IF Needs Judge -> Merge Company Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03220000-0000-4000-8000-000000000000",
+      "name": "IF Company Enrich -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03230000-0000-4000-8000-000000000000",
+      "name": "HubSpot Create Write Gate IF -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8680
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03240000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Write Gate IF -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03250000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create Write Gate IF -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8840
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03260000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8920
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 6
+      },
+      "id": "m03270000-0000-4000-8000-000000000000",
+      "name": "Build Response Merge Stage 1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4260,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 7
+      },
+      "id": "m03280000-0000-4000-8000-000000000000",
+      "name": "Build Response Merge Stage 2",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4260,
+        510
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "m03290000-0000-4000-8000-000000000000",
+      "name": "Build Response Merge Stage 3",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4260,
+        660
+      ]
     }
   ],
   "connections": {
@@ -4850,9 +5284,9 @@
             "index": 0
           },
           {
-            "node": "List By Name Carry Merge",
+            "node": "IF List Input -> List By Name Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5093,9 +5527,9 @@
             "index": 0
           },
           {
-            "node": "HubSpot Fetch By Id Carry Merge",
+            "node": "IF Bare Event -> HubSpot Fetch By Id Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5138,9 +5572,9 @@
             "index": 0
           },
           {
-            "node": "HubSpot Search Carry Merge",
+            "node": "IF Has Email -> HubSpot Search Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5161,9 +5595,9 @@
             "index": 0
           },
           {
-            "node": "HubSpot Linkedin Search Carry Merge",
+            "node": "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5206,16 +5640,16 @@
             "index": 0
           },
           {
-            "node": "HubSpot Name Search Carry Merge",
+            "node": "IF Name Searchable -> HubSpot Name Search Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
           {
-            "node": "Enrichment Gate Merge",
+            "node": "IF Name Searchable -> Enrichment Gate Merge Pass-Through",
             "type": "main",
-            "index": 2
+            "index": 0
           }
         ]
       ]
@@ -5339,9 +5773,9 @@
             "index": 0
           },
           {
-            "node": "Lusha Result Carry Merge",
+            "node": "IF Lusha Enabled -> Lusha Result Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5373,9 +5807,9 @@
             "index": 0
           },
           {
-            "node": "Apollo Result Carry Merge",
+            "node": "IF Apollo Enabled -> Apollo Result Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5447,9 +5881,9 @@
             "index": 0
           },
           {
-            "node": "ZoomInfo Mint Carry Merge",
+            "node": "IF ZoomInfo Needs Mint -> ZoomInfo Mint Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5526,7 +5960,7 @@
         ],
         [
           {
-            "node": "Merge Winners Fan-In",
+            "node": "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -5603,9 +6037,9 @@
         ],
         [
           {
-            "node": "Merge Winners Fan-In",
+            "node": "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -5730,7 +6164,7 @@
         ],
         [
           {
-            "node": "Build Response Merge",
+            "node": "IF Enrich -> Build Response Merge Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -5741,7 +6175,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 1
           }
@@ -5752,7 +6186,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           }
@@ -5763,7 +6197,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 3
           }
@@ -5800,9 +6234,9 @@
             "index": 0
           },
           {
-            "node": "HubSpot Company Fetch By Id Carry Merge",
+            "node": "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -5812,9 +6246,9 @@
             "index": 0
           },
           {
-            "node": "HubSpot Company Search Carry Merge",
+            "node": "IF Company Bare Event -> HubSpot Company Search Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -5915,7 +6349,7 @@
       "main": [
         [
           {
-            "node": "Decide Company Action Merge",
+            "node": "IF Company Recompute -> Decide Company Action Merge Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -5933,9 +6367,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "IF Company Skip -> Build Response Merge Pass-Through",
             "type": "main",
-            "index": 4
+            "index": 0
           }
         ],
         [
@@ -5967,9 +6401,9 @@
             "index": 0
           },
           {
-            "node": "Lusha Company Result Carry Merge",
+            "node": "IF Lusha Company Enabled -> Lusha Company Result Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -6001,9 +6435,9 @@
             "index": 0
           },
           {
-            "node": "Apollo Org Result Carry Merge",
+            "node": "IF Apollo Org Enabled -> Apollo Org Result Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -6075,9 +6509,9 @@
             "index": 0
           },
           {
-            "node": "ZoomInfo Mint Company Carry Merge",
+            "node": "IF ZoomInfo Company Needs Mint -> ZoomInfo Mint Company Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -6154,7 +6588,7 @@
         ],
         [
           {
-            "node": "Merge Company Fan-In",
+            "node": "IF Research Needed -> Merge Company Fan-In Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -6210,9 +6644,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 5
+            "index": 1
           }
         ]
       ]
@@ -6260,9 +6694,9 @@
         ],
         [
           {
-            "node": "Merge Company Fan-In",
+            "node": "IF Needs Judge -> Merge Company Fan-In Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -6376,9 +6810,9 @@
         ],
         [
           {
-            "node": "Build Response Merge",
+            "node": "IF Company Enrich -> Build Response Merge Pass-Through",
             "type": "main",
-            "index": 6
+            "index": 0
           }
         ]
       ]
@@ -6398,9 +6832,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 7
+            "index": 3
           }
         ]
       ]
@@ -6409,9 +6843,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 8
+            "index": 4
           }
         ]
       ]
@@ -6420,9 +6854,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 3",
             "type": "main",
-            "index": 9
+            "index": 0
           }
         ]
       ]
@@ -6522,9 +6956,9 @@
             "index": 0
           },
           {
-            "node": "ZoomInfo Usage Mint Carry Merge",
+            "node": "IF ZoomInfo Usage Needs Mint -> ZoomInfo Usage Mint Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -6700,9 +7134,9 @@
         ],
         [
           {
-            "node": "Build Response Merge",
+            "node": "HubSpot Create Write Gate IF -> Build Response Merge Pass-Through",
             "type": "main",
-            "index": 11
+            "index": 0
           }
         ]
       ]
@@ -6739,9 +7173,9 @@
         ],
         [
           {
-            "node": "Build Response Merge",
+            "node": "HubSpot Update Write Gate IF -> Build Response Merge Pass-Through",
             "type": "main",
-            "index": 12
+            "index": 0
           }
         ]
       ]
@@ -6776,16 +7210,16 @@
             "index": 0
           },
           {
-            "node": "HubSpot Company Create Carry Merge",
+            "node": "HubSpot Company Create Write Gate IF -> HubSpot Company Create Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
           {
-            "node": "Build Response Merge",
+            "node": "HubSpot Company Create Write Gate IF -> Build Response Merge Pass-Through",
             "type": "main",
-            "index": 14
+            "index": 0
           }
         ]
       ]
@@ -6822,9 +7256,9 @@
         ],
         [
           {
-            "node": "Build Response Merge",
+            "node": "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through",
             "type": "main",
-            "index": 13
+            "index": 0
           }
         ]
       ]
@@ -7252,34 +7686,34 @@
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 3
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 1
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 11
+            "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 12
+            "index": 5
           }
         ]
       ]
@@ -7334,39 +7768,39 @@
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 3
+          },
+          {
+            "node": "Build Response Merge Stage 2",
             "type": "main",
             "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 2
+          },
+          {
+            "node": "Build Response Merge Stage 2",
             "type": "main",
             "index": 5
           },
           {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 7
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 8
-          },
-          {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
             "index": 6
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 13
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 14
           }
         ]
       ]
@@ -7386,9 +7820,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 3",
             "type": "main",
-            "index": 9
+            "index": 0
           }
         ]
       ]
@@ -7599,14 +8033,14 @@
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 4
+            "index": 0
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 5
+            "index": 1
           },
           {
             "node": "Decide Company Action Merge",
@@ -7646,29 +8080,29 @@
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 1
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 11
+            "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 12
+            "index": 5
           }
         ]
       ]
@@ -7688,7 +8122,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 3
           }
@@ -7803,14 +8237,14 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 1
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 11
+            "index": 4
           }
         ]
       ]
@@ -7830,19 +8264,19 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 12
+            "index": 5
           }
         ]
       ]
@@ -7862,14 +8296,14 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 12
+            "index": 5
           }
         ]
       ]
@@ -7889,7 +8323,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 0
           }
@@ -7926,29 +8360,29 @@
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 7
+            "index": 3
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 8
+            "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 2
+          },
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 5
+          },
+          {
+            "node": "Build Response Merge Stage 2",
             "type": "main",
             "index": 6
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 13
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 14
           }
         ]
       ]
@@ -7968,9 +8402,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 4
+            "index": 0
           }
         ]
       ]
@@ -8022,9 +8456,9 @@
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 5
+            "index": 1
           }
         ]
       ]
@@ -8088,14 +8522,14 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 7
+            "index": 3
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 14
+            "index": 6
           }
         ]
       ]
@@ -8115,19 +8549,19 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 8
+            "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 6
+            "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 13
+            "index": 5
           }
         ]
       ]
@@ -8147,14 +8581,14 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 8
+            "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 13
+            "index": 5
           }
         ]
       ]
@@ -8174,9 +8608,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 6
+            "index": 2
           }
         ]
       ]
@@ -8185,9 +8619,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 3",
             "type": "main",
-            "index": 10
+            "index": 1
           },
           {
             "node": "Refusal Fired Sentinel",
@@ -8212,74 +8646,74 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 3
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 1
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 3",
             "type": "main",
-            "index": 9
+            "index": 0
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 3
+          },
+          {
+            "node": "Build Response Merge Stage 2",
             "type": "main",
             "index": 4
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 2
+          },
+          {
+            "node": "Build Response Merge Stage 1",
+            "type": "main",
+            "index": 4
+          },
+          {
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 5
           },
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 7
+            "index": 5
           },
           {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 8
-          },
-          {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
             "index": 6
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 11
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 12
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 13
-          },
-          {
-            "node": "Build Response Merge",
-            "type": "main",
-            "index": 14
           }
         ]
       ]
@@ -8299,9 +8733,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 3",
             "type": "main",
-            "index": 10
+            "index": 1
           }
         ]
       ]
@@ -8332,9 +8766,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 11
+            "index": 4
           }
         ]
       ]
@@ -8354,7 +8788,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 1
           }
@@ -8376,9 +8810,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
-            "index": 12
+            "index": 5
           }
         ]
       ]
@@ -8398,7 +8832,7 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 1",
             "type": "main",
             "index": 2
           }
@@ -8420,9 +8854,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 13
+            "index": 5
           }
         ]
       ]
@@ -8442,9 +8876,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 8
+            "index": 4
           }
         ]
       ]
@@ -8464,9 +8898,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 14
+            "index": 6
           }
         ]
       ]
@@ -8486,9 +8920,9 @@
       "main": [
         [
           {
-            "node": "Build Response Merge",
+            "node": "Build Response Merge Stage 2",
             "type": "main",
-            "index": 7
+            "index": 3
           }
         ]
       ]
@@ -8511,6 +8945,347 @@
             "node": "Credits Broadcast",
             "type": "main",
             "index": 1
+          }
+        ]
+      ]
+    },
+    "IF List Input -> List By Name Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "List By Name Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Bare Event -> HubSpot Fetch By Id Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Fetch By Id Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Has Email -> HubSpot Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Linkedin Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Name Searchable -> HubSpot Name Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Name Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Lusha Enabled -> Lusha Result Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Lusha Result Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Apollo Enabled -> Apollo Result Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Apollo Result Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Needs Mint -> ZoomInfo Mint Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Mint Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Company Fetch By Id Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Company Bare Event -> HubSpot Company Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Company Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Lusha Company Enabled -> Lusha Company Result Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Lusha Company Result Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Apollo Org Enabled -> Apollo Org Result Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Apollo Org Result Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Company Needs Mint -> ZoomInfo Mint Company Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Mint Company Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Usage Needs Mint -> ZoomInfo Usage Mint Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Mint Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Create Write Gate IF -> HubSpot Company Create Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Company Create Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Name Searchable -> Enrichment Gate Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Enrichment Gate Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Winners Fan-In",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Winners Fan-In",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Enrich -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Company Recompute -> Decide Company Action Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Decide Company Action Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Company Skip -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Research Needed -> Merge Company Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Company Fan-In",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Needs Judge -> Merge Company Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Company Fan-In",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Company Enrich -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "HubSpot Create Write Gate IF -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 1",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "HubSpot Update Write Gate IF -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 1",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Create Write Gate IF -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Build Response Merge Stage 1": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response Merge Stage 2": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Response Merge Stage 3": {
+      "main": [
+        [
+          {
+            "node": "Build Response Merge",
+            "type": "main",
+            "index": 2
           }
         ]
       ]

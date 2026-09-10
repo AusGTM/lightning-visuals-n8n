@@ -66,21 +66,27 @@ function runBuildIdentity(row) {
 test("the linkedin lane sits between IF Has Email and IF Name Searchable, and its adapter feeds Enrichment Gate", () => {
   const edge = (from, i = 0) => (wf.connections[from]?.main?.[i] || []).map((c) => c.node);
   // Phase 70 Plan 04 (D-70-04): "IF Has Email"/"IF Linkedin Searchable" are each also
-  // their own hop's carry_source — a SECOND fan-out edge, not a re-point.
-  assert.deepEqual(edge("IF Has Email", 0), ["HubSpot Search", "HubSpot Search Carry Merge"]);
+  // their own hop's carry_source — a SECOND fan-out edge, not a re-point. Phase 70
+  // Plan 11 (D-70-20): that second fan-out edge no longer lands on the carry Merge
+  // directly — a pass-through sits between them (no routing IF has a direct edge to
+  // a Merge input on this lane any more).
+  assert.deepEqual(edge("IF Has Email", 0),
+    ["HubSpot Search", "IF Has Email -> HubSpot Search Carry Merge Pass-Through"]);
   assert.deepEqual(edge("IF Has Email", 1), ["IF Linkedin Searchable"]);
   assert.deepEqual(edge("IF Linkedin Searchable", 0),
-    ["HubSpot Linkedin Search", "HubSpot Linkedin Search Carry Merge"]);
+    ["HubSpot Linkedin Search", "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through"]);
   assert.deepEqual(edge("IF Linkedin Searchable", 1), ["IF Name Searchable"]);
   // Phase 70 Plan 04 (D-70-04): a carry merge now sits between the search and its
   // adapter, re-attaching the row.
   assert.deepEqual(edge("HubSpot Linkedin Search"), ["HubSpot Linkedin Search Carry Merge"]);
   // Phase 70 Plan 03 (D-70-01): "Enrichment Gate" now sits behind a real Merge.
   assert.deepEqual(edge("Adapt Linkedin Search"), ["Enrichment Gate Merge"]);
-  // "IF Name Searchable"'s own true/false targets are unchanged by this splice.
+  // "IF Name Searchable"'s own true/false targets are unchanged by this splice, modulo
+  // the same Phase 70 Plan 11 pass-through retarget on both its own direct Merge edges.
   assert.deepEqual(edge("IF Name Searchable", 0),
-    ["HubSpot Name Search", "HubSpot Name Search Carry Merge"]);
-  assert.deepEqual(edge("IF Name Searchable", 1), ["Enrichment Gate Merge"]);
+    ["HubSpot Name Search", "IF Name Searchable -> HubSpot Name Search Carry Merge Pass-Through"]);
+  assert.deepEqual(edge("IF Name Searchable", 1),
+    ["IF Name Searchable -> Enrichment Gate Merge Pass-Through"]);
 });
 
 test("HubSpot Linkedin Search is the credential-bound httpRequest transport, never the native node (BUG 23/10 lesson)", () => {

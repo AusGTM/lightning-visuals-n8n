@@ -64,13 +64,15 @@ def test_all_contact_chain_nodes_and_merge_winners_are_bfs_reachable_from_webhoo
 def test_both_if_false_lanes_fan_straight_into_merge_winners():
     # Phase 70 Plan 03 (D-70-01): "Merge Winners" now sits behind a real Merge
     # ("Merge Winners Fan-In") — both false lanes converge on that Merge, not the
-    # Code node directly.
+    # Code node directly. Phase 70 Plan 11 (D-70-20): each of those two edges now
+    # runs through its own pass-through (no routing IF has a direct edge to a Merge
+    # input on this lane any more).
     doc = _load()
     conns = doc["connections"]
     research_false = [e["node"] for e in conns["IF Contact Research Needed"]["main"][1]]
     judge_false = [e["node"] for e in conns["IF Contact Needs Judge"]["main"][1]]
-    assert research_false == ["Merge Winners Fan-In"]
-    assert judge_false == ["Merge Winners Fan-In"]
+    assert research_false == ["IF Contact Research Needed -> Merge Winners Fan-In Pass-Through"]
+    assert judge_false == ["IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through"]
 
 
 def test_providers_bypass_only_path_still_reaches_the_contact_chain():

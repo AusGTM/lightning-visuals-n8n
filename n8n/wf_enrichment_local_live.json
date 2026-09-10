@@ -1460,6 +1460,62 @@
         150,
         3040
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00830000-0000-4000-8000-000000000000",
+      "name": "IF Research Needed -> Merge Company Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        3040
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00840000-0000-4000-8000-000000000000",
+      "name": "IF Needs Judge -> Merge Company Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        3120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00850000-0000-4000-8000-000000000000",
+      "name": "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00860000-0000-4000-8000-000000000000",
+      "name": "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        3280
+      ]
     }
   ],
   "connections": {
@@ -1740,7 +1796,7 @@
         ],
         [
           {
-            "node": "Merge Company Fan-In",
+            "node": "IF Research Needed -> Merge Company Fan-In Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -1817,9 +1873,9 @@
         ],
         [
           {
-            "node": "Merge Company Fan-In",
+            "node": "IF Needs Judge -> Merge Company Fan-In Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -1916,7 +1972,7 @@
         ],
         [
           {
-            "node": "Merge Winners Fan-In",
+            "node": "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -1993,9 +2049,9 @@
         ],
         [
           {
-            "node": "Merge Winners Fan-In",
+            "node": "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -2417,6 +2473,50 @@
             "node": "Merge Company Fan-In",
             "type": "main",
             "index": 2
+          }
+        ]
+      ]
+    },
+    "IF Research Needed -> Merge Company Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Company Fan-In",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Needs Judge -> Merge Company Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Company Fan-In",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Winners Fan-In",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Winners Fan-In",
+            "type": "main",
+            "index": 1
           }
         ]
       ]

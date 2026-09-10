@@ -224,8 +224,11 @@ def test_refusal_reaches_build_response_via_the_existing_unsupported_object_type
     )
     conns = doc["connections"]
     assert conns["IF Object Type Supported"]["main"][1][0]["node"] == "Unsupported Object Type"
-    # Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge.
-    assert conns["Unsupported Object Type"]["main"][0][0]["node"] == "Build Response Merge"
+    # Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge. Phase
+    # 70 Plan 11 (D-70-20): that Merge split into lane-grouped stages — this terminal
+    # lands on the unsupported/refusal stage, which itself reconverges on "Build
+    # Response Merge" (unrenamed).
+    assert conns["Unsupported Object Type"]["main"][0][0]["node"] == "Build Response Merge Stage 3"
 
 
 # --- Quick task 260904-5a8: Decide Company Action carries the "company" call-site literal ---

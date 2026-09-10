@@ -4825,6 +4825,18 @@ def build_enrichment_local_live():
     # "Build Research Failure Response" terminal — checked against the built node list),
     # so no companion `set_always_output_data` call is needed here.
 
+    # Phase 70 Plan 11 (D-70-20): this workflow's own routing-IF-direct-to-Merge audit,
+    # deferred by plan 70-10 — the SAME "IF Research Needed"/"IF Needs Judge" false
+    # branch and "IF Contact Research Needed"/"IF Contact Needs Judge" false branch
+    # shape build_enrichment_cloud() carries, mirrored here for the same reason this
+    # workflow's whole sentinel network above is mirrored rather than shared.
+    _retarget_all_if_direct_edges(nodes, conns, [
+        ("IF Research Needed", 1, "Merge Company Fan-In"),
+        ("IF Needs Judge", 1, "Merge Company Fan-In"),
+        ("IF Contact Research Needed", 1, "Merge Winners Fan-In"),
+        ("IF Contact Needs Judge", 1, "Merge Winners Fan-In"),
+    ], llx, lly)
+
     return {
         "id": "LVenrichmentLive01",
         "name": "LV Enrichment (local LIVE)",
@@ -8206,6 +8218,70 @@ return $input.all().map((it) => {
     splice_carry_merge_after(nodes, conns, "Filter Build Response Rows", "Build Credits Summary",
                               merge_name="Credits Broadcast", combine_by="combineAll")
 
+    # =========================================================================
+    # Phase 70 Plan 11 (D-70-20): this lane's own routing-IF-direct-to-Merge audit,
+    # deferred by plan 70-10 (`mergeInputContract.test.mjs`'s PENDING list). Every one
+    # of the 28 edges below was found by that same static contract, read straight off
+    # the just-built graph — never hand-inventoried — and is retargeted through a
+    # pass-through in one call, at the VERY END of this builder so no `_merge_input_
+    # index`/lambda lookup elsewhere in this function (many of which resolve an index
+    # off one of these exact sources, e.g. `eg("IF Name Searchable", 1)`) runs against
+    # an edge this call has already moved.
+    _retarget_all_if_direct_edges(nodes, conns, [
+        # --- carry merges: an HTTP-hop's own carry_source is a routing IF's branch ---
+        ("IF List Input", 0, "List By Name Carry Merge"),
+        ("IF Bare Event", 0, "HubSpot Fetch By Id Carry Merge"),
+        ("IF Has Email", 0, "HubSpot Search Carry Merge"),
+        ("IF Linkedin Searchable", 0, "HubSpot Linkedin Search Carry Merge"),
+        ("IF Name Searchable", 0, "HubSpot Name Search Carry Merge"),
+        ("IF Lusha Enabled", 0, "Lusha Result Carry Merge"),
+        ("IF Apollo Enabled", 0, "Apollo Result Carry Merge"),
+        ("IF ZoomInfo Needs Mint", 0, "ZoomInfo Mint Carry Merge"),
+        ("IF Company Bare Event", 0, "HubSpot Company Fetch By Id Carry Merge"),
+        ("IF Company Bare Event", 1, "HubSpot Company Search Carry Merge"),
+        ("IF Lusha Company Enabled", 0, "Lusha Company Result Carry Merge"),
+        ("IF Apollo Org Enabled", 0, "Apollo Org Result Carry Merge"),
+        ("IF ZoomInfo Company Needs Mint", 0, "ZoomInfo Mint Company Carry Merge"),
+        ("IF ZoomInfo Usage Needs Mint", 0, "ZoomInfo Usage Mint Carry Merge"),
+        ("HubSpot Company Create Write Gate IF", 0, "HubSpot Company Create Carry Merge"),
+        # --- fan_in convergence merges: a routing IF's own branch reaches the gate/
+        # response directly alongside the "real work happened" lane ---
+        ("IF Name Searchable", 1, "Enrichment Gate Merge"),
+        ("IF Contact Research Needed", 1, "Merge Winners Fan-In"),
+        ("IF Contact Needs Judge", 1, "Merge Winners Fan-In"),
+        ("IF Enrich", 1, "Build Response Merge"),
+        ("IF Company Recompute", 0, "Decide Company Action Merge"),
+        ("IF Company Skip", 0, "Build Response Merge"),
+        ("IF Research Needed", 1, "Merge Company Fan-In"),
+        ("IF Needs Judge", 1, "Merge Company Fan-In"),
+        ("IF Company Enrich", 1, "Build Response Merge"),
+        # --- write-gate refusal lanes: `wire_gate_refusal_lane`'s own direct edge,
+        # documented in its own docstring as this lane's job to retarget ---
+        ("HubSpot Create Write Gate IF", 1, "Build Response Merge"),
+        ("HubSpot Update Write Gate IF", 1, "Build Response Merge"),
+        ("HubSpot Company Create Write Gate IF", 1, "Build Response Merge"),
+        ("HubSpot Company Update Write Gate IF", 1, "Build Response Merge"),
+    ], sx, sy)
+    sy += 120
+
+    # Phase 70 Plan 11 (D-70-20): "Build Response Merge" declared fifteen inputs —
+    # over n8n's own ten-input cap (`merge_node`'s docstring) — before this call.
+    # Grouped by lane exactly as the plan's own action text asks: every CONTACTS
+    # terminal (including the contacts write-gate refusal inputs, 11-12) in one
+    # stage, every COMPANIES terminal (plus 13-14) in another, and the two mutually-
+    # exclusive whole-batch-refusal terminals (unsupported object type, "Build
+    # Refusal Row") in a third — each group computed from the SAME index table this
+    # comment sits above (the sentinel dump this plan ran against the pre-split
+    # graph), never re-derived by hand against the split graph.
+    split_merge_into_stages(
+        nodes, conns, build_response_merge,
+        groups=[
+            [0, 1, 2, 3, 11, 12],      # contacts terminals + contacts refusal lanes
+            [4, 5, 6, 7, 8, 13, 14],   # companies terminals + companies refusal lanes
+            [9, 10],                  # unsupported object type + whole-batch refusal
+        ],
+    )
+
     return {
         "id": "LVenrichmentCloud01",
         "name": "LV Enrichment (Cloud template)",
@@ -9409,6 +9485,75 @@ def splice_merge_before(nodes, conns, target_name, *, merge_name=None):
     return name
 
 
+def split_merge_into_stages(nodes, conns, merge_name, groups, *, max_inputs=10):
+    """Splits an over-wide append-mode Merge — more declared inputs than n8n's own
+    per-node cap (`merge_node`'s own docstring; ten) — into per-group STAGE Merges,
+    each within the cap, reconverging on the ORIGINAL `merge_name` node (Phase 70
+    Plan 11, D-70-20's over-wide-Merge rule — "Build Response Merge" on the
+    enrichment lane, fifteen inputs before this call). `merge_name` itself is never
+    renamed or replaced — every consumer that already names it (its own downstream
+    edge, and any external string naming the response terminal by node name) keeps
+    working unchanged; only its OWN declared `numberInputs` shrinks to `len(groups)`,
+    and each stage's single output becomes one of ITS inputs.
+
+    `groups`: an ordered list of lists of the CURRENT (pre-split) input indices
+    `merge_name` declares today. Every current index must appear in EXACTLY one
+    group — a silently dropped index would starve exactly like an unfed Merge input
+    already does (D-70-20's own class of defect, caught here at generation time
+    rather than left to a replay to discover). Each group must fit within
+    `max_inputs` — a group that still does not is this function's CALLER's bug
+    (regroup; never call this function recursively to auto-subdivide).
+
+    Mechanism: every edge currently feeding `merge_name` at one of a group's
+    original indices is RE-POINTED (never copied) to a freshly created stage Merge,
+    at a fresh 0-based index within that stage — so a sentinel/gate that already
+    shares an original input with a real producer (the legitimate multi-producer-
+    per-input case `mergeInputContract.test.mjs`'s own header documents) MOVES WITH
+    IT onto the same stage, preserving that input's existing coverage exactly (the
+    plan's own obligation: "a stage cannot starve where the wide Merge did not")."""
+    nodes_by_name = {n["name"]: n for n in nodes}
+    merge = nodes_by_name.get(merge_name)
+    if merge is None:
+        raise ValueError(f"split_merge_into_stages: no node named {merge_name!r}")
+    original_inputs = merge["parameters"]["numberInputs"]
+
+    seen = set()
+    for group in groups:
+        for i in group:
+            if i in seen:
+                raise ValueError(
+                    f"split_merge_into_stages: input {i} appears in more than one group")
+            seen.add(i)
+        if len(group) > max_inputs:
+            raise ValueError(
+                f"split_merge_into_stages: a group of {len(group)} inputs exceeds "
+                f"max_inputs={max_inputs} — regroup, do not call this recursively")
+    if seen != set(range(original_inputs)):
+        raise ValueError(
+            f"split_merge_into_stages: groups must partition every current index "
+            f"0..{original_inputs - 1} of {merge_name!r}; got {sorted(seen)}")
+
+    edges_by_index = {i: [] for i in range(original_inputs)}
+    for spec in conns.values():
+        for outputs in (spec.get("main") or []):
+            for conn in (outputs or []):
+                if conn.get("node") == merge_name:
+                    edges_by_index[conn["index"]].append(conn)
+
+    mx, my = merge["position"][0] - 200, merge["position"][1] - 150
+    for stage_i, group in enumerate(groups):
+        stage_name = f"{merge_name} Stage {stage_i + 1}"
+        nodes.append(merge_node(stage_name, mx, my + stage_i * 150, inputs=len(group), mode="append"))
+        for new_idx, orig_idx in enumerate(group):
+            for conn in edges_by_index[orig_idx]:
+                conn["node"] = stage_name
+                conn["index"] = new_idx
+        conns[stage_name] = {"main": [[{"node": merge_name, "type": "main", "index": stage_i}]]}
+
+    merge["parameters"]["numberInputs"] = len(groups)
+    return merge_name
+
+
 def set_always_output_data(nodes, names):
     """Sets `alwaysOutputData: true` on each named node (research Pitfall 1's
     mitigation): a node whose OWN computation would otherwise produce zero items still
@@ -9554,6 +9699,29 @@ def _retarget_merge_edge_through_passthrough(nodes, conns, source, source_out_id
     conns[passthrough_name] = {"main": [[
         {"node": merge_name, "type": "main", "index": match["index"]}]]}
     return match["index"]
+
+
+def _retarget_all_if_direct_edges(nodes, conns, edges, x, y):
+    """Applies `_retarget_merge_edge_through_passthrough` over a whole lane's worth of
+    routing-IF-direct-to-Merge edges in one call (Phase 70 Plan 11, D-70-20's
+    no-routing-IF-direct-edge rule, carried across the enrichment/local-live/review
+    lanes plan 70-10 left on `mergeInputContract.test.mjs`'s PENDING list — this
+    lane's own audit, deferred there by name). `edges`: an ordered list of
+    `(source, source_out_idx, merge_name)` triples, each naming ONE existing direct
+    edge — done at the very END of the calling builder, after every `_merge_input_
+    index`/lambda lookup that resolves an index off one of these sources has already
+    run, so retargeting (which never moves an input's INDEX, only what feeds it, per
+    `_retarget_merge_edge_through_passthrough`'s own contract) cannot invalidate an
+    index a sentinel/gate elsewhere in the same builder already baked in. Position
+    is auto-incremented per edge so no two pass-throughs collide on the canvas;
+    passthrough names are derived from the (source, merge_name) pair, never hand-
+    listed, so this cannot go stale as edges are added or removed above."""
+    py = y
+    for source, source_out_idx, merge_name in edges:
+        passthrough_name = f"{source} -> {merge_name} Pass-Through"
+        _retarget_merge_edge_through_passthrough(
+            nodes, conns, source, source_out_idx, merge_name, passthrough_name, x, py)
+        py += 80
 
 
 def wire_gate_refusal_lane(nodes, conns, write_name, merge_name, x, y, *,
@@ -10924,6 +11092,17 @@ def build_review_decision_cloud():
                               merge_name="Review Queue Contact Search Carry Merge",
                               source_out_idx=0)
 
+    # Phase 70 Plan 11 (D-70-20): this lane's own routing-IF-direct-to-Merge audit,
+    # deferred by plan 70-10. "Review IF Dry Run" true branch reaches "Build Review
+    # Response Merge" directly (the dry-run pass-through terminal); "Review Queue IF
+    # Contacts" feeds its own two per-object-type carry merges directly, same shape
+    # as `splice_carry_merge_after`'s IF-carry_source class on the other two lanes.
+    _retarget_all_if_direct_edges(nodes, conns, [
+        ("Review IF Dry Run", 0, "Build Review Response Merge"),
+        ("Review Queue IF Contacts", 1, "Review Queue Search Carry Merge"),
+        ("Review Queue IF Contacts", 0, "Review Queue Contact Search Carry Merge"),
+    ], rsx, rsy)
+
     return {
         "id": "LVReviewDecisionCloud01",
         "name": "LV Review Decision (Cloud)",
@@ -11106,18 +11285,103 @@ def assert_no_by_name_reads(wf: dict, name: str) -> dict:
     return wf
 
 
+_MERGE_INPUT_MAX = 10  # n8n's own per-node cap on declared Merge inputs (merge_node's own docstring)
+_MERGE_INPUT_SENTINEL_RE = re.compile(r"Sentinel$")
+
+
+def assert_merge_input_contract(wf: dict, name: str) -> dict:
+    """Phase 70 Plan 11 (D-70-20): the generation-time half of the structural rules
+    `tests/n8n/mergeInputContract.test.mjs` checks over the committed JSON — from this
+    commit on, a violation stops generation instead of shipping, in the same style as
+    `assert_no_by_name_reads`/`assert_write_request_emitters` (raises `ValueError`
+    naming the workflow, the offending Merge, the input index and which rule broke;
+    composes at the same insertion point, returns `wf` unchanged).
+
+    Enforces the four STRUCTURAL rules only — the ones a generator can see without
+    running anything:
+      1. no Merge declares more than `_MERGE_INPUT_MAX` inputs (n8n's own cap);
+      2. no node whose name ends `Sentinel` has a direct edge to a Merge input (a
+         sentinel's condition node always runs and its own empty output is a real
+         delivery — D-70-23's gate is the only node allowed to feed a Merge);
+      3. no routing IF (`n8n-nodes-base.if`) has a direct edge to a Merge input
+         (whether the live engine treats an IF's own empty branch as a delivery is
+         unobserved — a pass-through makes the answer irrelevant);
+      4. every declared Merge input has at least one producer (an unfed input can
+         never fire — execution 12206's shape).
+
+    Deliberately NOT enforced here: that every Merge input has exactly ONE producer.
+    A sentinel's gate legitimately shares an input with its real producer (D-70-23);
+    only a replay can tell a safe share from an unsafe one (`mergeInputContract.test
+    .mjs`'s own header) — a generator cannot, so this function does not try."""
+    nodes_by_name = {n["name"]: n for n in wf["nodes"]}
+    merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
+    merge_names = {m["name"] for m in merges}
+    conns = wf.get("connections", {})
+
+    violations = []
+    for m in merges:
+        ni = (m.get("parameters") or {}).get("numberInputs", 2)
+        if ni > _MERGE_INPUT_MAX:
+            violations.append(
+                f"{m['name']}[*]: declares {ni} inputs — over n8n's own cap of {_MERGE_INPUT_MAX}")
+
+    fed_inputs = {m["name"]: set() for m in merges}
+    for src, spec in conns.items():
+        src_node = nodes_by_name.get(src)
+        for outputs in (spec.get("main") or []):
+            for conn in (outputs or []):
+                target = conn.get("node")
+                if target not in merge_names:
+                    continue
+                fed_inputs[target].add(conn.get("index"))
+                if _MERGE_INPUT_SENTINEL_RE.search(src):
+                    violations.append(
+                        f"{target}[{conn.get('index')}]: fed directly by {src!r} — a "
+                        "sentinel's own Code node, not its gate")
+                if src_node is not None and src_node.get("type") == "n8n-nodes-base.if":
+                    violations.append(
+                        f"{target}[{conn.get('index')}]: fed directly by routing IF "
+                        f"{src!r} — no pass-through")
+
+    for m in merges:
+        ni = (m.get("parameters") or {}).get("numberInputs", 2)
+        fed = fed_inputs[m["name"]]
+        for i in range(ni):
+            if i not in fed:
+                violations.append(f"{m['name']}[{i}]: no producer at all")
+
+    if violations:
+        violations.sort()
+        lines = [f"  - {v}" for v in violations]
+        raise ValueError(
+            f"{name}: {len(violations)} Merge-input contract violation(s) — D-70-20 "
+            "forbids shipping any of them:\n" + "\n".join(lines)
+        )
+    return wf
+
+
+def _assert_generation_contracts(wf: dict, name: str) -> dict:
+    """Phase 70 Plan 11 (D-70-20): composes `assert_merge_input_contract` alongside
+    the pre-existing `assert_no_by_name_reads` at every write site — one call, both
+    generation-time refusals, in the same order every time so a violation of either
+    stops generation before the other ever gets a chance to also fire on stale state."""
+    return assert_merge_input_contract(assert_no_by_name_reads(wf, name), name)
+
+
 def main():
-    # Phase 70 Plan 04 Task 3 (D-70-01): `assert_no_by_name_reads` composes with
-    # `_normalize_hubspot_auth` at every write site below — from this commit on, a
-    # by-name read stops generation instead of shipping.
+    # Phase 70 Plan 04 Task 3 (D-70-01) / Phase 70 Plan 11 (D-70-20):
+    # `_assert_generation_contracts` composes `assert_no_by_name_reads` and
+    # `assert_merge_input_contract` with `_normalize_hubspot_auth` at every write site
+    # below — from this commit on, a by-name read OR a Merge-input contract violation
+    # stops generation instead of shipping.
     out_local = ROOT / "n8n" / "wf_contact_ingest_local.json"
     out_cloud = ROOT / "n8n" / "wf_contact_ingest_cloud.json"
     out_local.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_local()), "wf_contact_ingest_local"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_local()), "wf_contact_ingest_local"),
         indent=2) + "\n")
     _idc[0] = 0
     out_cloud.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_cloud()), "wf_contact_ingest_cloud"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_cloud()), "wf_contact_ingest_cloud"),
         indent=2) + "\n")
     print(f"wrote {out_local.relative_to(ROOT)}")
     print(f"wrote {out_cloud.relative_to(ROOT)}")
@@ -11125,17 +11389,17 @@ def main():
     _idc[0] = 0
     er_local = ROOT / "n8n" / "wf_enrichment_local.json"
     er_local.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_enrichment_local()), "wf_enrichment_local"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_enrichment_local()), "wf_enrichment_local"),
         indent=2) + "\n")
     _idc[0] = 0
     er_cloud = ROOT / "n8n" / "wf_enrichment_cloud.json"
     er_cloud.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_enrichment_cloud()), "wf_enrichment_cloud"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_enrichment_cloud()), "wf_enrichment_cloud"),
         indent=2) + "\n")
     _idc[0] = 0
     er_live = ROOT / "n8n" / "wf_enrichment_local_live.json"
     er_live.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_enrichment_local_live()), "wf_enrichment_local_live"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_enrichment_local_live()), "wf_enrichment_local_live"),
         indent=2) + "\n")
     print(f"wrote {er_local.relative_to(ROOT)}")
     print(f"wrote {er_cloud.relative_to(ROOT)}")
@@ -11144,22 +11408,22 @@ def main():
     _idc[0] = 0
     sched_cloud = ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json"
     sched_cloud.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_scheduled_maintenance_cloud()),
-                                 "wf_scheduled_maintenance_cloud"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_scheduled_maintenance_cloud()),
+                                      "wf_scheduled_maintenance_cloud"),
         indent=2) + "\n")
     print(f"wrote {sched_cloud.relative_to(ROOT)}")
 
     _idc[0] = 0
     status_cloud = ROOT / "n8n" / "wf_backend_status_cloud.json"
     status_cloud.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_backend_status_cloud()), "wf_backend_status_cloud"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_backend_status_cloud()), "wf_backend_status_cloud"),
         indent=2) + "\n")
     print(f"wrote {status_cloud.relative_to(ROOT)}")
 
     _idc[0] = 0
     review_cloud = ROOT / "n8n" / "wf_review_decision_cloud.json"
     review_cloud.write_text(json.dumps(
-        assert_no_by_name_reads(_normalize_hubspot_auth(build_review_decision_cloud()), "wf_review_decision_cloud"),
+        _assert_generation_contracts(_normalize_hubspot_auth(build_review_decision_cloud()), "wf_review_decision_cloud"),
         indent=2) + "\n")
     print(f"wrote {review_cloud.relative_to(ROOT)}")
 

@@ -246,8 +246,12 @@ test("without the recompute intent a complete record terminates observably at Bu
     "the gate reason rides to Build Response so the caller can tell 'complete' from 'broken'");
 
   // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge — the
-  // true lane's sole edge is the Merge, not the Code node directly.
-  assert.deepEqual(targetsOf(r.wf, "IF Company Skip", 0), ["Build Response Merge"]);
+  // true lane's sole edge is the Merge, not the Code node directly. Phase 70 Plan 11
+  // (D-70-20): the routing IF's own edge no longer lands on the Merge input directly
+  // — a pass-through sits between them (no routing IF has a direct edge to a Merge
+  // input on this lane any more).
+  assert.deepEqual(
+    targetsOf(r.wf, "IF Company Skip", 0), ["IF Company Skip -> Build Response Merge Pass-Through"]);
   assert.deepEqual(targetsOf(r.wf, "IF Company Skip", 1), ["Build Company Requests"]);
 });
 
@@ -301,9 +305,12 @@ test("the recompute lane is a single edge into Decide Company Action — zero pr
   // Phase 70 Plan 03 (D-70-01): "Decide Company Action" now sits behind a real Merge —
   // the true lane's sole edge is that Merge, not the Code node directly; the Merge
   // itself is free of provider/research/judge nodes exactly as this test's name says.
+  // Phase 70 Plan 11 (D-70-20): that edge is now a pass-through, never a direct
+  // routing-IF-to-Merge edge — still ONE hop, still free of any costly node.
   assert.deepEqual(
-    targetsOf(wf, "IF Company Recompute", 0), ["Decide Company Action Merge"],
-    "the true lane is ONE edge — nothing may sit between the gate and the sole veto writer");
+    targetsOf(wf, "IF Company Recompute", 0),
+    ["IF Company Recompute -> Decide Company Action Merge Pass-Through"],
+    "the true lane is ONE hop (a pass-through) — nothing costly may sit between the gate and the sole veto writer");
   assert.deepEqual(targetsOf(wf, "IF Company Recompute", 1), ["IF Company Skip"]);
 
   for (const costly of COSTLY_NODES) {
@@ -346,9 +353,11 @@ test("execution 11858's refusal survives, now emitted by the spliced gate rather
   assert.ok(gated[0].write_blocked_reason);
 
   // And it reaches the response: the gate's false lane has its own Build Response Merge
-  // input, so nothing about this refusal depends on the write node having run.
+  // input, so nothing about this refusal depends on the write node having run. Phase 70
+  // Plan 11 (D-70-20): that false lane is now a pass-through, not a direct edge.
   assert.deepEqual(
     targetsOf(wf, "HubSpot Company Update Write Gate IF", 0), ["HubSpot Company Update"]);
   assert.deepEqual(
-    targetsOf(wf, "HubSpot Company Update Write Gate IF", 1), ["Build Response Merge"]);
+    targetsOf(wf, "HubSpot Company Update Write Gate IF", 1),
+    ["HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through"]);
 });

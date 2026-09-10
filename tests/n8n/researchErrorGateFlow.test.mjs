@@ -174,8 +174,12 @@ test("the wiring routes true->failure terminal, false->Validate Research Output,
   assert.deepEqual(targetsOf(wf, "Research Carry Merge", 0), ["IF Research Errored"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 0), ["Build Research Failure Response"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 1), ["Validate Research Output"]);
-  // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge.
-  assert.deepEqual(targetsOf(wf, "Build Research Failure Response", 0), ["Build Response Merge"]);
+  // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge. Phase 70
+  // Plan 11 (D-70-20): "Build Response Merge" split into lane-grouped stage Merges —
+  // this companies-lane terminal now feeds the companies stage, which itself
+  // reconverges on "Build Response Merge" (unrenamed).
+  assert.deepEqual(
+    targetsOf(wf, "Build Research Failure Response", 0), ["Build Response Merge Stage 2"]);
 });
 
 // --- behaviour: a healthy payload still reaches Validate Research Output unchanged --------

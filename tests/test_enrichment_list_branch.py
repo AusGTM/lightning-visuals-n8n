@@ -90,9 +90,11 @@ def assert_branch_wiring(doc):
     # true -> resolve the list (PLUS, Phase 70 Plan 04's carry-merge fan, "List By Name
     # Carry Merge" — the row this node delivers is what that merge re-attaches after
     # the List-By-Name HTTP hop); false -> EXACTLY the edge the trigger used to carry,
-    # and nothing else. This is the "additive, not a re-route" property.
+    # and nothing else. This is the "additive, not a re-route" property. Phase 70 Plan
+    # 11 (D-70-20): the carry-merge fan now runs through a pass-through (no routing IF
+    # has a direct edge to a Merge input on this lane any more).
     assert _outbound(doc, "IF List Input") == [
-        ["HubSpot List By Name", "List By Name Carry Merge"],
+        ["HubSpot List By Name", "IF List Input -> List By Name Carry Merge Pass-Through"],
         ["Parse HubSpot Event"],
     ]
 

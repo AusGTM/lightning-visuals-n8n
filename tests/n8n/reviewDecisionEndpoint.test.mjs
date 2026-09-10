@@ -670,14 +670,19 @@ test("the verify refetch is reachable ONLY from the write branch, and both branc
   assert.deepEqual(feeders("Build Review Response"), ["Build Review Response Merge"]);
   const mergeFeeders = feeders("Build Review Response Merge")
     .filter((src) => !src.includes("Sentinel")).sort();
+  // Phase 70 Plan 11 (D-70-20): "Review IF Dry Run"'s own direct edge to the Merge is
+  // retargeted through a pass-through (no routing IF has a direct edge to a Merge
+  // input on this lane any more) — same source predicate, different literal feeder.
   assert.deepEqual(mergeFeeders,
-    ["Review Contact Verify Fetch Carry Merge", "Review IF Dry Run", "Review Verify Fetch Carry Merge"]);
+    ["Review Contact Verify Fetch Carry Merge", "Review IF Dry Run -> Build Review Response Merge Pass-Through",
+     "Review Verify Fetch Carry Merge"]);
   assert.deepEqual(feeders("Respond Review Decision"), ["Build Review Response"],
     "one node shapes the response body on both branches");
 
   const [dryBranch, writeBranch] = WF.connections["Review IF Dry Run"].main;
   // Phase 70 Plan 03 Task 3 (D-70-01): re-pointed to the Merge by splice_merge_before.
-  assert.deepEqual(dryBranch.map((c) => c.node), ["Build Review Response Merge"]);
+  // Phase 70 Plan 11 (D-70-20): now via a pass-through, not a direct edge.
+  assert.deepEqual(dryBranch.map((c) => c.node), ["Review IF Dry Run -> Build Review Response Merge Pass-Through"]);
   assert.deepEqual(writeBranch.map((c) => c.node), ["Review IF Contact Write"]);
 
   // The verify fetch must read the record independently, not the PATCH's echo.

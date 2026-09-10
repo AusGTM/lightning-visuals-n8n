@@ -203,10 +203,28 @@ test("the enrichment lane's gate IF false branch has its OWN Build Response Merg
   // arrival is dropped. Caught by driving the committed graph through the walker, not by
   // reasoning — see the armed-mixed case at the end of this file. A marker may share an
   // input (no data, filtered downstream); two REAL producers may not.
-  const merge = "Build Response Merge";
-  const indexOf = (src, outIdx) =>
-    ((ENRICHMENT.connections[src] || {}).main || [])[outIdx]
-      ?.filter((c) => c.node === merge).map((c) => c.index) ?? [];
+  // Phase 70 Plan 11 (D-70-20): "Build Response Merge" no longer receives these edges
+  // directly — it was split into lane-grouped STAGE merges (each within n8n's own
+  // ten-input cap), and every routing-IF-direct edge (including these two write-gate
+  // edges) now runs through a pass-through first (no routing IF has a direct edge to
+  // a Merge input on this lane any more). `resolveStageInput` follows AT MOST one
+  // pass-through hop and lands on the (stage merge, index) pair that is this input's
+  // real identity now — "own dedicated input" is asserted at that level, not against
+  // the now-3-input top merge every write shares.
+  const isMerge = (name) => {
+    const n = ENRICHMENT.nodes.find((x) => x.name === name);
+    return Boolean(n && n.type === "n8n-nodes-base.merge");
+  };
+  const resolveStageInput = (src, outIdx) => {
+    const targets = ((ENRICHMENT.connections[src] || {}).main || [])[outIdx] || [];
+    const out = [];
+    for (const c of targets) {
+      if (isMerge(c.node)) { out.push({ stage: c.node, index: c.index }); continue; }
+      const next = ((ENRICHMENT.connections[c.node] || {}).main || [])[0] || [];
+      for (const c2 of next) if (isMerge(c2.node)) out.push({ stage: c2.node, index: c2.index });
+    }
+    return out;
+  };
   const realProducers = {
     "HubSpot Create": "HubSpot Create",
     "HubSpot Update": "HubSpot Update",
@@ -215,13 +233,14 @@ test("the enrichment lane's gate IF false branch has its OWN Build Response Merg
   };
   const seen = new Set();
   for (const [write, realProducer] of Object.entries(realProducers)) {
-    const real = indexOf(realProducer, 0);
-    assert.equal(real.length, 1, `${realProducer} feeds ${merge} on exactly one index`);
-    const refusal = indexOf(write + " Write Gate IF", 1);
-    assert.equal(refusal.length, 1, `${write}'s refusal feeds ${merge} on exactly one index`);
-    assert.notDeepEqual(refusal, real, `${write}'s refusal must not share the write path's input`);
-    assert.ok(!seen.has(refusal[0]), `${write}'s refusal input is its own`);
-    seen.add(refusal[0]);
+    const real = resolveStageInput(realProducer, 0);
+    assert.equal(real.length, 1, `${realProducer} feeds a stage Merge on exactly one input`);
+    const refusal = resolveStageInput(write + " Write Gate IF", 1);
+    assert.equal(refusal.length, 1, `${write}'s refusal feeds a stage Merge on exactly one input`);
+    assert.notDeepEqual(refusal[0], real[0], `${write}'s refusal must not share the write path's input`);
+    const refusalKey = `${refusal[0].stage}:${refusal[0].index}`;
+    assert.ok(!seen.has(refusalKey), `${write}'s refusal input is its own`);
+    seen.add(refusalKey);
 
     // ...and both inputs are covered on the ways their own producer can fail to deliver.
     // Phase 70 Plan 10 (D-70-23): a sentinel's own outgoing edge no longer points at a
@@ -230,13 +249,13 @@ test("the enrichment lane's gate IF false branch has its OWN Build Response Merg
     // for the sentinel-pre-empts-a-real-row defect, executions 12204-12206). Assert the
     // gate node's presence, not the sentinel Code node's — the OLD wiring this test used
     // to pin is exactly the shape that no longer exists.
-    const feeders = (idx) => Object.entries(ENRICHMENT.connections)
+    const feeders = (stage, idx) => Object.entries(ENRICHMENT.connections)
       .filter(([, spec]) => (spec.main || []).some((outs) =>
-        (outs || []).some((c) => c.node === merge && c.index === idx)))
+        (outs || []).some((c) => c.node === stage && c.index === idx)))
       .map(([src]) => src);
-    assert.ok(feeders(refusal[0]).includes(`${write} No Refusal Sentinel Gate`),
+    assert.ok(feeders(refusal[0].stage, refusal[0].index).includes(`${write} No Refusal Sentinel Gate`),
       `${write}: the refusal input needs a marker when the gate refused nothing`);
-    assert.ok(feeders(real[0]).includes(`${write} All Refused Sentinel Gate`),
+    assert.ok(feeders(real[0].stage, real[0].index).includes(`${write} All Refused Sentinel Gate`),
       `${write}: the write input needs a marker when the gate allowed nothing`);
   }
 });
@@ -258,16 +277,17 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
   // pair row i of the HTTP response with row i of the FULL wave on any partially-refused
   // batch. The IF's true output is the wave that actually entered the write node.
   //
-  // The enrichment lane's own gate IF still feeds its carry Merge directly (unchanged;
-  // that lane's own pass-through audit is plan 70-11's job, per `wire_gate_refusal_lane`'s
-  // own D-70-23 docstring note). The ingest lane's two write-gate carry Merges no longer
-  // work this way: Phase 70 Plan 10 (D-70-23)'s ingest-lane audit found the SAME
-  // routing-IF-direct-edge-to-Merge-input shape here too and retargeted it through a
-  // pass-through (`_retarget_merge_edge_through_passthrough`), so the direct feeder is
-  // now `f"{write} Permitted Pass-Through"`, itself fed from the IF's true branch.
+  // Phase 70 Plan 10 (D-70-23)'s ingest-lane audit found the routing-IF-direct-edge-
+  // to-Merge-input shape and retargeted it through a pass-through
+  // (`_retarget_merge_edge_through_passthrough`), named `f"{write} Permitted
+  // Pass-Through"` (the ingest lane's own hand-chosen name). Phase 70 Plan 11
+  // (D-70-20) closed the SAME gap on the enrichment lane's own gate IF, via the
+  // generic `_retarget_all_if_direct_edges` helper, whose pass-through names follow
+  // the generic `f"{source} -> {merge_name} Pass-Through"` pattern instead — a
+  // DIFFERENT literal name, same structural shape ("passthrough-generic" below).
   const carries = [
     ["wf_enrichment_cloud.json", ENRICHMENT, "HubSpot Company Create Carry Merge",
-     "HubSpot Company Create Write Gate IF", "direct"],
+     "HubSpot Company Create Write Gate IF", "passthrough-generic"],
     ["wf_contact_ingest_cloud.json", INGEST, "Update Carry Merge",
      "HubSpot Update Write Gate IF", "passthrough"],
     ["wf_contact_ingest_cloud.json", INGEST, "Create Carry Merge",
@@ -294,9 +314,12 @@ test("the enrichment lane's carry merges pair with the gate IF's TRUE output, ne
           `${file}: ${mergeName} must not be carried from the gate Code node (count mismatch)`);
       }
     } else {
-      // "passthrough": the IF's true branch feeds a pass-through, and the pass-through
-      // — never the IF itself — feeds the carry Merge's input 1.
-      const passthroughName = `${expectedSource.slice(0, -" Write Gate IF".length)} Permitted Pass-Through`;
+      // "passthrough" / "passthrough-generic": the IF's true branch feeds a
+      // pass-through, and the pass-through — never the IF itself — feeds the carry
+      // Merge's input 1. Only the NAME the two retarget helpers chose differs.
+      const passthroughName = shape === "passthrough-generic"
+        ? `${expectedSource} -> ${mergeName} Pass-Through`
+        : `${expectedSource.slice(0, -" Write Gate IF".length)} Permitted Pass-Through`;
       const feeders = feedersOf(wf, mergeName);
       assert.ok(feeders.some(([src]) => src === passthroughName),
         `${file}: ${mergeName}'s carry input must come from ${passthroughName}`);

@@ -525,11 +525,16 @@ def test_company_gate_routes_through_the_recompute_lane_and_no_longer_straight_t
         "Company Gate still feeds Build Company Requests directly"
     )
     # "Decide Company Action"/"Build Response" now sit behind real Merges (D-70-01).
-    assert _targets(doc, "IF Company Recompute", 0) == ["Decide Company Action Merge"]
+    # Phase 70 Plan 11 (D-70-20): both direct routing-IF-to-Merge edges below now run
+    # through a pass-through (no routing IF has a direct edge to a Merge input on this
+    # lane any more) -- same source predicate, different literal feeder name.
+    assert _targets(doc, "IF Company Recompute", 0) == [
+        "IF Company Recompute -> Decide Company Action Merge Pass-Through"]
     assert _targets(doc, "IF Company Recompute", 1) == ["IF Company Skip"]
     # RECOMP-02: a skipped record is observable -- it terminates at Build Response carrying
     # its gate reason instead of returning today's bare 200 with no body.
-    assert _targets(doc, "IF Company Skip", 0) == ["Build Response Merge"]
+    assert _targets(doc, "IF Company Skip", 0) == [
+        "IF Company Skip -> Build Response Merge Pass-Through"]
     assert _targets(doc, "IF Company Skip", 1) == ["Build Company Requests"]
 
 
@@ -544,7 +549,9 @@ def test_recompute_lane_reaches_decide_in_exactly_one_edge_with_no_intermediate_
     assert len(true_lane) == 1, f"recompute true lane fans out to {true_lane}"
     # Phase 70 Plan 03 (D-70-01): "Decide Company Action" now sits behind a real Merge
     # — the sole target is that Merge, which carries no provider/research/judge node.
-    assert true_lane[0] == "Decide Company Action Merge"
+    # Phase 70 Plan 11 (D-70-20): the sole target is now a pass-through (still ONE
+    # edge, still nothing costly between the gate and the sole veto writer).
+    assert true_lane[0] == "IF Company Recompute -> Decide Company Action Merge Pass-Through"
 
     costly = {
         "Build Company Requests", "Lusha Company", "Apollo Org", "ZoomInfo Company",

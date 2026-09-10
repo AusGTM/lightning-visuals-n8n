@@ -965,6 +965,48 @@
         990,
         -280
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00590000-0000-4000-8000-000000000000",
+      "name": "Review IF Dry Run -> Build Review Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        3840
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00600000-0000-4000-8000-000000000000",
+      "name": "Review Queue IF Contacts -> Review Queue Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        3920
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00610000-0000-4000-8000-000000000000",
+      "name": "Review Queue IF Contacts -> Review Queue Contact Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        4000
+      ]
     }
   ],
   "connections": {
@@ -1086,7 +1128,7 @@
       "main": [
         [
           {
-            "node": "Build Review Response Merge",
+            "node": "Review IF Dry Run -> Build Review Response Merge Pass-Through",
             "type": "main",
             "index": 0
           }
@@ -1214,9 +1256,9 @@
             "index": 0
           },
           {
-            "node": "Review Queue Contact Search Carry Merge",
+            "node": "Review Queue IF Contacts -> Review Queue Contact Search Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -1226,9 +1268,9 @@
             "index": 0
           },
           {
-            "node": "Review Queue Search Carry Merge",
+            "node": "Review Queue IF Contacts -> Review Queue Search Carry Merge Pass-Through",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -1590,6 +1632,39 @@
         [
           {
             "node": "Review Queue Rows Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Review IF Dry Run -> Build Review Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Build Review Response Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue IF Contacts -> Review Queue Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Review Queue Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Review Queue IF Contacts -> Review Queue Contact Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Review Queue Contact Search Carry Merge",
             "type": "main",
             "index": 1
           }

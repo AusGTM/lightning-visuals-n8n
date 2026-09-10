@@ -61,17 +61,11 @@ const WORKFLOW_FILES = fs.readdirSync(N8N_DIR)
   .filter((f) => f.startsWith("wf_") && f.endsWith(".json"))
   .sort();
 
-// The workflows plan 70-11 still has to convert (.planning/phases/70-.../
-// 70-WALKER-RED-INVENTORY.md), each still carrying at least one of: an over-wide Merge,
-// a sentinel with a direct edge to a Merge input, or a routing IF with a direct edge to
-// a Merge input. Recomputed and asserted EXACT below — a workflow on this list that
-// already satisfies the contract fails the test just as loudly as a workflow off the
-// list that violates it, so the list cannot silently outlive the work it names.
-const PENDING = [
-  "wf_enrichment_cloud.json",
-  "wf_enrichment_local_live.json",
-  "wf_review_decision_cloud.json",
-].sort();
+// Phase 70 Plan 11 emptied this list: every committed workflow now satisfies the
+// Merge-input contract. Recomputed and asserted EXACT below — a workflow added here
+// that already satisfies the contract fails the test just as loudly as a workflow off
+// the list that violates it, so the list cannot silently be repopulated later.
+const PENDING = [].sort();
 
 const SENTINEL_NAME_RE = /Sentinel$/;
 
@@ -285,6 +279,23 @@ test("wf_contact_ingest_cloud.json: single-lane batch (every row a review row, n
     assert.equal(row.action, "review");
     assert.equal(row.association, "none");
   }
+});
+
+test("wf_review_decision_cloud.json: a dry-run companies decision stalls no Merge, one response row", () => {
+  const file = "wf_review_decision_cloud.json";
+  accountedFor.add(file);
+  const wf = loadWorkflow(path.join(N8N_DIR, file));
+
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Review Decision Webhook",
+    triggerItems: [{ body: {
+      object_type: "companies", record_id: "123", decision: "approve", dry_run: true,
+    } }],
+    httpStubs: { "Review Fetch By Id": [{ results: [{ id: "123", properties: { domain: "acme.example" } }] }] },
+  });
+
+  assert.deepEqual(trace.stalled, [], "no merge may stall on a dry-run companies decision");
+  assert.equal(nodeItems(runData, "Build Review Response").length, 1, "one response row");
 });
 
 test("every CONVERTED workflow falls into exactly one bucket: no-merges, no-trigger, awaiting-code, or replayed", () => {

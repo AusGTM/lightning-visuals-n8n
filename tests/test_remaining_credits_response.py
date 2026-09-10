@@ -168,43 +168,52 @@ def test_zero_env_or_vars_expressions_in_the_credit_branch():
 # --- (c) Build Response convergence: 5 real terminals + 2 re-pointed lanes + unsupported
 #         + the companies skip terminal (Phase 47.5 RECOMP-02)
 
-BUILD_RESPONSE_SOURCES = {
-    ("HubSpot Create", 0), ("HubSpot Update", 0), ("Skip (NoOp)", 0),
-    # Phase 61 Plan 06 Task 2 (REVIEW-C17): "HubSpot Company Create" no longer feeds
-    # Build Response directly — "Adapt Company Create" is spliced between them to
-    # capture the created company's id and join it to its planned dependency by value.
-    ("Adapt Company Create", 0), ("HubSpot Company Update", 0),
-    ("IF Enrich", 1), ("IF Company Enrich", 1),
-    ("Unsupported Object Type", 0),
-    # Phase 47.5 Plan 01 (RECOMP-02): the companies branch's skip terminal. Until now a
-    # complete company died at Normalize + Score Company with zero rows out, so the caller
-    # got a bare 200 with no body and could not tell "complete, nothing to do" from
-    # "something broke". This is the direct companies mirror of ("Skip (NoOp)", 0) above,
-    # which the contacts branch has always had. The assertion below stays EXACT equality —
-    # this extends the expected set, it does not relax the check.
-    ("IF Company Skip", 0),
-    # Phase 48 Plan 02 (D-04): the research-error failure terminal. An error-shaped Claude
-    # Web Research payload (Anthropic 400, e.g. credit exhaustion) now terminates
-    # observably at Build Response via Build Research Failure Response, carrying
-    # action:"research_failed" and a stated reason, instead of silently flowing into
-    # Validate Research Output / Merge Company / Decide Company Action as if it were real
-    # data. Extends the expected set again; exact equality is preserved.
-    ("Build Research Failure Response", 0),
-    # Phase 70 Plan 03 Task 2 (D-70-07): the ELEVENTH input, added via
-    # `_append_merge_input` after this merge was already sized to the ten above —
-    # carries a list-expansion refusal or a scale-up dispatch confirmation, both
-    # mutually exclusive with the other ten firing at all this execution.
-    ("Build Refusal Row", 0),
-    # Phase 70 Plan 05 Task 2 sub-step 2b (D-70-14): each of the lane's four new spliced
-    # write gates routes its REFUSAL out the IF's false output (index 1) onto the SAME
-    # merge input its own write path already feeds — the refusal and the success arrive
-    # on one channel, and no NEW merge input is created (which is what leaves the
-    # starved-lane sentinel network below untouched). Extends the expected set; exact
-    # equality is preserved.
-    ("HubSpot Create Write Gate IF", 1),
-    ("HubSpot Update Write Gate IF", 1),
-    ("HubSpot Company Create Write Gate IF", 1),
-    ("HubSpot Company Update Write Gate IF", 1),
+# Phase 70 Plan 11 (D-70-20): "Build Response Merge" declared fifteen inputs — over
+# n8n's own ten-input cap — and was split into three lane-grouped STAGE Merges that
+# reconverge on "Build Response Merge" itself (unrenamed). The eleven real terminals
+# below are unchanged in KIND, but now land on their stage, and every routing-IF-
+# direct edge among them now runs through a pass-through (no routing IF has a direct
+# edge to a Merge input on this lane any more) — so the source NAME for those four
+# changed too. Grouped here exactly as `split_merge_into_stages`'s own call groups
+# them in `scripts/build_cloud_workflows.py`.
+BUILD_RESPONSE_STAGE_SOURCES = {
+    "Build Response Merge Stage 1": {
+        ("HubSpot Create", 0), ("HubSpot Update", 0), ("Skip (NoOp)", 0),
+        ("IF Enrich -> Build Response Merge Pass-Through", 0),
+        ("HubSpot Create Write Gate IF -> Build Response Merge Pass-Through", 0),
+        ("HubSpot Update Write Gate IF -> Build Response Merge Pass-Through", 0),
+    },
+    "Build Response Merge Stage 2": {
+        # Phase 61 Plan 06 Task 2 (REVIEW-C17): "HubSpot Company Create" no longer
+        # feeds Build Response directly — "Adapt Company Create" is spliced between
+        # them to capture the created company's id and join it to its planned
+        # dependency by value.
+        ("Adapt Company Create", 0), ("HubSpot Company Update", 0),
+        ("IF Company Enrich -> Build Response Merge Pass-Through", 0),
+        # Phase 47.5 Plan 01 (RECOMP-02): the companies branch's skip terminal. Until
+        # now a complete company died at Normalize + Score Company with zero rows
+        # out, so the caller got a bare 200 with no body and could not tell
+        # "complete, nothing to do" from "something broke". This is the direct
+        # companies mirror of ("Skip (NoOp)", 0) above, which the contacts branch
+        # has always had.
+        ("IF Company Skip -> Build Response Merge Pass-Through", 0),
+        # Phase 48 Plan 02 (D-04): the research-error failure terminal. An error-
+        # shaped Claude Web Research payload (Anthropic 400, e.g. credit exhaustion)
+        # now terminates observably at Build Response via Build Research Failure
+        # Response, carrying action:"research_failed" and a stated reason, instead
+        # of silently flowing into Validate Research Output / Merge Company /
+        # Decide Company Action as if it were real data.
+        ("Build Research Failure Response", 0),
+        ("HubSpot Company Create Write Gate IF -> Build Response Merge Pass-Through", 0),
+        ("HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through", 0),
+    },
+    "Build Response Merge Stage 3": {
+        ("Unsupported Object Type", 0),
+        # Phase 70 Plan 03 Task 2 (D-70-07): carries a list-expansion refusal or a
+        # scale-up dispatch confirmation, both mutually exclusive with the other
+        # terminals firing at all this execution.
+        ("Build Refusal Row", 0),
+    },
 }
 
 
@@ -217,9 +226,10 @@ def test_build_response_is_reachable_from_every_terminal_branch():
     Merge" first. Phase 70 Plan 04 (D-70-04): "Credits Broadcast" (a combineAll merge)
     sits between that Merge and "Build Response" — broadcasting "Build Credits
     Summary"'s single `remaining_credits` item onto every row — so "Build Response"'s
-    own sole inbound edge is now that broadcast merge, one hop further back. The eleven
-    real sources are checked another level further back, against "Build Response
-    Merge" itself."""
+    own sole inbound edge is now that broadcast merge, one hop further back. Phase 70
+    Plan 11 (D-70-20): "Build Response Merge" itself is now fed by exactly three
+    lane-grouped STAGE Merges (never over n8n's own ten-input cap); the eleven real
+    sources are checked one level further back, against each stage."""
     doc = _load()
     assert _inbound_edges(doc, "Build Response") == [("Credits Broadcast", 0)]
     # "Filter Build Response Rows" drops the starved-lane sentinel markers BEFORE the
@@ -230,12 +240,18 @@ def test_build_response_is_reachable_from_every_terminal_branch():
         ("Filter Build Response Rows", 0), ("Build Credits Summary", 0),
     }
     assert _inbound_edges(doc, "Filter Build Response Rows") == [("Build Response Merge", 0)]
-    merge_edges = {(src, idx) for (src, idx) in _inbound_edges(doc, "Build Response Merge")
+    stage_edges = {(src, idx) for (src, idx) in _inbound_edges(doc, "Build Response Merge")
                    if "Sentinel" not in src}
-    assert merge_edges == BUILD_RESPONSE_SOURCES, (
-        f"Build Response Merge inbound (non-sentinel) edges {merge_edges} != "
-        f"expected {BUILD_RESPONSE_SOURCES}"
-    )
+    assert stage_edges == {
+        ("Build Response Merge Stage 1", 0), ("Build Response Merge Stage 2", 0),
+        ("Build Response Merge Stage 3", 0),
+    }
+    for stage_name, expected in BUILD_RESPONSE_STAGE_SOURCES.items():
+        merge_edges = {(src, idx) for (src, idx) in _inbound_edges(doc, stage_name)
+                       if "Sentinel" not in src}
+        assert merge_edges == expected, (
+            f"{stage_name} inbound (non-sentinel) edges {merge_edges} != expected {expected}"
+        )
 
 
 def test_build_response_feeds_respond_to_webhook():

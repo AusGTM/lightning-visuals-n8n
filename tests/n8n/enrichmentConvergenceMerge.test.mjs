@@ -101,10 +101,16 @@ test("the enrichment workflow's D-70-01 fan_in convergence Merges are exactly th
   // Phase 70 Plan 04 (D-70-04) added a SEVENTH append-mode Merge — "Collect Credits"
   // (3 inputs, one per provider's real-or-skipped credit lane) — a new, genuinely
   // optional-lane convergence this plan introduced, not one of the original six.
+  // Phase 70 Plan 11 (D-70-20): "Build Response Merge" declared fifteen inputs — over
+  // n8n's own ten-input cap — and is now split into three lane-grouped stage Merges
+  // (contacts, companies, unsupported/refusal) that reconverge on "Build Response
+  // Merge" itself (unrenamed — every consumer that already named it keeps working).
+  // Three MORE append-mode Merges, not a replacement for the one already counted.
   const expectedNames = [
     "Build Response Merge", "Enrichment Gate Merge", "Company Gate Merge",
     "Merge Winners Fan-In", "Merge Company Fan-In", "Decide Company Action Merge",
     "Collect Credits",
+    "Build Response Merge Stage 1", "Build Response Merge Stage 2", "Build Response Merge Stage 3",
   ];
   assert.deepEqual(convergenceMerges.map((m) => m.name).sort(), expectedNames.sort());
 });
