@@ -37,8 +37,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `requiredInputs` row; a fire-count guard throws by Merge name on a feedback edge; the
   frozen v1 graph is digest-pinned. Two further review rounds the same day (quick task
   260911-3mu) widened what "a genuine loss" means: `starvedWithData` now also reports
-  `merge_dropped_rows` — any fired `combine`-mode run whose output is smaller than its largest
-  input (annihilation on an unfilled input, AND the unequal-count `Math.min` drop with every
+  `merge_dropped_rows` — any fired `combineByPosition`/`combineAll` run whose output is smaller
+  than its largest input (annihilation on an unfilled input, AND the unequal-count `Math.min` drop with every
   input filled, which the committed ingest graph reaches when `HubSpot Associate Company`
   returns nothing against a two-row carry lane — pinned RED-first in `writeGateShape.test.mjs`);
   a feedback cycle with no Merge on it now throws instead of hanging; the walker's

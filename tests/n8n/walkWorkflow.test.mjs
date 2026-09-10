@@ -743,7 +743,7 @@ test("NF-NT-04: a feedback cycle with NO Merge on it terminates with a thrown er
   );
   assert.throws(
     () => walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] }),
-    /feedback cycle with no Merge/
+    /feedback cycle \(no Merge on it/
   );
 });
 

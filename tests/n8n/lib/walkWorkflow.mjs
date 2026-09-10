@@ -570,8 +570,9 @@ export function walkWorkflow(wf, opts) {
   // per-Merge cap to stop it. One shared counter catches either shape.
   // Both caps below (FIRE_CAP, DELIVERY_CAP) share one rationale: they bound a walk that
   // would otherwise never return, and they sit far above any measured legitimate walk —
-  // the committed 287-node enrichment graph dequeues ~111 deliveries and fires ~13 Merges
-  // per batch, independent of row count (no splitInBatches node exists in any committed
+  // the committed 287-node enrichment graph dequeues at most 191 deliveries and fires at
+  // most 19 Merges across every walk in the suite (measured, 260911-3mu round-4 review),
+  // independent of row count (no splitInBatches node exists in any committed
   // workflow). The `max(1000, …)` floors keep a SMALL graph with a genuinely high-fan-in
   // Merge from tripping a size-derived bound (NF-NT-06).
   let v1FiresCount = 0;
@@ -587,11 +588,12 @@ export function walkWorkflow(wf, opts) {
   // NF-NT-04 (260911-1z5 review): a feedback cycle that never passes through a Merge is
   // invisible to the fire counter above and hung the walker forever (T→A→B→A). One shared
   // delivery counter bounds the whole walk; a real walk on the 287-node enrichment graph
-  // with a 2x2 batch dequeues a few hundred deliveries, so 50 per node is far above any
+  // dequeues at most 191 deliveries on any suite walk, so 50 per node is far above any
   // legitimate shape and far below "forever".
   let deliveriesProcessed = 0;
-  // Strictly above FIRE_CAP: a Merge-driven cycle must trip the Merge-naming guard first,
-  // so this one only ever names a cycle with NO Merge on it.
+  // Strictly above FIRE_CAP so that a SHORT Merge-driven cycle (<= 4 deliveries per fire)
+  // trips the Merge-naming guard first. A longer Merge cycle, or a cycle with no Merge on
+  // it at all, lands here instead — the message names both possibilities (NF4-MN-01).
   const DELIVERY_CAP = Math.max(FIRE_CAP * 4, (wf.nodes || []).length * 50);
 
   // processQueue() drains `queue` to empty. Factored out (quick task 260911-0tz, Step 3c)
@@ -604,7 +606,8 @@ export function walkWorkflow(wf, opts) {
       if (deliveriesProcessed > DELIVERY_CAP) {
         throw new Error(
           `walkWorkflow: ${deliveriesProcessed} deliveries processed without the queue ` +
-          `draining (last: "${delivery.targetName}") — feedback cycle with no Merge on it?`);
+          `draining (last: "${delivery.targetName}") — feedback cycle (no Merge on it, or ` +
+          `a Merge cycle longer than 4 hops per fire)?`);
       }
       const node = nodesByName[delivery.targetName];
       if (!node) continue; // dangling connection target — should not happen on real JSON
@@ -876,7 +879,13 @@ export function walkWorkflow(wf, opts) {
         // never fires for append. The entry carries the counts it was judged on, so
         // `starvedWithData` needs no cross-lookup into `trace.merges` (NF3-MN-03).
         const maxIn = Math.max(0, ...Object.values(r.itemCounts));
-        if (typeof r.outputCount === "number" && r.outputCount < maxIn) {
+        if (typeof r.outputCount !== "number") {
+          // NF4-NT-01: every v1 fire site records outputCount; its absence is an impossible
+          // state and must be loud, never a silent "no drop" (the NF3-MN-03 rule).
+          throw new Error(
+            `walkWorkflow: v1 run ${i} of Merge "${n.name}" has no outputCount — impossible state`);
+        }
+        if (r.outputCount < maxIn) {
           trace.stalled.push({
             node: n.name, reason: "merge_dropped_rows", run: i,
             itemCounts: { ...r.itemCounts }, outputCount: r.outputCount,
