@@ -323,9 +323,10 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    before the role filter even runs, and applies the chosen roles to whoever is left
    (D-62-18) — a person the round already knows about at that company is never spent on.
    `suggest_contacts.synthesise_rows(company, selected, fetched_url, per_company_cap)`
-   then emits at most `per_company_cap` rows, each carrying the URL actually fetched as
-   its provenance locator — never the company's homepage, and never the page the
-   operator originally pasted if the ladder had to escalate past it.
+   then emits at most `per_company_cap` rows, each carrying as its provenance locator
+   the page THAT PERSON was actually found on (64-REVIEW.md WR-01) — the pasted page
+   for a person found there, a later ladder page for a person found there instead, and
+   `fetched_url` only as the fallback for a person the walk never folded.
 
    Each company's synthesised records are **accumulated** into the round's own list, not
    dispatched one company at a time — the round dispatches once, for the whole batch,
@@ -546,7 +547,10 @@ and what `enrich-before-ingest/SKILL.md` already calls.
                pages, candidates, bar, vocabulary["families"], chosen_families,
                known_contacts)
        people = walk["people"]           # the walk's own deduped union, not one page's
-       fetched_url = pages[-1]["url"] if pages else plan.get("pasted_url")
+       # 64-REVIEW.md WR-01: this is now only the FALLBACK locator, for a person the
+       # walk never folded -- the search-fallback branch below sets it to the page it
+       # actually fetched; a ladder person's locator comes from their own recorded page.
+       fetched_url = plan.get("pasted_url")
        source_rank = None          # a ladder-found person's provenance is unchanged
        fallback_selection = None
        # Phase 65: name the round's CAUSE before deciding what happens next -- the

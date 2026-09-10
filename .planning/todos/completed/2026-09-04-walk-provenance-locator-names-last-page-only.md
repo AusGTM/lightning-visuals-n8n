@@ -44,3 +44,31 @@ Both are design changes beyond a review fix. Deferred deliberately rather than i
 
 Set `resolves_phase` when a phase actually takes this on. Do not tag it speculatively —
 `close_phase_todos` closes on the key alone.
+
+## Resolved 2026-09-11 (quick task 260911-anw)
+
+Fixed with exactly the seam this todo named: `walk_pages`' fold now stamps
+`source_url` on a COPY of each person at the admit site (after the `seen_keys`
+dedupe `continue`, so a duplicate keeps its first sighting's page; a refused
+page's people are never touched, since the refusal check breaks first). The
+return shape stayed at its pinned six top-level keys — `source_url` rides each
+person, not a seventh key, exactly the seam this todo flagged as available.
+`synthesise_rows` now resolves each row's locator per person:
+`person.get("source_url") or fetched_url`, keeping `fetched_url` as the
+fallback for a person the walk never folded (the search-fallback branch, and
+any hand-built person dict). `SKILL.md` step 7's `fetched_url` assignment no
+longer reads `pages[-1]`; it reads `plan.get("pasted_url")` as the fallback
+value only.
+
+Pinned by three new tests in `test_suggest_contacts.py`
+(`test_synthesise_rows_locator_is_the_page_the_person_was_actually_found_on`,
+`test_synthesise_rows_locator_for_a_name_on_both_pages_is_the_first_page_seen`,
+`test_synthesise_rows_locator_never_names_a_refused_final_page`), RED observed
+first against the unmodified code — all three failed on the last-page value,
+exactly the defect this todo names. The pre-existing six-key assertion and the
+single-locator fallback assertion both passed unmodified throughout.
+
+Deliberately NOT fixed here (recorded, not chased): the search-fallback branch
+still stamps a single `fetched_url` per company when more than one accepted
+URL is fetched for that company — out of this todo's scope, which named the
+ladder walk only.
