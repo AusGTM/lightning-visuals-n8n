@@ -417,6 +417,16 @@ def test_assert_no_self_dispatch_passes_the_real_maintenance_build_whose_target_
     assert b.assert_no_self_dispatch(wf, "wf_scheduled_maintenance_cloud") is wf
 
 
+def test_the_exemption_cannot_widen_by_mislabeling_the_call_site():
+    """70-REVIEW WR-08: the exemption is keyed on the workflow BODY's own name, never on
+    the caller-supplied label. A body that is not the maintenance workflow, passed under
+    the maintenance label with SJ-3's node name, must still be refused."""
+    wf = _wf_with_exec_node(_SELF_ID, _SELF_NAME, "SJ-3 Dispatch To Enrichment",
+                            "LVreviewDecisionCloud01", "LV Review Decision (Cloud)")
+    with pytest.raises(ValueError, match=r"SJ-3 Dispatch To Enrichment"):
+        b.assert_no_self_dispatch(wf, "wf_scheduled_maintenance_cloud")
+
+
 def test_the_exemption_cannot_widen_by_reusing_the_exempt_node_name_in_another_workflow():
     """The exemption is keyed on the PAIR (workflow name, node name). A future fan-out
     that borrowed SJ-3's node name in the enrichment build must not inherit it."""

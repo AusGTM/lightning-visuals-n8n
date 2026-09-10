@@ -11278,8 +11278,11 @@ _EXECUTE_WORKFLOW_TYPE = "n8n-nodes-base.executeWorkflow"
 # The ONE (workflow name, node name) pair permitted to carry an executeWorkflow node.
 # Keyed on the PAIR, never the node name alone: a future fan-out that borrowed this name
 # in another build would otherwise inherit the exemption silently.
+# Keyed on the workflow BODY's own `name` (what n8n shows and what the deploy matches on),
+# never on the caller-supplied file label: a mislabeled `main()` call site must not be able
+# to widen the exemption (70-REVIEW WR-08, 2026-09-10).
 _SELF_DISPATCH_EXEMPTIONS = frozenset({
-    ("wf_scheduled_maintenance_cloud", "SJ-3 Dispatch To Enrichment"),
+    ("LV Scheduled Maintenance (Cloud)", "SJ-3 Dispatch To Enrichment"),
 })
 
 
@@ -11331,7 +11334,7 @@ def assert_no_self_dispatch(wf: dict, name: str) -> dict:
                 "2026-09-10); recursion is impossible by absence, never by an in-graph "
                 "guard.")
             continue
-        if (name, node_name) in _SELF_DISPATCH_EXEMPTIONS:
+        if (wf_name, node_name) in _SELF_DISPATCH_EXEMPTIONS:
             continue
         violations.append(
             f"  - {node_name!r} dispatches to {target} — no Execute Workflow node may "
