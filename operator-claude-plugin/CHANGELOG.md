@@ -16,6 +16,67 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-09-11
+
+Quick batch `260911-anu`: six client-side todos closed under operator rulings taken on
+2026-09-11 (`.planning/quick/260911-*`). Two backend items in the same batch are recorded in
+the repository-root `CHANGELOG.md`.
+
+### Changed
+- **`merge_enriched` honours `protect_if_current_present` per field, for BOTH callers**
+  (todo `2026-09-07-merge-enriched-ignores-jobtitles-own-protect-if-current-present`,
+  quick `260911-anx`). The fill-versus-conflict rule was one blanket "never replace a
+  present value"; it now reads each field's own `protect_if_current_present` from the
+  shipped `config/field_policy.yaml` through the RICH-04 seam. `jobtitle` (`false`) accepts a
+  differing waterfall value; `email`, the location fields, `phone`, `mobilephone` and
+  `lv_linkedin_url` (`true`) are never replaced; a field with no such key, or no policy
+  entry at all, keeps fill-only; an unreadable policy degrades to protect-everything. Every
+  differing value is still recorded in `conflicts`, now as `source_value` + `replaced`
+  (was `kept`). The pre-arm preview's enriched column shows a replaced value beside the
+  operator's original. `enrich-before-ingest` and `suggest-contacts` share the one rule.
+- **Forbidden-name markers match whole tokens, not substrings** (todo
+  `2026-09-08-forbidden-name-markers-refuse-secretary-and-armidale`, quick `260911-any`).
+  `Secretary` no longer trips `secret`, `Armidale` no longer trips `arm`. The ten-marker
+  tuple is unchanged in all seven store copies (`held_queue`, `suggestion_declines`,
+  `run_manifest`, `run_state`, `run_report`, `written_records`, `remainder_queue`); the
+  matcher tokenises on word boundaries, camelCase and snake_case and checks each marker
+  with the inflections `""`/`s`/`ed`/`ing`, so `webhookSecret`, `N8N_API_KEY`,
+  `api_tokens`, `credentials` and `armed` still refuse. Parity pinned by
+  `tests/test_forbidden_marker_parity.py`. Residual: a first name literally `Grant` or
+  `Token` still refuses (new todo).
+- **A synthesised row's provenance locator names the page the person was found on**
+  (todo `2026-09-04-walk-provenance-locator-names-last-page-only`, quick `260911-anw`).
+  `walk_pages`' fold stamps `source_url` on each admitted person (first sighting wins);
+  `synthesise_rows` resolves the locator per person, falling back to the pasted URL only
+  when a person carries none. The six documented `walk_pages` return keys are unchanged.
+- **A company with no usable website reaches the web-search fallback** (todo
+  `2026-09-04-website-less-company-search-fallback`, quick `260911-ao2`, operator ruling
+  "search, LinkedIn-or-held"). `discovery_plan`'s empty-candidates terminal now yields a
+  fifth walk ending `WALK_NO_LADDER` and a seventh round cause `CAUSE_NO_LADDER`, routed
+  through the SAME `round_outcome` re-entry machine as every other cause.
+  `eligible_after_ladder(attempts, ladder_built=True)` gains a keyword: `False` with an
+  empty attempts list is eligible, `False` with ANY attempts is a contradiction and
+  ineligible, so a refusal can never be laundered. With no own-host, rank 1 is
+  structurally absent (`_host_matches` refuses an empty listed host); rank 2 rows may be
+  sendable, rank 3 rows are always held; a searched domain is never written back or used
+  as an alternate. Without an operator-supplied domain, `partition_for_dispatch` still
+  holds every such row as `company_domain_unknown` — unchanged, by design.
+
+### Fixed
+- **The enriched preview and the confidence gate no longer disagree** (todo
+  `2026-09-09-enriched-preview-says-send-for-rows-the-confidence-gate-holds`, quick
+  `260911-anz`). The behavioural fix shipped in 0.44.0's backend round (D-70-11,
+  `partition_for_ingest`); this release pins the recorded Round B shape, corrects two
+  stale docstrings that still named `hold_emailless` as the sole SEND/HELD source, and
+  states in `enrich-before-ingest/SKILL.md` that a new person is never created without
+  end-of-run approval. A held row approved in that pass still has no path to `sent` (new
+  todo).
+- **Propose/enrich legs are never reported as `None -> failed`** (todo
+  `2026-09-09-written-records-labels-propose-and-enrich-legs-failed`, quick `260911-ao0`).
+  Already true since D-70-09's `can_write` gate in `chunking.dispatch_and_recover`; this
+  release adds the end-to-end regression tests on run `2bc3617b`'s recorded row shape.
+  No production code changed.
+
 ## [0.44.0] - 2026-09-11
 
 ### Changed

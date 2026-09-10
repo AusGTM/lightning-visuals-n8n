@@ -7,6 +7,35 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Merge-input contract rule 5 — a Merge input with more than one producer edge is a
+  generation-time refusal unless the Merge is on an explicit tolerant-allowlist** (quick
+  task 260911-ao1, 2026-09-11, operator ruling option A on todo
+  `2026-09-11-merge-input-contract-allows-many-producers-per-input`).
+  `assert_merge_input_contract` in `scripts/build_cloud_workflows.py` now enforces it;
+  `_MERGE_MULTI_PRODUCER_TOLERANT` is keyed on `(wf["name"], merge_name)` and carries a
+  reason string per entry. A census of all eight committed `wf_*.json` found SIXTEEN such
+  pairs (ingest 2, enrichment cloud 9, enrichment local-live 2, review-decision 3), not the
+  two the todo assumed — `Decide Company Action Merge` and `Collect Credits` among them —
+  and no structural discriminator separates the multi-firing shape from the exclusive one,
+  so every census pair is admitted by the allowlist and none of its reason strings claims
+  safety. RED was observed with the allowlist emptied (51 input-level violations reducing
+  to the 16 pairs, in both Python and the JS mirror `tests/n8n/mergeInputContract.test.mjs`,
+  whose new census test pins the two lists to each other). Regeneration produced zero
+  `n8n/` diff; nothing deployed. MN-01 and NF-MJ-01 carried into
+  `.planning/todos/pending/2026-09-11-merge-multi-run-drain-and-grouping-unobserved.md`.
+- **`scripts/judge_reason_distribution.py` — a GET-only reader of `Judge Gate` runData**
+  (quick task 260911-anv, 2026-09-11, operator ruling "measure first" on todo
+  `2026-08-04-enrichment-throughput-ceiling`). Folds every run of the gate nodes across
+  listed executions and reports counts only (no bodies — runData carries the webhook
+  secret). Findings recorded in the todo: (a) `Judge Gate` already emits `judge_reasons`
+  on every row (no builder change needed); (b) the committed cloud body bakes
+  `max_uses: 5`, matching `WEB_RESEARCH_MAX_SEARCHES=5`, as a build-time literal; (c) the
+  live instance's execution retention (ids `12119`–`12356`) now holds only the 2026-09-10
+  runaway children and disarmed proof sends, so no judge escalation is observable there —
+  Phase 63's 5-input replay corpus remains the only measured distribution. Band stays
+  `[75, 85]`; lever 1 remains unauthorised.
+
+### Added
 - **The offline walker models n8n's v1 execution order, proved against Gate 11's own
   recordings (quick task 260911-0tz, 2026-09-11).** `tests/n8n/lib/walkWorkflow.mjs` now
   carries two explicit engine branches keyed on `settings.executionOrder`: the legacy branch
