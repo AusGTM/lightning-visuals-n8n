@@ -35,7 +35,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   atomically, which reproduces the recording's `source` arrays exactly, asserted as real
   tests). The drain is capped at one fired run per Merge, matching CLAUDE.md's
   `requiredInputs` row; a fire-count guard throws by Merge name on a feedback edge; the
-  frozen v1 graph is digest-pinned.
+  frozen v1 graph is digest-pinned. Two further review rounds the same day (quick task
+  260911-3mu) widened what "a genuine loss" means: `starvedWithData` now also reports
+  `merge_dropped_rows` — any fired `combine`-mode run whose output is smaller than its largest
+  input (annihilation on an unfilled input, AND the unequal-count `Math.min` drop with every
+  input filled, which the committed ingest graph reaches when `HubSpot Associate Company`
+  returns nothing against a two-row carry lane — pinned RED-first in `writeGateShape.test.mjs`);
+  a feedback cycle with no Merge on it now throws instead of hanging; the walker's
+  producer-run grouping rule is documented as consistent with, not established by, the Gate 11
+  recordings, with its divergent shape pinned and carried as an open question.
 - **The credit-check lane does not multi-fire under v1.**
   `tests/n8n/creditsSummaryUnderV1.test.mjs` walks the enrichment graph with all three
   providers enabled and pins `Collect Credits` firing exactly once and `Build Credits

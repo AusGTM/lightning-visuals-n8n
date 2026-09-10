@@ -4,7 +4,7 @@ type: execute
 status: complete
 subsystem: n8n-tests
 tags: [walker, v1, starvation-detector, review-closure]
-commits: [dbb987e5, <docs commit>]
+commits: [dbb987e5, 42d8442e, 5ca774a0, see git log]
 completed: 2026-09-11
 ---
 
@@ -29,5 +29,19 @@ PLAN) and NF-NT-07 (process: SUMMARY committed by the orchestrator, this file).
 | NF-NT-05 README pointer | fixed | — |
 | NF-NT-08 CHANGELOG count | 14 → 12 | — |
 
-Suites: `node --test tests/n8n/*.test.mjs` 1098 pass / 0 fail (1093 + 5 new). Python suites
-re-run by the orchestrator before push.
+Suites after round 3: `node --test tests/n8n/*.test.mjs` 1098 pass / 0 fail (1093 + 5 new).
+
+## Round 4 (closure of the third-pass review, `260911-3mu-REVIEW.md`)
+
+| Finding | Closed at | RED-first / test |
+|---|---|---|
+| NF3-BL-01 unequal-count `Math.min` drop invisible | stall pass emits `merge_dropped_rows` (`outputCount < max(itemCounts)`, self-contained entry); `starvedWithData` returns it; the `outputCount === 0` arm is REPLACED | `writeGateShape.test.mjs` "ingest, ARMED, both rows permitted, HubSpot Associate Company returns nothing" — RED against `42d8442e` (`starvedWithData` length 0), GREEN after; the NF-BL-01 case's expected `trace.stalled` gains the second entry |
+| NF3-MJ-01 false acceptance of NF-MN-06 | PLAN note retracted; test landed | `walkWorkflow.test.mjs` "NF3-MJ-01 (MN-07 earliness)": `assert.throws` + stub `calls` deepEqual `[]` |
+| NF3-MN-01 / NF3-MN-02 | convergence header, both test names, both messages reworded to what is checked | — |
+| NF3-MN-03 fail-open cross-lookup | removed with the arm; `merge_dropped_rows` carries its own counts | — |
+| NF3-MN-04 CHANGELOG silent on round 3 | one clause covering rounds 3 and 4 | — |
+| NF3-NT-01 (NF-NT-06) | shared cap rationale; `FIRE_CAP = max(1000, nodes*4)`; `DELIVERY_CAP = max(FIRE_CAP*4, nodes*50)` so a Merge cycle trips the Merge-naming guard first | existing MN-02 guard test |
+| NF3-NT-02 | `enrichmentMixedBatch` asserts `runData["Build Response"].length === 1` | — |
+| NF3-NT-03 | BL-02 comment reason corrected in `propagate` and the legacy mirror | — |
+| NF3-NT-04 | NF-MJ-01 pin asserts `runData.M` deepEqual `[[q, q]]` | — |
+| NF3-NT-05 | this frontmatter | — |
