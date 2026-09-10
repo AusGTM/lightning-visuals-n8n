@@ -1,0 +1,50 @@
+D-70-21 rollback bundle — zero-write dry-run diff against the live n8n Cloud instance
+=======================================================================================
+
+Captured: 2026-09-10, by the 70-08 plan executor (Task 2), against the pinned rollback
+commit 59812be (see tests/test_phase70_rollback_bundle.py for the pinned node counts and
+workflow names this bundle is checked against).
+
+Procedure: the five pre-Phase-70 n8n/wf_*_cloud.json bodies were checked out from commit
+59812be into the working tree, scripts/deploy_n8n_workflows.py was run with NO arguments
+(its default dry-run path — DRY_RUN and ALLOW_N8N_DEPLOY were never set), stdout+stderr
+were captured below, and the working tree was restored from HEAD in the same bracketed
+command sequence (git status --porcelain -- n8n/ was empty both before the checkout and
+after the restore). No live write was made: the script's own DRY RUN banner below is the
+proof — it only ever prints once _writes_allowed() is false, which is the unconditional
+state on this invocation.
+
+Credentials were available in the environment for this capture, so the run performed one
+live read (GET the five current live workflow bodies from n8n Cloud) to compute a real
+diff — this is the "real zero-write dry-run diff against the live instance" case, not the
+no-credentials skip case. Both are valid rollback-dry-run artifacts per the plan; this one
+happens to be the informative one, since the live instance is currently running the Phase
+70 JSON and every one of the five workflows below reports "update" rather than "create".
+
+---------------------------------------------------------------------------------------
+CAPTURED OUTPUT (scripts/deploy_n8n_workflows.py, argv=[], stdout+stderr combined)
+---------------------------------------------------------------------------------------
+[runner] loaded .env (/Users/robertli/Desktop/consulting/lightning-visuals/lv-n8n-poc/.env)
+[runner] deploy_n8n_workflows.main([]) exit code: 0
+Workflows to create: []
+Workflows to update: ['LV Backend Status (Cloud template)', 'LV Contact Ingest (Cloud template)', 'LV Enrichment (Cloud template)', 'LV Review Decision (Cloud)', 'LV Scheduled Maintenance (Cloud)']
+DRY RUN (default) — no writes will be made. Set DRY_RUN=false AND ALLOW_N8N_DEPLOY=true to deploy.
+---------------------------------------------------------------------------------------
+
+Interpretation: all five pre-Phase-70 bodies matched their live workflow by name (no
+"create" entries — the deploy script routes strictly by `name`, per CLAUDE.md §13.0.2)
+and every one differs from what is currently live (the Phase 70 JSON, deployed
+2026-09-10), so every one reports "update". This is the expected shape for a rollback:
+the armed invocation (`70-ROLLBACK-RUNBOOK.md`) would PUT these five bodies over the five
+currently-live ones. Nothing was created, nothing was deleted, nothing was armed, and the
+working tree's n8n/ directory held the pre-70 bodies for the duration of this single
+Python process only.
+
+No-credentials fallback (documented for completeness, not this capture's actual path):
+had N8N_URL / N8N_API_KEY been unset, scripts/deploy_n8n_workflows.py's own _has_n8n()
+guard fires first and the script prints exactly:
+
+    skipped (no n8n creds): N8N_URL and N8N_API_KEY must both be set to run this deploy.
+
+and exits 0 without constructing any HTTP request — also a valid, zero-write dry-run
+artifact per this plan's Task 2 action.
