@@ -297,7 +297,8 @@ locked decisions are D-70-01..19 in
   (`e4415b9`; live proof on executions 12194/12196).
 - Binding on all six (SAFE-01..05) applies unchanged; nothing armed during the phase.
 
-**Plans:** 7/7 executed (planned 2026-09-09) + 5 gap-closure plans (planned 2026-09-10, waves 0–4),
+**Plans:** 7/7 executed (planned 2026-09-09) + 5 gap-closure plans (planned 2026-09-10, waves 0–4)
++ 3 round-2 gap-closure plans (planned 2026-09-10, waves 1–2),
 sequential on the builder file except 70-05 ∥ 70-06.
 
 Plans:
@@ -330,3 +331,9 @@ Plans:
 - [ ] 70-10-PLAN.md — Wave 2: D-70-23 decided, then the sentinel mechanism gated in the generator, the starved carry Merge bypassed, the ingest lane green, and the Merge-input contract test landed
 - [ ] 70-11-PLAN.md — Wave 3: the enrichment, review and local lanes converted, the fifteen-input response Merge split, the contract made a generation-time refusal, and the whole harness green
 - [ ] 70-12-PLAN.md — Wave 4: G-70-4's like-with-like comparator, the observed-live platform facts recorded with their execution ids, and Gates 5 and 6 written up
+
+**Gap closure, round 2** *(planned 2026-09-10 from `70-UAT.md` — G-70-5 blocker; D-70-24/25/26/27)*
+
+- [ ] 70-13-PLAN.md — Wave 1: TRACER — the self-referencing fan-out deleted from the enrichment graph, `scale_up: true` refused as a row, a self-dispatching node made a generation-time refusal, and the client's ability to ask for one retired
+- [ ] 70-14-PLAN.md — Wave 2: D-70-25 marker filtering at both response builders, RED-first on Gate 5's recorded recovered shape, plus execution 12316 frozen as a documented walker divergence
+- [ ] 70-15-PLAN.md — Wave 2: the retirement and the runaway's platform facts recorded with their execution ids, the two-minute burst watch made a standing deploy step, and Gates 7/8/9 written up
