@@ -2393,19 +2393,20 @@ would have created a second, driftable copy of the same rule. Coverage:
 `tests/n8n/pairPipelineAssociationFlow.test.mjs` (resolved / held / update in one batch call,
 with the held case asserted NOT landed).
 
-### 13.0.2 As-built delta — the request-level flags: THREE, not four (Phase 61 / 62; `async_ack` retired by Phase 70, 2026-09-09)
+### 13.0.2 As-built delta — the request-level flags: TWO, not three (Phase 61 / 62; `async_ack` retired by Phase 70, 2026-09-09; `scale_up` retired by Phase 70 gap closure round 2, 2026-09-10)
 
 §13.0 documents `recompute` as **the** request-level boolean. Phase 61 added two more following
 the identical idiom, and Phase 62 added a fourth (`source_by_field`, 2026-09-02). **Phase 70
-(D-70-07, 2026-09-09) RETIRED `async_ack`**, so §13.0's "a request-level boolean, deliberately
-not a `mode` value" reasoning now covers **three** signals. Read this before treating §13.3's
-input schema or §18.2's parser sample as the complete request contract — both predate all of
-them.
+(D-70-07, 2026-09-09) RETIRED `async_ack`**, and **Phase 70 gap closure round 2 (D-70-24,
+2026-09-10) RETIRED `scale_up`** (see below), so §13.0's "a request-level boolean, deliberately
+not a `mode` value" reasoning now covers **two** signals: `recompute` and `source_by_field`.
+Read this before treating §13.3's input schema or §18.2's parser sample as the complete request
+contract — both predate all of them.
 
 | Flag | Added by | Default | Does |
 | --- | --- | --- | --- |
 | `recompute` | 47.5 | off | §13.0's veto recompute lane |
-| `scale_up` | 61-06 Task 5 | **off** | substrate-3 sub-workflow fan-out via a self-referencing `Execute Workflow` node |
+| `scale_up` | 61-06 Task 5 | **RETIRED 2026-09-10 (executions 12211-12348)** | was substrate-3 sub-workflow fan-out via a self-referencing `Execute Workflow` node; now refused as a row, see below |
 | `source_by_field` | 62-04 (D-62-17) | off | per-field provenance map for a suggestion round — which source supplied each field |
 
 **`async_ack` was retired by Phase 70 Plan 03 Task 2 (D-70-07) on 2026-09-09** and is listed
@@ -2423,26 +2424,50 @@ runData (D-70-05). A caller still passing `async_ack` is silently ignored
 spread, from the envelope with a per-event fallback, and both normalize **strictly** to `true` —
 a truthy non-boolean never opts in. They describe the REQUEST, not a row.
 
-**`scale_up`.** OFF by default, and the off path is test-asserted rather than assumed:
-`dispatch_plan()` with `scale_up` omitted emits an envelope carrying no `scale_up` key at all,
-dict-equal to the envelope every existing caller already sends
-(`operator-claude-plugin/tests/test_scale_up_runtime.py`). Termination has two independent
-stops: `IF Scale Up Route` and `Build Scale Up Fan-Out` test the identical predicate
-(`scale_up === true && fan_depth < 1`), and each dispatched child is re-written with
-`scale_up: false` and `fan_depth: depth + 1`, so a child can never fan again even if one guard
-were wrong. `Dispatch Self` runs `mode: "each"`, `waitForSubWorkflow: false` (detached);
-`Build Scale Up Ack` reports what was *dispatched*, never a business outcome.
+**`scale_up` is RETIRED (D-70-24, 2026-09-10) — the fan-out lane was DELETED, not disabled.**
+It used to work as described in the paragraph below (kept for a reader who meets the name in
+old code or an old commit); it no longer exists in any form. On 2026-09-10, four disarmed
+proof sends against the freshly redeployed gap-closure enrichment body triggered 135
+self-dispatched `Execute Workflow` child executions (`12211`–`12348`) in six minutes, ~3 in
+flight continuously, 138 enrichment executions consumed in total (`12209`–`12348`) against the
+Starter 2.5K/month budget — even though every send carried `scale_up: false` and the two
+independent termination guards described below were both present and, on every OTHER
+execution, correct. The mechanism that let a child dispatch anyway was never isolated (see
+§13.0.3's new row). Operator ruling: **after this observation, no in-graph guard on this engine
+is trusted to bound a self-referencing dispatch** — the feature is removed, not re-guarded.
+`scripts/build_cloud_workflows.py`'s enrichment build now contains **zero** `executeWorkflow`
+nodes (down from one), and a build-time assertion (`assert_no_self_dispatch`) refuses
+generation if one ever returns, with a single keyed exemption for SJ-3's unrelated
+cross-workflow dispatch in `wf_scheduled_maintenance_cloud.json` (untouched, still 1 node).
+A request carrying `scale_up: true` (envelope or event) is now refused as a row — the same
+refusal shape the pre-existing unsupported-object-type case uses — naming the retirement and
+these execution ids; a caller still passing the keyword is silently ignored, not rejected. The
+plugin has no parameter left to ask for it. Full record: `70-13-SUMMARY.md`
+(`requirements-completed: [D-70-24, D-70-26]`), `tests/n8n/scaleUpRefused.test.mjs`,
+`operator-claude-plugin/tests/test_scale_up_retired.py`. The feature may return in a later
+phase once the engine rule behind this observation is understood.
 
-**Nodes added to `wf_enrichment_cloud` (verified by counting the committed
-`n8n/wf_enrichment_cloud.json`: 123 nodes as of 2026-08-30; **218 as of 2026-09-09** — see the
-Phase 70 note below):** `Build Async Ack` (renamed `Build Ack` and made unconditional by Phase
-70), `IF Linkedin Searchable`, `HubSpot Linkedin Search`, `Adapt Linkedin Search`,
+*What it did, for history:* OFF by default, and the off path was test-asserted rather than
+assumed. Termination had two independent stops: `IF Scale Up Route` and `Build Scale Up
+Fan-Out` tested the identical predicate (`scale_up === true && fan_depth < 1`), and each
+dispatched child was re-written with `scale_up: false` and `fan_depth: depth + 1`, so a child
+could never fan again even if one guard were wrong. `Dispatch Self` ran `mode: "each"`,
+`waitForSubWorkflow: false` (detached); `Build Scale Up Ack` reported what was *dispatched*,
+never a business outcome. Both guards held on every execution except the ones that produced
+the runaway — see §13.0.3's row for what was actually observed.
+
+**Nodes added to `wf_enrichment_cloud` by the ORIGINAL Phase 61 change (verified by counting
+the committed `n8n/wf_enrichment_cloud.json` at the time: 123 nodes as of 2026-08-30; 218 as of
+2026-09-09):** `Build Async Ack` (renamed `Build Ack` and made unconditional by Phase 70),
+`IF Linkedin Searchable`, `HubSpot Linkedin Search`, `Adapt Linkedin Search`,
 `Adapt Company Create`, `IF Scale Up Route`, `Build Scale Up Fan-Out`, `Dispatch Self`,
-`Build Scale Up Ack`. One pre-existing edge was re-pointed: `Parse HubSpot Event`'s first fan
-target is now `IF Scale Up Route`, whose FALSE lane reaches the old target
-`IF Object Type Supported` unchanged — one extra pass-through hop, identical routing for any
-request that never opts in. As always, never hand-edit the JSON; regenerate with
-`scripts/build_cloud_workflows.py`.
+`Build Scale Up Ack`. **Four of those nine — `IF Scale Up Route`, `Build Scale Up Fan-Out`,
+`Dispatch Self`, `Build Scale Up Ack` — no longer exist**, deleted by the retirement above; the
+other five (the linkedin-search and company-create additions, and `Build Ack`) stand unchanged.
+The re-pointed edge from the original change (`Parse HubSpot Event`'s first fan target moved to
+`IF Scale Up Route`) is also gone: `Parse HubSpot Event`'s first fan target is `IF Object Type
+Supported` again — the exact edge the original splice re-pointed, restored to its pre-Phase-61
+shape. As always, never hand-edit the JSON; regenerate with `scripts/build_cloud_workflows.py`.
 
 **`source_by_field` differs mechanically from the other three — read this before assuming the
 same wiring.** It is not a boolean normalized in `Parse HubSpot Event`. It rides as a **multipart
@@ -2599,6 +2624,44 @@ start) and AFTER-03 (full end-of-run report).
 > plan 70-11) before the redeploy that would have exercised it. What WAS observed live at 15
 > inputs, and is recorded as confounded rather than settled, is in §13.0.3's table below.
 
+> **Extended 2026-09-10 (Gate 4/Gate 5 deploy attempt — the runaway, D-70-24, gap closure round
+> 2, plans 70-13/70-14). Deployment state, corrected AGAIN, this time by an incident, not by a
+> generation change alone.** The operator deployed and bounced the 291/69/55/43/30 gap-closure
+> JSON disarmed at 2026-09-10T07:03Z. The four other workflows came up clean. The enrichment
+> workflow began self-dispatching within a minute of the first disarmed proof send — see
+> §13.0.3's new rows for the mechanism and its scale. Stopped by `POST
+> /workflows/950HPb7a1GgSAIyZ/deactivate` at ~07:09:45Z, then a PUT of the pre-Phase-70
+> `59812be` enrichment body (123 nodes) at 07:10:50Z as a second, belt-and-braces stop; the
+> enrichment workflow was reactivated on that pre-70 body at ~07:14Z. Zero HubSpot writes
+> throughout.
+>
+> **The scale-up fan-out that caused it is now DELETED, not merely stopped** (D-70-24, plans
+> 70-13/70-14 — see this section's retirement note above): the enrichment graph regenerated a
+> second time in this round, `wf_enrichment_cloud.json` **291 → 287** nodes (the four fan-out
+> nodes gone, zero `executeWorkflow` nodes remain), and `wf_contact_ingest_cloud.json` stayed at
+> **69** nodes but had its `Build Response`/`Build Ingest Response` jsCode changed (D-70-25, the
+> marker filter) — every other committed workflow is unchanged from the row above.
+>
+> **Live state as of this writing, five workflows, three different generations —
+> read this before assuming any single "committed vs. live" statement covers all five:**
+>
+> | Workflow | Live right now | Committed now (this round) | Gap |
+> | --- | --- | --- | --- |
+> | `wf_enrichment_cloud.json` | pre-Phase-70 `59812be` body, **123 nodes**, restored ~07:14Z during the incident stop | **287 nodes**, zero `executeWorkflow` | a full generation — no Merge nodes at all live, vs. the full Phase-70 Merge/gate redesign committed |
+> | `wf_contact_ingest_cloud.json` | gap-closure round-1 JSON, **69 nodes**, deployed 2026-09-10T07:03Z | **69 nodes**, marker-filter jsCode only | jsCode-only (D-70-25 not yet live) |
+> | `wf_review_decision_cloud.json` | gap-closure round-1 JSON, **55 nodes** | **55 nodes**, unchanged | none |
+> | `wf_scheduled_maintenance_cloud.json` | gap-closure JSON, **43 nodes** | **43 nodes**, unchanged | none |
+> | `wf_backend_status_cloud.json` | gap-closure JSON, **30 nodes** | **30 nodes**, unchanged | none |
+>
+> **Nothing is armed anywhere in this chain, on any of the five live bodies.** The committed
+> JSON is ahead of live by the whole of this gap-closure round (plans 70-13 and 70-14) — most of
+> that gap sits on the enrichment lane, which is currently running an architecture generation
+> behind (the pre-Phase-70 body has no Merge nodes, no IF-shaped write gates, and no marker
+> filter at all; it predates this entire phase). The deploy that would put the current committed
+> JSON live is deferred to the operator as Gate 7 in `70-DEFERRED-GATES.md`, and Gate 7 is
+> followed immediately — before any send — by the two-minute burst watch this incident made a
+> standing rule (`70-ROLLBACK-RUNBOOK.md`).
+
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
 Established during Phase 61's premise spike. **Tags are load-bearing: `[documented]` means
@@ -2624,6 +2687,16 @@ it happen. Documentation is not evidence of as-built behaviour — do not upgrad
 | **A node fed zero items does not run at all, and so contributes no delivery to anything it feeds.** First demonstrated with an HTTP node at Gate 1 (`12200`); the SAME rule, in Code/NoOp gate form, was only first observed at Gate 3/70-05-A (`12203`, `12206`) — recorded separately rather than assumed identical in every node type until each was actually seen. | `[observed live]` (HTTP form: `12200`, `HubSpot Associate Company` never ran when its lane was starved; Code/NoOp gate form: `12203`, `12206`) |
 | **A multipart part carrying a Content-Type header is filed by n8n's webhook parser under `$binary`, never `$json.body`** — a 3-tuple `(None, value, "text/plain")` loses the field entirely; a 2-tuple `(None, value)` (no Content-Type) parses correctly. | `[observed live]` (`12200` vs `12202` — G-70-1, fixed `576fe7c`) |
 | **CONFOUNDED, not settled: whether a Merge can exceed n8n's documented 2–10 input range live.** The 15-input `Build Response Merge` never fired on `12204`/`12205`/`12206` — but every one of its inputs also had at least one starved lane feeding it a sentinel's `[]`, so the non-firing is fully explained by the SAME starvation rule as every other row above. The input-count question was never isolated from the starvation confound before the graph was regenerated (plan 70-11 split it into 3 stage Merges of ≤10 inputs each), so the documented 2–10 range remains an independent reason to keep every Merge ≤10 inputs, never a live-proven ceiling. | `[documented]` only (n8n's own published range) + `[observed live, confounded]` (`12204`, `12205`, `12206` — non-firing observed, cause NOT isolated) |
+| **Deactivating a workflow stops further self-dispatch after a short lag; children already queued before the deactivate still run, and the tail errors rather than executing.** `POST /workflows/{id}/deactivate` was sent at ~07:09:45Z; children already in flight kept running for roughly 30s, then the last three (`12346`, `12347`, `12348`) errored `Workflow is not active and cannot be executed` at ~07:10:15Z. No new execution appeared after `12348`. This is the stop mechanism the runbook's burst watch now assumes — deactivate is not instantaneous, and an operator watching for zero new executions immediately after the deactivate call will see the drain, not a failure. | `[observed live]` (2026-09-10T07:09:45Z–07:10:15Z, executions `12346`–`12348`, the runaway stop) |
+| **A node can execute with an item that no declared connection delivered.** Child execution `12316`'s `Dispatch Self` (an `executeWorkflow` node) ran ONCE with 1 marker item, though its ONLY declared producer, `Build Scale Up Fan-Out`, emitted 0 items on that run. The stored workflow's `connections` matched the committed JSON exactly (no duplicate node names, no stray edge). runData `source` for `Dispatch Self` named `Recompute Requested Sentinel Gate` — a Code node with NO declared edge to `Dispatch Self` at all — and `source` for `Build Scale Up Fan-Out` named `Refusal Row Absent Sentinel Gate`; both are D-70-23 gate Code nodes that returned `[]`. **The cause is NOT isolated.** This is a documented divergence, not a modelled mechanism: `tests/n8n/walkerEngineFidelity.test.mjs` pins execution `12316` as a case the walker does NOT reproduce, and no code in this repo claims to explain it. Do not read this row as resolved by the retirement above — the retirement removed the node the mechanism could act on; it did not identify the mechanism. | `[observed live]`, cause not isolated (2026-09-10, child execution `12316`, `70-14-SUMMARY.md`, `tests/n8n/fixtures/frozen/exec_12316.runData.json`) |
+| **Scale of the 2026-09-10 runaway.** 135 self-dispatched `Execute Workflow` child executions (`12211`–`12348`) in six minutes, ~3 in flight continuously, each child dispatching one more before any guard caught it. 138 enrichment executions consumed in total (`12209`–`12348`) against the Starter 2.5K/month budget — roughly 5.5% of one month's allotment in six minutes, from four disarmed proof sends that themselves should have produced 4 executions. | `[observed live]` (2026-09-10T07:04Z–07:10Z, executions `12209`–`12348`) |
+
+**No Merge-behaviour row above was touched by this round.** Every Merge-related fact in this
+table (zero-item delivery, first-delivery-wins, fires-at-most-once, input starvation, the
+15-input CONFOUNDED row) is exactly as Gate 1/Gate 3's 2026-09-10 UAT session left it. This
+round's three new rows are about self-dispatch and deactivation, not Merge semantics. The next
+Merge observation is Gate 8 in `70-DEFERRED-GATES.md` — a re-run of the same disarmed proof
+against the loop-free body, not yet exercised.
 
 **Do not read the fan-out as cheaper.** The same 2-synthetic-row batch listed **1** execution
 inline (substrate 1, `12044`) and **3** with `scale_up: true` (`12045` + two children). The

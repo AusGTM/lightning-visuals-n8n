@@ -24,21 +24,32 @@ then Phase 61 added nine nodes to `wf_enrichment_cloud.json` (`Build Async Ack`,
 `Adapt Company Create`, `IF Scale Up Route`, `Build Scale Up Fan-Out`, `Dispatch Self`,
 `Build Scale Up Ack`) and re-pointed `Parse HubSpot Event`'s first fan target; Phase 62 and
 quick tasks `260904-5a8` / `260904-pav` edited existing nodes' `jsCode` and `jsonBody`
-without changing the node count. Treat the diagrams below as orientation, and **the committed
-`wf_*.json` as authority** for what a node contains.
+without changing the node count; Phase 70 added native `Merge` nodes at every convergence point
+(node counts moved again, see CLAUDE.md §13.0.2); **Phase 70 gap closure round 2 (D-70-24,
+2026-09-10) then DELETED four of the nine Phase 61 additions** — `IF Scale Up Route`,
+`Build Scale Up Fan-Out`, `Dispatch Self`, `Build Scale Up Ack` no longer exist, after a
+disarmed proof send triggered 135 self-dispatched child executions (`12211`–`12348`) via
+`Dispatch Self`; the enrichment graph now carries **zero** `executeWorkflow` nodes and a
+`scale_up: true` request is refused as a row rather than fanned. Treat the diagrams below as
+orientation, and **the committed `wf_*.json` as authority** for what a node contains.
 
 **Two further currency facts, both load-bearing:**
 
 - **The committed JSON is itself AHEAD of the running n8n Cloud instance** — regenerated and
   committed without deploying since 2026-09-02 (CLAUDE.md §13.0.2). So the file is not
-  evidence of what n8n is executing either. Only a live read is.
+  evidence of what n8n is executing either. Only a live read is. As of 2026-09-10 the live
+  enrichment lane is further behind than the other four workflows: it is running the
+  pre-Phase-70 body (123 nodes, no Merge nodes at all), restored after the runaway above; the
+  committed JSON carries the full Phase-70 redesign at 287 nodes. See CLAUDE.md §13.0.2 for the
+  per-workflow live-vs-committed table.
 - **Never hand-edit `wf_*.json`.** Change `n8n/code/*.js` (or the builder) and re-run
   `.venv/bin/python scripts/build_cloud_workflows.py`.
 
-Request-level signals now number **four**, not the one §13.0's original text describes:
-`recompute`, `async_ack`, `scale_up` (booleans normalized in `Parse HubSpot Event`) and
-`source_by_field` (a multipart form field read downstream by `Merge Contacts`). No scheduled
-path carries any of them — all four are on-demand only.
+Request-level signals now number **two**, not the one §13.0's original text describes:
+`recompute` and `source_by_field` (a multipart form field read downstream by `Merge Contacts`).
+`async_ack` was retired by Phase 70 (D-70-07, the ack is now unconditional); `scale_up` was
+retired by Phase 70 gap closure round 2 (D-70-24, above). No scheduled path carries either
+remaining signal — both are on-demand only.
 
 ## Pipeline
 

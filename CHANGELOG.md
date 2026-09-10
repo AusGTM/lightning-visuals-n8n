@@ -26,8 +26,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 - **The `async_ack` request-level flag (D-70-07).** The ack is unconditional; three
-  request-level flags remain (`recompute`, `scale_up`, `source_by_field`). CLAUDE.md §13.0.2's
-  table is corrected from four to three.
+  request-level flags remained at the time (`recompute`, `scale_up`, `source_by_field`).
+  CLAUDE.md §13.0.2's table was corrected from four to three — see below for the further
+  correction to two.
+- **The scale-up fan-out lane and the `scale_up` request-level flag (D-70-24, 2026-09-10 —
+  gap closure round 2, plans 70-13/70-14).** `IF Scale Up Route`, `Build Scale Up Fan-Out`,
+  `Dispatch Self` and `Build Scale Up Ack` are deleted from `wf_enrichment_cloud.json`
+  (287 nodes, down from 291; zero `executeWorkflow` nodes remain on the enrichment lane).
+  Removed, not disabled: a disarmed proof send against the redeployed gap-closure body
+  triggered 135 self-dispatched child executions (`12211`–`12348`, six minutes, ~3 in flight
+  continuously, 138 enrichment executions consumed in total against the Starter 2.5K/month
+  budget) even though both of the lane's independent termination guards were correct on every
+  other execution — the mechanism that let one child dispatch anyway was never isolated
+  (CLAUDE.md §13.0.3). A request carrying `scale_up: true` is now refused as a row, mirroring
+  the existing unsupported-object-type refusal shape; a caller still passing the keyword is
+  silently ignored. Two request-level flags remain (`recompute`, `source_by_field`); CLAUDE.md
+  §13.0.2's table is corrected from three to two.
 
 ### Fixed
 - **Gap closure from the 2026-09-10 disarmed live UAT (plans 70-08..70-12).** The first native
@@ -45,13 +59,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   recovery under `raw_rows`, and the driver's ingest branch reads that instead, plan 70-12).
   CLAUDE.md §13.0.2/§13.0.3 record the observed-live platform facts these executions
   established, each with its execution id.
+- **Gap closure round 2 from the 2026-09-10 runaway (G-70-5, plans 70-13/70-14).** A
+  disarmed re-proof send against the freshly redeployed gap-closure JSON found a fifth gap:
+  `Dispatch Self` self-dispatching a child once per execution though its only declared producer
+  emitted zero items (root cause NOT isolated). Fixed by removal, not a guard: the fan-out lane
+  is deleted (see Removed, above), and `assert_no_self_dispatch` — a new generation-time
+  contract composed into `_assert_generation_contracts` alongside `assert_merge_input_contract`
+  — refuses to generate any workflow JSON containing an `executeWorkflow` node other than one
+  single keyed exemption, `("wf_scheduled_maintenance_cloud", "SJ-3 Dispatch To Enrichment")`,
+  checked AFTER a self-reference-to-own-workflow test that the exemption cannot suppress. A
+  second, unrelated fix landed in the same round: `Build Response` and `Build Ingest Response`
+  now both run a shared, positive row-identity filter (`hasRowIdentity` — `row_id`, `action`,
+  `outcome`, `object_id`, `hs_object_id`, `id`) before either projects a row, so a marker item
+  can no longer reach the caller even when an upstream broadcast (the credits-collector
+  `combineAll` mechanism) has made it non-empty (D-70-25) — Gate 5's recovered rows had
+  contained exactly such marker-shaped items. Execution `12316`'s three unconnected-source node
+  runs are pinned in `tests/n8n/walkerEngineFidelity.test.mjs` as a frozen, verified prohibition
+  case: the walker does NOT reproduce them, and is not taught to (D-70-26) — recorded, not
+  modelled. CLAUDE.md §13.0.2/§13.0.3 record the retirement and the three new observed-live
+  facts this incident established, each with its execution ids.
 
 ### Not yet done
-- **The gap-closure JSON (node counts above) is committed but NOT yet redeployed.** What is
-  live today is the pre-gap-closure Phase 70 JSON (218/50/45/43/30), deployed and bounced
-  disarmed on 2026-09-10 for the UAT above and still running. Two gates remain, both
-  deferred to the operator: Gate 5 (redeploy the gap-closure JSON, re-run the disarmed proof)
-  and Gate 6 (the first armed mixed-verdict batch, only after Gate 5 passes) — see
+- **The gap-closure JSON is committed but NOT fully redeployed, and the live instance is now
+  MIXED across five different generations.** As of 2026-09-10, after the runaway stop: the live
+  enrichment lane runs the pre-Phase-70 body (123 nodes, no Merge nodes at all — the incident
+  stop's belt-and-braces PUT), while the other four workflows run the gap-closure round-1 JSON
+  (69/55/43/30, deployed disarmed the same day). The current committed JSON — 287-node
+  enrichment (zero `executeWorkflow`), 69-node ingest with the marker filter — is ahead of ALL
+  five live bodies by varying degrees. Three gates remain, all deferred to the operator: Gate 7
+  (disarmed deploy + bounce of the loop-free body, then the two-minute `mode: integrated` burst
+  watch this incident made a standing runbook step, BEFORE any send), Gate 8 (the D-70-19 proof
+  re-run, all four sends `shapes_equal: true`), and Gate 9 (the armed mixed-verdict re-run,
+  formerly Gate 6, only after Gate 8 passes) — see
   `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`.
   Nothing is armed anywhere in this chain.
 
