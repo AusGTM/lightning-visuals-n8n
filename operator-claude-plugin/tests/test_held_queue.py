@@ -182,6 +182,22 @@ def test_save_refuses_an_arming_shaped_value_inside_observed_signals(tmp_path):
     assert not target.exists()
 
 
+def test_a_held_armidale_jockey_club_entry_saves_and_loads_back_unchanged(tmp_path):
+    """'Armidale Jockey Club' trips the 'arm' marker as a raw substring, and 'the club
+    Secretary' trips 'secret' -- both must survive whole-token matching, exercising
+    both the allowlisted `row` scan and the free-text `reason` scan (quick 260911-any)."""
+    target = tmp_path / "held_queue.json"
+    entry = held_queue.build_entry(
+        {"row_id": "row-1", "company": "Armidale Jockey Club"},
+        confidence.HOLD_NO_MATCH, "held for the club Secretary to confirm", _outcome(),
+    )
+    held_queue.save("run-1", {"row-1": entry}, path=target)
+
+    loaded = held_queue.load(path=target)
+    assert loaded["row-1"]["row"]["company"] == "Armidale Jockey Club"
+    assert loaded["row-1"]["reason"] == "held for the club Secretary to confirm"
+
+
 def test_a_rejected_save_leaves_a_previously_saved_queue_untouched(tmp_path):
     target = tmp_path / "held_queue.json"
     good = held_queue.build_entry({"row_id": "row-1"}, confidence.HOLD_NO_MATCH, "x", _outcome())

@@ -31,9 +31,9 @@ def _point_at_a_fake_durable_home(monkeypatch, tmp_path):
 
 
 def test_a_real_held_person_survives_key_build_save_and_load(tmp_path):
-    """No name in this fixture contains a `_FORBIDDEN_NAME_MARKERS` substring -- this
-    test proves the happy path; the marker's false positives are proved separately in
-    plan 01's Task 3."""
+    """No name in this fixture matches a `_FORBIDDEN_NAME_MARKERS` whole token -- this
+    test proves the happy path; the marker's genuine (whole-token) refusals are proved
+    separately in plan 01's Task 3."""
     rows = [
         {"firstname": "Craig", "lastname": "Smith", "company": "The Roma Turf Club",
          "email": "craig.smith@thehartford.com"},
@@ -426,22 +426,52 @@ def test_export_rows_raises_suggestion_decline_error_on_an_unknown_key(tmp_path)
 
 
 # =====================================================================================
-# The inherited false-positive is refused, not silently dropped
+# quick 260911-any: whole-token matching -- Secretary and Armidale save; real markers
+# still refuse
 # =====================================================================================
 
 
-def test_a_real_company_name_containing_a_forbidden_marker_is_refused_not_dropped(tmp_path):
-    """'Armidale Jockey Club' is a real NSW racing body; the 'arm' marker matches
-    inside it. This pins the inherited false positive as KNOWN behaviour -- which is
-    what makes plan 02's `unstorable` reporting path load-bearing rather than
-    decorative."""
+def test_a_secretary_at_armidale_jockey_club_saves_and_loads_back_unchanged(tmp_path):
+    """'Secretary' contains the substring 'secret' and 'Armidale Jockey Club' contains
+    the substring 'arm' -- both false-tripped the old substring matcher. Whole-token
+    matching must let both through."""
     target = tmp_path / "suggestion_declines.json"
     entry = suggestion_declines.build_entry(
-        {"firstname": "Pat", "lastname": "Lee", "company": "Armidale Jockey Club"},
+        {"firstname": "Pat", "lastname": "Lee", "company": "Armidale Jockey Club",
+         "jobtitle": "Secretary"},
         "no_email", "x", "run-1", "123",
     )
-    with pytest.raises(suggestion_declines.SuggestionDeclineError) as excinfo:
-        suggestion_declines.save({"123::pat|lee": entry}, path=target)
+    key = "123::pat|lee"
+    suggestion_declines.save({key: entry}, path=target)
 
-    assert "armidale" in str(excinfo.value).lower()
+    loaded = suggestion_declines.load(path=target)
+    assert loaded[key]["row"]["company"] == "Armidale Jockey Club"
+    assert loaded[key]["row"]["jobtitle"] == "Secretary"
+
+
+def test_a_genuine_marker_in_provenance_or_reason_still_refuses_nothing_written(tmp_path):
+    """The `unstorable` reporting path (plan 02) stays load-bearing: a genuine
+    marker -- a `provenance` key named `grant`, or a `reason` carrying a raw secret --
+    is still refused via `first_refusal`, and `save` still raises with nothing
+    written."""
+    target = tmp_path / "suggestion_declines.json"
+    entry = suggestion_declines.build_entry(
+        {"firstname": "Pat", "lastname": "Lee"}, "no_email", "x", "run-1", "123",
+        provenance={"grant": "op-grant-123"},
+    )
+    key = "123::pat|lee"
+
+    sentence = suggestion_declines.first_refusal(key, entry)
+    assert sentence is not None
+
+    with pytest.raises(suggestion_declines.SuggestionDeclineError):
+        suggestion_declines.save({key: entry}, path=target)
+    assert not target.exists()
+
+    leaked_entry = suggestion_declines.build_entry(
+        {"firstname": "Pat", "lastname": "Lee"}, "no_email",
+        "n8n_api_key=super-secret", "run-1", "123",
+    )
+    with pytest.raises(suggestion_declines.SuggestionDeclineError):
+        suggestion_declines.save({key: leaked_entry}, path=target)
     assert not target.exists()
