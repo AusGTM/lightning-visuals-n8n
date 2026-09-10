@@ -1,0 +1,3806 @@
+{
+ "execution_id": "12358",
+ "status": "success",
+ "mode": "webhook",
+ "workflow_id": "AwbBeShdPgV48eiY",
+ "workflow_name": "LV Contact Ingest (Cloud template)",
+ "workflow_version_id": "c7fbf31a-7afc-422c-88e0-397ef71a5845",
+ "started_at": "2026-09-10T13:56:57.231Z",
+ "stopped_at": "2026-09-10T13:57:01.038Z",
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "graph": {
+  "committed_file": "n8n/wf_contact_ingest_cloud.json",
+  "commit": "ec102a4",
+  "node_count": 69,
+  "note": "Full runData recording (Gate 11, 2026-09-10, first runtime observation under executionOrder v1). workflowData dropped; the graph that ran is the committed file at the named commit (node names identical, verified at freeze time). Add a dated graph copy beside this file if a test ever needs to walk it."
+ },
+ "runData": {
+  "Webhook Trigger": [
+   {
+    "startTime": 1789048617263,
+    "executionIndex": 0,
+    "source": [],
+    "hints": [],
+    "executionTime": 0,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "headers": {
+          "host": "alexherman.app.n8n.cloud",
+          "user-agent": "python-requests/2.34.2",
+          "content-length": "459",
+          "accept": "*/*",
+          "accept-encoding": "gzip, br",
+          "cdn-loop": "cloudflare; loops=1; subreqs=1",
+          "cf-connecting-ip": "<redacted>",
+          "cf-ew-via": "15",
+          "cf-ipcountry": "AU",
+          "cf-ray": "a38ef0603fced719-BNE",
+          "cf-visitor": "{\"scheme\":\"https\"}",
+          "cf-worker": "n8n.cloud",
+          "content-type": "multipart/form-data; boundary=8e313774478a67db72a0af4d3d9799a5",
+          "x-enrichment-secret": "<redacted>",
+          "x-forwarded-for": "<redacted>",
+          "x-forwarded-host": "alexherman.app.n8n.cloud",
+          "x-forwarded-port": "443",
+          "x-forwarded-proto": "https",
+          "x-forwarded-server": "traefik-prod-users-swc-40-6d977c9c6c-b4msk",
+          "x-is-trusted": "yes",
+          "x-real-ip": "<redacted>"
+         },
+         "params": {},
+         "query": {},
+         "body": {
+          "run_id": "cf67924d603340fab32e19a2c9ded1e3"
+         },
+         "webhookUrl": "https://alexherman.app.n8n.cloud/webhook/hubspot/contact-upload",
+         "executionMode": "production"
+        },
+        "binary": {
+         "data": {
+          "mimeType": "text/csv",
+          "fileType": "text",
+          "fileExtension": "csv",
+          "data": "filesystem-v2",
+          "fileName": "contacts.csv",
+          "id": "filesystem-v2:workflows/AwbBeShdPgV48eiY/executions/12358/binary_data/a52bca8d-e413-4298-bd3b-31ad39245787",
+          "fileSize": "168 B",
+          "bytes": 168
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Set Config": [
+   {
+    "startTime": 1789048617263,
+    "executionIndex": 1,
+    "source": [
+     {
+      "previousNode": "Webhook Trigger",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 1636,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "headers": {
+          "host": "alexherman.app.n8n.cloud",
+          "user-agent": "python-requests/2.34.2",
+          "content-length": "459",
+          "accept": "*/*",
+          "accept-encoding": "gzip, br",
+          "cdn-loop": "cloudflare; loops=1; subreqs=1",
+          "cf-connecting-ip": "<redacted>",
+          "cf-ew-via": "15",
+          "cf-ipcountry": "AU",
+          "cf-ray": "a38ef0603fced719-BNE",
+          "cf-visitor": "{\"scheme\":\"https\"}",
+          "cf-worker": "n8n.cloud",
+          "content-type": "multipart/form-data; boundary=8e313774478a67db72a0af4d3d9799a5",
+          "x-enrichment-secret": "<redacted>",
+          "x-forwarded-for": "<redacted>",
+          "x-forwarded-host": "alexherman.app.n8n.cloud",
+          "x-forwarded-port": "443",
+          "x-forwarded-proto": "https",
+          "x-forwarded-server": "traefik-prod-users-swc-40-6d977c9c6c-b4msk",
+          "x-is-trusted": "yes",
+          "x-real-ip": "<redacted>"
+         },
+         "params": {},
+         "query": {},
+         "body": {
+          "run_id": "cf67924d603340fab32e19a2c9ded1e3"
+         },
+         "webhookUrl": "https://alexherman.app.n8n.cloud/webhook/hubspot/contact-upload",
+         "executionMode": "production",
+         "allow_create": false,
+         "run_id": "cf67924d603340fab32e19a2c9ded1e3"
+        },
+        "binary": {
+         "data": {
+          "mimeType": "text/csv",
+          "fileType": "text",
+          "fileExtension": "csv",
+          "data": "filesystem-v2",
+          "fileName": "contacts.csv",
+          "id": "filesystem-v2:workflows/AwbBeShdPgV48eiY/executions/12358/binary_data/a52bca8d-e413-4298-bd3b-31ad39245787",
+          "fileSize": "168 B",
+          "bytes": 168
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Extract From File": [
+   {
+    "startTime": 1789048618899,
+    "executionIndex": 2,
+    "source": [
+     {
+      "previousNode": "Set Config",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 2,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co"
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co"
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Build Ingest Ack": [
+   {
+    "startTime": 1789048618901,
+    "executionIndex": 3,
+    "source": [
+     {
+      "previousNode": "Set Config",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 7,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "run_id": "cf67924d603340fab32e19a2c9ded1e3",
+         "accepted": true,
+         "row_ids": []
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Respond to Webhook": [
+   {
+    "startTime": 1789048618908,
+    "executionIndex": 4,
+    "source": [
+     {
+      "previousNode": "Build Ingest Ack",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 0,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "run_id": "cf67924d603340fab32e19a2c9ded1e3",
+         "accepted": true,
+         "row_ids": []
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Set Config Fields": [
+   {
+    "startTime": 1789048618909,
+    "executionIndex": 5,
+    "source": [
+     {
+      "previousNode": "Set Config",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 8,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "source_by_field": {}
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Source By Field Broadcast": [
+   {
+    "startTime": 1789048618917,
+    "executionIndex": 6,
+    "source": [
+     {
+      "previousNode": "Extract From File",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Set Config Fields",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 6,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "source_by_field": {}
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 0
+         },
+         {
+          "item": 0,
+          "input": 1
+         }
+        ]
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "source_by_field": {}
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 1
+         },
+         {
+          "item": 0,
+          "input": 1
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Map Columns": [
+   {
+    "startTime": 1789048618923,
+    "executionIndex": 7,
+    "source": [
+     {
+      "previousNode": "Source By Field Broadcast",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 12,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Normalize Phone": [
+   {
+    "startTime": 1789048618935,
+    "executionIndex": 8,
+    "source": [
+     {
+      "previousNode": "Map Columns",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 10,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Build Verify Batch": [
+   {
+    "startTime": 1789048618945,
+    "executionIndex": 9,
+    "source": [
+     {
+      "previousNode": "Normalize Phone",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 9,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "emails": [
+          "p70-i-single-a@runtime-proof.invalid",
+          "p70-i-single-b@runtime-proof.invalid"
+         ],
+         "_rows": [
+          {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co",
+           "allow_create": false,
+           "source_by_field": {},
+           "reject": false,
+           "phone_normalized": null
+          },
+          {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co",
+           "allow_create": false,
+           "source_by_field": {},
+           "reject": false,
+           "phone_normalized": null
+          }
+         ]
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Verify Emails (batch)": [
+   {
+    "startTime": 1789048618954,
+    "executionIndex": 10,
+    "source": [
+     {
+      "previousNode": "Build Verify Batch",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 159,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "results": [
+          {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "validations": {
+            "syntax": true,
+            "domain_exists": false,
+            "mx_records": false,
+            "mailbox_exists": false,
+            "is_disposable": false,
+            "is_role_based": false
+           },
+           "score": 40,
+           "status": "INVALID_DOMAIN"
+          },
+          {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "validations": {
+            "syntax": true,
+            "domain_exists": false,
+            "mx_records": false,
+            "mailbox_exists": false,
+            "is_disposable": false,
+            "is_role_based": false
+           },
+           "score": 40,
+           "status": "INVALID_DOMAIN"
+          }
+         ]
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Verify Email Carry Merge": [
+   {
+    "startTime": 1789048619113,
+    "executionIndex": 11,
+    "source": [
+     {
+      "previousNode": "Verify Emails (batch)",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Build Verify Batch",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 2,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "results": [
+          {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "validations": {
+            "syntax": true,
+            "domain_exists": false,
+            "mx_records": false,
+            "mailbox_exists": false,
+            "is_disposable": false,
+            "is_role_based": false
+           },
+           "score": 40,
+           "status": "INVALID_DOMAIN"
+          },
+          {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "validations": {
+            "syntax": true,
+            "domain_exists": false,
+            "mx_records": false,
+            "mailbox_exists": false,
+            "is_disposable": false,
+            "is_role_based": false
+           },
+           "score": 40,
+           "status": "INVALID_DOMAIN"
+          }
+         ],
+         "emails": [
+          "p70-i-single-a@runtime-proof.invalid",
+          "p70-i-single-b@runtime-proof.invalid"
+         ],
+         "_rows": [
+          {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co",
+           "allow_create": false,
+           "source_by_field": {},
+           "reject": false,
+           "phone_normalized": null
+          },
+          {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co",
+           "allow_create": false,
+           "source_by_field": {},
+           "reject": false,
+           "phone_normalized": null
+          }
+         ]
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 0
+         },
+         {
+          "item": 0,
+          "input": 1
+         },
+         {
+          "item": 0,
+          "input": 1
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Apply Email": [
+   {
+    "startTime": 1789048619115,
+    "executionIndex": 12,
+    "source": [
+     {
+      "previousNode": "Verify Email Carry Merge",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 8,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Search by Email": [
+   {
+    "startTime": 1789048619123,
+    "executionIndex": 13,
+    "source": [
+     {
+      "previousNode": "Apply Email",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 615,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "total": 0,
+         "results": []
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "total": 0,
+         "results": []
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Search By Email Carry Merge": [
+   {
+    "startTime": 1789048619738,
+    "executionIndex": 14,
+    "source": [
+     {
+      "previousNode": "HubSpot Search by Email",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Apply Email",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 1,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "total": 0,
+         "results": [],
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 0
+         },
+         {
+          "item": 0,
+          "input": 1
+         },
+         {
+          "item": 0,
+          "input": 1
+         }
+        ]
+       },
+       {
+        "json": {
+         "total": 0,
+         "results": [],
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 1
+         },
+         {
+          "item": 1,
+          "input": 1
+         },
+         {
+          "item": 1,
+          "input": 1
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Adapt Search Results": [
+   {
+    "startTime": 1789048619739,
+    "executionIndex": 15,
+    "source": [
+     {
+      "previousNode": "Search By Email Carry Merge",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 12,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Resolve Identity": [
+   {
+    "startTime": 1789048619751,
+    "executionIndex": 16,
+    "source": [
+     {
+      "previousNode": "Adapt Search Results",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 22,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         }
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Merge Contacts": [
+   {
+    "startTime": 1789048619773,
+    "executionIndex": 17,
+    "source": [
+     {
+      "previousNode": "Resolve Identity",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 12,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-a@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleA"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-a@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleA",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-b@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleB"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-b@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleB",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         }
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Build Company Link": [
+   {
+    "startTime": 1789048619785,
+    "executionIndex": 18,
+    "source": [
+     {
+      "previousNode": "Merge Contacts",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 9,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-a@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleA"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-a@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleA",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co"
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-b@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleB"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-b@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleB",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co"
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Company Search by Domain": [
+   {
+    "startTime": 1789048619794,
+    "executionIndex": 19,
+    "source": [
+     {
+      "previousNode": "Build Company Link",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 536,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "total": 0,
+         "results": []
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "total": 0,
+         "results": []
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Company Domain Carry Merge": [
+   {
+    "startTime": 1789048620330,
+    "executionIndex": 20,
+    "source": [
+     {
+      "previousNode": "HubSpot Company Search by Domain",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Build Company Link",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 1,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "total": 0,
+         "results": [],
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-a@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleA"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-a@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleA",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co"
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 0
+         },
+         {
+          "item": 0,
+          "input": 1
+         },
+         {
+          "item": 0,
+          "input": 1
+         }
+        ]
+       },
+       {
+        "json": {
+         "total": 0,
+         "results": [],
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-b@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleB"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-b@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleB",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co"
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 1
+         },
+         {
+          "item": 1,
+          "input": 1
+         },
+         {
+          "item": 1,
+          "input": 1
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Stash Domain Search": [
+   {
+    "startTime": 1789048620331,
+    "executionIndex": 21,
+    "source": [
+     {
+      "previousNode": "Company Domain Carry Merge",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 7,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-a@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleA"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-a@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleA",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co",
+         "_company_domain_search": {
+          "results": [],
+          "total": 0
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-b@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleB"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-b@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleB",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co",
+         "_company_domain_search": {
+          "results": [],
+          "total": 0
+         }
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Company Search by Name": [
+   {
+    "startTime": 1789048620338,
+    "executionIndex": 22,
+    "source": [
+     {
+      "previousNode": "Stash Domain Search",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 531,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "total": 0,
+         "results": []
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "total": 0,
+         "results": []
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Company Name Carry Merge": [
+   {
+    "startTime": 1789048620869,
+    "executionIndex": 23,
+    "source": [
+     {
+      "previousNode": "HubSpot Company Search by Name",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Stash Domain Search",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 2,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "total": 0,
+         "results": [],
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-a@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleA"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-a@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleA",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co",
+         "_company_domain_search": {
+          "results": [],
+          "total": 0
+         }
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 0
+         },
+         {
+          "item": 0,
+          "input": 1
+         },
+         {
+          "item": 0,
+          "input": 1
+         }
+        ]
+       },
+       {
+        "json": {
+         "total": 0,
+         "results": [],
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-b@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleB"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-b@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleB",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co",
+         "_company_domain_search": {
+          "results": [],
+          "total": 0
+         }
+        },
+        "binary": {},
+        "pairedItem": [
+         {
+          "item": 1
+         },
+         {
+          "item": 1,
+          "input": 1
+         },
+         {
+          "item": 1,
+          "input": 1
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Adapt Company Link": [
+   {
+    "startTime": 1789048620871,
+    "executionIndex": 24,
+    "source": [
+     {
+      "previousNode": "Company Name Carry Merge",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 10,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleA",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-a@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-a@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleA",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-a@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleA"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-a@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleA",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "company_name": "Runtime Proof Co",
+         "company_hold_reason": "no company in HubSpot matched domain runtime-proof.invalid or name \"Runtime Proof Co\" \u2014 create or enrich the company first, or name its record id on the row"
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "firstname": "P70",
+         "lastname": "SingleB",
+         "company": "Runtime Proof Co",
+         "allow_create": false,
+         "source_by_field": {},
+         "reject": false,
+         "phone_normalized": null,
+         "email_normalized": "p70-i-single-b@runtime-proof.invalid",
+         "email_valid": false,
+         "email_status": "INVALID_DOMAIN",
+         "needs_review_reason": "email verifier: INVALID_DOMAIN",
+         "email_verify_fallback": false,
+         "searchResultsByKey": {},
+         "lookup_failed": false,
+         "identity": {
+          "outcome": "net_new",
+          "contact_id": null,
+          "match_key": null,
+          "candidate_ids": [],
+          "reason": "valid email, no existing match"
+         },
+         "merge": {
+          "canonicalPatch": {
+           "email": "p70-i-single-b@runtime-proof.invalid",
+           "firstname": "P70",
+           "lastname": "SingleB",
+           "company": "Runtime Proof Co"
+          },
+          "provenance": {
+           "email": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "human_review_required",
+            "value": "p70-i-single-b@runtime-proof.invalid"
+           },
+           "firstname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "P70"
+           },
+           "lastname": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "SingleB"
+           },
+           "company": {
+            "source": "csv",
+            "confidence": 80,
+            "verified_at": "2026-09-10T13:56:59.784Z",
+            "validation_status": "provider_only",
+            "value": "Runtime Proof Co"
+           }
+          },
+          "cacheKeys": {},
+          "decisions": [
+           {
+            "field": "email",
+            "current_value": null,
+            "chosen_value": "p70-i-single-b@runtime-proof.invalid",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "human_review_required",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "firstname",
+            "current_value": null,
+            "chosen_value": "P70",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "lastname",
+            "current_value": null,
+            "chosen_value": "SingleB",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           },
+           {
+            "field": "company",
+            "current_value": null,
+            "chosen_value": "Runtime Proof Co",
+            "source_provider": "csv",
+            "decision": "promote",
+            "confidence": 80,
+            "reason": "Current value blank and candidate passed threshold.",
+            "validation_status": "provider_only",
+            "evidence_url": null,
+            "verified_at": "2026-09-10T13:56:59.784Z"
+           }
+          ]
+         },
+         "company_search_domain": "runtime-proof.invalid",
+         "company_search_name": "Runtime Proof Co",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "company_name": "Runtime Proof Co",
+         "company_hold_reason": "no company in HubSpot matched domain runtime-proof.invalid or name \"Runtime Proof Co\" \u2014 create or enrich the company first, or name its record id on the row"
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Decide Action": [
+   {
+    "startTime": 1789048620881,
+    "executionIndex": 25,
+    "source": [
+     {
+      "previousNode": "Adapt Company Link",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 7,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         }
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "IF Update": [
+   {
+    "startTime": 1789048620888,
+    "executionIndex": 26,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 2,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [],
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         }
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "IF Create": [
+   {
+    "startTime": 1789048620890,
+    "executionIndex": 27,
+    "source": [
+     {
+      "previousNode": "IF Update",
+      "previousNodeOutput": 1,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 1,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [],
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         }
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         }
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Set Review": [
+   {
+    "startTime": 1789048620891,
+    "executionIndex": 28,
+    "source": [
+     {
+      "previousNode": "IF Create",
+      "previousNodeOutput": 1,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 6,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "queue": "needs_review"
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "queue": "needs_review"
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Decide Action Snapshot": [
+   {
+    "startTime": 1789048620897,
+    "executionIndex": 29,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 5,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "_decided_snapshot": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "_decided_snapshot": true
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Create Gate Unreached Sentinel": [
+   {
+    "startTime": 1789048620902,
+    "executionIndex": 30,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 6,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {},
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Create Gate Unreached Sentinel Gate": [
+   {
+    "startTime": 1789048620908,
+    "executionIndex": 31,
+    "source": [
+     {
+      "previousNode": "HubSpot Create Gate Unreached Sentinel",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 5,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Update Gate Unreached Sentinel": [
+   {
+    "startTime": 1789048620913,
+    "executionIndex": 32,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 6,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {},
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Update Gate Unreached Sentinel Gate": [
+   {
+    "startTime": 1789048620919,
+    "executionIndex": 33,
+    "source": [
+     {
+      "previousNode": "HubSpot Update Gate Unreached Sentinel",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 5,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Associate Lane Sentinel": [
+   {
+    "startTime": 1789048620924,
+    "executionIndex": 34,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 6,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {},
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Associate Lane Sentinel Gate": [
+   {
+    "startTime": 1789048620930,
+    "executionIndex": 35,
+    "source": [
+     {
+      "previousNode": "Associate Lane Sentinel",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 9,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Ingest Merge Response": [
+   {
+    "startTime": 1789048620939,
+    "executionIndex": 36,
+    "source": [
+     {
+      "previousNode": "Decide Action Snapshot",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Set Review",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "Associate Lane Sentinel Gate",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "HubSpot Update Gate Unreached Sentinel Gate",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "HubSpot Create Gate Unreached Sentinel Gate",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 2,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "_decided_snapshot": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "_decided_snapshot": true
+        },
+        "pairedItem": {
+         "item": 1
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-a@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleA",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-a@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleA\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "queue": "needs_review"
+        },
+        "pairedItem": {
+         "item": 0,
+         "input": 1
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "company_domain": "runtime-proof.invalid",
+         "domain": "runtime-proof.invalid",
+         "write_request": {
+          "action": "review",
+          "hs_object_id": null,
+          "domain": "runtime-proof.invalid",
+          "email": "p70-i-single-b@runtime-proof.invalid"
+         },
+         "properties": {
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "firstname": "P70",
+          "lastname": "SingleB",
+          "company": "Runtime Proof Co",
+          "lv_contact_enrichment_provenance": "{\"company\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"Runtime Proof Co\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"email\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"human_review_required\",\"value\":\"p70-i-single-b@runtime-proof.invalid\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"firstname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"P70\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"},\"lastname\":{\"confidence\":80,\"source\":\"csv\",\"validation_status\":\"provider_only\",\"value\":\"SingleB\",\"verified_at\":\"2026-09-10T13:56:59.784Z\"}}"
+         },
+         "queue": "needs_review"
+        },
+        "pairedItem": {
+         "item": 1,
+         "input": 1
+        }
+       },
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0,
+         "input": 2
+        }
+       },
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0,
+         "input": 3
+        }
+       },
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0,
+         "input": 4
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Build Ingest Response": [
+   {
+    "startTime": 1789048620941,
+    "executionIndex": 37,
+    "source": [
+     {
+      "previousNode": "Ingest Merge Response",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 9,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "email": "p70-i-single-a@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "association": "none",
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "row_id": null
+        }
+       },
+       {
+        "json": {
+         "action": "review",
+         "outcome": "net_new",
+         "contact_id": null,
+         "hs_object_id": null,
+         "email": "p70-i-single-b@runtime-proof.invalid",
+         "company_id": null,
+         "company_match": null,
+         "association": "none",
+         "reason": "valid email, no existing match",
+         "email_status": "INVALID_DOMAIN",
+         "row_id": null
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Review Lane Sentinel": [
+   {
+    "startTime": 1789048620950,
+    "executionIndex": 38,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 24,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      []
+     ]
+    }
+   }
+  ],
+  "HubSpot Create Carry Unreached Sentinel": [
+   {
+    "startTime": 1789048620974,
+    "executionIndex": 39,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 11,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {},
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Create Carry Unreached Sentinel Gate": [
+   {
+    "startTime": 1789048620985,
+    "executionIndex": 40,
+    "source": [
+     {
+      "previousNode": "HubSpot Create Carry Unreached Sentinel",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 8,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Update Carry Unreached Sentinel": [
+   {
+    "startTime": 1789048620993,
+    "executionIndex": 41,
+    "source": [
+     {
+      "previousNode": "Decide Action",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 10,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {},
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "HubSpot Update Carry Unreached Sentinel Gate": [
+   {
+    "startTime": 1789048621004,
+    "executionIndex": 42,
+    "source": [
+     {
+      "previousNode": "HubSpot Update Carry Unreached Sentinel",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 13,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Build Association Request Merge": [
+   {
+    "startTime": 1789048621017,
+    "executionIndex": 43,
+    "source": [
+     {
+      "previousNode": "HubSpot Update Carry Unreached Sentinel Gate",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     },
+     {
+      "previousNode": "HubSpot Create Carry Unreached Sentinel Gate",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 1,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      [
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0
+        }
+       },
+       {
+        "json": {
+         "_gsd_sentinel_marker": true
+        },
+        "pairedItem": {
+         "item": 0,
+         "input": 1
+        }
+       }
+      ]
+     ]
+    }
+   }
+  ],
+  "Build Association Request": [
+   {
+    "startTime": 1789048621019,
+    "executionIndex": 44,
+    "source": [
+     {
+      "previousNode": "Build Association Request Merge",
+      "previousNodeOutput": 0,
+      "previousNodeRun": 0
+     }
+    ],
+    "hints": [],
+    "executionTime": 19,
+    "executionStatus": "success",
+    "data": {
+     "main": [
+      []
+     ]
+    }
+   }
+  ]
+ },
+ "redaction": "request headers x-enrichment-secret, x-real-ip, x-forwarded-for, cf-connecting-ip replaced with <redacted> at freeze time (2026-09-11)"
+}

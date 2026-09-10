@@ -412,7 +412,15 @@ export function walkWorkflow(wf, opts) {
     // (`addNodeToBeExecuted`, `packages/core/src/execution-engine/workflow-execute.ts`)
     // rather than a genuine zero-item delivery — the two are indistinguishable from
     // runData alone. Under v1 there is no such push, so whether a zero-item OUTPUT still
-    // counts as a delivery to a Merge input is UNOBSERVED. Left UNCHANGED deliberately —
+    // counts as a delivery to a Merge input was UNOBSERVED when this was written.
+    // OBSERVED 2026-09-10 (Gate 11, executions 12354/12355/12356, frozen at
+    // `tests/n8n/fixtures/frozen/exec_1235{4,5,6}.runData.json`, pinned by
+    // `tests/n8n/v1RuntimeRecordings.test.mjs`): under v1 it does NOT — `Merge Company`
+    // ran with 0 items into `Decide Company Action Merge` input 1 and never appeared in
+    // that Merge's `source`. This rule is therefore known to model the LEGACY engine, not
+    // v1. Still left UNCHANGED here — moving it is a modelling change with its own
+    // fidelity case (see .planning/todos/pending/2026-09-11-walker-rule-c-zero-item-output-
+    // not-a-delivery-under-v1.md), not a freeze-time edit. Original note follows. Left UNCHANGED deliberately —
     // not because it is believed correct under v1, but because reimplementing it now
     // would replace one unobserved model with another (D-70-19 forbids that), and
     // freezing this rule lets Gate 11 isolate the ONE variable this plan actually
