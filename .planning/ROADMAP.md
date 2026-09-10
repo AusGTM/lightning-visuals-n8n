@@ -342,4 +342,4 @@ Plans:
 
 - [ ] 70-16-PLAN.md — Wave 1: TRACER — every generated workflow flipped onto n8n's v1 execution order from one generator constant, a non-v1 body made a generation-time refusal, and the walker stopped claiming to model the legacy engine it was never observed to model correctly
 - [ ] 70-17-PLAN.md — Wave 2: the v1 setting pinned against every path that can revert it — both PUT paths, the bind pipeline, the bounce read-back and the proof driver's verdict
-- [ ] 70-18-PLAN.md — Wave 2: the source-cited engine rule and Gate 8's observations recorded with their tags and execution ids, the stale live-state note corrected, and Gates 10/11/12 written up with Gate 9 superseded
+- [ ] 70-18-PLAN.md — Wave 3: the source-cited engine rule and Gate 8's observations recorded with their tags and execution ids, the stale live-state note corrected, and Gates 10/11/12 written up with Gate 9 superseded
