@@ -5,15 +5,15 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: one-merge-one-result-channel-n8n-runtime-truth
 status: executing
-stopped_at: "2026-09-10 Gate 5 attempt: gap-closure JSON LOOPED live (135 self-dispatch executions, G-70-5 blocker); enrichment rolled back to 59812be and reactivated; ingest lane PASSED shapes_equal live (12293/12309); Gate 6 blocked"
-last_updated: "2026-09-10T07:14:46Z"
+stopped_at: "2026-09-10 gap round 2 planned (70-13..70-15, G-70-5: remove scale-up fan-out, marker filter, no-self-dispatch refusal); checker 0 blockers/4 warnings fixed inline; chained to execute"
+last_updated: "2026-09-10T07:46:03Z"
 last_activity: 2026-09-10
 last_activity_desc: Gate 5 run — ingest lane proven live; enrichment lane self-dispatch runaway (G-70-5), live enrichment back on pre-70 body; 138 executions burned
-state_head: 6d8da7214078fb91989e7786415f5823f00d84cc
+state_head: 728256581a7faa782441ee9816ec9f4a89c7b3df
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 28
+  total_plans: 31
   completed_plans: 23
   percent: 29
 ---
