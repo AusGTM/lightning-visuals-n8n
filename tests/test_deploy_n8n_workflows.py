@@ -86,6 +86,72 @@ def test_bind_credentials_fails_closed_on_unresolvable_credential_name():
         deploy.bind_credentials(workflow, name_to_id={})
 
 
+# --- D-70-29: a PUT/POST cannot silently lose the v1 execution order -----------------
+#
+# Plan 70-16 puts settings.executionOrder=v1 in every committed body. A dropped setting
+# anywhere between the committed file and the live PUT/POST reverts the workflow to the
+# legacy order that produced every Gate 8 symptom (executions 12349-12353) while every
+# OTHER offline test stayed green. These pin the value, not merely the key, through both
+# write paths (create and update) and through the three transforms upstream of the
+# four-key payload filter.
+
+def test_update_put_payload_carries_settings_value_intact(monkeypatch):
+    monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
+    monkeypatch.setenv("N8N_API_KEY", "fake-key")
+    captured = {}
+
+    def fake_put(url, headers=None, json=None, timeout=None):
+        captured["json"] = json
+
+        class _Resp:
+            status_code = 200
+
+        return _Resp()
+
+    monkeypatch.setattr(requests, "put", fake_put)
+    body = {"name": "wf", "nodes": [], "connections": {},
+            "settings": {"executionOrder": "v1"}, "id": "wf-1", "active": True}
+    deploy._update_workflow_live("wf-1", body)
+    assert captured["json"]["settings"] == {"executionOrder": "v1"}
+
+
+def test_create_post_payload_carries_settings_value_intact(monkeypatch):
+    monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
+    monkeypatch.setenv("N8N_API_KEY", "fake-key")
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["json"] = json
+
+        class _Resp:
+            status_code = 201
+
+        return _Resp()
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    body = {"name": "wf", "nodes": [], "connections": {}, "settings": {"executionOrder": "v1"}}
+    deploy._create_workflow_live(body)
+    assert captured["json"]["settings"] == {"executionOrder": "v1"}
+
+
+def test_settings_survive_rebind_bind_and_baked_flag_transforms():
+    """The gap a payload-only test would miss: the four-key filter keeps the 'settings'
+    KEY, but only if none of the three transforms upstream of it (rebind_subworkflow_refs
+    -> bind_credentials -> enable_baked_flags) dropped or replaced its VALUE first.
+    enable_baked_flags returns a tuple — unpacked below, per the plan's own warning."""
+    workflow = {
+        "name": "wf",
+        "nodes": [{"name": "Some Code Node", "type": "n8n-nodes-base.code",
+                   "parameters": {"jsCode": "const X = 1;"}}],
+        "connections": {},
+        "settings": {"executionOrder": "v1"},
+    }
+    rebound = deploy.rebind_subworkflow_refs(workflow, live_by_name={})
+    bound = deploy.bind_credentials(rebound, name_to_id={})
+    overlaid, _counts = deploy.enable_baked_flags(bound, flags=())
+    assert overlaid["settings"] == {"executionOrder": "v1"}
+
+
 # --- _instance_ok: no fail-open (review consensus #4) --------------------------------
 
 def test_instance_ok_true_when_expected_url_matches(monkeypatch):

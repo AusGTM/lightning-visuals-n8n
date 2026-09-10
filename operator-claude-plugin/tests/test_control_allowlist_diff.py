@@ -128,6 +128,33 @@ def test_changed_settings_are_refused():
     assert "settings" in str(exc.value)
 
 
+# --- D-70-29: put_body's settings value round-trips; a legacy-shaped rewrite is refused ---
+
+
+def test_put_body_value_level_round_trip_preserves_settings_object():
+    """The key-set coverage above (test_put_body_keeps_exactly_the_four_keys_n8n_accepts)
+    only proves 'settings' is present. A value-level check catches a put_body that swapped
+    in a DIFFERENT settings object — e.g. a legacy-shaped one — while still reporting the
+    key as present."""
+    workflow = _workflow(active=True)
+    body = n8n_control.put_body(workflow)
+    assert body["settings"] == workflow["settings"] == {"executionOrder": "v1"}
+
+
+def test_reverting_settings_to_legacy_shape_is_refused_naming_settings_key():
+    """test_changed_settings_are_refused (above) covers a v1 -> v0 VALUE change. This
+    covers the other legacy shape an arming/disarming rewrite could leave behind: the
+    executionOrder KEY dropped entirely (the engine's own legacy-order default), against
+    a v1 original. Same refusal, same named key — asserted separately because a rewrite
+    that drops a key is a different code path than one that changes a value."""
+    original = _workflow()
+    modified = copy.deepcopy(original)
+    modified["settings"] = {}
+    with pytest.raises(n8n_control.MutationRefused) as exc:
+        n8n_control.assert_only_allowlisted_change(original, modified, ALLOWED)
+    assert "settings" in str(exc.value)
+
+
 def test_an_allowlisted_name_absent_from_the_original_is_refused():
     """A typo in a node name would otherwise produce a PUT that changes nothing while
     reporting a successful mutation."""
