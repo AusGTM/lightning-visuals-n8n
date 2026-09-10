@@ -321,6 +321,13 @@ export function runNode(node, items, ctx) {
  *     substitution for a Code node whose body `await`s (the walker runs Code bodies
  *     synchronously and cannot execute one). Both directions throw: an await-bearing
  *     Code node with no stub, and a stub for a node the walker could have run.
+ *   allowLegacy: boolean (default falsey) — D-70-30 (gap-closure round 3, plan 70-16).
+ *     The ONLY escape from the non-v1 refusal below. Reserved for
+ *     tests/n8n/walkerEngineFidelity.test.mjs's frozen fixtures — RECORDED legacy-engine
+ *     divergences from executions 12203, 12206 and 12316, all on bodies whose settings
+ *     carried no execution order. NOT a supported mode for any graph this repo
+ *     generates: every committed n8n/wf_*.json runs on v1 (D-70-28), and every synthetic
+ *     graph this test suite builds now declares v1 too (`wf()`'s settings default).
  *
  * Returns `{ runData, trace }`. `trace.unhandledTypes`, `trace.stalled`, `trace.respond`,
  * `trace.respondSuppressed`, `trace.trigger`, `trace.orderingUsed` — see 70-01-PLAN.md —
@@ -328,9 +335,13 @@ export function runNode(node, items, ctx) {
  * keyed by input index, naming the producer whose delivery CLAIMED each input. Added
  * because the defect executions 12203 and 12206 exposed is invisible in item counts
  * alone: which node took input 0 IS the finding.
+ *
+ * Throws (D-70-30) when `wf.settings.executionOrder` is not `"v1"` and `opts.allowLegacy`
+ * was not passed — this walker models the v1 contract only; it does not, and after
+ * G-70-6 must not, claim to model the legacy engine the retired bodies ran on.
  */
 export function walkWorkflow(wf, opts) {
-  const { triggerNode, triggerItems, httpStubs = {}, codeStubs = {}, env = {} } = opts || {};
+  const { triggerNode, triggerItems, httpStubs = {}, codeStubs = {}, env = {}, allowLegacy } = opts || {};
   const nodesByName = {};
   for (const n of wf.nodes || []) nodesByName[n.name] = n;
 
@@ -339,6 +350,19 @@ export function walkWorkflow(wf, opts) {
 
   const outgoing = wf.connections || {};
   const order = wf.settings && wf.settings.executionOrder === "v1" ? "v1" : "legacy";
+
+  // D-70-30 (gap-closure round 3, plan 70-16): refuse a non-v1 body unless the caller
+  // explicitly opts into the one documented escape. G-70-6 retired the legacy body this
+  // walker used to silently fall back to modelling; from here on, silence is a bug, not
+  // a default.
+  if (order !== "v1" && !allowLegacy) {
+    throw new Error(
+      `walkWorkflow: settings.executionOrder = ${JSON.stringify(wf.settings && wf.settings.executionOrder)}, ` +
+      `want "v1" — D-70-30: this walker models n8n's v1 execution order only. Pass ` +
+      `allowLegacy explicitly if this is a recorded legacy-engine fixture ` +
+      `(walkerEngineFidelity.test.mjs only) — never for a graph this repo generates.`
+    );
+  }
 
   const runData = {};
   const staticData = {};
@@ -374,21 +398,34 @@ export function walkWorkflow(wf, opts) {
     if (outItems.length === 0 && node && node.alwaysOutputData === true) {
       outItems = [{}];
     }
-    // ENGINE RULE (executions 12203 and 12206, 70-UAT.md § Tests 2 and 3; D-70-20): a
-    // node that ran and emitted ZERO items still DELIVERS to its targets. The runData
-    // `source` arrays of both executions name a sentinel whose output was `[]` as the
-    // producer that took a Merge input. This line used to read
-    // `if (outItems.length === 0) return;` — dropping the wave — which is why every
-    // offline suite was green while the live engine dropped rows. A zero-item delivery
-    // is enqueued exactly like any other; what it means at the CONSUMING end depends on
-    // whether the target is a Merge (see the walk loop below).
+    // D-70-30 rule (c) — UNOBSERVED under v1. Originally recorded as ENGINE RULE
+    // (executions 12203 and 12206, 70-UAT.md § Tests 2 and 3; D-70-20): a node that ran
+    // and emitted ZERO items still DELIVERS to its targets. The runData `source` arrays
+    // of both executions name a sentinel whose output was `[]` as the producer that took
+    // a Merge input. This line used to read `if (outItems.length === 0) return;` —
+    // dropping the wave — which is why every offline suite was green while the live
+    // engine dropped rows.
     //
-    // INFERRED, NOT OBSERVED: this also makes an IF node's EMPTY branch a delivery to a
-    // Merge input. No execution in this repo has ever observed whether the live engine
-    // does that (an IF is not a Code node and may not emit an empty branch at all). The
-    // routing pass-throughs plan 70-10 adds make every generated graph independent of
-    // the answer either way; until an observation exists, treat this branch of the model
-    // as unverified.
+    // Gap-closure round 3 (plan 70-16, D-70-30): both executions 12203 and 12206 ran on
+    // bodies whose `settings.executionOrder` was ABSENT — n8n's LEGACY order. What this
+    // walker calls a "delivery" may in fact have been the legacy `addEmptyItem` push
+    // (`addNodeToBeExecuted`, `packages/core/src/execution-engine/workflow-execute.ts`)
+    // rather than a genuine zero-item delivery — the two are indistinguishable from
+    // runData alone. Under v1 there is no such push, so whether a zero-item OUTPUT still
+    // counts as a delivery to a Merge input is UNOBSERVED. Left UNCHANGED deliberately —
+    // not because it is believed correct under v1, but because reimplementing it now
+    // would replace one unobserved model with another (D-70-19 forbids that), and
+    // freezing this rule lets Gate 11 isolate the ONE variable this plan actually
+    // changes: the executionOrder flip itself. A zero-item delivery is still enqueued
+    // exactly like any other; what it means at the CONSUMING end depends on whether the
+    // target is a Merge (see the walk loop below).
+    //
+    // INFERRED, NOT OBSERVED (unchanged by D-70-30): this also makes an IF node's EMPTY
+    // branch a delivery to a Merge input. No execution in this repo has ever observed
+    // whether the live engine does that (an IF is not a Code node and may not emit an
+    // empty branch at all). The routing pass-throughs plan 70-10 adds make every
+    // generated graph independent of the answer either way; until an observation exists,
+    // treat this branch of the model as unverified.
     for (const edge of connectionsFrom(fromName, outputIndex)) {
       enqueue({
         targetName: edge.node, inputIndex: edge.index || 0,
@@ -489,13 +526,23 @@ export function walkWorkflow(wf, opts) {
 
     if (TRIGGER_TYPES.has(node.type)) continue; // a trigger is never re-delivered to
 
+    // D-70-30 rule (a) — the ONE v1 rule this walker MODELS. Originally recorded as
     // ENGINE RULE (execution 12200, 70-UAT.md § Test 1): a node fed ZERO items does not
     // RUN, and so contributes no run entry and no delivery of its own. On 12200
     // "HubSpot Associate Company" received zero items, never ran, and its own
     // alwaysOutputData therefore contributed nothing to the carry Merge — the sentinel
-    // alone satisfied it. This is the counterpart of the delivery rule in `propagate`
-    // above, and the two together are what make a gated sentinel possible at all: an
-    // empty delivery still SATISFIES a Merge input, but it never STARTS a lane.
+    // alone satisfied it. Execution 12200 ran under n8n's LEGACY order — its own
+    // `settings` carried no `executionOrder` — but this rule is expected to hold A
+    // FORTIORI under v1: v1's documented behaviour (Gate 8's engine citation,
+    // `addNodeToBeExecuted`'s `addEmptyItem` branch,
+    // `packages/core/src/execution-engine/workflow-execute.ts`) is that legacy pushes an
+    // empty-item run onto an otherwise-empty branch specifically so a waiting Merge can
+    // finish; v1 removes exactly that push, so a node fed zero items running EVEN LESS
+    // under v1 than it did under the legacy execution 12200 observed is the stronger, not
+    // the weaker, claim. This is the counterpart of the delivery rule in `propagate`
+    // above (D-70-30 rule (c), UNOBSERVED under v1), and the two together are what make a
+    // gated sentinel possible at all: an empty delivery still SATISFIES a Merge input,
+    // but it never STARTS a lane.
     if (delivery.items.length === 0) continue;
 
     if (node.type === "n8n-nodes-base.respondToWebhook") {
@@ -524,6 +571,22 @@ export function walkWorkflow(wf, opts) {
     result.outputs.forEach((branchItems, idx) => propagate(node.name, idx, branchItems));
   }
 
+  // D-70-30 rule (b) — NOT MODELLED. This pass REPORTS starvation; it does not DRAIN.
+  // n8n's v1 path (documented, not observed on this instance) drains a still-waiting
+  // Merge at end-of-run once its arrived-with-data input count reaches `requiredInputs`
+  // — for the Merge v3.2 node this repo generates
+  // (`packages/nodes-base/nodes/Merge/v3/actions/versionDescription.ts`), that is `1` for
+  // the `append` and `combine` modes this repo emits. This walker deliberately does NOT
+  // implement that drain: a faithful implementation would have to decide whether a
+  // zero-item arrival counts toward `inputsWithData`, which is exactly what D-70-30 rule
+  // (c) above calls UNOBSERVED — implementing the drain now would silently answer that
+  // open question rather than leave it open, replacing one unobserved model with another
+  // (D-70-19 forbids that). On a graph that satisfies the Merge-input contract
+  // (`assert_merge_input_contract`, D-70-20 — every input has at least one producer),
+  // this walker's report-only pass and a hypothetical v1 drain agree UNLESS an input
+  // receives no non-empty delivery at all; every committed n8n/wf_*.json satisfies that
+  // contract, so `trace.stalled` staying starvation-only rather than draining costs
+  // nothing on the graphs this repo actually generates.
   for (const [name, state] of Object.entries(mergeState)) {
     if (state.fired) continue;
     const node = nodesByName[name];

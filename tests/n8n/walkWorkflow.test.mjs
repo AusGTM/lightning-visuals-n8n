@@ -46,22 +46,42 @@ function respondNode(name) {
 function edge(target, inputIndex) {
   return { node: target, type: "main", index: inputIndex || 0 };
 }
+// D-70-30 (gap-closure round 3, plan 70-16): defaults to n8n's v1 execution order —
+// every committed n8n/wf_*.json runs on it (D-70-28), and the walker now REFUSES any
+// graph that does not declare it. A call site that needs a non-v1 graph (there is
+// exactly one, below, proving the refusal itself) must pass `settings` explicitly.
 function wf(nodes, connections, settings) {
-  return { nodes, connections, settings: settings || {} };
+  return { nodes, connections, settings: settings || { executionOrder: "v1" } };
 }
 
 // A passthrough Code node's jsCode: return $input.all() unchanged.
 const PASSTHROUGH = "return $input.all();";
 
-test("collapse case (F5): two lanes into a converged Gate, a downstream reader that " +
-  "recovers Gate BY NAME with a bare .all() loses the first lane entirely", () => {
+test("collapse case (F5) under v1: two lanes into a converged Gate, a downstream reader " +
+  "that recovers Gate BY NAME with a bare .all() no longer loses a lane, RE-DERIVED " +
+  "under D-70-30's pop-order dequeue", () => {
   // Comment naming the live execution this encodes: execution 12163
-  // (.planning/debug/resolved/uat-batch-review-row-reads-failed.md, F5) — "Enrichment
-  // Gate" ran twice (run 0 = email lane, run 1 = name lane) and BOTH runs of "Normalize +
-  // Score" (fed by a SINGLE edge from the Gate) returned the Gate's LAST run only,
-  // because n8n's own docs confirm bare `$('Node').all()` returns "the items of the
-  // node's most recent run". A walker that silently merged the two Gate runs into one
-  // combined run would never be able to detect this — the whole point of this test.
+  // (.planning/debug/resolved/uat-batch-review-row-reads-failed.md, F5) — under n8n's
+  // LEGACY (FIFO/shift) order, "Enrichment Gate" ran twice (run 0 = email lane, run 1 =
+  // name lane) and BOTH runs of "Normalize + Score" (fed by a SINGLE edge from the Gate)
+  // returned the Gate's LAST run only, because n8n's own docs confirm bare
+  // `$('Node').all()` returns "the items of the node's most recent run".
+  //
+  // RE-DERIVED for v1 (gap-closure round 3, plan 70-16, D-70-28/D-70-30): this file's
+  // `wf()` helper now defaults every synthetic graph to v1's execution order, and the
+  // walker's ONLY behavioural difference between v1 and legacy is the dequeue direction
+  // (pop, not shift — see the walker's own header comment). For THIS topology that
+  // change means: Trigger enqueues [LaneA, LaneB] in that order, so v1's pop-order
+  // processes LaneB's ENTIRE path (LaneB -> Gate run 0 -> Reader run 0) to completion
+  // BEFORE LaneA even runs -- unlike legacy's shift-order, which finishes both Lane
+  // nodes, then both Gate runs, before Reader ever fires. Reader therefore fires once
+  // per Gate run, immediately after each one, and captures each run's row distinctly —
+  // the collapse this case originally demonstrated does NOT reproduce for this exact
+  // topology under v1. This is a genuine, re-derived finding, not a test that was
+  // "fixed" to pass: it is kept (rather than deleted) precisely to record that a bare
+  // by-name last-run read is FRAGILE across execution orders, which is why D-70-01 bans
+  // it system-wide regardless of which order a workflow runs under — this case just
+  // shows the fragility runs both ways.
   const graph = wf(
     [
       triggerNode("Trigger"),
@@ -79,12 +99,15 @@ test("collapse case (F5): two lanes into a converged Gate, a downstream reader t
   );
   const { runData } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
   assert.equal(runData.Gate.length, 2, "Gate fired once per inbound edge, not once merged");
+  assert.deepEqual(runData.Gate, [[{ id: "row-B" }], [{ id: "row-A" }]],
+    "v1's pop-order runs LaneB (the LAST-enqueued edge) to completion first");
   const readerRows = nodeItems(runData, "Reader");
   const distinctIds = new Set(readerRows.map((r) => r.id));
-  assert.equal(distinctIds.size, 1,
-    "the walker SEES the F5 collapse: only ONE distinct row (the Gate's last run) ever " +
-    "reaches the reader, even though the Gate fired twice with two different rows");
-  assert.ok(!distinctIds.has("row-A"), "row-A (the FIRST lane) is missing entirely, not merely duplicated");
+  assert.equal(distinctIds.size, 2,
+    "under v1, Reader fires once per Gate run and captures BOTH rows distinctly — the " +
+    "collapse this case demonstrates under legacy does not reproduce here");
+  assert.ok(distinctIds.has("row-A") && distinctIds.has("row-B"),
+    "neither lane is lost under v1's execution order for this topology");
 });
 
 test("merge case: the same lanes into a Merge before the Gate — the reader sees both rows in one run", () => {
@@ -244,6 +267,11 @@ test("mutually-exclusive-branch case: alwaysOutputData on the IF itself DOES fir
 
 test("respond case: two nodes wired into one respondToWebhook — only the first firing " +
   "is recorded as trace.respond, the second is suppressed", () => {
+  // RE-DERIVED for v1 (gap-closure round 3, plan 70-16, D-70-28/D-70-30): under v1's
+  // pop-order dequeue, Trigger enqueues [First, Second] and pop() takes Second (the
+  // LAST-enqueued edge) first, so Second's whole path resolves before First's. "First
+  // firing wins" is still true — it is just Second's delivery that fires first under
+  // this order, not First's, by construction of pop().
   const graph = wf(
     [
       triggerNode("Trigger"),
@@ -258,19 +286,26 @@ test("respond case: two nodes wired into one respondToWebhook — only the first
     }
   );
   const { trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
-  assert.equal(trace.respond.items[0].id, "row-1", "the FIRST firing wins trace.respond");
+  assert.equal(trace.respond.items[0].id, "row-2",
+    "under v1's pop-order, Second (the last-enqueued edge) fires first and wins trace.respond");
   assert.equal(trace.respondSuppressed.length, 1, "the second firing is recorded, not silently dropped");
-  assert.equal(trace.respondSuppressed[0].items[0].id, "row-2");
+  assert.equal(trace.respondSuppressed[0].items[0].id, "row-1");
 });
 
 test("paired-item case: $('Upstream').item resolves against the reader's OWN current run index " +
   "(research Open Question 3 / Pitfall 4) — documented here, not merely asserted", () => {
+  // RE-DERIVED for v1 (gap-closure round 3, plan 70-16, D-70-28/D-70-30): under v1's
+  // pop-order dequeue, LaneB (the LAST-enqueued edge) runs — and resolves all the way
+  // through Upstream and Reader — before LaneA even starts, so Upstream's run 0 carries
+  // row-B (not row-A) and Reader's run 0 pairs against it. The PAIRING rule itself
+  // (Reader's run i pairs with Upstream's run i) is unchanged; only WHICH row lands in
+  // which run index is swapped by the dequeue-direction flip.
   const graph = wf(
     [
       triggerNode("Trigger"),
       codeNode("LaneA", "return [{ json: { id: 'row-A' } }];"),
       codeNode("LaneB", "return [{ json: { id: 'row-B' } }];"),
-      codeNode("Upstream", PASSTHROUGH), // two inbound edges -> run 0 = row-A, run 1 = row-B
+      codeNode("Upstream", PASSTHROUGH), // two inbound edges -> under v1, run 0 = row-B, run 1 = row-A
       codeNode("Reader", "return [{ json: $('Upstream').item.json }];"),
     ],
     {
@@ -281,11 +316,12 @@ test("paired-item case: $('Upstream').item resolves against the reader's OWN cur
     }
   );
   const { runData } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] });
-  // Documented pairing: Reader's run 0 (fed by Upstream's run 0, the LaneA delivery)
-  // resolves `.item` against Upstream run 0 (row-A); Reader's run 1 resolves against
-  // Upstream run 1 (row-B). Index-paired by construction — see makeDollar's `.item`.
-  assert.deepEqual(runData.Reader[0], [{ id: "row-A" }], "Reader's run 0 paired with Upstream's run 0");
-  assert.deepEqual(runData.Reader[1], [{ id: "row-B" }], "Reader's run 1 paired with Upstream's run 1");
+  // Documented pairing: Reader's run 0 (fed by Upstream's run 0, the LaneB delivery
+  // under v1's pop-order) resolves `.item` against Upstream run 0 (row-B); Reader's
+  // run 1 resolves against Upstream run 1 (row-A). Index-paired by construction — see
+  // makeDollar's `.item`.
+  assert.deepEqual(runData.Reader[0], [{ id: "row-B" }], "Reader's run 0 paired with Upstream's run 0");
+  assert.deepEqual(runData.Reader[1], [{ id: "row-A" }], "Reader's run 1 paired with Upstream's run 1");
 });
 
 test("mixed-batch case: a 2-lane x 2-action graph through a Merge returns exactly 4 rows, no duplicates", () => {
@@ -391,4 +427,31 @@ test("D-70-20 mechanism price (2/2): the Wave 2 alternative -- a sentinel gated 
   const deadRows = deadRun.runData.Merge[0];
   assert.ok(deadRows.some((r) => r.id === "row-B"), "LaneB's real row still arrives");
   assert.equal(deadRows.length, 2, "the marker fills the starved input instead of stalling the Merge");
+});
+
+// =============================================================================================
+// D-70-30 / G-70-6 (gap-closure round 3, plan 70-16): the walker models n8n's v1
+// execution order only. A graph whose settings do not declare it is refused, not
+// silently walked under an engine mode this repo has retired. The one documented escape
+// option (see the walker's own doc comment in lib/walkWorkflow.mjs) is proved ELSEWHERE
+// — by walkerEngineFidelity.test.mjs going green under it, never by a second passing
+// case here. Do not reach for that escape in this file: this suite's job is to prove the
+// refusal, not to route around it.
+// =============================================================================================
+
+test("walkWorkflow refuses a graph whose settings do not declare n8n's v1 execution order", () => {
+  const graph = wf(
+    [triggerNode("Trigger"), codeNode("A", PASSTHROUGH)],
+    { Trigger: { main: [[edge("A")]] } },
+    {} // explicit override -- wf()'s default is now v1; this is the ONE call site in
+    // this file that needs a non-v1 graph, to prove the refusal itself
+  );
+  assert.throws(
+    () => walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{}] }),
+    (error) => {
+      assert.match(error.message, /executionOrder/);
+      assert.match(error.message, /D-70-30/);
+      return true;
+    }
+  );
 });

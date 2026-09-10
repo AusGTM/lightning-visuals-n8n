@@ -15,6 +15,26 @@ they were written.
 The full runData account of each is in
 `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-UAT.md`.
 
+## Why these can never be regenerated (D-70-28, gap-closure round 3, plan 70-16)
+
+Every file above carries `settings: {}` — no `executionOrder` — because that is exactly
+what the live n8n body ran on when each execution happened: `settings.executionOrder` was
+ABSENT on every live body throughout Phase 70 until D-70-28's flip to `"v1"`. These are
+RECORDINGS of the LEGACY engine, frozen at the moment they were observed. D-70-28 rules
+that every workflow `scripts/build_cloud_workflows.py` generates from here on runs on
+`"v1"` — so regenerating one of these fixtures from the current builder would no longer
+produce the settings-`{}` body the named execution actually ran on; it would silently stop
+being a recording and start being a fabrication. That is the reason "Refresh policy: none"
+below is not merely a convention but a consequence of D-70-28: there is no builder output
+these fixtures could ever be refreshed FROM again.
+
+The walker (`tests/n8n/lib/walkWorkflow.mjs`) reflects the same fact structurally, not just
+in prose (D-70-30): it refuses to walk any graph whose settings are not `"v1"` unless the
+caller passes the documented `allowLegacy` escape, and `tests/n8n/walkerEngineFidelity
+.test.mjs` — the suite that loads these fixtures — is the ONLY caller in this repo that
+passes it, precisely because these three fixtures are the only graphs left that legitimately
+need it.
+
 ## The rule
 
 **These files are never regenerated and never hand-edited.** Wave 2 of phase 70 changes

@@ -1,16 +1,30 @@
 // tests/n8n/walkerEngineFidelity.test.mjs
 //
 // Phase 70 plan 70-09 (gaps G-70-2 / G-70-3, decisions D-70-19 / D-70-20): the walker's
-// fidelity to the LIVE n8n Cloud engine, stated as reproductions of two executions this
-// repo actually watched on 2026-09-10.
+// fidelity to the LIVE n8n Cloud engine, stated as reproductions of three executions this
+// repo actually watched (12203, 12206 on 2026-09-10; 12316 on 2026-09-10, added by plan
+// 70-14).
 //
 // Why this file exists. Every offline suite was green while the live engine dropped rows.
 // `tests/n8n/lib/walkWorkflow.mjs` dropped a zero-item wave; the engine DELIVERS it. So
 // an offline green meant nothing, and no graph fix could be believed until the instrument
 // told the truth. These cases are written against the observed runData of executions
-// 12203 and 12206 — the outcome the engine PRODUCED, never the outcome the design
+// 12203, 12206 and 12316 — the outcome the engine PRODUCED, never the outcome the design
 // intended. D-70-19: the walker moves toward the engine, never toward the plans and never
 // toward a green suite.
+//
+// RECORDED LEGACY-ENGINE DIVERGENCES (gap-closure round 3, plan 70-16, D-70-30). All
+// three frozen fixtures below carry `settings: {}` — no `executionOrder` — because that
+// is exactly what n8n's live body ran on at the time of each execution: `settings
+// .executionOrder` was ABSENT on every live body throughout Phase 70 until D-70-28's
+// flip. These are RECORDINGS of what the LEGACY engine did, frozen at the moment they
+// were observed; they are not, and after D-70-28 must not be read as, a demonstration of
+// what the walker models for any graph this repo generates today. Every committed
+// `n8n/wf_*.json` now runs on v1 (D-70-28), and the walker refuses to walk a non-v1 body
+// by default (D-70-30) — these three cases are the ONLY call sites in this repo that pass
+// the escape (`allowLegacy: true`), because a frozen fixture can never be regenerated
+// from the current builder (it would stop being the recording it is) and so can never be
+// flipped to v1 itself. Each `walkWorkflow(` call below is commented with the same note.
 //
 // Every case runs against a FROZEN copy of the graph as committed on 2026-09-10 (see
 // `fixtures/frozen/README.md`), because Wave 2 changes the live graph under `n8n/` and
@@ -80,6 +94,11 @@ function armedIngestGraph() {
 function run12203() {
   return walkWorkflow(armedIngestGraph(), {
     triggerNode: "Webhook Trigger",
+    // D-70-30 (gap-closure round 3, plan 70-16): the frozen 2026-09-10 fixture's own
+    // settings carry no executionOrder — execution 12203 ran on n8n's LEGACY order.
+    // allowLegacy is the ONE documented escape from the walker's v1-only refusal,
+    // reserved for exactly this file's recorded legacy-engine divergences.
+    allowLegacy: true,
     triggerItems: [
       { email: A_EMAIL, firstname: "Grant", lastname: "Dewsbury", company: "Darwin Turf Club" },
       { email: B_EMAIL, firstname: "Steve", lastname: "Taylor", company: "Darwin Turf Club" },
@@ -216,6 +235,9 @@ function run12206() {
   }
   return walkWorkflow(wf, {
     triggerNode: "Webhook Trigger",
+    // D-70-30: the frozen 2026-09-10 fixture's settings carry no executionOrder —
+    // execution 12206 ran on n8n's LEGACY order. See the note at run12203 above.
+    allowLegacy: true,
     triggerItems: [{ body: { run_id: null, mode: "propose", events: [
       { objectType: "contact", email: "p70-single-a@runtime-proof.invalid", row_id: "e-single-a" },
       { objectType: "contact", email: "p70-single-b@runtime-proof.invalid", row_id: "e-single-b" },
@@ -368,6 +390,9 @@ test("execution 12316 (D-70-26(b), [observed live], 2026-09-10, cause unknown): 
   // webhook, exactly as a self-dispatched child does.
   const { runData, trace } = walkWorkflow(wf, {
     triggerNode: "Execute Workflow Trigger",
+    // D-70-30: the frozen 2026-09-10 fixture's settings carry no executionOrder —
+    // execution 12316 ran on n8n's LEGACY order. See the note at run12203 above.
+    allowLegacy: true,
     triggerItems: [{}],
     // No httpStubs supplied deliberately: the empty seed parses to object_type "unknown"
     // (matches the sidecar's "Parse HubSpot Event" entry exactly) and routes through the
