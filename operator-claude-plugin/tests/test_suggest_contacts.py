@@ -1126,6 +1126,90 @@ def test_walk_pages_end_to_end_into_extraction_validate():
 
 
 # =====================================================================================
+# 260911-anw (todo 2026-09-04, 64-REVIEW.md WR-01) — a synthesised row must attribute
+# to the page the person was actually found on, never to whatever page the walk
+# happened to fetch last. All three tests below pass the walk's FINAL page as
+# `fetched_url`, exactly what the documented caller above does -- the defect this
+# plan fixes.
+# =====================================================================================
+
+def test_synthesise_rows_locator_is_the_page_the_person_was_actually_found_on():
+    company_row = _company_row(website="https://example-club.example/contact")
+    candidates = {"accepted": [], "budget_remaining": 2}
+    bar = suggest_contacts.walk_bar(["board"], per_company_cap=3)
+
+    contact_page = {
+        "url": "https://example-club.example/contact",
+        "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Board Member"}],
+    }
+    board_page = {
+        "url": "https://example-club.example/board",
+        "people": [{"firstname": "Sam", "lastname": "Reilly", "jobtitle": "Board Member"}],
+    }
+
+    walk = suggest_contacts.walk_pages(
+        [contact_page, board_page], candidates, bar,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert len(walk["selected"]) == 2
+
+    # documented caller sets fetched_url from the walk's FINAL page.
+    records = suggest_contacts.synthesise_rows(
+        company_row, walk["selected"], board_page["url"], per_company_cap=3
+    )
+    assert len(records) == 2
+    locator_by_lastname = {r["row"]["lastname"]: r["provenance"]["locator"] for r in records}
+    assert locator_by_lastname["Doe"] == contact_page["url"]
+    assert locator_by_lastname["Reilly"] == board_page["url"]
+
+
+def test_synthesise_rows_locator_for_a_name_on_both_pages_is_the_first_page_seen():
+    company_row = _company_row(website="https://example-club.example/contact")
+    candidates = {"accepted": [], "budget_remaining": 2}
+    bar = suggest_contacts.walk_bar(["board"], per_company_cap=3)
+
+    dup_person = {"firstname": "Jane", "lastname": "Doe", "jobtitle": "Board Member"}
+    page_1 = {"url": "https://example-club.example/contact", "people": [dup_person]}
+    page_2 = {"url": "https://example-club.example/board", "people": [dup_person]}
+
+    walk = suggest_contacts.walk_pages(
+        [page_1, page_2], candidates, bar,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert len(walk["selected"]) == 1  # deduped -- first-wins
+
+    records = suggest_contacts.synthesise_rows(
+        company_row, walk["selected"], page_2["url"], per_company_cap=3
+    )
+    assert len(records) == 1
+    assert records[0]["provenance"]["locator"] == page_1["url"]
+
+
+def test_synthesise_rows_locator_never_names_a_refused_final_page():
+    company_row = _company_row(website="https://example-club.example/contact")
+    candidates = {"accepted": ["https://example-club.example/staff"], "budget_remaining": 1}
+    page_1 = {"url": "https://example-club.example/contact",
+              "people": [{"firstname": "Jane", "lastname": "Doe", "jobtitle": "Board Member"}]}
+    page_2 = {"url": "https://example-club.example/board", "people": [],
+              "disposition": "refused"}
+
+    walk = suggest_contacts.walk_pages(
+        [page_1, page_2], candidates, bar=3,
+        family_list=FAMILY_LIST, chosen_families=["board"], known_contacts=[],
+    )
+    assert walk["ended"] == suggest_contacts.WALK_REFUSED
+
+    # documented caller still sets fetched_url from the walk's FINAL page -- here the
+    # refused one -- which is exactly the case this test guards against.
+    records = suggest_contacts.synthesise_rows(
+        company_row, walk["selected"], page_2["url"], per_company_cap=3
+    )
+    assert len(records) == 1
+    assert records[0]["provenance"]["locator"] == page_1["url"]
+    assert records[0]["provenance"]["locator"] != page_2["url"]
+
+
+# =====================================================================================
 # Phase 64 Task 2 — the closed `ended` vocabulary: a refusal stays terminal, and
 # cap_exhausted / ladder_exhausted are read off next_candidates()'s own dict
 # (D-64-08, D-64-10, D-64-11, D-64-13, SAFE-02, SAFE-03).

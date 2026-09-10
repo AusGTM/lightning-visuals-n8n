@@ -327,9 +327,14 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
     boundary) -- a future caller decides what happens next.
 
     Returns `{"people", "selected", "dropped", "scores", "ended", "bar"}` and nothing
-    else -- no key, flag, or list here invites another fetch (D-64-11). `people` is
-    the deduped union in walk order; `selected`/`dropped` are the accumulated
-    `select_people` outputs across every folded page; `scores` is
+    else -- no key, flag, or list here invites another fetch (D-64-11); the return
+    keys stay exactly six. `people` is the deduped union in walk order, and every
+    admitted person now carries `source_url`: the URL of the page it was actually
+    folded from, stamped at the admit site so a duplicate keeps its FIRST sighting's
+    page (64-REVIEW.md WR-01) -- this rides each person, never a seventh top-level
+    key. `selected`/`dropped` are the accumulated `select_people` outputs across every
+    folded page (each `selected` entry carries `source_url` too, since `select_people`
+    already returns a copy of its input); `scores` is
     `[{"url", "score", "cumulative"}, ...]`, one entry per folded page (a refused page
     contributes none) -- `score` is that page's own marginal (post-dedupe) hit count,
     `cumulative` the running total; `ended` is one of `WALK_ENDINGS` or `None` (keep
@@ -371,7 +376,12 @@ def walk_pages(pages, candidates, bar, family_list, chosen_families, known_conta
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
-            new_people.append(person)
+            # 64-REVIEW.md WR-01: stamp the page's OWN url on a copy of the person at
+            # the moment it is admitted -- this is the only place that knows which
+            # page a person actually came from. A copy, never a mutation: `pages`
+            # belongs to the caller and is re-walked on every subsequent call as the
+            # ladder grows, so mutating it in place would rewrite history each pass.
+            new_people.append(dict(person, source_url=page.get("url")))
         people.extend(new_people)
 
         page_selection = select_people(
@@ -475,16 +485,20 @@ SEARCH_SOURCE_TIERS = (1, 2, 3)
 def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=None):
     """At most `per_company_cap` rows shaped for `extraction.validate()`: `record_type`
     "contacts", `row` carrying only canonical props (`firstname`/`lastname`/`company`/
-    `jobtitle`), `provenance` naming this module as the input and `fetched_url` -- the
-    URL ACTUALLY fetched, never the company's homepage -- as the locator.
+    `jobtitle`), `provenance` naming this module as the input and, as the locator, the
+    page THAT PERSON was actually found on (64-REVIEW.md WR-01) -- `person["source_url"]`
+    when `walk_pages`' fold stamped one, `fetched_url` otherwise. `fetched_url` is never
+    the company's homepage; it is the fallback locator for a person the walk never
+    folded (the search-fallback branch, and any hand-built person dict).
 
     `source_tier` (quick task 260904-5sd, D-5sd-01/D-5sd-05) is how a person found
     through the web-search fallback declares WHERE they came from. Omitted -- which is
-    every existing call site -- the provenance is byte-identical to what it has always
-    been: `{"input": "suggest_contacts_ladder", "locator": fetched_url}`, no extra key.
-    Passed, it must be one of `SEARCH_SOURCE_TIERS`, and the provenance becomes
-    `{"input": "suggest_contacts_web_search", "locator": fetched_url, "source_tier": N}`.
-    An unknown value REFUSES, in the same register `per_company_cap` already uses: a
+    every existing call site -- the provenance key SET is byte-identical to what it has
+    always been: `{"input": "suggest_contacts_ladder", "locator": ...}`, no extra key --
+    only the locator VALUE now varies per person (260911-anw, above). Passed, it must be
+    one of `SEARCH_SOURCE_TIERS`, and the provenance becomes `{"input":
+    "suggest_contacts_web_search", "locator": ..., "source_tier": N}`. An unknown value
+    REFUSES, in the same register `per_company_cap` already uses: a
     silent downgrade to the ladder provenance would make a third-party claim read as
     self-attested and bypass `search_fallback.hold_weak_sources` entirely.
 
@@ -559,11 +573,16 @@ def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=N
         extra = set(row.keys()) - canonical
         assert not extra, f"synthesised row carries non-canonical key(s): {sorted(extra)}"
 
+        # 64-REVIEW.md WR-01: the locator is THIS person's own recorded page when the
+        # fold stamped one (`walk_pages`' admit site), and `fetched_url` otherwise --
+        # the search-fallback branch and any hand-built person dict, byte-identical to
+        # before.
+        locator = person.get("source_url") or fetched_url
         records.append(
             {
                 "record_type": "contacts",
                 "row": row,
-                "provenance": dict(provenance),
+                "provenance": {**provenance, "locator": locator},
             }
         )
     return records
