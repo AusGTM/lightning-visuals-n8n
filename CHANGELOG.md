@@ -7,14 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
-- **One Merge, one result channel (Phase 70, 2026-09-09) — committed, NOT deployed.** Every
-  convergence point and every HTTP hop in the cloud workflows now carries a native n8n `Merge`
-  node instead of a by-name run read, write gates are IF-shaped and EMIT their refusals as
-  rows, and both row-outcome lanes answer with an ack only. Node counts moved as an expected
-  consequence (Merges plus the starved-lane sentinels each Merge input needs):
-  `wf_enrichment_cloud` 123 → **218**, `wf_contact_ingest_cloud` 29 → **50**,
-  `wf_review_decision_cloud` 26 → **45**, `wf_scheduled_maintenance_cloud` 39 → **43**,
-  `wf_backend_status_cloud` 17 → **30**, `wf_enrichment_local_live` 46 → **70**,
+- **One Merge, one result channel (Phase 70, 2026-09-09) — deployed disarmed 2026-09-10, then
+  superseded by gap closure (committed, not yet redeployed).** Every convergence point and
+  every HTTP hop in the cloud workflows now carries a native n8n `Merge` node instead of a
+  by-name run read, write gates are IF-shaped and EMIT their refusals as rows, and both
+  row-outcome lanes answer with an ack only. Node counts moved as an expected consequence
+  (Merges plus the starved-lane sentinels each Merge input needs):
+  `wf_enrichment_cloud` 123 → 218 → **291**, `wf_contact_ingest_cloud` 29 → 50 → **69**,
+  `wf_review_decision_cloud` 26 → 45 → **55**, `wf_scheduled_maintenance_cloud` 39 → **43**,
+  `wf_backend_status_cloud` 17 → **30**, `wf_enrichment_local_live` 46 → 70 → **82**,
   `wf_contact_ingest_local` 12 → **13**.
 - **Acceptance is a mixed batch per lane (D-70-17).** `tests/n8n/enrichmentMixedBatch.test.mjs`
   and `tests/n8n/ingestMixedBatch.test.mjs` drive the committed JSON through the 70-01 walker
@@ -28,14 +29,31 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   request-level flags remain (`recompute`, `scale_up`, `source_by_field`). CLAUDE.md §13.0.2's
   table is corrected from four to three.
 
+### Fixed
+- **Gap closure from the 2026-09-10 disarmed live UAT (plans 70-08..70-12).** The first native
+  Merge node this repo ever ran live surfaced four gaps: G-70-1 (a multipart part carrying a
+  Content-Type is filed under `$binary`, never `$json.body` — fixed in-session, `576fe7c`),
+  G-70-2/G-70-3 (a Merge input shared between a starved-lane sentinel and a real producer can
+  be satisfied by the sentinel's empty output FIRST, dropping the real row — root cause: a
+  zero-item Code output is a live delivery, which the walker did not model; fixed by correcting
+  the walker toward the engine (plan 70-09), gating every sentinel so it emits nothing at all
+  when its lane is live (D-70-23, plan 70-10), and splitting the 15-input `Build Response
+  Merge` into 3 stage Merges of ≤10 inputs each with a Merge-input contract enforced at
+  generation time (plan 70-11)), and G-70-4 (the proof driver compared the client-reconciled
+  ingest rows, which carry a `reported_outcome` key the walker's raw prediction never produces,
+  against that raw prediction — `dispatch.dispatch()` now exposes the pre-reconciliation
+  recovery under `raw_rows`, and the driver's ingest branch reads that instead, plan 70-12).
+  CLAUDE.md §13.0.2/§13.0.3 record the observed-live platform facts these executions
+  established, each with its execution id.
+
 ### Not yet done
-- **NOTHING IS DEPLOYED AND NOTHING IS ARMED.** No committed workflow in this repo has ever had
-  a native Merge node observed on the real engine. The deploy + bounce and the disarmed live
-  proof (D-70-19, plus the `settings.executionOrder` read D-70-02 needs) are the operator's
-  step, deferred to the end-of-phase UAT — Gate 3 in
+- **The gap-closure JSON (node counts above) is committed but NOT yet redeployed.** What is
+  live today is the pre-gap-closure Phase 70 JSON (218/50/45/43/30), deployed and bounced
+  disarmed on 2026-09-10 for the UAT above and still running. Two gates remain, both
+  deferred to the operator: Gate 5 (redeploy the gap-closure JSON, re-run the disarmed proof)
+  and Gate 6 (the first armed mixed-verdict batch, only after Gate 5 passes) — see
   `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md`.
-  Until it runs, this repo's Merge-behaviour claims stay `[documented]`, never `[observed
-  live]`.
+  Nothing is armed anywhere in this chain.
 
 ## [0.21.0] - 2026-09-07
 

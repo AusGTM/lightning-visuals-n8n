@@ -2550,11 +2550,54 @@ start) and AFTER-03 (full end-of-run report).
 > under §13.0.3's tagging rule. The `[observed live]` upgrade — together with the live
 > `settings.executionOrder` read (D-70-02) — is Gate 3's job and no earlier.
 >
-> **Carried caveat, `[documented]` only:** `Build Response Merge` on the enrichment lane has
-> **15 inputs**, and n8n's own published documentation describes 2–10 for the Merge node. The
-> committed graph is generated, not hand-wired, and the walker models 15 inputs without
-> complaint; whether the live engine accepts a 15-input Merge is one of the things Gate 3
-> observes first. Flagged, deliberately not resolved offline.
+> **Carried caveat, `[documented]` only, RESOLVED below — see the 2026-09-10 addendum.**
+> `Build Response Merge` on the enrichment lane has **15 inputs**, and n8n's own published
+> documentation describes 2–10 for the Merge node. The committed graph is generated, not
+> hand-wired, and the walker models 15 inputs without complaint; whether the live engine
+> accepts a 15-input Merge is one of the things Gate 3 observes first. Flagged, deliberately
+> not resolved offline as of 2026-09-09 — resolved by regeneration (split into 3 stage Merges,
+> plan 70-11) before the run that would have tested it live.
+
+> **Extended 2026-09-10 (Gate 1 / Gate 3 UAT, then gap-closure plans 70-08..70-12).** The
+> `[documented]`-only state above lasted less than a day. The operator DID deploy and bounce
+> the Phase 70 JSON disarmed on 2026-09-10 (Gate 1, Gate 3 in `70-DEFERRED-GATES.md`) — the
+> first native Merge node this repo ever ran live. It found three real defects (G-70-1
+> resolved in-session; G-70-2/G-70-3 blocker, fixed offline by plans 70-09/70-10/70-11; G-70-4
+> minor, fixed by plan 70-12). See §13.0.3's platform-facts table for the engine rules those
+> executions established, each tagged `[observed live]` with its execution id.
+>
+> **The node counts moved again, past what the live instance is running.** The gap-closure
+> waves (70-09 walker-fidelity, 70-10 gated sentinels, 70-11 Merge-input-contract/stage-split)
+> regenerated three of the five cloud workflows a second time, all committed, none deployed:
+>
+> | Workflow | Committed 2026-09-09 (live 2026-09-10) | Committed now (gap closure) |
+> | --- | --- | --- |
+> | `wf_enrichment_cloud.json` | 218 | **291** |
+> | `wf_contact_ingest_cloud.json` | 50 | **69** |
+> | `wf_review_decision_cloud.json` | 45 | **55** |
+> | `wf_scheduled_maintenance_cloud.json` | 43 | 43 (unchanged) |
+> | `wf_backend_status_cloud.json` | 30 | 30 (unchanged) |
+> | `wf_enrichment_local_live.json` | 70 | **82** |
+> | `wf_enrichment_local.json` | 10 | 10 (unchanged) |
+> | `wf_contact_ingest_local.json` | 13 | 13 (unchanged) |
+>
+> **Deployment state as of 2026-09-10, corrected: NOT "not deployed" — deployed, disarmed,
+> and now one gap-closure generation behind again.** The 218/50/45/43/30 JSON (the row above
+> labelled "Committed 2026-09-09 (live 2026-09-10)") IS what n8n Cloud is running right now —
+> deployed and bounced disarmed on 2026-09-10 for Gates 1 and 3, and still live: nothing in
+> this gap-closure plan (70-12) deploys, bounces or arms anything. Two gates remain, both
+> deferred to the operator (`70-DEFERRED-GATES.md` § Gate 5, § Gate 6): Gate 5 redeploys the
+> 291/69/55/43/30/82/10/13 gap-closure JSON above and re-runs the disarmed proof; Gate 6 is
+> the first armed mixed-verdict batch, and runs only after Gate 5 passes. The pre-Phase-70
+> rollback bundle (commit `59812be`, node counts 17/29/123/26/39) stays available at Gate 4
+> if the operator ever needs to revert past Phase 70 entirely, but was NOT exercised — the
+> live instance went forward to the Phase 70 JSON instead, per the operator's 2026-09-10 UAT
+> session. Nothing is armed anywhere in this chain.
+>
+> **The 15-input Merge caveat is now moot, not resolved by observation.** `Build Response
+> Merge` never ran with 15 inputs live — it was split into 3 stage Merges (each ≤10 inputs,
+> plan 70-11) before the redeploy that would have exercised it. What WAS observed live at 15
+> inputs, and is recorded as confounded rather than settled, is in §13.0.3's table below.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
@@ -2573,6 +2616,14 @@ it happen. Documentation is not evidence of as-built behaviour — do not upgrad
 | A **Wait under 65 seconds stays in-process and is NOT restart-safe**; only `>= 65s` is offloaded to the database and reloaded on the resume condition. Never park work on a sub-65s wait and call it durable. | `[documented]` (P-08) — a design constraint, **not** a description of shipped behaviour: there is no Wait node in any of the eight `n8n/wf_*.json` workflows |
 | A parent workflow **cannot activate while a referenced child is unpublished** (400: "Please publish all referenced sub-workflows first"). Publish children before parents. | `[observed live]` (P-13 probe) |
 | A **self-referencing `Execute Workflow` node publishes, runs, and terminates** — the in-workflow depth guard stopped recursion, zero grandchildren. | `[observed live, disarmed]` (`12045` → children `12046`/`12047`, `61-SCALE-UP-VERDICT.json`, `depth_guard_stopped_recursion: true`) |
+| **`settings.executionOrder` is ABSENT on all five running cloud workflow bodies** (the engine's own legacy-v0 default, not a value anyone set). Read directly from the LIVE workflow bodies via the executions API, not from the committed JSON (which also omits it — see D-70-02). | `[observed live]` (2026-09-10, `LV Enrichment (Cloud template)` and `LV Contact Ingest (Cloud template)` both `null`, `70-RUNTIME-VERDICT.json`) |
+| A **Merge node's zero-item output IS a delivery to its consumer's input** — not silence, not a non-event. A Code/IF/NoOp node that legitimately produces nothing still satisfies whichever Merge input it feeds. | `[observed live]` (`12203`: `Associate Carry Merge`, `Ingest Merge Response`; `12206`: `Enrichment Gate Merge`) |
+| **The first delivery to a Merge input is the one kept; a later arrival on the same input is discarded**, even when the later arrival is the real row and the first was an empty sentinel output. | `[observed live]` (`12203`: `Associate Carry Merge` fired 1×0 on the sentinel's `[]` before `Build Association Request`'s real item arrived; `Ingest Merge Response` fired on `HubSpot Update Gate Unreached Sentinel`'s `[]` before the gate IF's refusal row arrived — both the real association result and the `write_blocked` row were dropped) |
+| **A Merge fires at most once per execution.** Once every declared input has received its first delivery (empty or not), the Merge runs and locks; nothing arriving afterward re-triggers it. | `[observed live]` (`12203`, `12206` — both Merges ran exactly once) |
+| **A Merge with an input that NEVER receives any delivery at all never fires — and its downstream terminates silently, with the execution still reporting `success`.** This is starvation, not a hang: no execution in this repo's UAT ever got stuck `running`. | `[observed live]` (`12204`/`12205`/`12206`: the then-15-input `Build Response Merge` never fired on any execution — `Build Response` never ran, 0 rows recovered vs 4/2 predicted, status `success`) |
+| **A node fed zero items does not run at all, and so contributes no delivery to anything it feeds.** First demonstrated with an HTTP node at Gate 1 (`12200`); the SAME rule, in Code/NoOp gate form, was only first observed at Gate 3/70-05-A (`12203`, `12206`) — recorded separately rather than assumed identical in every node type until each was actually seen. | `[observed live]` (HTTP form: `12200`, `HubSpot Associate Company` never ran when its lane was starved; Code/NoOp gate form: `12203`, `12206`) |
+| **A multipart part carrying a Content-Type header is filed by n8n's webhook parser under `$binary`, never `$json.body`** — a 3-tuple `(None, value, "text/plain")` loses the field entirely; a 2-tuple `(None, value)` (no Content-Type) parses correctly. | `[observed live]` (`12200` vs `12202` — G-70-1, fixed `576fe7c`) |
+| **CONFOUNDED, not settled: whether a Merge can exceed n8n's documented 2–10 input range live.** The 15-input `Build Response Merge` never fired on `12204`/`12205`/`12206` — but every one of its inputs also had at least one starved lane feeding it a sentinel's `[]`, so the non-firing is fully explained by the SAME starvation rule as every other row above. The input-count question was never isolated from the starvation confound before the graph was regenerated (plan 70-11 split it into 3 stage Merges of ≤10 inputs each), so the documented 2–10 range remains an independent reason to keep every Merge ≤10 inputs, never a live-proven ceiling. | `[documented]` only (n8n's own published range) + `[observed live, confounded]` (`12204`, `12205`, `12206` — non-firing observed, cause NOT isolated) |
 
 **Do not read the fan-out as cheaper.** The same 2-synthetic-row batch listed **1** execution
 inline (substrate 1, `12044`) and **3** with `scale_up: true` (`12045` + two children). The
