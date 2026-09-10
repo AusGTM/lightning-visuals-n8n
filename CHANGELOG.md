@@ -23,7 +23,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   representation; `fired`/`sources`/`itemCounts` keep run-0 semantics for the six existing
   consumers. Four synthetic cases in `walkWorkflow.test.mjs` that encoded the legacy model
   were re-derived from the v1 rules (one kept as an explicitly legacy-only case), not
-  deleted.
+  deleted. A code review of that round found two blockers, closed the same day by quick task
+  260911-1z5: `trace.stalled` had become unreachable under v1 (every Merge with one delivery
+  drains), silently voiding 38 starvation assertions across 12 files — it is now a v1-native
+  detector enumerated from the graph's Merge nodes with three named shapes
+  (`merge_never_delivered_to`, `merge_fired_with_unfilled_input`,
+  `merge_pending_runs_undrained`) and one shared loss filter, `starvedWithData(trace)`, which
+  every re-derived site uses and which a synthetic case proves NON-empty on a genuine loss;
+  and the walker had mis-attributed which producer claimed which Merge input on 12354-12356
+  (a producer node-run's deliveries to several inputs of one Merge now fill ONE pending run
+  atomically, which reproduces the recording's `source` arrays exactly, asserted as real
+  tests). The drain is capped at one fired run per Merge, matching CLAUDE.md's
+  `requiredInputs` row; a fire-count guard throws by Merge name on a feedback edge; the
+  frozen v1 graph is digest-pinned.
 - **The credit-check lane does not multi-fire under v1.**
   `tests/n8n/creditsSummaryUnderV1.test.mjs` walks the enrichment graph with all three
   providers enabled and pins `Collect Credits` firing exactly once and `Build Credits

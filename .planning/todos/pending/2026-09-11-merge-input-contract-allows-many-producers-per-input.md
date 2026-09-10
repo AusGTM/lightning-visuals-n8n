@@ -75,3 +75,18 @@ node "executes once". The walker now CAPS the drain at one run per Merge and rep
 leftover pending run as `merge_pending_runs_undrained` rather than firing or dropping it.
 Resolving this needs a live observation of a Merge left with two partially-filled pending
 runs — not available from any recording in this repo.
+
+## Open question (NF-MJ-01, quick task 260911-1z5 review, recorded by the round-3 closure)
+
+The walker's BL-02 grouping rule — one producer node-run's deliveries to several inputs of one
+Merge fill ONE pending run atomically — is CONSISTENT WITH recordings 12354-12356 but was not
+isolated by them: a per-input FIFO queue model (input i's k-th delivery joins run k) reproduces
+the same `source` arrays whenever `Companies Absent Sentinel Gate` reaches input 0 first. The
+two models diverge on a Merge where two grouped producers OVERLAP on an input (P -> inputs
+0,1 and Q -> inputs 1,2 of a 3-input Merge): grouping opens a second pending run that MN-01's
+cap leaves undrained and `starvedWithData` reports as a loss; the per-input-queue model
+completes one run (P,P,Q) and loses nothing. Seven Merges in `wf_enrichment_cloud.json` carry a
+producer feeding multiple inputs with a second producer on one of those inputs (`Build Response
+Merge Stage 1/2`, `Merge Winners Fan-In`, `Merge Company Fan-In`, ...). Pinned as a
+KNOWN-UNOBSERVED case in `tests/n8n/walkWorkflow.test.mjs` (NF-MJ-01). Resolving it needs a
+live recording of a Merge with overlapping grouped producers both delivering.

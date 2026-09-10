@@ -79,8 +79,9 @@ no walk. It pins the two NEW v1 observations these recordings established (both 
   with 0 items into that same Merge's input 1 and never appears in any run's `source`. This is
   the question `walkWorkflow.mjs` D-70-30 rule (c) left UNOBSERVED; it is now observed, and the
   walker's rule (c) model (legacy: zero-item output delivers) is known NOT to match v1. The
-  walker is deliberately unchanged by the freeze — see
-  `.planning/todos/pending/2026-09-11-walker-rule-c-zero-item-output-not-a-delivery-under-v1.md`.
+  walker was deliberately unchanged by the freeze itself; quick tasks 260911-0tz and
+  260911-1z5 then taught it both v1 points (`walkerEngineFidelityV1.test.mjs`) — see
+  `.planning/todos/completed/2026-09-11-walker-rule-c-zero-item-output-not-a-delivery-under-v1.md`.
 
 `allowLegacy` does not apply to these five: they are not walked, and they are v1.
 
