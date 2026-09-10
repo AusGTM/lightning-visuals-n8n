@@ -1,21 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T02:18:25Z
+updated: 2026-09-10T02:24:23Z
 ---
 
 ## Current Test
 
-number: 3
-name: Gate 3 / D-70-19 — disarmed live mixed-batch proof (phase-closing gate)
-expected: |
-  Deploy + bounce disarmed; read live `settings.executionOrder`; run
-  `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` (4 sends).
-  `70-RUNTIME-VERDICT.json` shows `shapes_equal: true`, all four executions settled, zero writes,
-  and the 15-input `Build Response Merge` accepted by the live engine.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -69,14 +62,41 @@ observed: |
 
 ### 3. Gate 3 / D-70-19 — disarmed live mixed-batch proof (phase-closing gate)
 expected: Deploy + bounce disarmed; read live `settings.executionOrder`; run `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` (4 sends: enrichment_2x2, enrichment_single_lane, ingest_2x2, ingest_single_lane). `70-RUNTIME-VERDICT.json` shows `shapes_equal: true`, all four executions settled, zero writes, and the 15-input `Build Response Merge` accepted by the live engine (n8n docs describe 2–10 inputs — flagged). Then apply the follow-on CLAUDE.md `[observed live]` edits written at the end of `70-DEFERRED-GATES.md` § Gate 3. Steps in `70-DEFERRED-GATES.md` § Gate 3.
-result: [pending]
+result: issue
+reported: "operator delegated the run; issue observed by the agent (verdict shapes_equal: false) — operator to confirm"
+severity: blocker
+observed: |
+  Driver run 2026-09-10T02:21Z after the G-70-1 fix and the driver's own live-half repairs
+  (nonexistent `executions_client.get_workflow`, wrong ingest workflow literal, ingest sends
+  routed through the enrichment webhook — all found on first live run). Verdict:
+  `shapes_equal: false`, `writes_performed: 0`, every flag `"false"`, executions `12204`+`12205`
+  (enrichment_2x2, 2 chunks), `12206`, `12207`, `12208` — ALL settled `success`, no hang.
+  `live_settings_execution_order`: null on both workflows (setting absent; engine default).
+  INGEST sends (`12207`, `12208`): row-for-row equal to the walker on `action`/`outcome`/
+  `email`; the only difference is the client-side `reported_outcome` key `report.reconcile`
+  adds — the driver compares client-reconciled rows against raw walker rows (comparator
+  artifact, G-70-4), not a runtime divergence.
+  ENRICHMENT sends (`12204`/`12205`/`12206`): 0 rows recovered vs 4/2 predicted.
+  `Build Response Merge` (15 inputs) NEVER EXECUTED on any of the three executions; `Build
+  Response` never ran; the execution finished `success` with the response lane silently
+  starved — not a hang, a silent termination. Upstream, `Enrichment Gate Merge` (append, 5
+  inputs) fired ONCE with sources `Contacts Lane FetchById Absent Sentinel` (1 marker) on in0
+  and `Contacts Absent Sentinel`'s ZERO-ITEM output on in1–in4 (contacts were present, so it
+  emitted `[]`), producing 1 marker item; `Enrichment Gate` filtered it to 0; the real rows
+  (`Adapt Search` 2 items / `Adapt Linkedin Search` 2 items) reached in4/in1 AFTER the Merge
+  had fired and were dropped. Same engine rule as G-70-2: a zero-item output is a delivery,
+  first delivery per input wins, the Merge fires once. The 15-input Merge then received only
+  zero-item sentinel deliveries on inputs 0–3, 11, 12 and never fired at all, while every
+  ≤10-input Merge in the same executions fired — the carried 2–10 caveat is now an
+  observation, cause not isolated.
+  CLAUDE.md follow-on `[observed live]` edits NOT applied — the gate did not pass.
 
 ## Summary
 
 total: 3
 passed: 0
-issues: 2
-pending: 1
+issues: 3
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -117,4 +137,37 @@ blocked: 0
   missing:
     - "Walker: model a zero-item output as a delivery (empty buffer that satisfies readiness) so the offline harness reproduces execution 12203 RED before any fix"
     - "Design decision (operator): a sentinel must never share a Merge input with a real producer while the engine treats [] as delivery — either per-input separation with append-mode fan-in, or sentinels that emit a marker the response builder filters, or executionOrder v1 re-evaluated with an observed probe"
+  debug_session: ""
+
+- gap_id: G-70-3
+  truth: "On a disarmed enrichment batch every row reaches Build Response and the recovered rows are shape-equal to the walker's prediction"
+  status: failed
+  reason: "Executions 12204/12205/12206: 0 rows recovered vs 4/2 predicted; Build Response Merge (15 inputs) never executed; Enrichment Gate Merge fired early on Contacts Absent Sentinel's zero-item output and dropped the real rows"
+  severity: blocker
+  test: 3
+  root_cause: "Same engine rule as G-70-2 (zero-item output is a delivery; first delivery per input wins; one fire) applied to the enrichment lane's convergence Merges, where one global sentinel (Contacts Absent Sentinel) feeds many inputs of many Merges with [] whenever contacts are present. Additionally the 15-input Build Response Merge never fired on any execution while every <=10-input Merge did — n8n documents 2-10 inputs; cause not isolated live."
+  artifacts:
+    - path: "tests/n8n/lib/walkWorkflow.mjs"
+      issue: "line 331 drops a zero-item output; the engine delivers it"
+    - path: "scripts/build_cloud_workflows.py"
+      issue: "starved-lane sentinels share Merge inputs with real producers; Build Response Merge declared with numberInputs 15"
+    - path: "n8n/wf_enrichment_cloud.json"
+      issue: "Enrichment Gate Merge in1-in4 and Build Response Merge in0-3,11,12 fed by Contacts Absent Sentinel's [] output"
+  missing:
+    - "Walker RED reproduction of 12206 (zero-item delivery) before any graph change"
+    - "Operator design decision on sentinel/Merge separation (see G-70-2) and on splitting Build Response Merge to <=10 inputs or an observed probe of the 15-input node in isolation"
+  debug_session: ""
+
+- gap_id: G-70-4
+  truth: "prove_phase70_runtime.py compares like with like on the ingest lane"
+  status: failed
+  reason: "Ingest sends differ from the walker only by the client-added reported_outcome key (report.reconcile), so a correct runtime would still read shapes_equal: false"
+  severity: minor
+  test: 3
+  root_cause: "run_live reads rows through dispatch.dispatch (client-reconciled) while predict reads raw Build Ingest Response items from the walker; row_shape keys the comparison on the full key set"
+  artifacts:
+    - path: "scripts/prove_phase70_runtime.py"
+      issue: "row_shape includes every key; recovered ingest rows carry reported_outcome"
+  missing:
+    - "Compare raw recovery rows (watch.recover_dispatch responses) on the ingest lane, or exclude client-added keys from row_shape — with a test that fails on the 12207 shape first"
   debug_session: ""

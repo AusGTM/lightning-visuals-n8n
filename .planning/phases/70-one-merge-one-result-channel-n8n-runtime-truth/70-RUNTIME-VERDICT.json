@@ -1,21 +1,67 @@
 {
   "premise": "phase-70-runtime-truth",
   "question": "do the rows recovered from a disarmed live run's runData match, shape for shape, the rows the committed walker predicts for the same input?",
-  "status": "predicted_only_awaiting_gate_3",
-  "basis": "predicted (offline, nothing contacted)",
-  "answer": null,
-  "shapes_equal": null,
-  "generated_at": "2026-09-09T22:25:37.817335+00:00",
-  "live_settings_execution_order": null,
-  "execution_ids": [],
+  "status": "observed",
+  "basis": "observed",
+  "answer": false,
+  "shapes_equal": false,
+  "generated_at": "2026-09-10T02:21:43.341663+00:00",
+  "live_settings_execution_order": {
+    "LV Enrichment (Cloud template)": null,
+    "LV Contact Ingest (Cloud template)": null
+  },
+  "execution_ids": [
+    "12205",
+    "12206",
+    "12207",
+    "12208"
+  ],
   "writes_performed": 0,
-  "write_flags_read_from_live_bodies": null,
+  "write_flags_read_from_live_bodies": {
+    "LV Enrichment (Cloud template)": {
+      "HubSpot Create Write Gate": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      },
+      "HubSpot Update Write Gate": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      },
+      "HubSpot Company Create Write Gate": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      },
+      "HubSpot Company Update Write Gate": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      }
+    },
+    "LV Contact Ingest (Cloud template)": {
+      "Decide Action": {
+        "ALLOW_HUBSPOT_CREATE": "false"
+      },
+      "Associate Lane Sentinel": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      },
+      "HubSpot Update Write Gate": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      },
+      "HubSpot Create Write Gate": {
+        "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+        "ALLOW_HUBSPOT_CREATE": "false"
+      }
+    }
+  },
   "sends": [
     {
       "name": "enrichment_2x2",
       "lane": "enrichment",
+      "run_id": "2d495bd3b48c4c2d84442edd757bc8a2",
       "input_row_count": 4,
       "predicted_row_count": 4,
+      "recovered_row_count": 0,
       "predicted_shapes": [
         {
           "keys": [
@@ -146,16 +192,22 @@
           "outcome": null
         }
       ],
-      "recovered_row_count": null,
-      "shapes_equal": null,
-      "execution_id": null,
-      "settled": null
+      "recovered_shapes": [],
+      "shapes_equal": false,
+      "execution_id": "12205",
+      "execution_ids": [
+        "12205",
+        "12204"
+      ],
+      "settled": true
     },
     {
       "name": "enrichment_single_lane",
       "lane": "enrichment",
+      "run_id": "d05acb5d7e4841a4b1e075774921fb0c",
       "input_row_count": 2,
       "predicted_row_count": 2,
+      "recovered_row_count": 0,
       "predicted_shapes": [
         {
           "keys": [
@@ -222,16 +274,21 @@
           "outcome": null
         }
       ],
-      "recovered_row_count": null,
-      "shapes_equal": null,
-      "execution_id": null,
-      "settled": null
+      "recovered_shapes": [],
+      "shapes_equal": false,
+      "execution_id": "12206",
+      "execution_ids": [
+        "12206"
+      ],
+      "settled": true
     },
     {
       "name": "ingest_2x2",
       "lane": "ingest",
+      "run_id": "b5acf7f5d0144f1db3a99e458d8fde82",
       "input_row_count": 4,
       "predicted_row_count": 4,
+      "recovered_row_count": 4,
       "predicted_shapes": [
         {
           "keys": [
@@ -310,16 +367,102 @@
           "outcome": "net_new"
         }
       ],
-      "recovered_row_count": null,
-      "shapes_equal": null,
-      "execution_id": null,
-      "settled": null
+      "recovered_shapes": [
+        {
+          "keys": [
+            "action",
+            "association",
+            "company_id",
+            "company_match",
+            "contact_id",
+            "email",
+            "email_status",
+            "hs_object_id",
+            "outcome",
+            "reason",
+            "reported_outcome",
+            "row_id"
+          ],
+          "row_id": null,
+          "email": "p70-i-domain-a@runtime-proof.invalid",
+          "action": "review",
+          "outcome": "net_new"
+        },
+        {
+          "keys": [
+            "action",
+            "association",
+            "company_id",
+            "company_match",
+            "contact_id",
+            "email",
+            "email_status",
+            "hs_object_id",
+            "outcome",
+            "reason",
+            "reported_outcome",
+            "row_id"
+          ],
+          "row_id": null,
+          "email": "p70-i-domain-b@runtime-proof.invalid",
+          "action": "review",
+          "outcome": "net_new"
+        },
+        {
+          "keys": [
+            "action",
+            "association",
+            "company_id",
+            "company_match",
+            "contact_id",
+            "email",
+            "email_status",
+            "hs_object_id",
+            "outcome",
+            "reason",
+            "reported_outcome",
+            "row_id"
+          ],
+          "row_id": null,
+          "email": "p70-i-name-a@runtime-proof-nodomain.invalid",
+          "action": "review",
+          "outcome": "net_new"
+        },
+        {
+          "keys": [
+            "action",
+            "association",
+            "company_id",
+            "company_match",
+            "contact_id",
+            "email",
+            "email_status",
+            "hs_object_id",
+            "outcome",
+            "reason",
+            "reported_outcome",
+            "row_id"
+          ],
+          "row_id": null,
+          "email": "p70-i-name-b@runtime-proof-nodomain.invalid",
+          "action": "review",
+          "outcome": "net_new"
+        }
+      ],
+      "shapes_equal": false,
+      "execution_id": "12207",
+      "execution_ids": [
+        "12207"
+      ],
+      "settled": true
     },
     {
       "name": "ingest_single_lane",
       "lane": "ingest",
+      "run_id": "4ef87940853b40bc82b0b330b3e289ac",
       "input_row_count": 2,
       "predicted_row_count": 2,
+      "recovered_row_count": 2,
       "predicted_shapes": [
         {
           "keys": [
@@ -360,11 +503,55 @@
           "outcome": "net_new"
         }
       ],
-      "recovered_row_count": null,
-      "shapes_equal": null,
-      "execution_id": null,
-      "settled": null
+      "recovered_shapes": [
+        {
+          "keys": [
+            "action",
+            "association",
+            "company_id",
+            "company_match",
+            "contact_id",
+            "email",
+            "email_status",
+            "hs_object_id",
+            "outcome",
+            "reason",
+            "reported_outcome",
+            "row_id"
+          ],
+          "row_id": null,
+          "email": "p70-i-single-a@runtime-proof.invalid",
+          "action": "review",
+          "outcome": "net_new"
+        },
+        {
+          "keys": [
+            "action",
+            "association",
+            "company_id",
+            "company_match",
+            "contact_id",
+            "email",
+            "email_status",
+            "hs_object_id",
+            "outcome",
+            "reason",
+            "reported_outcome",
+            "row_id"
+          ],
+          "row_id": null,
+          "email": "p70-i-single-b@runtime-proof.invalid",
+          "action": "review",
+          "outcome": "net_new"
+        }
+      ],
+      "shapes_equal": false,
+      "execution_id": "12208",
+      "execution_ids": [
+        "12208"
+      ],
+      "settled": true
     }
   ],
-  "scope_boundary": "PREDICTION ONLY \u2014 nothing was contacted, no execution ran, no live settings.executionOrder was read, and `shapes_equal` is deliberately null rather than true. The live half is Gate 3 in 70-DEFERRED-GATES.md."
+  "scope_boundary": "DISARMED: every write flag read 'false' in the live bodies before anything was sent, the allowlist was empty, and every row was expected blocked. Zero HubSpot writes, nothing armed. This is NOT the gated live unattended run."
 }

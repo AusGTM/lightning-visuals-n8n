@@ -5,8 +5,8 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: One merge, one result channel — n8n runtime truth
 status: verifying
-stopped_at: Phase 70 executed; verification human_needed — three live gates in 70-UAT.md
-last_updated: "2026-09-09T22:49:07Z"
+stopped_at: Phase 70 UAT complete 2026-09-10 — 3/3 gates ran live, 3 issues (G-70-1 resolved; G-70-2/3 blocker: engine delivers zero-item sentinel outputs to Merge inputs; G-70-4 minor); gap planning next
+last_updated: "2026-09-10T02:24:23Z"
 last_activity: 2026-09-10
 last_activity_desc: Phase 70 execution in progress — 70-05 Task 1 + Task 2 sub-step 2a landed
 state_head: e4e95f01a73cafac41aae2a2fac5666d1a62f0fe
@@ -502,7 +502,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-10T00:00:00Z (resumed)
-**Stopped at:** Session resumed 2026-09-10, proceeding to /gsd-verify-work 70 (Gate 1). Prior note
+**Stopped at:** /gsd-verify-work 70 complete 2026-09-10 — see 70-UAT.md Gaps (G-70-2/G-70-3 blocker). Next: /gsd-plan-phase 70 --gaps. Prior note
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints

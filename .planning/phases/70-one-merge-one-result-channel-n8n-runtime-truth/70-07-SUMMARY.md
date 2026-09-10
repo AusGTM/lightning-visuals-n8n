@@ -311,6 +311,20 @@ None for the work in this plan. **Gate 3 needs the operator**: deploy with
 never reloads a running workflow), then run the driver with `ALLOW_PHASE70_RUNTIME_PROOF=true`.
 All disarmed. Full steps in `70-DEFERRED-GATES.md` Gate 3.
 
+### Gate 3 — observed live 2026-09-10 (deferred from Task 3, run at end-of-phase UAT)
+
+`70-RUNTIME-VERDICT.json` now reads `status: observed`, `shapes_equal: false`, executions
+`12204`/`12205`/`12206`/`12207`/`12208`, all settled, `writes_performed: 0`,
+`live_settings_execution_order` null on both workflows. Ingest sends match the walker on
+every row's action/outcome (the only key difference is the client's `reported_outcome`,
+G-70-4). Enrichment sends recovered 0 rows: `Build Response Merge` (15 inputs) never executed,
+and `Enrichment Gate Merge` fired once on `Contacts Absent Sentinel`'s zero-item output before
+the real rows arrived (G-70-3, same engine rule as G-70-2). Per D-70-19 the walker was not
+adjusted; the CLAUDE.md `[observed live]` follow-on edits were NOT applied. The driver's live
+half needed three repairs on first run (nonexistent `executions_client.get_workflow`, wrong
+ingest workflow name literal, ingest sends routed through the enrichment webhook) — committed
+in `576fe7c`.
+
 ## Next Phase Readiness
 
 **This is the last plan of Phase 70. The phase is complete pending the end-of-phase UAT of three
