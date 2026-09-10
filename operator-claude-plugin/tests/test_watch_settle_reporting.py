@@ -456,3 +456,85 @@ def test_require_executions_api_never_names_the_key_value():
         assert "secret-value-xyz" not in str(refusal)
     else:
         raise AssertionError("an empty executions-API key must refuse")
+
+
+# =====================================================================================
+# Phase 70 code review WR-01 — the cross-execution runData merge is a UNION, never a
+# replacement. Two executions contribute to one recovery (a `scale_up` parent plus its
+# child, or a multi-chunk dispatch); each carries its OWN copy of a write node's runs.
+# A plain `dict.update` lets whichever execution is folded LAST speak for the node,
+# so a child that never wrote erases a parent that did — and `report.reconcile`, the
+# documented consumer of this merged `run_data`, then downgrades a real write to
+# `not_confirmed`: a silent misreport in the one direction that matters.
+# =====================================================================================
+
+def _write_node_runs(items):
+    return [{"data": {"main": [[{"json": item} for item in items]]}}]
+
+
+def _execution_with_write_node(run_id, execution_id, row_id, written, *, child_ids=()):
+    """One settled execution that decided an `update` for its row and carries its own
+    `HubSpot Update` run — PRESENT either way, producing output only when `written`.
+    An absent key could never clobber under `dict.update`; a present-but-empty one is
+    exactly the shape that does."""
+    run_data = {
+        "Parse HubSpot Event": [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+        "Build Response": [{"data": {"main": [[{"json": {"row_id": row_id,
+                                                         "action": "update"}}]]}}],
+        "HubSpot Update": _write_node_runs(
+            [{"id": f"hs-{row_id}"}] if written else []),
+    }
+    if child_ids:
+        run_data[_CHILD_DISPATCH_NODE] = [{"data": {"main": [[
+            {"json": {"dispatched": True},
+             "metadata": {"subExecution": {"workflowId": "wf", "executionId": cid}}}
+            for cid in child_ids
+        ]]}}]
+    return {"id": execution_id, "status": "success",
+            "data": {"resultData": {"runData": run_data}}}
+
+
+def test_recovered_run_data_unions_a_write_nodes_runs_across_executions(
+        stub_get_transport_factory):
+    """WR-01: the parent WROTE, the child did not. The child is folded second, so a
+    replacing merge leaves `HubSpot Update` holding the child's empty run alone."""
+    run_id = "run-wr-01-union"
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-parent"}]},
+        _execution_with_write_node(run_id, "exec-parent", "row-parent", True,
+                                   child_ids=["9101"]),
+        _execution_with_write_node(run_id, "9101", "row-child", False),
+    ])
+
+    recovery = watch.recover_dispatch(
+        _FAKE_CONFIG, run_id, expected_chunk_count=1, workflow_id="wf-enrichment-cloud",
+        transport=get_transport, now=lambda: 0.0, sleep=lambda seconds: None,
+    )
+
+    assert recovery["recovered"] is True
+    assert recovery["execution_ids"] == ["exec-parent", "9101"]
+    # Both executions' runs survive — the same shape n8n itself uses for a node that
+    # ran once per inbound branch (see report.all_node_items).
+    assert len(recovery["run_data"]["HubSpot Update"]) == 2
+
+
+def test_reconcile_confirms_a_write_any_contributing_execution_actually_made(
+        stub_get_transport_factory):
+    """The consumer-level statement of the same defect: the parent's row was really
+    written, so it must not come back `not_confirmed` because a sibling execution's
+    copy of the write node produced nothing."""
+    run_id = "run-wr-01-reconcile"
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-parent"}]},
+        _execution_with_write_node(run_id, "exec-parent", "row-parent", True,
+                                   child_ids=["9102"]),
+        _execution_with_write_node(run_id, "9102", "row-child", False),
+    ])
+
+    recovery = watch.recover_dispatch(
+        _FAKE_CONFIG, run_id, expected_chunk_count=1, workflow_id="wf-enrichment-cloud",
+        transport=get_transport, now=lambda: 0.0, sleep=lambda seconds: None,
+    )
+    rows = report.reconcile(recovery["responses"], recovery["run_data"])
+
+    assert [row["reported_outcome"] for row in rows] == ["update", "update"]

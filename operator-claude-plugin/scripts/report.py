@@ -144,12 +144,16 @@ def _write_node_items(run_data, node_name):
     """The write node's own output items — the authoritative "this landed" list, since
     an item only exists here because HubSpot Create/Update actually returned it.
     Absent entirely (the write-safety gate filtered every row before the node ever
-    ran) yields [], same conclusion as "ran with zero items"."""
-    runs = run_data.get(node_name)
-    first_run = runs[0] if isinstance(runs, list) and runs else None
-    if first_run is None:
-        return []
-    return _node_output_items(first_run)
+    ran) yields [], same conclusion as "ran with zero items".
+
+    EVERY run, not `runs[0]` (review WR-01). A write node legitimately runs more than
+    once — once per inbound branch that delivers within one execution (the collapse
+    `all_node_items` documents from executions 12096/12098), and once per contributing
+    execution now that `watch.recover_async_dispatch` unions its runs across them. A
+    `runs[0]`-only read makes the answer depend on which run happens to be first, so a
+    write that really landed reads as "produced nothing" and `reconcile` downgrades it
+    to `not_confirmed`."""
+    return all_node_items(run_data, node_name)
 
 
 def _write_node_produced_output(run_data, node_name):

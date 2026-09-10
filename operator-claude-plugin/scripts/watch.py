@@ -581,7 +581,10 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
     on success — `run_data` is the MERGED `data.resultData.runData` of every matched
     execution (D-70-06: a caller that needs to cross-reference a write node's own
     output, e.g. `report.reconcile`, needs the real node-level data, not only the
-    flattened response rows). `{"recovered": False, "responses": [], "matched_executions":
+    flattened response rows). The merge is a per-node UNION: a node's run lists are
+    CONCATENATED across executions, never replaced (review WR-01), so a write one
+    execution made is still visible when a sibling execution's copy of that node
+    produced nothing. `{"recovered": False, "responses": [], "matched_executions":
     N, "elapsed_seconds", "bound_seconds"}` when the bound elapses first — the caller
     (the skill) is expected to tell the operator this run is still going and offer to
     call this again with the SAME `run_id`, never to re-dispatch (that would send the
@@ -623,7 +626,21 @@ def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=
                     responses.extend(_response_rows(execution, response_node))
                     rd = report._run_data(execution)
                     if isinstance(rd, dict):
-                        merged_run_data.update(rd)
+                        # UNION, never replacement (Phase 70 review WR-01): each
+                        # execution carries its OWN runs for the same node, and
+                        # `dict.update` would let whichever is folded last speak for
+                        # it — a child that never wrote erasing a parent that did, so
+                        # `report.reconcile` downgrades a real write to
+                        # `not_confirmed`. Concatenating is exactly the shape n8n
+                        # itself produces for a node that ran more than once (see
+                        # `report.all_node_items`), so every reader already handles it.
+                        for node, runs in rd.items():
+                            if isinstance(runs, list) and isinstance(
+                                    merged_run_data.get(node), list):
+                                merged_run_data[node].extend(runs)
+                            else:
+                                merged_run_data[node] = (
+                                    list(runs) if isinstance(runs, list) else runs)
                 return {
                     "recovered": True, "responses": responses,
                     "matched_executions": len(settled) + len(children),
