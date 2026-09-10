@@ -337,3 +337,9 @@ Plans:
 - [ ] 70-13-PLAN.md — Wave 1: TRACER — the self-referencing fan-out deleted from the enrichment graph, `scale_up: true` refused as a row, a self-dispatching node made a generation-time refusal, and the client's ability to ask for one retired
 - [ ] 70-14-PLAN.md — Wave 2: D-70-25 marker filtering at both response builders, RED-first on Gate 5's recorded recovered shape, plus execution 12316 frozen as a documented walker divergence
 - [ ] 70-15-PLAN.md — Wave 2: the retirement and the runaway's platform facts recorded with their execution ids, the two-minute burst watch made a standing deploy step, and Gates 7/8/9 written up
+
+**Gap closure, round 3** *(planned 2026-09-10 from `70-UAT.md` — G-70-6 blocker; D-70-28/29/30/31)*
+
+- [ ] 70-16-PLAN.md — Wave 1: TRACER — every generated workflow flipped onto n8n's v1 execution order from one generator constant, a non-v1 body made a generation-time refusal, and the walker stopped claiming to model the legacy engine it was never observed to model correctly
+- [ ] 70-17-PLAN.md — Wave 2: the v1 setting pinned against every path that can revert it — both PUT paths, the bind pipeline, the bounce read-back and the proof driver's verdict
+- [ ] 70-18-PLAN.md — Wave 2: the source-cited engine rule and Gate 8's observations recorded with their tags and execution ids, the stale live-state note corrected, and Gates 10/11/12 written up with Gate 9 superseded
