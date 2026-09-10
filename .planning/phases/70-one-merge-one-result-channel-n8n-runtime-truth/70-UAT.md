@@ -3,20 +3,12 @@ status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T09:00:05Z
+updated: 2026-09-10T09:15:17Z
 ---
 
 ## Current Test
 
-number: 7
-name: Gate 7 — disarmed deploy + bounce of the loop-free round-2 JSON, then the two-minute burst watch
-expected: |
-  Deploy + bounce the round-2 JSON disarmed (`scripts/deploy_n8n_workflows.py`,
-  `scripts/bounce_n8n_workflows.py`): live node counts 30/69/287/55/43, all active, both write
-  flags `"false"`. Then, with NOTHING sent, watch the executions list for two minutes: zero
-  executions with `mode: integrated` appear. Steps in `70-DEFERRED-GATES.md` § Gate 7 and
-  `70-ROLLBACK-RUNBOOK.md` Step 6.
-awaiting: user response
+[testing paused — Gate 8 failed on the enrichment lane (G-70-6); Gate 9 blocked; live rolled back to 59812be]
 
 ## Tests
 
@@ -154,24 +146,63 @@ reason: "Gate 5 did not pass on the enrichment lane (G-70-5); Gate 6 arms nothin
 
 ### 7. Gate 7 — disarmed deploy + bounce of the round-2 JSON, then the two-minute burst watch
 expected: Live node counts 30/69/287/55/43, all active, both write flags `"false"`; enrichment body has zero `executeWorkflow` nodes; two-minute watch with nothing sent shows zero `mode: integrated` executions. Steps in `70-DEFERRED-GATES.md` § Gate 7.
-result: [pending]
+result: pass
+observed: |
+  2026-09-10T09:03Z: five PUTs at 200, bounced; live 30/69/287/55/43, all active, flags `"false"`;
+  enrichment 0 `executeWorkflow` (maintenance keeps SJ-3's one). 125 s watch, 9 polls, nothing
+  sent: zero executions with id > 12348. PASS.
 
 ### 8. Gate 8 — disarmed D-70-19 proof re-run on the loop-free graph
 expected: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → all four sends `shapes_equal: true`, every execution settled, `writes_performed: 0`, the enrichment sends recover real rows carrying `row_id` (never marker-shaped items), and on every execution each node's runData `source` matches a declared connection. Steps in `70-DEFERRED-GATES.md` § Gate 8.
-result: [pending]
+result: issue
+reported: "agent-driven; issue observed — operator to confirm"
+severity: blocker
+observed: |
+  Executions 12349–12353 (exactly five: 4 sends, enrichment_2x2 = 2 chunks); NO `mode: integrated`
+  execution — the loop is gone. `writes_performed: 0`; HubSpot search on the proof identities
+  `total: 0`. INGEST: `shapes_equal: true` on both sends (12352, 12353) — yet both executions
+  ended `error` at `HubSpot Update`: `Method not allowed ... 405`. runData: `IF Update` sent 0
+  items to the update lane; `HubSpot Update Write Gate` still ran (src `Decide Action Snapshot`,
+  1 item) and emitted a synthesized `write_blocked`; `HubSpot Update Permitted Pass-Through` ran
+  with 0 items; `HubSpot Update` then EXECUTED with no input item and PATCHed an empty id → 405.
+  Same on Gate 5's 12293/12309. Disarmed and no record existed, so harmless — but a write node
+  ran on a lane that carried nothing. ENRICHMENT: recovered 1 row per execution, all
+  `action: "list_expansion_refused"` (`row_id: null`): `IF List Input` sent 0 items down the
+  list lane, yet `IF List Expanded` ran (src `Expand List To Events`, 0 in) and emitted the
+  "named no list" refusal; `Build Refusal Row` ran on it; that refusal was the only row
+  `Build Response` received. The real rows were lost upstream: `Enrichment Gate Merge` fired
+  TWICE, both times with five gated-sentinel inputs (`Contacts Absent Sentinel Gate` delivered
+  `[{}]` on four inputs although `Contacts Absent Sentinel` itself emitted 0 items), and
+  `Enrichment Gate` output 0 both times; `Adapt Search`/`Adapt Linkedin Search`'s rows never
+  merged. 12349/12351 then errored at `Apply Contact Judge Verdict`
+  (`Cannot read properties of undefined (reading 'judge_flags')`) — a downstream node fed a
+  marker. `Build Response Merge` stages did fire (the ≤10-input split works mechanically).
+  ONE RULE explains every observation of the day (G-70-2/3/5 and this): on this engine, with
+  `settings.executionOrder` ABSENT on every workflow, a node executes once its predecessor has
+  run EVEN WHEN IT RECEIVED ZERO ITEMS — gates emit their marker on an empty input, IFs
+  evaluate on `undefined`, HTTP nodes fire with no item, an `Execute Workflow` node dispatches.
+  Every "zero-item delivery" and "unconnected source" seen today is this. n8n's current docs
+  (`docs.n8n.io/build/flow-logic/understand-execution-order`) describe only branch ordering
+  ("workflows created before n8n 1.0" = legacy) and say nothing about empty-input execution;
+  the observation stands on its own. D-70-02 ("no executionOrder v1 flip") was decided by
+  research that found the docs silent — the flip has never been observed on this instance.
+  After the run: live rolled back to the pre-70 `59812be` bundle (17/29/123/26/39, all active,
+  disarmed; Gate 4 runbook), one-minute post-bounce check clean.
 
 ### 9. Gate 9 — armed mixed-verdict re-run on the ingest lane (only after Gate 8 passes)
 expected: Armed for exactly one contact of a same-company pair; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after. Steps in `70-DEFERRED-GATES.md` § Gate 9.
-result: [pending]
+result: blocked
+blocked_by: prior-phase
+reason: "Gate 8 failed on the enrichment lane and showed HubSpot Update executing on an empty lane (G-70-6); nothing is armed until that rule is settled"
 
 ## Summary
 
 total: 9
-passed: 0
-issues: 5
-pending: 3
+passed: 1
+issues: 6
+pending: 0
 skipped: 0
-blocked: 1
+blocked: 2
 skipped: 0
 blocked: 0
 
@@ -277,4 +308,23 @@ blocked: 0
     - "Remove the self-referencing Dispatch Self / scale_up fan-out from the enrichment graph (feature OFF by default, never used live) until the engine rule is understood — no in-graph guard can be trusted after this observation"
     - "Marker filtering at Build Response: recovered rows on the enrichment lane contained marker-shaped items"
     - "Re-observe the stage-Merge split and Build Response on a loop-free body (Gate 5 re-run) before any armed send"
+  debug_session: ""
+
+- gap_id: G-70-6
+  truth: "A node that receives zero items does not execute; a starved lane contributes nothing to a Merge; a write node never fires on an empty lane"
+  status: failed
+  reason: "Gate 8 (12349–12353): HubSpot Update executed with no input item (405) on a disarmed run; IF List Expanded emitted a refusal on an empty list lane; gated sentinels delivered markers on inputs whose sentinel emitted 0 items; Enrichment Gate Merge fired twice and dropped every real row"
+  severity: blocker
+  test: 8
+  root_cause: "Single engine rule, observed consistently across G-70-2/3/5/6 and NOT yet flipped: with settings.executionOrder ABSENT (legacy order on this instance), every node executes once its predecessor has run regardless of item count. The whole Phase 70 design (sentinels, gated sentinels, carry Merges, refusal lanes) and the 70-09 walker correction model deliveries; none models 'empty input still executes'. Vendor docs are silent on empty-input semantics; the v1 flip (D-70-02 rejected it on research alone) has never been observed on this instance."
+  artifacts:
+    - path: "scripts/build_cloud_workflows.py"
+      issue: "no workflow sets settings.executionOrder; every generated body inherits the instance default (legacy)"
+    - path: "tests/n8n/lib/walkWorkflow.mjs"
+      issue: "models zero-item output as a delivery (70-09) but not zero-item INPUT as an execution; neither model matches the engine"
+    - path: ".planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-CONTEXT.md"
+      issue: "D-70-02 (no v1 flip) rests on documentation absence, now contradicted by four live observations"
+  missing:
+    - "Operator decision: probe settings.executionOrder = v1 on the committed bodies (one generator line, regenerate, disarmed deploy, Gate 7 watch, Gate 8 proof) BEFORE any further graph redesign — the cheapest experiment that can retire four gaps at once"
+    - "If v1 changes the rule: walker reverts toward 'zero items = no execution' (RED-first on the Gate 8 executions), sentinel network re-evaluated; if not: every node must tolerate empty input explicitly (Execute Once off, guards) and the walker models 'always executes'"
   debug_session: ""

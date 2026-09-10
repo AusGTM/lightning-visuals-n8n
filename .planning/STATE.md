@@ -5,10 +5,10 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: one-merge-one-result-channel-n8n-runtime-truth
 status: executing
-stopped_at: "2026-09-10 gap round 2 executed (70-13..70-15, G-70-5 resolved offline: fan-out removed, markers filtered, no-self-dispatch refusal); VERIFICATION human_needed 46/46; Gates 7/8/9 pending in 70-UAT.md tests 7-9; live enrichment still on pre-70 59812be"
-last_updated: "2026-09-10T09:00:05Z"
+stopped_at: "2026-09-10 Gate 7 PASS (no loop), Gate 8 FAIL (G-70-6 blocker: nodes execute on zero input — legacy executionOrder, setting absent); live rolled back to pre-70 59812be bundle (17/29/123/26/39), disarmed; decision needed: probe executionOrder v1"
+last_updated: "2026-09-10T09:15:17Z"
 last_activity: 2026-09-10
-last_activity_desc: Phase 70 gap round 2 executed and verified offline; round-2 JSON (enrichment 287 nodes, zero executeWorkflow) committed, NOT deployed
+last_activity_desc: Gate 8 on round-2 JSON — loop gone, ingest shapes_equal but HubSpot Update fired on an empty lane; enrichment lane returned a refusal row and dropped real rows; one engine rule (zero-input nodes still execute) explains G-70-2/3/5/6
 state_head: 728256581a7faa782441ee9816ec9f4a89c7b3df
 progress:
   total_phases: 7
