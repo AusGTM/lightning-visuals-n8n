@@ -205,3 +205,66 @@ observed instead.
 Upgrade CLAUDE.md's Merge-behaviour statement from `[documented]` to `[observed live]`, citing
 this verdict file and its execution ids, and add the live `settings.executionOrder` value to
 §13.0.3's platform-facts table with the same tag. Neither edit may be made before the run.
+
+---
+
+## Gate 4 — pre-Phase-70 live rollback (D-70-21)
+
+**Deferred by:** Phase 70 Plan 08 Task 3 (`type="checkpoint:human-verify"`,
+`gate="blocking-human"` — the operator's standing ruling of 2026-09-09 defers live probes and
+live-write gates to end-of-phase UAT). Nothing was deployed and nothing was bounced by the
+executor.
+
+**Reached:** 2026-09-10. The preparation half is DONE and committed: `70-ROLLBACK-RUNBOOK.md`
+(a standalone operator procedure — checkout, dry-run, armed deploy, bounce, read-back, restore),
+`70-ROLLBACK-DRYRUN.txt` (a real zero-write dry-run diff captured against the live instance —
+credentials resolved, one live GET was made to compute the diff, all five workflows reported
+`update`, no write occurred), and `tests/test_phase70_rollback_bundle.py` (15 tests, pinning
+commit `59812be` and the five node counts 17/29/123/26/39 against git history, and asserting the
+bundle is disarmed at rest — both write flags read `"false"` and the allowlist reads empty
+everywhere they are declared).
+
+**Why this gate exists.** The live n8n Cloud instance is currently running the Phase 70 JSON
+(node counts 218/50/45/43/30, deployed and bounced disarmed 2026-09-09), and its enrichment
+lane's response builder is dead: `Build Response Merge` never fires and `Build Response` never
+runs, so an enrichment request finishes `success` with zero rows and nothing alerts on it
+(n8n Cloud executions `12204`, `12205`, `12206`, 2026-09-10). The pre-Phase-70 bodies at commit
+`59812be` are the last known-working live state. Until the operator runs the rollback (or the
+fixed Phase 70 JSON is redeployed at its own later gate), the live enrichment lane returns
+empty results for every request.
+
+**Risk accepted by deferring.** The offline gap-closure waves (regenerating the graph, turning
+the RED suite green) proceed on the committed JSON regardless of what is live — they do not
+need the rollback to make progress. The risk deferred here is operational, not planning: any
+live enrichment request sent before the operator runs this gate silently returns zero rows.
+
+**Steps (operator):**
+1. Open `.planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-ROLLBACK-RUNBOOK.md`
+   and follow it top to bottom. It is self-contained — no other plan or gate needs to be read
+   first. It refuses immediately if the working tree is not clean.
+2. It checks the five pre-Phase-70 bodies out of commit `59812be`, dry-runs the diff, deploys
+   them live with both write-gate variables set (`DRY_RUN=false ALLOW_N8N_DEPLOY=true`), bounces
+   all five workflows (mandatory — a stored update alone never reloads a running workflow), reads
+   back the five live node counts and both write flags, and restores the working tree from
+   `HEAD`.
+3. Report the four facts back:
+   - the five live node counts after the bounce (expected `17, 29, 123, 26, 39`, in the order
+     backend_status / contact_ingest / enrichment / review_decision / scheduled_maintenance);
+   - both write flags (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`) read from the live
+     bodies (expected the disarmed `"false"` literal everywhere either is declared);
+   - all five workflows active;
+   - one disarmed enrichment (or ingest) request returning a non-empty row set again.
+4. Nothing is armed at any point: the allowlist (`TEST_RECORD_IDS`, `TEST_RECORD_DOMAINS`) stays
+   empty and no HubSpot record is written by the rollback itself.
+
+**Resume signal:** "rolled back" with the four facts, "deferred" to leave the live instance on
+the Phase 70 JSON for now (accepting the zero-row enrichment behaviour until the fix lands and
+is redeployed), or a description of what the deploy/bounce read-back showed if it did not match
+expectations.
+
+### What this gate does NOT do
+
+It does not fix the Phase 70 graph defect (D-70-20 does that, offline, across the gap-closure
+waves) — it reverts the live instance PAST the defect to the last known-working graph. The
+fixed Phase 70 JSON is redeployed later, at a separate gate, once the offline suite is green
+and this phase's own live-observation gates (1, 70-05-A, 3) are exercised at end-of-phase UAT.
