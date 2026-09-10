@@ -1,0 +1,204 @@
+{
+  "execution_id": "12316",
+  "status": "success",
+  "mode": "integrated",
+  "workflow_id": "950HPb7a1GgSAIyZ",
+  "started_at": "2026-09-10T07:08:54.898Z",
+  "note": "runData excerpt for the nodes named in 70-UAT.md Test 4. `source` is what the engine recorded; `declared_producers` is what the frozen connections declare. Where they differ, no edge exists and the cause is NOT isolated.",
+  "nodes": {
+    "Execute Workflow Trigger": {
+      "ran": true,
+      "runs": 1,
+      "source": [],
+      "declared_producers": [],
+      "out0_item_count": 1,
+      "out0_first_item_json": {}
+    },
+    "Parse HubSpot Event": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Execute Workflow Trigger",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Execute Workflow Trigger",
+        "IF List Expanded",
+        "IF List Input"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {
+        "event_id": "sub:undefined:undefined",
+        "object_id": null,
+        "object_type": "unknown",
+        "property_name": null,
+        "event_type": null,
+        "occurred_at": "2026-09-10T07:08:55.987Z",
+        "provider_enabled": {
+          "lusha": false,
+          "apollo": false,
+          "zoominfo": false
+        },
+        "providers_requested": [],
+        "mode": null,
+        "recompute": false,
+        "run_id": null,
+        "scale_up": false,
+        "fan_depth": 0
+      }
+    },
+    "IF Scale Up Route": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Parse HubSpot Event",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Parse HubSpot Event"
+      ],
+      "out0_item_count": 0,
+      "out0_first_item_json": null
+    },
+    "Build Scale Up Fan-Out": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Refusal Row Absent Sentinel Gate",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "IF Scale Up Route"
+      ],
+      "out0_item_count": 0,
+      "out0_first_item_json": null
+    },
+    "Dispatch Self": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Recompute Requested Sentinel Gate",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Build Scale Up Fan-Out"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {}
+    },
+    "Recompute Requested Sentinel": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "IF Scale Up Route",
+          "previousNodeOutput": 1,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "IF Scale Up Route"
+      ],
+      "out0_item_count": 0,
+      "out0_first_item_json": null
+    },
+    "Recompute Requested Sentinel Gate": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Companies Absent Sentinel Gate",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Recompute Requested Sentinel"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {
+        "_gsd_sentinel_marker": true
+      }
+    },
+    "Refusal Row Absent Sentinel": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Parse HubSpot Event",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Parse HubSpot Event"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {}
+    },
+    "Refusal Row Absent Sentinel Gate": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Refusal Row Absent Sentinel",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Refusal Row Absent Sentinel"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {
+        "_gsd_sentinel_marker": true
+      }
+    },
+    "Companies Absent Sentinel": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "IF Scale Up Route",
+          "previousNodeOutput": 1,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "IF Scale Up Route"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {}
+    },
+    "Companies Absent Sentinel Gate": {
+      "ran": true,
+      "runs": 1,
+      "source": [
+        {
+          "previousNode": "Companies Absent Sentinel",
+          "previousNodeOutput": 0,
+          "previousNodeRun": 0
+        }
+      ],
+      "declared_producers": [
+        "Companies Absent Sentinel"
+      ],
+      "out0_item_count": 1,
+      "out0_first_item_json": {
+        "_gsd_sentinel_marker": true
+      }
+    }
+  }
+}
