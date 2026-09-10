@@ -3,17 +3,16 @@ status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6), 70-VERIFICATION.md (round 3, gap closure 70-16..70-18: Gates 10/11/12)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T11:30:00Z
+updated: 2026-09-10T12:00:00Z
 ---
 
 ## Current Test
 
-[testing paused — Gate 8 failed on the enrichment lane (G-70-6); Gate 9 blocked; live rolled
-back to 59812be; gap closure round 3 (D-70-28..31, plans 70-16/70-17/70-18) flipped
-settings.executionOrder to v1 on every generated body offline and wrote up Gates 10, 11 and
-12 — none of the three has been run yet. Outstanding: Gate 10 (disarmed deploy + bounce of
-the v1 bodies), Gate 11 (the D-70-19 proof re-run under v1), Gate 12 (the armed mixed-verdict
-re-run, formerly Gate 9)]
+number: 10
+name: Gate 10 — disarmed deploy + bounce of the v1 bodies, then the two-minute burst watch
+expected: |
+  Five PUTs at 200 of the committed v1 JSON (node counts 30/69/287/55/43 unchanged), bounce, read-back shows settings.executionOrder == "v1" on all five live bodies and both write flags "false"; two-minute watch with nothing sent shows zero mode: integrated executions. Steps in 70-DEFERRED-GATES.md § Gate 10.
+awaiting: user response
 
 ## Tests
 
@@ -329,7 +328,10 @@ blocked: 0
 
 - gap_id: G-70-6
   truth: "A node that receives zero items does not execute; a starved lane contributes nothing to a Merge; a write node never fires on an empty lane"
-  status: failed
+  status: resolved
+  resolved_by: "70-16-PLAN.md (+70-17, 70-18)"
+  resolved_at: 2026-09-10
+  live_confirmation: "pending Gates 10/11/12"
   reason: "Gate 8 (12349–12353): HubSpot Update executed with no input item (405) on a disarmed run; IF List Expanded emitted a refusal on an empty list lane; gated sentinels delivered markers on inputs whose sentinel emitted 0 items; Enrichment Gate Merge fired twice and dropped every real row"
   severity: blocker
   test: 8
