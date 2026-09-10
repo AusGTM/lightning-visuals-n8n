@@ -11232,12 +11232,88 @@ def assert_merge_input_contract(wf: dict, name: str) -> dict:
     return wf
 
 
+_EXECUTE_WORKFLOW_TYPE = "n8n-nodes-base.executeWorkflow"
+
+# The ONE (workflow name, node name) pair permitted to carry an executeWorkflow node.
+# Keyed on the PAIR, never the node name alone: a future fan-out that borrowed this name
+# in another build would otherwise inherit the exemption silently.
+_SELF_DISPATCH_EXEMPTIONS = frozenset({
+    ("wf_scheduled_maintenance_cloud", "SJ-3 Dispatch To Enrichment"),
+})
+
+
+def assert_no_self_dispatch(wf: dict, name: str) -> dict:
+    """Phase 70 Plan 13 Task 2 (G-70-5, D-70-26a): the third generation-time refusal,
+    in the same style as `assert_no_by_name_reads`/`assert_merge_input_contract` (raises
+    `ValueError` naming the workflow, the node and the target it references; composes at
+    the same insertion point, returns `wf` unchanged).
+
+    DEFAULT-REFUSE, one named exemption. Two rules, in this order:
+
+      1. An executeWorkflow node whose target id OR cached target name matches the
+         workflow being built is refused UNCONDITIONALLY, exemption or not. That is the
+         self-dispatch G-70-5 rode: on 2026-09-10 `Dispatch Self` ran once per execution
+         with a marker item although its only declared producer emitted zero items,
+         producing 135 child executions in six minutes (12211-12348). The mechanism was
+         never isolated, so the engine's behaviour around such a node is unknown — which
+         is exactly why the walker must never be taught to model one (D-70-26). Absence
+         is the guarantee; this assertion is what keeps it absent.
+
+      2. Any OTHER executeWorkflow node is refused too, except the single pair in
+         `_SELF_DISPATCH_EXEMPTIONS`. That one — SJ-3's cross-workflow dispatch from the
+         scheduled-maintenance build into the enrichment workflow — predates this phase,
+         targets a DIFFERENT workflow, and is proven live. Nothing else is exempt
+         because after Gate 5 no in-graph guard is trusted on this engine: adding a new
+         dispatch must be a deliberate decision that edits this list, not a node someone
+         wires up and ships.
+
+    Rule 1 runs before the exemption is consulted, so the exemption cannot silently
+    cover a self-reference that happens to carry the exempt pair.
+    """
+    wf_id = wf.get("id")
+    wf_name = wf.get("name")
+    violations = []
+    for node in wf.get("nodes", []):
+        if node.get("type") != _EXECUTE_WORKFLOW_TYPE:
+            continue
+        ref = ((node.get("parameters") or {}).get("workflowId") or {})
+        target_id = ref.get("value")
+        target_name = ref.get("cachedResultName")
+        node_name = node.get("name")
+        target = f"{target_id!r}/{target_name!r}"
+        if (target_id is not None and target_id == wf_id) or \
+                (target_name is not None and target_name == wf_name):
+            violations.append(
+                f"  - {node_name!r} dispatches to THIS workflow ({target}) — a "
+                "self-referencing Execute Workflow node. D-70-24 removed the only one "
+                "that ever shipped after it looped live (executions 12211-12348, "
+                "2026-09-10); recursion is impossible by absence, never by an in-graph "
+                "guard.")
+            continue
+        if (name, node_name) in _SELF_DISPATCH_EXEMPTIONS:
+            continue
+        violations.append(
+            f"  - {node_name!r} dispatches to {target} — no Execute Workflow node may "
+            "ship unless its (workflow, node) pair is named in "
+            "_SELF_DISPATCH_EXEMPTIONS. Adding one is a deliberate decision (D-70-26a), "
+            "not a wiring change.")
+    if violations:
+        raise ValueError(
+            f"{name}: {len(violations)} Execute Workflow node(s) refused at generation "
+            "time — D-70-26(a):\n" + "\n".join(violations)
+        )
+    return wf
+
+
 def _assert_generation_contracts(wf: dict, name: str) -> dict:
     """Phase 70 Plan 11 (D-70-20): composes `assert_merge_input_contract` alongside
     the pre-existing `assert_no_by_name_reads` at every write site — one call, both
     generation-time refusals, in the same order every time so a violation of either
-    stops generation before the other ever gets a chance to also fire on stale state."""
-    return assert_merge_input_contract(assert_no_by_name_reads(wf, name), name)
+    stops generation before the other ever gets a chance to also fire on stale state.
+    Phase 70 Plan 13 Task 2 (D-70-26a): `assert_no_self_dispatch` joins them as the
+    third, outermost, in the same fixed order."""
+    return assert_no_self_dispatch(
+        assert_merge_input_contract(assert_no_by_name_reads(wf, name), name), name)
 
 
 def main():

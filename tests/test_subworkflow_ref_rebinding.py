@@ -52,36 +52,46 @@ def test_fails_closed_when_the_referenced_workflow_is_not_live():
 
 
 def test_workflows_without_executeworkflow_nodes_pass_through_unchanged():
-    # Phase 61 Plan 06 Task 5: wf_enrichment_cloud.json is no longer this test's example —
-    # it now carries its OWN executeWorkflow node ("Dispatch Self", the substrate-3
-    # self-reference; see test_self_reference_resolves_via_its_own_live_name below).
-    # wf_contact_ingest_cloud.json carries none and is the re-anchored example.
-    wf = json.loads((ROOT / "n8n" / "wf_contact_ingest_cloud.json").read_text())
+    # Phase 61 Plan 06 Task 5 had re-anchored this away from wf_enrichment_cloud.json,
+    # which then carried its own self-referencing "Dispatch Self" node. Phase 70 Plan 13
+    # (D-70-24) deleted that node, so the enrichment workflow carries none again — and it
+    # is the more valuable example, because it is the one that regressed.
+    wf = json.loads((ROOT / "n8n" / "wf_enrichment_cloud.json").read_text())
     assert not any(n["type"] == "n8n-nodes-base.executeWorkflow" for n in wf["nodes"])
     out = rebind_subworkflow_refs(wf, {})  # empty live map must not matter here
     assert json.dumps(out, sort_keys=True) == json.dumps(wf, sort_keys=True)
 
 
-def test_self_reference_resolves_via_its_own_live_name():
-    """Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up). wf_enrichment_cloud.json's
-    "Dispatch Self" node references the workflow's OWN name/id
-    ("LVenrichmentCloud01"/"LV Enrichment (Cloud template)") — self-reference needs no
-    special-casing in rebind_subworkflow_refs because the workflow already exists live
-    (61-05's substrate-1 deploy): its own name already resolves to its own live id via the
-    SAME fresh live name->id map every other executeWorkflow node uses."""
-    wf = json.loads((ROOT / "n8n" / "wf_enrichment_cloud.json").read_text())
-    node = next(n for n in wf["nodes"] if n["name"] == "Dispatch Self")
-    assert node["type"] == "n8n-nodes-base.executeWorkflow"
-    assert node["parameters"]["workflowId"]["value"] == "LVenrichmentCloud01", \
-        "the committed artifact no longer bakes the local self-reference id — re-anchor this test"
-    assert node["parameters"]["workflowId"]["cachedResultName"] == "LV Enrichment (Cloud template)"
-    assert node["parameters"]["options"]["waitForSubWorkflow"] is False, \
-        "self-dispatch must be detached (P-13's proven shape) — a waiting self-reference " \
-        "would deadlock the parent on its own child"
+def test_no_committed_workflow_contains_a_self_referencing_execute_workflow_node():
+    """Phase 70 Plan 13 Task 1/2 (G-70-5, D-70-24/D-70-26a). This test's subject used to be
+    wf_enrichment_cloud.json's "Dispatch Self" node and how `rebind_subworkflow_refs`
+    resolved its self-reference. That node looped live on 2026-09-10 — 135 child executions
+    in six minutes from four disarmed sends (12211-12348), by a mechanism this repo never
+    isolated — and was deleted rather than guarded, because only the ABSENCE of a
+    self-referencing Execute Workflow node makes recursion impossible on this engine.
 
-    out = rebind_subworkflow_refs(wf, LIVE)
-    rebound = next(n for n in out["nodes"] if n["name"] == "Dispatch Self")
-    assert rebound["parameters"]["workflowId"]["value"] == "srv-abc123", (
-        "a workflow's own name must resolve through the SAME live map used for every "
-        "other reference — no self-reference special-casing"
-    )
+    So the assertion inverts: no committed workflow may contain one at all. Generation
+    itself refuses one (`build_cloud_workflows.assert_no_self_dispatch`); this is the
+    matching check over what is actually on disk.
+    """
+    for path in sorted((ROOT / "n8n").glob("wf_*.json")):
+        wf = json.loads(path.read_text())
+        for node in wf["nodes"]:
+            if node["type"] != "n8n-nodes-base.executeWorkflow":
+                continue
+            ref = node["parameters"]["workflowId"]
+            assert ref["value"] != wf["id"], (
+                f"{path.name}: {node['name']!r} dispatches to its own id — D-70-24")
+            assert ref["cachedResultName"] != wf["name"], (
+                f"{path.name}: {node['name']!r} dispatches to its own name — D-70-24")
+
+
+def test_the_only_committed_execute_workflow_node_is_sj3s_cross_workflow_dispatch():
+    """The one legitimate dispatch, and the one `rebind_subworkflow_refs` exists for."""
+    found = []
+    for path in sorted((ROOT / "n8n").glob("wf_*.json")):
+        wf = json.loads(path.read_text())
+        for node in wf["nodes"]:
+            if node["type"] == "n8n-nodes-base.executeWorkflow":
+                found.append((path.name, node["name"]))
+    assert found == [("wf_scheduled_maintenance_cloud.json", "SJ-3 Dispatch To Enrichment")]

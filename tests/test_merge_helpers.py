@@ -398,7 +398,7 @@ def test_assert_no_self_dispatch_passes_a_graph_with_no_execute_workflow_node():
 
 def test_assert_no_self_dispatch_raises_on_a_node_targeting_its_own_workflow_id():
     wf = _wf_with_exec_node(_SELF_ID, _SELF_NAME, "Dispatch Self", _SELF_ID, "Some Other Name")
-    with pytest.raises(ValueError, match=r"wf_enrichment_cloud.*Dispatch Self.*LVenrichmentCloud01"):
+    with pytest.raises(ValueError, match=r"(?s)wf_enrichment_cloud.*Dispatch Self.*LVenrichmentCloud01"):
         b.assert_no_self_dispatch(wf, "wf_enrichment_cloud")
 
 
@@ -422,7 +422,7 @@ def test_the_exemption_cannot_widen_by_reusing_the_exempt_node_name_in_another_w
     that borrowed SJ-3's node name in the enrichment build must not inherit it."""
     wf = _wf_with_exec_node(_SELF_ID, _SELF_NAME, "SJ-3 Dispatch To Enrichment",
                             "LVreviewDecisionCloud01", "LV Review Decision (Cloud)")
-    with pytest.raises(ValueError, match=r"wf_enrichment_cloud.*SJ-3 Dispatch To Enrichment"):
+    with pytest.raises(ValueError, match=r"(?s)wf_enrichment_cloud.*SJ-3 Dispatch To Enrichment"):
         b.assert_no_self_dispatch(wf, "wf_enrichment_cloud")
 
 
