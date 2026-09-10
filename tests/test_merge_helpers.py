@@ -372,3 +372,82 @@ def test_split_merge_into_stages_raises_on_a_dropped_index():
     merge_name = b.splice_merge_before(nodes, conns, "Target")
     with pytest.raises(ValueError, match="must partition every current index"):
         b.split_merge_into_stages(nodes, conns, merge_name, groups=[list(range(6)), list(range(6, 10))])
+
+
+# =============================================================================================
+# Phase 70 Plan 13 Task 2 (G-70-5, D-70-26a): assert_no_self_dispatch — the third
+# generation-time refusal, in the same style as assert_merge_input_contract above.
+# Default-refuse every executeWorkflow node, with ONE exemption keyed on the
+# (workflow name, node name) pair. Small in-memory graphs, plus the real maintenance build
+# for the one node that is legitimately exempt.
+# =============================================================================================
+
+_SELF_ID = "LVenrichmentCloud01"
+_SELF_NAME = "LV Enrichment (Cloud template)"
+
+
+def _wf_with_exec_node(wf_id, wf_name, node_name, target_id, target_name):
+    node = b._execute_workflow_node(node_name, 0, 0, target_id, target_name)
+    return {"id": wf_id, "name": wf_name, "nodes": [node], "connections": {}}
+
+
+def test_assert_no_self_dispatch_passes_a_graph_with_no_execute_workflow_node():
+    wf = {"id": "X", "name": "X", "nodes": [_code_node("A")], "connections": {}}
+    assert b.assert_no_self_dispatch(wf, "wf_enrichment_cloud") is wf
+
+
+def test_assert_no_self_dispatch_raises_on_a_node_targeting_its_own_workflow_id():
+    wf = _wf_with_exec_node(_SELF_ID, _SELF_NAME, "Dispatch Self", _SELF_ID, "Some Other Name")
+    with pytest.raises(ValueError, match=r"wf_enrichment_cloud.*Dispatch Self.*LVenrichmentCloud01"):
+        b.assert_no_self_dispatch(wf, "wf_enrichment_cloud")
+
+
+def test_assert_no_self_dispatch_raises_on_a_node_targeting_its_own_workflow_name():
+    wf = _wf_with_exec_node("some-other-id", _SELF_NAME, "Dispatch Self", "another-id", _SELF_NAME)
+    with pytest.raises(ValueError, match=r"Dispatch Self"):
+        b.assert_no_self_dispatch(wf, "wf_enrichment_cloud")
+
+
+def test_assert_no_self_dispatch_passes_the_real_maintenance_build_whose_target_is_another_workflow():
+    wf = b.build_scheduled_maintenance_cloud()
+    dispatch = next(n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.executeWorkflow")
+    assert dispatch["name"] == "SJ-3 Dispatch To Enrichment"
+    assert dispatch["parameters"]["workflowId"]["value"] != wf["id"]
+    assert dispatch["parameters"]["workflowId"]["cachedResultName"] != wf["name"]
+    assert b.assert_no_self_dispatch(wf, "wf_scheduled_maintenance_cloud") is wf
+
+
+def test_the_exemption_cannot_widen_by_reusing_the_exempt_node_name_in_another_workflow():
+    """The exemption is keyed on the PAIR (workflow name, node name). A future fan-out
+    that borrowed SJ-3's node name in the enrichment build must not inherit it."""
+    wf = _wf_with_exec_node(_SELF_ID, _SELF_NAME, "SJ-3 Dispatch To Enrichment",
+                            "LVreviewDecisionCloud01", "LV Review Decision (Cloud)")
+    with pytest.raises(ValueError, match=r"wf_enrichment_cloud.*SJ-3 Dispatch To Enrichment"):
+        b.assert_no_self_dispatch(wf, "wf_enrichment_cloud")
+
+
+def test_the_exemption_cannot_widen_by_adding_a_second_dispatch_node_to_the_exempt_workflow():
+    """The other direction: a differently-named cross-workflow node in the maintenance
+    build is refused too — the exemption covers one node, not the workflow."""
+    wf = _wf_with_exec_node("LVscheduledMaintenanceCloud01", "LV Scheduled Maintenance (Cloud)",
+                            "SJ-4 Dispatch To Enrichment", _SELF_ID, _SELF_NAME)
+    with pytest.raises(ValueError, match=r"SJ-4 Dispatch To Enrichment"):
+        b.assert_no_self_dispatch(wf, "wf_scheduled_maintenance_cloud")
+
+
+def test_the_exemption_does_not_cover_a_self_reference_wearing_the_exempt_name():
+    """The exemption asserts POSITIVELY that its target is another workflow, so it cannot
+    silently cover a self-reference that happens to carry the exempt pair."""
+    wf = _wf_with_exec_node("LVscheduledMaintenanceCloud01", "LV Scheduled Maintenance (Cloud)",
+                            "SJ-3 Dispatch To Enrichment",
+                            "LVscheduledMaintenanceCloud01", "LV Scheduled Maintenance (Cloud)")
+    with pytest.raises(ValueError, match=r"SJ-3 Dispatch To Enrichment"):
+        b.assert_no_self_dispatch(wf, "wf_scheduled_maintenance_cloud")
+
+
+def test_assert_no_self_dispatch_is_composed_into_the_generation_contracts():
+    """It must run at the SAME insertion point as the other two, so a violation stops
+    generation before any JSON is written."""
+    wf = _wf_with_exec_node(_SELF_ID, _SELF_NAME, "Dispatch Self", _SELF_ID, _SELF_NAME)
+    with pytest.raises(ValueError, match=r"Dispatch Self"):
+        b._assert_generation_contracts(wf, "wf_enrichment_cloud")
