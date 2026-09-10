@@ -5,10 +5,10 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
 current_phase_name: one-merge-one-result-channel-n8n-runtime-truth
 status: executing
-stopped_at: "2026-09-10 Gate 7 PASS (no loop), Gate 8 FAIL (G-70-6 blocker: nodes execute on zero input — legacy executionOrder, setting absent); live rolled back to pre-70 59812be bundle (17/29/123/26/39), disarmed; decision needed: probe executionOrder v1"
+stopped_at: "2026-09-10 gap-closure round 3 PLANNED (70-16..70-18, waves 1-3, verified 0 blockers): operator ruling D-70-28..31 flips settings.executionOrder to v1 on every generated workflow (supersedes D-70-02); live still pre-70 59812be bundle, disarmed; next: /gsd-execute-phase 70 --gaps-only"
 last_updated: "2026-09-10T10:20:40.510Z"
 last_activity: 2026-09-10
-last_activity_desc: Gate 8 on round-2 JSON — loop gone, ingest shapes_equal but HubSpot Update fired on an empty lane; enrichment lane returned a refusal row and dropped real rows; one engine rule (zero-input nodes still execute) explains G-70-2/3/5/6
+last_activity_desc: Gap-closure round 3 planned for G-70-6 — n8n legacy executionOrder pushes one empty item down every empty branch (workflow-execute.ts addEmptyItem), explaining G-70-2/3/5/6; D-70-28..31 flip v1, pin PUT preservation, walker records the v1 contract, Gates 10/11/12 replace 9
 state_head: 3744aa3e9cc6defad31e4af0250139c09029c89a
 progress:
   total_phases: 7
