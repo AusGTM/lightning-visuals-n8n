@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 70
-current_phase_name: One merge, one result channel — n8n runtime truth
-status: verifying
-stopped_at: Phase 70 UAT complete 2026-09-10 — 3/3 gates ran live, 3 issues (G-70-1 resolved; G-70-2/3 blocker: engine delivers zero-item sentinel outputs to Merge inputs; G-70-4 minor); gap planning next
-last_updated: "2026-09-10T02:24:23Z"
+current_phase_name: one-merge-one-result-channel-n8n-runtime-truth
+status: executing
+stopped_at: "Phase 70 gap closure planned 2026-09-10 — 5 plans (70-08..70-12), checker VERIFICATION PASSED; Wave 0 = live rollback to 59812be (operator gate 4)"
+last_updated: "2026-09-10T03:35:21.738Z"
 last_activity: 2026-09-10
-last_activity_desc: Phase 70 execution in progress — 70-05 Task 1 + Task 2 sub-step 2a landed
-state_head: e4e95f01a73cafac41aae2a2fac5666d1a62f0fe
+last_activity_desc: Phase 70 gap-closure plans 70-08..70-12 planned and checker-passed (G-70-2/3/4); next /gsd-execute-phase 70 --gaps-only
+state_head: 6d8da7214078fb91989e7786415f5823f00d84cc
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 23
+  total_plans: 28
   completed_plans: 23
   percent: 29
 ---
@@ -358,10 +358,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 70 (One merge, one result channel — n8n runtime truth) — EXECUTING
+Phase: 70 (one-merge-one-result-channel-n8n-runtime-truth) — READY TO EXECUTE
 Plan: 7 of 7
-Status: Phase complete — ready for verification
-Last activity: 2026-09-09 — Phase 70 execution started
+Status: Ready to execute
+Last activity: 2026-09-10 — Phase 70 UAT run (3 gates) and gap-closure plans 70-08..70-12 created
 
 *The v1.1 retained sections below are history, not current position.*
 
