@@ -214,7 +214,7 @@ def test_detector_clean_workflow_returns_empty():
 _RUN_RECOVERY_PATH = "n8n/code/nodeRunRecovery.js"
 # The commit that deleted the module (Phase 70 Plan 04 Task 3, D-70-01). Its PARENT is
 # the last revision that still carried the file's real content.
-_RUN_RECOVERY_DELETED_AT = "60402f2"
+_RUN_RECOVERY_DELETED_AT = "60402f2ef164505ce9de9d6a1b68b8e44b589563"
 _SIGNATURE_RE = re.compile(r"^function \w+\(all, nodeName, runIndex, keep, maxRuns\) \{$")
 
 
