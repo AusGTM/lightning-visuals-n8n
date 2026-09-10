@@ -117,6 +117,7 @@ this environment's tooling.
 """
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -214,6 +215,27 @@ _FORBIDDEN_NAME_MARKERS = (
     "grant", "permission", "webhook",
 )
 
+# quick 260911-any: whole-token matching, not raw substring — reimplemented fresh per
+# this module's own anti-DRY discipline (see module docstring).
+_CAMEL_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_TOKEN = re.compile(r"[^a-z0-9]+")
+_INFLECTION_SUFFIXES = ("", "s", "ed", "ing")
+
+
+def _tokenised(value) -> str:
+    """`value`, camel-broken, lowercased, and split into a padded, space-joined run
+    of tokens (e.g. `" armed row "`) — the shape a marker is matched against."""
+    broken = _CAMEL_BREAK.sub(" ", str(value)).lower()
+    tokens = [token for token in _NON_TOKEN.split(broken) if token]
+    return f" {' '.join(tokens)} "
+
+
+_FORBIDDEN_TOKEN_RUNS = tuple(
+    _tokenised(marker).rstrip() + suffix + " "
+    for marker in _FORBIDDEN_NAME_MARKERS
+    for suffix in _INFLECTION_SUFFIXES
+)
+
 # classify_read()'s four answers (57-05 Task 1, REVIEW-57-M9), mirroring
 # `held_queue.classify_read` — `load()`'s own return ([] on absent, [] on malformed)
 # cannot say WHICH of the two happened; this is the second probe that can.
@@ -231,8 +253,8 @@ class WrittenRecordsError(Exception):
 
 
 def _looks_forbidden(value) -> bool:
-    lowered = str(value).lower()
-    return any(marker in lowered for marker in _FORBIDDEN_NAME_MARKERS)
+    tokenised = _tokenised(value)
+    return any(run in tokenised for run in _FORBIDDEN_TOKEN_RUNS)
 
 
 def written_records_path(run_id) -> Path:
@@ -386,8 +408,9 @@ def classify_review_item(item) -> dict:
     `reason`, `row_id` and `association` are always `None` — deliberately, never derived
     from operator-supplied text. The operator's own review reason already lives on the
     HubSpot record itself (`lv_enrichment_review_reason`), so the artifact loses nothing
-    by omitting it, and free prose containing `arm`, `grant` or `permission` would trip
-    `_looks_forbidden` (a substring check) and raise on a bookkeeping write that must
+    by omitting it, and free prose containing the whole word `arm`, `grant` or
+    `permission` would trip `_looks_forbidden` (a whole-token check, quick
+    260911-any) and raise on a bookkeeping write that must
     never be able to raise (D-59-10). The same `_looks_forbidden` sweep `classify_item`
     runs over its finished entry runs here too, so the Phase 23 D-11 guarantee holds
     identically on this path.

@@ -36,14 +36,16 @@ the matches — a reader asking "what's queued" reads every run's file, not one 
 (`held_queue.py`, `written_records.py`, `run_manifest.py`) already documents and follows:
 a later change to one module's list must not silently weaken another's.
 
-**SCAN KEYS, NOT FREE-TEXT VALUES (REVIEW-57-M2).** The ten markers below are matched as
-plain substrings (`_looks_forbidden`, mirrored from every sibling), so `"arm"` matches
-`Armstrong`, `Armidale`, and `pharmacy`. `held_queue` survives that because
-`ROW_FIELD_ALLOWLIST` narrows an entry's `row` to identity keys before the scan ever
-runs. This store holds COMPLETE `rows` / `people` / `companies` records — real company
-and person names — and has no such allowlist to narrow with (a work spec's columns are
-whatever the operator's own spreadsheet or lookup produced, and cannot be enumerated in
-advance). So the scan is narrowed by POSITION instead of by allowlist:
+**SCAN KEYS, NOT FREE-TEXT VALUES (REVIEW-57-M2).** `held_queue` narrows an entry's
+`row` to identity keys (`ROW_FIELD_ALLOWLIST`) before the scan ever runs. This store
+holds COMPLETE `rows` / `people` / `companies` records — real company and person names —
+and has no such allowlist to narrow with (a work spec's columns are whatever the
+operator's own spreadsheet or lookup produced, and cannot be enumerated in advance). So
+the scan is narrowed by POSITION instead of by allowlist (quick 260911-any additionally
+narrowed the matcher itself to whole TOKENS, not raw substrings — see `_looks_forbidden`
+below — but the position-based narrowing here stays, as a second line of defence for a
+key that happens to BE a forbidden whole token, e.g. a spreadsheet column literally
+named `grant`):
 
   - every KEY, recursively, at every depth — dict keys in the spec, in nested dicts, and
     in dicts inside lists (exactly the shape a `rows` / `people` / `companies` spec has).
@@ -83,6 +85,7 @@ private helper, not a second atomic-write implementation. The filename is delibe
 not a dotfile (Phase 23 D-04).
 """
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -115,6 +118,27 @@ _FORBIDDEN_NAME_MARKERS = (
     "grant", "permission", "webhook",
 )
 
+# quick 260911-any: whole-token matching, not raw substring — reimplemented fresh per
+# this module's own anti-DRY discipline.
+_CAMEL_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_TOKEN = re.compile(r"[^a-z0-9]+")
+_INFLECTION_SUFFIXES = ("", "s", "ed", "ing")
+
+
+def _tokenised(value) -> str:
+    """`value`, camel-broken, lowercased, and split into a padded, space-joined run
+    of tokens (e.g. `" armed row "`) — the shape a marker is matched against."""
+    broken = _CAMEL_BREAK.sub(" ", str(value)).lower()
+    tokens = [token for token in _NON_TOKEN.split(broken) if token]
+    return f" {' '.join(tokens)} "
+
+
+_FORBIDDEN_TOKEN_RUNS = tuple(
+    _tokenised(marker).rstrip() + suffix + " "
+    for marker in _FORBIDDEN_NAME_MARKERS
+    for suffix in _INFLECTION_SUFFIXES
+)
+
 
 class RemainderQueueError(Exception):
     """Raised when an entry cannot be persisted safely — an unrecognised `reason`, a
@@ -124,7 +148,8 @@ class RemainderQueueError(Exception):
 
 
 def _looks_forbidden(value) -> bool:
-    return any(marker in str(value).lower() for marker in _FORBIDDEN_NAME_MARKERS)
+    tokenised = _tokenised(value)
+    return any(run in tokenised for run in _FORBIDDEN_TOKEN_RUNS)
 
 
 def _first_forbidden_key(value):

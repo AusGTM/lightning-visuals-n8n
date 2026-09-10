@@ -36,15 +36,14 @@ weaken another. This is the third instance of the same discipline in this plugin
 # assumption inherited from every sibling store in this plugin. Per-key locking only
 # if two operators ever share one durable directory on one machine.
 
-# ponytail: the `"arm"` marker in `_FORBIDDEN_NAME_MARKERS` matches inside ordinary
-# words -- a real company name like "Armidale Jockey Club", or a locator path
-# containing "farm" or "pharmacy", refuses the save. Inherited verbatim from
-# `held_queue` on purpose (D-69-01), which is exactly why `first_refusal` below is
-# PUBLIC: the caller pre-checks with it and reports the one entry it cannot store
-# rather than losing a whole batch's save to it.
+# `first_refusal` below is PUBLIC: the caller pre-checks with it and reports the one
+# entry it cannot store rather than losing a whole batch's save to it -- still the
+# right shape after quick 260911-any's whole-token matching fix, since a genuinely
+# forbidden-shaped marker still costs one decline its own storage.
 """
 import csv
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -69,6 +68,27 @@ _FORBIDDEN_NAME_MARKERS = (
     "grant", "permission", "webhook",
 )
 
+# quick 260911-any: whole-token matching, not raw substring -- reimplemented fresh
+# per this module's own anti-DRY discipline (see module docstring).
+_CAMEL_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_TOKEN = re.compile(r"[^a-z0-9]+")
+_INFLECTION_SUFFIXES = ("", "s", "ed", "ing")
+
+
+def _tokenised(value) -> str:
+    """`value`, camel-broken, lowercased, and split into a padded, space-joined run
+    of tokens (e.g. `" armed row "`) -- the shape a marker is matched against."""
+    broken = _CAMEL_BREAK.sub(" ", str(value)).lower()
+    tokens = [token for token in _NON_TOKEN.split(broken) if token]
+    return f" {' '.join(tokens)} "
+
+
+_FORBIDDEN_TOKEN_RUNS = tuple(
+    _tokenised(marker).rstrip() + suffix + " "
+    for marker in _FORBIDDEN_NAME_MARKERS
+    for suffix in _INFLECTION_SUFFIXES
+)
+
 # The read-classification vocabulary (`classify_read`, below). No ANOTHER_RUN:
 # D-69-03 makes the whole document multi-run by design, so there is no "wrong run" to
 # detect at the document level -- an individual entry's own `run_id` is still
@@ -86,8 +106,8 @@ class SuggestionDeclineError(Exception):
 
 
 def _looks_forbidden(value) -> bool:
-    lowered = str(value).lower()
-    return any(marker in lowered for marker in _FORBIDDEN_NAME_MARKERS)
+    tokenised = _tokenised(value)
+    return any(run in tokenised for run in _FORBIDDEN_TOKEN_RUNS)
 
 
 def _first_forbidden(value):

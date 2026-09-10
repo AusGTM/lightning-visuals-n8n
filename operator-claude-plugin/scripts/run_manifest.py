@@ -77,6 +77,7 @@ the same reasoning `artifact_store.py` and `durable_paths.py` already carry for 
 files they own.
 """
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,12 +115,35 @@ ALLOWED_VERDICTS = frozenset({MATCHED, ENRICHED, HELD, UNCHECKED, UNANSWERED, CO
 # conversation. A verdict map is the one thing `save()` ever receives from outside this
 # module, so it is the one thing checked for a key or value whose NAME suggests that
 # grant, a live-write permission, a secret, or an API key smuggled in under a
-# row_id-shaped key. Deliberately broad substrings (["arm"] also catches "armed",
-# "disarm", "arming") — a false-positive refusal on a legitimate row_id costs nothing;
-# a missed one costs the one thing this module must never hold.
+# row_id-shaped key. Matched as whole TOKENS, not raw substrings (quick 260911-any) —
+# "arm" still catches "armed"/"arming" via the inflection runs below, but no longer
+# "disarm"/"disarmed" (test_run_report.py:93 pins "disarmed" as legitimate vocabulary) —
+# a false-positive refusal on a legitimate row_id costs nothing; a missed one costs the
+# one thing this module must never hold.
 _FORBIDDEN_NAME_MARKERS = (
     "arm", "secret", "api_key", "apikey", "token", "credential", "password",
     "grant", "permission", "webhook",
+)
+
+# quick 260911-any: whole-token matching, not raw substring — reimplemented fresh per
+# this module's own anti-DRY discipline (see module docstring).
+_CAMEL_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_TOKEN = re.compile(r"[^a-z0-9]+")
+_INFLECTION_SUFFIXES = ("", "s", "ed", "ing")
+
+
+def _tokenised(value) -> str:
+    """`value`, camel-broken, lowercased, and split into a padded, space-joined run
+    of tokens (e.g. `" armed row "`) — the shape a marker is matched against."""
+    broken = _CAMEL_BREAK.sub(" ", str(value)).lower()
+    tokens = [token for token in _NON_TOKEN.split(broken) if token]
+    return f" {' '.join(tokens)} "
+
+
+_FORBIDDEN_TOKEN_RUNS = tuple(
+    _tokenised(marker).rstrip() + suffix + " "
+    for marker in _FORBIDDEN_NAME_MARKERS
+    for suffix in _INFLECTION_SUFFIXES
 )
 
 # classify_read()'s four answers (57-05 Task 1, REVIEW-57-M9), mirroring
@@ -139,8 +163,8 @@ class ManifestError(Exception):
 
 
 def _looks_forbidden(name) -> bool:
-    lowered = str(name).lower()
-    return any(marker in lowered for marker in _FORBIDDEN_NAME_MARKERS)
+    tokenised = _tokenised(name)
+    return any(run in tokenised for run in _FORBIDDEN_TOKEN_RUNS)
 
 
 def manifest_path() -> Path:

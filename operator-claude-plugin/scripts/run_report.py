@@ -59,6 +59,7 @@ Task 2 adds `build_run_report` — the join over the five primary stores plus th
 """
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -86,13 +87,42 @@ ANOTHER_RUN = "another_run"
 
 # Phase 23 D-11, reimplemented fresh (not imported) — see module docstring. Scanning
 # KEYS at every depth uses all ten; scanning scalar VALUES excludes "arm" and "webhook"
-# (this module's own vocabulary: "disarm"/"disarmed" and EXECUTIONS_BASIS's "webhook
-# execution" are real observations, never authority).
+# (this module's own vocabulary: a standalone "armed"/"disarmed" observation and
+# EXECUTIONS_BASIS's "webhook execution" text are real observations, never authority).
+# quick 260911-any: both sets are now matched as whole TOKENS, not raw substrings —
+# see `_tokenised`/`_looks_forbidden_key`/`_looks_forbidden_value` below. Neither
+# set's membership changed.
 _FORBIDDEN_NAME_MARKERS = (
     "arm", "secret", "api_key", "apikey", "token", "credential", "password",
     "grant", "permission", "webhook",
 )
 _VALUE_MARKERS = tuple(m for m in _FORBIDDEN_NAME_MARKERS if m not in ("arm", "webhook"))
+
+# quick 260911-any: whole-token matching, not raw substring — reimplemented fresh per
+# this module's own anti-DRY discipline.
+_CAMEL_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_TOKEN = re.compile(r"[^a-z0-9]+")
+_INFLECTION_SUFFIXES = ("", "s", "ed", "ing")
+
+
+def _tokenised(value) -> str:
+    """`value`, camel-broken, lowercased, and split into a padded, space-joined run
+    of tokens (e.g. `" armed row "`) — the shape a marker is matched against."""
+    broken = _CAMEL_BREAK.sub(" ", str(value)).lower()
+    tokens = [token for token in _NON_TOKEN.split(broken) if token]
+    return f" {' '.join(tokens)} "
+
+
+def _token_runs(markers):
+    return tuple(
+        _tokenised(marker).rstrip() + suffix + " "
+        for marker in markers
+        for suffix in _INFLECTION_SUFFIXES
+    )
+
+
+_FORBIDDEN_TOKEN_RUNS = _token_runs(_FORBIDDEN_NAME_MARKERS)
+_VALUE_TOKEN_RUNS = _token_runs(_VALUE_MARKERS)
 
 # The four observation fields `record_audit` accepts. Schema, not data — never fed
 # through the forbidden-name scan under their OWN names ("disarm" contains "arm").
@@ -107,13 +137,13 @@ class RunReportError(Exception):
 
 
 def _looks_forbidden_key(name) -> bool:
-    lowered = str(name).lower()
-    return any(marker in lowered for marker in _FORBIDDEN_NAME_MARKERS)
+    tokenised = _tokenised(name)
+    return any(run in tokenised for run in _FORBIDDEN_TOKEN_RUNS)
 
 
 def _looks_forbidden_value(value) -> bool:
-    lowered = str(value).lower()
-    return any(marker in lowered for marker in _VALUE_MARKERS)
+    tokenised = _tokenised(value)
+    return any(run in tokenised for run in _VALUE_TOKEN_RUNS)
 
 
 def _first_forbidden(value):
