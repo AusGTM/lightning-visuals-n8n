@@ -360,7 +360,7 @@ Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 70
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-11 - Completed quick task 260911-0tz: walker v1 model (review open, gap closure 260911-1z5 in flight)
+Last activity: 2026-09-11 - Completed quick tasks 260911-1z5 and 260911-3mu: walker v1 model review closure rounds 2 and 3
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -969,6 +969,8 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 260911-3mu | Close second-review findings on the walker v1 model: combine-mode annihilation now a reported loss, grouping rule scoped to what Gate 11 observed, detector pinned on the recordings, Merge-free cycle guard | 2026-09-11 | dbb987e5 | Under third review | [260911-3mu-close-second-review-findings-on-the-walk](./quick/260911-3mu-close-second-review-findings-on-the-walk/) |
+| 260911-1z5 | Close review findings on the walker v1 model: v1-native starvation detector + starvedWithData, producer-run grouping reproduces 12354-12356 source attribution, drain capped at one run per Merge, 38 stalled sites re-derived | 2026-09-11 | 7f573285 | Reviewed: 1 blocker / 2 majors — closed by 260911-3mu | [260911-1z5-close-review-findings-on-the-walker-v1-m](./quick/260911-1z5-close-review-findings-on-the-walker-v1-m/) |
 | 260911-0tz | Walker models n8n v1 execution order (rule (c) flip + end-of-run drain) proved against Gate 11 recordings 12354-12356; credit lane pinned single-fire under v1 | 2026-09-11 | 75c611ac | Reviewed: 2 blockers / 2 majors (BL-01 stalled-trace vacuous under v1, BL-02 source attribution) — closed by 260911-1z5 | [260911-0tz-fix-the-walker-rule-c-first-then-the-cre](./quick/260911-0tz-fix-the-walker-rule-c-first-then-the-cre/) |
 | 260823-ono | Metro peak-body named-account floor: `lv_named_account_score_floor` (number) read by `lv_icp_fit_score` FORMULA-F; ATC/MRC/SSR/BRC/Perth at 60/B live; enum rejected (D-20 reconfirmed) | 2026-08-23 | f1105dd | Verified | [260823-ono-metro-peak-body-override-rule-tier-atc-m](./quick/260823-ono-metro-peak-body-override-rule-tier-atc-m/) |
 | 260826-20w | Permissive contact enrichment: email reclassified `fill_blank_only`@80 (was `manual_protected`@95), promotes into a blank + flags `lv_enrichment_needs_review`; five HubSpot-native location properties (city/state/country/hs_state_code/hs_country_region_code) added to the waterfall; live proof execution 11958 | 2026-08-26 | a583c29 | Verified | [260826-20w-permissive-contact-enrichment-location-f](./quick/260826-20w-permissive-contact-enrichment-location-f/) |
