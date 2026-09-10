@@ -3,20 +3,12 @@ status: testing
 phase: 70-one-merge-one-result-channel-n8n-runtime-truth
 source: [70-VERIFICATION.md (round 1: Gates 1/70-05-A/3 — run 2026-09-10), 70-VERIFICATION.md (round 2, gap closure 70-08..70-12: Gates 4/5/6)]
 started: 2026-09-10T00:00:00Z
-updated: 2026-09-10T06:26:10Z
+updated: 2026-09-10T07:14:46Z
 ---
 
 ## Current Test
 
-number: 4
-name: Gate 4 / Gate 5 — put a working graph on the live instance (operator: rollback OR redeploy)
-expected: |
-  The live instance currently runs the PRE-gap-closure Phase 70 JSON: every enrichment request
-  silently returns 0 rows. Either run Gate 4 (rollback to `59812be`, `70-ROLLBACK-RUNBOOK.md`)
-  or go straight to Gate 5: deploy + bounce the gap-closure JSON disarmed
-  (`scripts/deploy_n8n_workflows.py`, `scripts/bounce_n8n_workflows.py`), node counts
-  291/69/55/43/30 match, both write flags false. Steps in `70-DEFERRED-GATES.md` § Gate 4 / § Gate 5.
-awaiting: user response
+[testing paused — Gate 5 enrichment lane blocked on G-70-5; Gate 6 blocked on Gate 5]
 
 ## Tests
 
@@ -101,22 +93,65 @@ observed: |
 
 ### 4. Gate 4 / Gate 5 (deploy) — a working graph on the live instance
 expected: Live instance no longer runs the defective pre-gap-closure JSON. EITHER Gate 4 rollback to `59812be` (17/29/123/26/39 nodes) OR Gate 5's deploy + bounce of the gap-closure JSON (291/69/55/43/30 nodes), disarmed, both write flags `"false"` read back. Steps in `70-DEFERRED-GATES.md` § Gate 4 / § Gate 5.
-result: [pending]
+result: issue
+reported: "agent-driven (disarmed deploy/bounce); issue observed — operator to confirm"
+severity: blocker
+observed: |
+  2026-09-10T07:03Z: gap-closure JSON deployed (five PUTs at 200) and bounced; live 30/69/291/55/43,
+  all active, both write flags `"false"` everywhere. Proof driver sent enrichment_2x2 at 07:04Z.
+  RUNAWAY: the enrichment workflow began self-dispatching — 135 `integrated` (Execute Workflow)
+  child executions 12211–12348 in six minutes, ~3 in flight continuously, each child dispatching
+  one more. 138 enrichment executions consumed in total (ids 12209–12348) against the Starter
+  2.5K/month budget. Stopped by `POST /workflows/950HPb7a1GgSAIyZ/deactivate` at ~07:09:45Z
+  (children queued before it still ran; the last three, 12346–12348, errored
+  `Workflow is not active and cannot be executed` at 07:10:15Z) and, belt-and-braces, a PUT of
+  the pre-Phase-70 `59812be` enrichment body (123 nodes) at 07:10:50Z. No new execution after
+  12348. Enrichment workflow reactivated on the pre-70 body at ~07:14Z. Zero HubSpot writes.
+  Mechanism (child 12316, runData): `Dispatch Self` ran ONCE with 1 marker item and dispatched
+  a child carrying a bare event (`object_type: "unknown"`, `run_id: null`, `scale_up: false`,
+  `fan_depth: 0` — so the depth guard never saw a fan-out it could stop). Its ONLY declared
+  producer `Build Scale Up Fan-Out` emitted 0 items; the stored body's connections match the
+  committed JSON exactly (no duplicate node names). runData `source` names
+  `Recompute Requested Sentinel Gate` (a D-70-23 gate Code node that returned `[]`) as
+  `Dispatch Self`'s source, and `Refusal Row Absent Sentinel Gate` as `Build Scale Up Fan-Out`'s.
+  On the pre-gap body (Gate 3, 12204–12206) the same declared wiring did NOT run `Dispatch Self`.
+  So on this engine (executionOrder absent → legacy) a node can execute with an item that no
+  declared connection delivered, apparently when a zero-item Code output is "delivered" onward —
+  the same zero-item-delivery rule as G-70-2/3, now shown to reach a single-input node with no
+  connection from the sentinel at all. Mechanism NOT isolated; observation only.
+  The live instance is now mixed: enrichment = pre-70 `59812be` body (123 nodes, active);
+  ingest/review/maintenance/status = gap-closure JSON (69/55/43/30, active, disarmed).
 
 ### 5. Gate 5 — disarmed re-proof on the fixed graph (D-70-19)
 expected: With the gap-closure JSON live and bounced: `ALLOW_PHASE70_RUNTIME_PROOF=true .venv/bin/python scripts/prove_phase70_runtime.py` → `70-RUNTIME-VERDICT.json` `shapes_equal: true`, four executions settled, `writes_performed: 0`, every `Build Response` / `Build Ingest Response` run reached (no starved Merge), live `settings.executionOrder` recorded. Steps in `70-DEFERRED-GATES.md` § Gate 5.
-result: [pending]
+result: issue
+reported: "agent-driven; partial — operator to confirm"
+severity: major
+observed: |
+  Verdict written 07:09Z, `status: observed`, `shapes_equal: false` overall, `writes_performed: 0`,
+  `live_settings_execution_order` null on both. INGEST LANE PASSED: `ingest_2x2` (12293) 4/4 and
+  `ingest_single_lane` (12309) 2/2 both `shapes_equal: true`, settled — the D-70-23 gated-sentinel
+  graph is a faithful match to the engine on the ingest lane. ENRICHMENT LANE FAILED:
+  `enrichment_2x2` recovered 8 rows vs 4 predicted (executions 12209/12210 + the first two
+  runaway children 12211/12212 matched by run_id echo), `enrichment_single_lane` 4 vs 2
+  (12251 + 12254); recovered rows include marker-shaped items (no `action`/`row_id`) — the
+  stage Merges/`Build Response` did fire (the 15-input split works) but markers leak into the
+  response and the self-dispatch children double the rows. Blocked on G-70-5.
 
 ### 6. Gate 6 — armed mixed-verdict re-run on the fixed graph (only after Gate 5 passes)
 expected: Same pair as Gate 70-05-A (or equivalent): armed for exactly one contact; `Build Ingest Response` exactly 2 rows; permitted row `action: "update"`, `association: "associated"`; refused row `action: "write_blocked"`; HubSpot shows one update + one association; disarmed and read back after. Steps in `70-DEFERRED-GATES.md` § Gate 6.
-result: [pending]
+result: blocked
+blocked_by: prior-phase
+reason: "Gate 5 did not pass on the enrichment lane (G-70-5); Gate 6 arms nothing until it does"
 
 ## Summary
 
 total: 6
 passed: 0
-issues: 3
-pending: 3
+issues: 5
+pending: 0
+skipped: 0
+blocked: 1
 skipped: 0
 blocked: 0
 
@@ -199,4 +234,24 @@ blocked: 0
       issue: "row_shape includes every key; recovered ingest rows carry reported_outcome"
   missing:
     - "Compare raw recovery rows (watch.recover_dispatch responses) on the ingest lane, or exclude client-added keys from row_shape — with a test that fails on the 12207 shape first"
+  debug_session: ""
+
+- gap_id: G-70-5
+  truth: "Deploying the gap-closure enrichment JSON produces no execution the caller did not request; Dispatch Self runs only for a scale_up request with fan_depth < 1"
+  status: failed
+  reason: "Observed 2026-09-10 07:04–07:10Z: 135 self-dispatched child executions (12211–12348) from four disarmed proof sends; Dispatch Self ran once per execution with a marker item though its only producer emitted 0 items"
+  severity: blocker
+  test: 4
+  root_cause: "NOT isolated. Live facts: stored connections == committed (Dispatch Self <- Build Scale Up Fan-Out only); Build Scale Up Fan-Out emitted 0 items with runData source Refusal Row Absent Sentinel Gate; Dispatch Self emitted 1 item with source Recompute Requested Sentinel Gate; both sources are D-70-23 gate Code nodes that returned []. The pre-gap body (same declared wiring around these nodes) never ran Dispatch Self. Legacy executionOrder (setting absent). A zero-item Code output on this engine can cause a downstream single-input node with NO connection from that node to execute with a marker item."
+  artifacts:
+    - path: "scripts/build_cloud_workflows.py"
+      issue: "Dispatch Self (self-referencing executeWorkflow) has no guard that survives an item arriving outside its declared connection; the gate Code nodes (_sentinel_gate_js) return [] when a lane is live"
+    - path: "n8n/wf_enrichment_cloud.json"
+      issue: "gap-closure body (291 nodes) loops live; pre-70 59812be body (123 nodes) restored live"
+    - path: "tests/n8n/lib/walkWorkflow.mjs"
+      issue: "does not model a zero-item output reaching an unconnected node; executeWorkflow node modelled as inert"
+  missing:
+    - "Remove the self-referencing Dispatch Self / scale_up fan-out from the enrichment graph (feature OFF by default, never used live) until the engine rule is understood — no in-graph guard can be trusted after this observation"
+    - "Marker filtering at Build Response: recovered rows on the enrichment lane contained marker-shaped items"
+    - "Re-observe the stage-Merge split and Build Response on a loop-free body (Gate 5 re-run) before any armed send"
   debug_session: ""
