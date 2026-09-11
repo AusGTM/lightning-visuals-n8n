@@ -131,6 +131,32 @@ def _first_forbidden(value):
     return None
 
 
+def _first_forbidden_key(value):
+    """Like `_first_forbidden` but scans KEY NAMES only, never string leaf values --
+    the identical narrowing `held_queue.py`'s `260911-w6o` change gave `row`'s own
+    scan, reimplemented here per this module's own anti-DRY discipline (D-69-01).
+    Safe only because `ROW_FIELD_ALLOWLIST` already filters `row` to a closed,
+    enumerated tuple before this runs (see `build_entry()`) -- a forbidden-shaped KEY
+    can never reach `row` through `build_entry` at all, so this scan's only live
+    effect was refusing VALUES: a person's own name, a company's own name, an email
+    (Phase 71, D-71-04's own todo fold -- `entry_key` has ALWAYS produced name-shaped
+    keys, so this store refuses a decline for a person named Grant today, in
+    production, before this change)."""
+    if isinstance(value, dict):
+        for key, sub in value.items():
+            if _looks_forbidden(key):
+                return key
+            found = _first_forbidden_key(sub)
+            if found is not None:
+                return found
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found = _first_forbidden_key(item)
+            if found is not None:
+                return found
+    return None
+
+
 def queue_path() -> Path:
     """Resolved fresh on every call -- the same durable directory `held_queue.
     queue_path()` resolves into, never a second resolution rule."""
@@ -173,22 +199,42 @@ def build_entry(row, reason_code, reason, run_id, company_id, provenance=None) -
 
 def first_refusal(key, entry):
     """A human sentence naming what is wrong with persisting `key`/`entry`, or `None`
-    when it is safe. Checks, in order: the key is forbidden-shaped; `entry` is not a
-    dict; `reason_code` is not in `suggest_contacts.PARTITION_REASON_CODES`; `run_id`
-    is not a non-empty string; a forbidden-shaped marker anywhere in `row`,
-    `provenance`, or `reason`.
+    when it is safe. Checks, in order: `entry` is not a dict; the key is
+    forbidden-shaped AND is not the entry's own derived identity; `reason_code` is not
+    in `suggest_contacts.PARTITION_REASON_CODES`; `run_id` is not a non-empty string;
+    a forbidden-shaped marker anywhere in `row`'s KEY NAMES, `provenance`, or `reason`.
 
     PUBLIC because the caller pre-checks with it (see plan 02) so one odd company name
     cannot cost a whole batch's save.
+
+    Phase 71 (D-71-04's own todo fold): the entries-map KEY is `entry_key(company_id,
+    row)` -- a composite of a resolved `company_id` and the row's OWN normalised name
+    -- so a person whose normalised firstname is a whole-token marker (e.g. "Grant")
+    tripped `_looks_forbidden(key)` unconditionally, in production, before this
+    narrowing. The key is exempt from the marker scan EXACTLY when it equals the
+    entry's own recomputed `entry_key` -- any other key is an arbitrary
+    caller-supplied string and keeps the full refusal. `row`'s own scan is narrowed to
+    KEY NAMES ONLY for the identical reason `held_queue.py`'s `260911-w6o` narrowed
+    `row`'s scan there -- `ROW_FIELD_ALLOWLIST` already closes the field set, so the
+    value scan's only live effect was refusing a person's own name. `provenance` and
+    `reason` keep FULL key-and-value scanning, unchanged.
     """
-    if _looks_forbidden(key):
+    if not isinstance(entry, dict):
+        if _looks_forbidden(key):
+            return (
+                f"refusing to persist a suggestion-decline entry keyed {key!r} -- its "
+                "name suggests an arming grant, a live-write permission, a secret, or "
+                "an API key. Nothing was written."
+            )
+        return f"entry for key {key!r} is not a dict. Nothing was written."
+
+    exempt_key = entry_key(entry.get("company_id"), entry.get("row") or {})
+    if key != exempt_key and _looks_forbidden(key):
         return (
             f"refusing to persist a suggestion-decline entry keyed {key!r} -- its "
             "name suggests an arming grant, a live-write permission, a secret, or an "
             "API key. Nothing was written."
         )
-    if not isinstance(entry, dict):
-        return f"entry for key {key!r} is not a dict. Nothing was written."
 
     reason_code = entry.get("reason_code")
     if reason_code not in suggest_contacts.PARTITION_REASON_CODES:
@@ -204,7 +250,7 @@ def first_refusal(key, entry):
             "string. Nothing was written."
         )
 
-    offender = _first_forbidden(entry.get("row"))
+    offender = _first_forbidden_key(entry.get("row"))
     if offender is None:
         offender = _first_forbidden(entry.get("provenance"))
     if offender is None and _looks_forbidden(entry.get("reason") or ""):

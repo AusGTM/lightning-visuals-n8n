@@ -104,6 +104,39 @@ dotfile (Phase 23 D-04). ONE GLOBAL FILE, never one per run (unlike
 pass" (D-61-07) is a promise about a single durable backlog, not a per-run artifact; an
 entry from an earlier run stays in the queue until an operator's review clears it,
 across however many later runs happen in between.
+
+**The document ACCUMULATES; each entry carries its own identity (Phase 71, D-69-03 /
+D-71-04).** Mirrors `suggestion_declines.py`'s own framing: a new run's entries MERGE
+into the document, they never overwrite by position. The document-level `run_id`
+field is NOT removed by this — `record_verb()` already documents that it names the
+run that LAST TOUCHED the file, never the run that first held any given row. What
+changes is the entries map's KEY: it is no longer the caller's per-run positional
+`row_id` (see `identity_keys()`/`stable_key()` below) — a positional key is
+destructive under an accumulating document, since a second run's own `row-1` would
+silently overwrite a first run's held `row-1` in the very `save()` call meant to
+merge them.
+
+**The stable key (D-71-04).** `identity_keys(row)` derives every satisfied
+`config/column_mapping.yaml` `required_identity.any_of` group from `row`, normalised
+and serialised group-prefixed (`email::...`, `name::first|last|company`,
+`linkedin::...`). `stable_key(row)` is `identity_keys(row)[0]`, or a total,
+never-`row-N`-shaped `source-position::...` fallback. Both the write site
+(`enrich-before-ingest` step 5) and any future read site call these SAME functions —
+never re-derive the same rule independently in two places (RESEARCH Pitfall 2).
+
+**The legacy document (D-71-05).**
+row-N (any pre-Phase-71 positional key) is refused outright by `_validated_entries()`
+via `_LEGACY_KEY` — a pre-Phase-71 document is never silently read as current-schema
+data. `legacy_reason()` gives the caller the one sentence naming the wipe (delete the
+file; the next run repopulates it under the stable key) instead of the bare word
+`ANOMALOUS`.
+
+**The `company_known` stamp (D-71-01..03).** An OPTIONAL `{"domain", "source"}` dict
+recorded on an entry at persist time, when the caller already knows the row's cleaned
+email domain belongs to a company HubSpot holds. `classify_facet()` itself is
+UNCHANGED by this — its `known_company_domains` argument and pure-read discipline
+stand; `stamped_domains(entries)` is the ONE derivation a caller folds the stamp into
+that argument through.
 """
 import hashlib
 import json
@@ -121,6 +154,20 @@ QUEUE_FILENAME = "held_queue.json"
 RUN_ID_FIELD = "run_id"
 STAMP_FIELD = "saved_at"
 ENTRIES_FIELD = "entries"
+
+# D-71-04 stable-key serialisation — mirrors suggestion_declines.py's own
+# KEY_SEPARATOR/NAME_SEPARATOR verbatim so the two sibling stores read alike.
+KEY_SEPARATOR = "::"
+NAME_SEPARATOR = "|"
+SOURCE_POSITION_PREFIX = "source-position"
+
+# D-71-01..03: the closed vocabulary for `company_known["source"]`. Widening this is a
+# deliberate future decision, never a silent one — see `build_entry()`.
+COMPANY_KNOWN_SOURCES = ("step2_match", "step2_company_row")
+
+# D-71-05: a pre-Phase-71 positional key. `stable_key()`'s own fallback is prefixed
+# specifically so it can never collide with this pattern.
+_LEGACY_KEY = re.compile(r"^row-\d+$")
 
 # REVIEW-A7, widened by quick 260911-w6o (F2-1): identity keys + the columns the
 # envelope projects, and nothing else -- still a CLOSED, enumerated tuple. Enumerated
@@ -248,6 +295,155 @@ def _first_forbidden_key(value):
     return None
 
 
+def _normalize_company(value) -> str:
+    """Mirrors `suggest_contacts._normalize_name`'s exact rule, restated locally --
+    that function is private to its own module (`run_manifest._present`'s own
+    docstring is the shipped precedent for restating rather than reaching into
+    another module's private name)."""
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def identity_keys(row) -> tuple[str, ...]:
+    """Every satisfied `config/column_mapping.yaml` `required_identity.any_of` group,
+    normalised and serialised, in that file's own priority order: email, then
+    firstname+lastname+company, then linkedin_url. `stable_key(row)` is this tuple's
+    first member. `save()`'s entries-map key check exempts EXACTLY these strings from
+    the forbidden-marker scan -- a key that IS one of `identity_keys(entry["row"])` is
+    a projection of `ROW_FIELD_ALLOWLIST`-filtered fields, already closed by
+    `_allowlisted_row`; any other key is an arbitrary caller-supplied string and keeps
+    the full refusal.
+
+    Computed identically whether `row` is a SOURCE row or a MERGED one: the merged row
+    is a superset of the source row's identity fields (the waterfall fills blanks, it
+    never replaces a present `firstname`/`lastname`/`company`/`email`), so a
+    source-derived key is always present in the merged row's own `identity_keys()`.
+    `stable_key()`'s own docstring explains why the WRITE site must still compute from
+    the source row specifically.
+
+    Email group: `row["email"]` stripped and case-folded, admitted only when it strips
+    to a non-empty string containing exactly one `@` with both halves non-empty (the
+    same usability test `classify_facet()` step 1 already applies -- mirrored here,
+    not imported, since that logic lives inline in `classify_facet()` under a private
+    name). Name group: `suggest_contacts.name_key(row)` (PUBLIC, D-69-04) joined with
+    `NAME_SEPARATOR` to a `company` normalised by `_normalize_company()` above --
+    admitted only when both the name and the company are present. Linkedin group:
+    `row["linkedin_url"]` stripped and case-folded, admitted only when non-empty.
+    """
+    if not isinstance(row, dict):
+        return ()
+
+    # Deliberately a FUNCTION-scoped import, not a module-level one: `run_manifest.py`
+    # imports `held_queue` at module level, and `suggest_contacts` imports
+    # `preingest`, which reads `preview.PLUGIN_ROOT` at ITS OWN module level -- a
+    # module-level `import suggest_contacts` here creates a real import cycle
+    # (`extraction` -> `preview` -> `preview_enrichment` -> `chunking` ->
+    # `run_manifest` -> `held_queue` -> `suggest_contacts` -> `preingest` ->
+    # `preview.PLUGIN_ROOT`, undefined mid-import) that breaks `import extraction`
+    # itself. Deferring to call time avoids it while still calling the PUBLIC
+    # `name_key` contract (D-69-04), never re-normalising a name independently.
+    import suggest_contacts
+
+    keys = []
+
+    email = row.get("email")
+    if isinstance(email, str):
+        cleaned = email.strip().casefold()
+        parts = cleaned.split("@")
+        if len(parts) == 2 and parts[0] and parts[1]:
+            keys.append(f"email{KEY_SEPARATOR}{cleaned}")
+
+    name = suggest_contacts.name_key(row)
+    company = _normalize_company(row.get("company"))
+    if name is not None and company:
+        first, last = name
+        keys.append(
+            f"name{KEY_SEPARATOR}{first}{NAME_SEPARATOR}{last}{NAME_SEPARATOR}{company}"
+        )
+
+    linkedin = row.get("linkedin_url")
+    if isinstance(linkedin, str) and linkedin.strip():
+        keys.append(f"linkedin{KEY_SEPARATOR}{linkedin.strip().casefold()}")
+
+    return tuple(keys)
+
+
+def stable_key(row) -> str:
+    """The ONE derivation both the write site (`enrich-before-ingest` step 5) and any
+    future read site call -- never re-derived independently in two places (RESEARCH
+    Pitfall 2). `identity_keys(row)[0]` when non-empty; otherwise a
+    `SOURCE_POSITION_PREFIX` fallback built from `row.get("row_id")`, deliberately
+    prefixed so it can never be produced as, or mistaken for, a legacy `row-N` key
+    (`_LEGACY_KEY`) -- TOTAL even when `row` carries no `row_id` at all.
+
+    Computed from the SOURCE row, not a merged one, at persist time: the merged row's
+    revealed email would put a person in the email group while their source row
+    (blank email) sits in the name group -- two keys for one person across two runs is
+    exactly the cross-run miss D-71-04 exists to close.
+    """
+    keys = identity_keys(row)
+    if keys:
+        return keys[0]
+    row_id = row.get("row_id") if isinstance(row, dict) else None
+    return f"{SOURCE_POSITION_PREFIX}{KEY_SEPARATOR}{row_id}"
+
+
+def stamped_domains(entries) -> set[str]:
+    """The ONE derivation both skill surfaces (plan 02) call to turn an entries map
+    into `known_company_domains` -- the same "one filter every later report calls
+    instead of each growing its own" rule `open_entries()`'s own docstring already
+    states. Returns the set of non-empty `entry["company_known"]["domain"]` values,
+    tolerant of a non-dict entry or a missing stamp. `classify_facet()` itself is NOT
+    touched by this -- its signature, purity, and safe-default direction all stand."""
+    domains = set()
+    if not isinstance(entries, dict):
+        return domains
+    for entry in entries.values():
+        if not isinstance(entry, dict):
+            continue
+        stamp = entry.get("company_known")
+        if not isinstance(stamp, dict):
+            continue
+        domain = stamp.get("domain")
+        if isinstance(domain, str) and domain:
+            domains.add(domain)
+    return domains
+
+
+def _valid_company_known(value) -> bool:
+    """Mirrors the `status` check in `save()`/`_validated_entries()`: absent (`None`)
+    is valid; present must be a dict whose `domain` is a non-empty string and whose
+    `source` is one of `COMPANY_KNOWN_SOURCES` (D-71-01..03)."""
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    domain = value.get("domain")
+    if not isinstance(domain, str) or not domain:
+        return False
+    return value.get("source") in COMPANY_KNOWN_SOURCES
+
+
+def legacy_reason(path=None) -> str | None:
+    """One sentence naming the D-71-05 wipe when the document at `path` carries any
+    `_LEGACY_KEY`-shaped entries-map key, else `None`. Never raises -- tolerant of a
+    missing or unreadable file exactly like `load()`/`classify_read()`."""
+    target = Path(path) if path is not None else queue_path()
+    try:
+        document = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    entries = document.get(ENTRIES_FIELD) if isinstance(document, dict) else None
+    if not isinstance(entries, dict):
+        return None
+    if any(isinstance(key, str) and _LEGACY_KEY.match(key) for key in entries):
+        return (
+            "this queue was written under the pre-Phase-71 positional keys; delete "
+            "held_queue.json — the next run repopulates it under the stable identity "
+            "key"
+        )
+    return None
+
+
 def queue_path() -> Path:
     """Resolved fresh on every call — the same durable directory
     `run_manifest.manifest_path()` and `artifact_store.state_path()` both resolve into,
@@ -275,16 +471,31 @@ def _allowlisted_row(row) -> dict:
     return {key: row[key] for key in ROW_FIELD_ALLOWLIST if key in row}
 
 
-def build_entry(row, hold_code, reason, outcome, observed_signals=None) -> dict:
+def build_entry(row, hold_code, reason, outcome, observed_signals=None,
+                 company_known=None) -> dict:
     """One held row's queue entry, ready to hand to `save()` (merged into the map
-    `save()` expects: `{row_id: entry, ...}`)."""
-    return {
+    `save()` expects: `{key: entry, ...}`, keyed by `stable_key(row)`).
+
+    `company_known` is OPTIONAL (D-71-01..03): `{"domain", "source"}`, `source` one of
+    `COMPANY_KNOWN_SOURCES`. When supplied, `domain` is cleaned through
+    `enrichment._clean_domain` at build time so every reader gets one already-
+    normalised form. Absent by default -- `classify_facet()`'s own safe default
+    (`known_company_domains=frozenset()`) is what a caller sees until a caller wires
+    this stamp in.
+    """
+    entry = {
         "hold_code": hold_code,
         "reason": reason,
         "observed_signals": dict(observed_signals or {}),
         "resume_fingerprint": fingerprint(hold_code, outcome),
         "row": _allowlisted_row(row),
     }
+    if company_known is not None:
+        entry["company_known"] = {
+            "domain": enrichment._clean_domain(company_known.get("domain")),
+            "source": company_known.get("source"),
+        }
+    return entry
 
 
 def classify_facet(entry, known_company_domains=frozenset()):
@@ -451,7 +662,23 @@ def save(run_id, entries, path=None) -> None:
     written, so a save that raises leaves the previous queue untouched.
     """
     for row_id, entry in entries.items():
-        if _looks_forbidden(row_id):
+        # Phase 71 (D-71-04, T-71-01): a key that IS the entry's own derived identity
+        # is a projection of ROW_FIELD_ALLOWLIST-filtered fields, which
+        # `_allowlisted_row` already closed and which `260911-w6o` already exempted
+        # from value scanning for exactly this reason -- whereas a key that is not the
+        # entry's own identity is an arbitrary caller-supplied string and keeps the
+        # original refusal. `identity_keys` is computed from `entry["row"]` (the
+        # MERGED row `build_entry` stored) while the KEY was derived from the SOURCE
+        # row by `stable_key()` -- merged is a superset (see `identity_keys()`'s own
+        # docstring), so a source-derived key is always in the merged row's
+        # `identity_keys`. `stable_key()`'s `source-position::` fallback is NOT in
+        # `identity_keys` (only SATISFIED groups are returned), so a no-identity row's
+        # key still goes through the full marker scan -- correct, since it is built
+        # from a system-minted `row_id` and can never legitimately carry a person's
+        # name.
+        row_payload = entry.get("row") if isinstance(entry, dict) else None
+        exempt_keys = identity_keys(row_payload if isinstance(row_payload, dict) else {})
+        if row_id not in exempt_keys and _looks_forbidden(row_id):
             raise HeldQueueError(
                 f"refusing to persist a held-queue entry keyed {row_id!r} — its name "
                 "suggests an arming grant, a live-write permission, a secret, or an "
@@ -473,6 +700,15 @@ def save(run_id, entries, path=None) -> None:
             raise HeldQueueError(
                 f"row {row_id!r} carries a status whose verb is not one of "
                 "held_queue.ALL_VERBS. Nothing was written."
+            )
+        # Phase 71 (D-71-01..03): `company_known` is OPTIONAL; mirrors the `status`
+        # check immediately above.
+        company_known = entry.get("company_known") if isinstance(entry, dict) else None
+        if not _valid_company_known(company_known):
+            raise HeldQueueError(
+                f"row {row_id!r} carries a company_known stamp that is not a dict "
+                "with a non-empty domain and a source in "
+                "held_queue.COMPANY_KNOWN_SOURCES. Nothing was written."
             )
         # quick 260911-w6o: `row` scans KEY NAMES only (widened allowlist now
         # legitimately carries a value like an email or a person's own name that
@@ -510,6 +746,10 @@ def _validated_entries(document):
     for row_id, entry in entries.items():
         if not isinstance(row_id, str) or not isinstance(entry, dict):
             return None
+        # D-71-05: a pre-Phase-71 positional key degrades the WHOLE document, never
+        # just the one row -- see `legacy_reason()` for the honest sentence.
+        if _LEGACY_KEY.match(row_id):
+            return None
         if entry.get("hold_code") not in confidence.ALL_HOLD_CODES:
             return None
         if not isinstance(entry.get("resume_fingerprint"), str):
@@ -521,6 +761,9 @@ def _validated_entries(document):
         if status is not None and (
             not isinstance(status, dict) or status.get("verb") not in ALL_VERBS
         ):
+            return None
+        # D-71-01..03: mirrors the status check above.
+        if not _valid_company_known(entry.get("company_known")):
             return None
     return entries
 
