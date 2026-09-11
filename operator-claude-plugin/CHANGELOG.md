@@ -16,6 +16,44 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-09-11
+
+Quick batch `260911-ss3`: four findings from `.planning/UAT-autonomous-batch-2026-09-09.md`
+closed under this batch's own quick items (`260911-ss4`, `260911-ss5`, `260911-ss6`,
+`260911-ss7`).
+
+### Fixed
+- **`enrich-before-ingest` no longer re-matches a batch it already matched** (F1, quick
+  `260911-ss4`). The recorded UAT batch sent the same unarmed match six times instead of
+  once — an eight-execution amplification for what should have been two. `scripts/match_state.py`
+  persists step 2's `preingest.match_batch` classification per batch, keyed on the match's
+  own run id; every downstream fence (steps 3, 4, 5, 7) now loads the persisted
+  classification instead of re-matching.
+- **The end-of-run report names the run it actually counted, and the matched-id handoff
+  survives the process** (F9, quick `260911-ss5`). The row-accounting line used to claim
+  it matched "the original batch"; it now names this run's enrichment scope. A new
+  `scripts/match_handoff.py` persists the row-id-to-HubSpot-id handoff `enrich-before-ingest`
+  hands to `enrich-records`, one durable file per run, and the report renders it in a new
+  Matched-id handoff section.
+
+### Changed
+- **A contacts batch priced through Lusha now quotes 7 credits per contact, not 1** (F10,
+  major, quick `260911-ss7`). n8n execution 12372 (2026-09-11) billed 7 credits on one
+  real first-time reveal (email + phone + mobile + LinkedIn + location + seniority) — the
+  old 1-credit figure was measured on a reveal-free search that never matches the shipped
+  backend's request shape. `preview_enrichment`'s cost block and `write_grant`'s envelope
+  both price from the same `config/cost_rates.json` rate table, so both move together; the
+  `suggest-contacts` stage-2 line prices from the identical rate and moves with it. This is
+  a **ceiling**, not an invoice — the estimator already deliberately over-states rather
+  than under-states. The rate table's own "Rates measured" date is left at 2026-07-30 on
+  purpose; the new date rides only this one rate's own citation, so every other rate's
+  staleness disclosure keeps over-stating rather than under-stating its age.
+- **`enrich-before-ingest` closes its write grant when a batch finishes normally** (F11,
+  minor, quick `260911-ss6`). Step 7 already closed the grant on a pre-call ceiling breach
+  or a crash; nothing closed it on an ordinary finish or a run where nothing was sendable
+  at all. Step 10 now calls `write_grant.close_grant(grant, CLOSED_BATCH_COMPLETE)` after
+  the end-of-run report, guarded so a grant another path already closed is never re-closed.
+
 ## [0.45.0] - 2026-09-11
 
 Quick batch `260911-anu`: six client-side todos closed under operator rulings taken on
