@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "batch_id": "260911-ss3",
+  "created_at": "2026-09-11T10:43:19.465Z",
+  "options": {},
+  "base_revision": "f7d5fefad46a26aa0910518334107d0cf1660de3",
+  "items": [
+    {
+      "quick_id": "260911-ss4",
+      "client_id": null,
+      "description": "F1 (major, budget): enrich-before-ingest persists no step-2 match outcome, so every later SKILL fence that needs `classified` re-runs `preingest.match_batch` and re-POSTs the whole batch in propose mode (UAT 2026-09-11, run a254d1eda71246a2a964922cdf5c2bd2: six 4-row sends 12365/12366/12368/12370/12373/12374 + two 2-row sends 12375/12376). Persist the step-2 match outcome per run_id in the plugin durable state dir and make every later fence in operator-claude-plugin/skills/enrich-before-ingest/SKILL.md load it instead of re-matching; test against the recorded shape. See .planning/UAT-autonomous-batch-2026-09-09.md F1.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "operator-claude-plugin/scripts/match_state.py",
+        "operator-claude-plugin/scripts/run_report.py",
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md",
+        "operator-claude-plugin/tests/test_match_state.py",
+        "operator-claude-plugin/tests/test_run_report.py",
+        "operator-claude-plugin/tests/test_forbidden_marker_parity.py",
+        "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py",
+        "operator-claude-plugin/tests/test_skill_sequence_coverage.py",
+        "operator-claude-plugin/tests/test_linkedin_row_composition.py"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "058ee899",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-ss5",
+      "client_id": null,
+      "description": "F9 (major, AFTER-01): the end-of-run report line \"Matches the original batch's N row(s)\" is scoped by SKILL.md line 1139 to len(unmatched_rows) and reads as false against a 4-row input; rename the scope line so it names this run's enrichment scope, and persist the matched-id handoff (confirmed_ids to enrich-records) per run_id as a durable file the report names. See .planning/UAT-autonomous-batch-2026-09-09.md F9.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "operator-claude-plugin/scripts/match_handoff.py",
+        "operator-claude-plugin/scripts/run_report.py",
+        "operator-claude-plugin/tests/test_match_handoff.py",
+        "operator-claude-plugin/tests/test_run_report.py",
+        "operator-claude-plugin/tests/test_forbidden_marker_parity.py",
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "058ee899",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-ss6",
+      "client_id": null,
+      "description": "F11 (minor): operator-claude-plugin/skills/enrich-before-ingest/SKILL.md has no write_grant.close_grant step; add the batch-complete close (CLOSED_BATCH_COMPLETE) at end of run and CLOSED_SESSION_END guidance. See .planning/UAT-autonomous-batch-2026-09-09.md F11.",
+      "status": "complete",
+      "depends_on": [
+        "260911-ss4",
+        "260911-ss5"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md",
+        "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 2,
+      "commit": "058ee899",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-ss7",
+      "client_id": null,
+      "description": "F10 (major, cost model): grant pricing and preview_enrichment price Lusha at 1 credit per contact; execution 12372 Lusha Enrich billing block shows creditsCharged 7 for one rich reveal (balance 3860 to 3853 confirmed) and 0 for NOT_FOUND. Re-measure the Lusha rate the pricing table uses and record the 7-credit observation in docs/LUSHA-V3-CONTRACT.md. Bump operator-claude-plugin to 0.46.0 with one CHANGELOG section naming F1/F9/F10/F11. See .planning/UAT-autonomous-batch-2026-09-09.md F10.",
+      "status": "complete",
+      "depends_on": [
+        "260911-ss4",
+        "260911-ss5",
+        "260911-ss6"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/config/cost_rates.json",
+        "operator-claude-plugin/tests/test_cost_guard.py",
+        "operator-claude-plugin/config/operator.local.example.json",
+        "docs/LUSHA-V3-CONTRACT.md",
+        "scripts/enrichment_cost_ledger.py",
+        "operator-claude-plugin/.claude-plugin/plugin.json",
+        "operator-claude-plugin/CHANGELOG.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 3,
+      "commit": "058ee899",
+      "failure_reason": null
+    }
+  ]
+}
