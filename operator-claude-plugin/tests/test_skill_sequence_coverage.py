@@ -294,20 +294,41 @@ COVERED = {
             "run_report.record_audit",
         ),
     ): "test_write_grant.py::test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_stop",
+    # Quick task 260911-ss4 (F1): step 2's fence now saves the classification it just
+    # produced, under `match_run_id` -- the batch's own D-70-05 correlation handle --
+    # so a later fence in a FRESH process reads it back instead of re-sending the
+    # batch. The sink moves from `classify_matches` to `match_state.save`, so the
+    # covering nodeid repoints to the Task 1 composition test that actually drives a
+    # save (never `test_chunking.py`'s existing match-lane test, which has no
+    # business touching this new store).
     (
         "enrich-before-ingest",
         (
             "config_gate.load_config", "chunking.plan_chunks", "chunking.chunk_ceiling",
-            "preingest.match_batch", "preingest.classify_matches",
+            "preingest.match_batch", "preingest.classify_matches", "match_state.save",
         ),
-    ): "test_chunking.py::test_chunk_ceilings_real_match_key_return_flows_into_match_batch_and_classify_matches",
+    ): "test_match_state.py::test_the_recorded_batch_round_trips_through_save_load_apply_and_save_again",
+    # Quick task 260911-ss4 (F1): step 3's own fence, new -- load the classification
+    # step 2 saved, apply the operator's confirm/deny/pick decisions, save the result
+    # back under the same `match_run_id`. Same covering test as the entry above; the
+    # checker requires only that the test mention the sink (`match_state.save`), and
+    # that test drives it for real, twice, across this exact sequence.
     (
         "enrich-before-ingest",
         (
-            "config_gate.load_config", "preingest.build_rows_spec", "preingest.rows_from_table",
-            "chunking.plan_chunks", "chunking.chunk_ceiling", "preingest.match_batch",
-            "preingest.classify_matches", "extraction.validate",
+            "match_state.load", "preingest.apply_match_decisions", "match_state.save",
         ),
+    ): "test_match_state.py::test_the_recorded_batch_round_trips_through_save_load_apply_and_save_again",
+    # Quick task 260911-ss4 (F1): the linkedin fence used to rebuild the WHOLE match
+    # from `rows_from_table` through `classify_matches` purely to reach one unmatched
+    # row -- exactly the re-match this quick task removes. It now loads the
+    # classification step 2 already persisted. The sink is still `extraction.validate`,
+    # so the covering nodeid is unchanged; that test now drives the sequence by saving
+    # a classification with a linkedin-only unmatched row, loading it through
+    # `match_state.load`, and carrying that row into `extraction.validate`.
+    (
+        "enrich-before-ingest",
+        ("match_state.load", "extraction.validate"),
     ): "test_linkedin_row_composition.py::test_a_lusha_hit_for_the_unmatched_row_is_proposed_through_resolutions_and_revalidated",
     # F2 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): step 1's new
     # housekeeping fence -- prune stale durable state at the start of a round, never

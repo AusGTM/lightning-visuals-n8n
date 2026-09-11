@@ -37,6 +37,7 @@ longer exists, which is worse for a later reader than no note at all.
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -579,3 +580,74 @@ def test_the_skill_reports_an_incomplete_written_records_list_loudly():
     )
     assert "D-59-10" in body
     assert "an undecided row stops the whole batch" in body.lower()
+
+
+# ---------------------------------------------------------------------------------
+# Quick task 260911-ss4 (F1, uat-autonomous-batch-2026-09-09.md): step 2's match ran
+# once, but nothing survived it -- every later fence, a fresh process each time,
+# re-ran preingest.match_batch and re-sent the whole batch. The recorded run spent SIX
+# 4-row propose executions plus TWO 2-row sends where two would have done. These pins
+# hold the fix: exactly one match_batch call (step 2's), a match_state.load(match_run_id)
+# fence or prose mention in every later step that used to rebuild the match, and step 2
+# printing match_run_id so a fresh process has the id it needs.
+# ---------------------------------------------------------------------------------
+
+def _step_span(number):
+    for step_number, span in _numbered_step_spans(_text()):
+        if step_number == number:
+            return span
+    raise AssertionError(f"no top-level step {number!r} found in SKILL.md")
+
+
+def test_exactly_one_match_batch_call_and_it_sits_in_step_2():
+    text = _text()
+    assert text.count("preingest.match_batch(") == 1, (
+        "the recorded F1 leak was a SECOND match_batch call (step 5's linkedin fence) "
+        "re-sending the whole batch every time a later fence needed the classification"
+    )
+    assert "preingest.match_batch(" in _step_span("2")
+
+
+def test_step_2_binds_and_prints_match_run_id_then_saves():
+    span = _step_span("2")
+    assert "match_run_id = outcome.run_id" in span
+    assert "print(match_run_id)" in span, (
+        "a fresh process must have match_run_id to pass to match_state.load — never "
+        "re-derive it by re-sending the batch"
+    )
+    assert "match_state.save(match_run_id, classified)" in span
+
+
+def test_step_3_loads_applies_and_saves_back_under_the_same_match_run_id():
+    span = _step_span("3")
+    assert "match_state.load(match_run_id)" in span
+    assert "preingest.apply_match_decisions" in span
+    assert "match_state.save(match_run_id" in span
+
+
+def test_step_4_loads_the_persisted_classification_before_building_unmatched_rows():
+    span = _step_span("4")
+    assert "classified = match_state.load(match_run_id)" in span
+
+
+@pytest.mark.parametrize("step_number", ["5", "6", "9"])
+def test_steps_5_6_and_9_name_match_state_load_in_prose_as_the_rebuild_path(step_number):
+    span = _step_span(step_number)
+    assert "match_state.load(match_run_id)" in span, (
+        f"step {step_number} consumes unmatched_rows/the classification without a "
+        "stated source — exactly how the recorded leak refilled them by re-matching"
+    )
+
+
+def test_step_5s_linkedin_fence_loads_the_persisted_classification_not_a_second_match():
+    span = _step_span("5")
+    assert "classified = match_state.load(match_run_id)" in span
+    assert "preingest.classify_matches" not in span, (
+        "step 5's linkedin fence used to rebuild the WHOLE match from rows_from_table "
+        "through classify_matches purely to reach one unmatched row"
+    )
+
+
+def test_step_7_loads_the_persisted_classification_before_confirmed_ids():
+    span = _step_span("7")
+    assert "classified = match_state.load(match_run_id)" in span

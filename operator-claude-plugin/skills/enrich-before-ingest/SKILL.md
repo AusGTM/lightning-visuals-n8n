@@ -180,7 +180,7 @@ whatever seven columns happened to be in the source file.
    provider list:
 
    ```python
-   import chunking, config_gate, preingest
+   import chunking, config_gate, match_state, preingest
 
    cfg = config_gate.load_config()
    plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg, key="max_rows_per_match_request"))
@@ -188,7 +188,29 @@ whatever seven columns happened to be in the source file.
    classified = preingest.classify_matches(
        spec["rows"], outcome.responses, unchecked_row_ids=outcome.unchecked_row_ids,
    )
+   match_run_id = outcome.run_id  # the match's own D-70-05 correlation handle, not a new id
+   match_state.save(match_run_id, classified)
+   print(match_run_id)
    ```
+
+   **This match is sent ONCE for the whole batch.** Its outcome is written to
+   `match_state-<match_run_id>.json` in the plugin's durable state directory; every
+   later step in this flow reads it from there instead of re-sending the batch — a
+   later fence with no id is the whole F1 leak (2026-09-11): the recorded run
+   (`a254d1eda71246a2a964922cdf5c2bd2`) spent SIX propose executions on ONE batch
+   because nothing survived between fences.
+
+   The four-group report below LEADS with `match_run_id` on its own line, and that id
+   is carried verbatim into every later fence in this flow. **Two ids now coexist and
+   must not be confused:** `match_run_id` is the MATCH's id and is what every
+   `match_state` call takes; the bare `run_id` minted at step 5 is the ENRICHMENT
+   dispatch's id and is untouched by this change. They are deliberately different —
+   `watch.recover_dispatch` correlates settled executions by `run_id`, so sharing one
+   id would let step 5's recovery read the propose execution's runData.
+
+   When the file is not there: `match_state.classify_read` answers `ABSENT` or
+   `ANOMALOUS`, and the honest recovery is to re-run step 2 ONCE, saying so — never a
+   silent re-match, and never repeatedly.
 
    **The HTTP response carries NO row data at all — it is an ack. Read row outcomes
    from the execution, never from the wire.** (Rewritten 2026-09-09, Phase 70 D-70-05 /
@@ -273,9 +295,17 @@ whatever seven columns happened to be in the source file.
    Turn the answered lines into decisions and apply them in one call:
 
    ```python
+   import match_state, preingest
+
+   classified = match_state.load(match_run_id)
    resolved = {"row-4": "101452", "row-9": preingest.DECLINE_MATCH}
    classified = preingest.apply_match_decisions(classified, resolved)
+   match_state.save(match_run_id, classified)
    ```
+
+   The confirmed match is written back here, under the same `match_run_id` step 2
+   saved under — which is what makes step 7's `confirmed_ids` include a row confirmed
+   in this step, not only the rows that matched by email.
 
    A confirmed row moves into the auto-matched group, carrying the chosen candidate's
    object id. A declined row moves into the unmatched group and is enriched like any
@@ -292,6 +322,7 @@ whatever seven columns happened to be in the source file.
    config. Build the spec from the rows still sitting in `unmatched` after step 3:
 
    ```python
+   classified = match_state.load(match_run_id)
    unmatched_rows = [entry["row"] for entry in classified["unmatched"]]
    spec = {"rows": unmatched_rows, "object_type": "contacts"}
    ```
@@ -478,6 +509,10 @@ whatever seven columns happened to be in the source file.
    carried. `watch.recover_async_dispatch` is the one place that reads it; nothing here
    re-implements that walk.
 
+   `unmatched_rows` is step 4's value — in a fresh process rebuild it from
+   `match_state.load(match_run_id)` and step 4's comprehension, never from
+   `preingest.match_batch`.
+
    `send_ids`/`send_domains`/`allow_create`/`object_type`/`providers_override` are whatever
    the earlier steps resolved for this send — bound to real names here, never left as
    angle-bracket placeholders, because this block is executable Python and an AST test
@@ -651,15 +686,9 @@ whatever seven columns happened to be in the source file.
    same rewrite-and-revalidate loop the extraction lane already runs:
 
    ```python
-   import chunking, config_gate, extraction, preingest
+   import extraction, match_state
 
-   cfg = config_gate.load_config()
-   spec = preingest.build_rows_spec(preingest.rows_from_table(path)["rows"])
-   plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg, key="max_rows_per_match_request"))
-   outcome = preingest.match_batch(plan, cfg)
-   classified = preingest.classify_matches(
-       spec["rows"], outcome.responses, unchecked_row_ids=outcome.unchecked_row_ids,
-   )
+   classified = match_state.load(match_run_id)
    # A linkedin-only row that lands in `unmatched` goes through the waterfall like any
    # other unmatched row (steps 4-5 above). Once Lusha returns a value this row did not
    # already carry, propose it; a confirmed value becomes a `resolutions` entry and the
@@ -697,6 +726,10 @@ whatever seven columns happened to be in the source file.
    nothing here is guessed, nothing is written that was held, and nothing waits for a
    held row mid-run. For each row's own response item (or its absence, for a row whose
    chunk failed outright — see above), turn it into a typed outcome and a verdict:
+
+   `unmatched_rows` is step 4's value — in a fresh process rebuild it from
+   `match_state.load(match_run_id)` and step 4's comprehension, never from
+   `preingest.match_batch`.
 
    ```python
    import confidence, held_queue, preingest, run_manifest, run_state
@@ -773,6 +806,10 @@ whatever seven columns happened to be in the source file.
 
 6. **The enriched preview — the last look before anything reaches HubSpot.** Render
    it:
+
+   `unmatched_rows` is step 4's value — in a fresh process rebuild it from
+   `match_state.load(match_run_id)` and step 4's comprehension, never from
+   `preingest.match_batch`.
 
    ```python
    # `responses` is the SAME recovered list step 5 assessed — the preview's per-row
@@ -1011,6 +1048,7 @@ whatever seven columns happened to be in the source file.
    to `enrich-records`:
 
    ```python
+   classified = match_state.load(match_run_id)
    confirmed_ids = [entry["hs_object_id"] for entry in classified["auto_matched"]]
    ```
 
@@ -1106,6 +1144,10 @@ whatever seven columns happened to be in the source file.
    the SAME `run_id`. One call joins every durable store this run touched into one block:
    per-record outcome, association outcome, held rows named individually with reasons,
    spend against the ceiling, and the disarm verdict.
+
+   `unmatched_rows` is step 4's value — in a fresh process rebuild it from
+   `match_state.load(match_run_id)` and step 4's comprehension, never from
+   `preingest.match_batch`.
 
    ```python
    import run_report
