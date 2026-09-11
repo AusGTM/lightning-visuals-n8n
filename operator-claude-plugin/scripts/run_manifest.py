@@ -401,6 +401,17 @@ def rows_to_resume(rows, manifest, *, held_entries=None, current_outcomes=None):
     (`rows_to_resume(rows, manifest)`) is byte-for-byte unchanged; only a row actually
     carrying `confidence_held` ever reads either of them.
 
+    Since 260911-w6p (F2-2), a `confidence_held` row's VERB is checked before any of
+    the above: `held_queue.is_settled(entry)` (verb `create`/`skip`/`drop`) reports
+    the row DONE in `skipped`, regardless of fingerprint — a `create`d person now
+    exists in HubSpot, so a free match pass finds them at a high tier, the
+    fingerprint differs, and the fingerprint rule alone would re-resume the very row
+    the operator just landed. `held_queue.entry_verb(entry) == held_queue.VERB_RETRY`
+    re-includes the row regardless of fingerprint too — an explicit ask to look again
+    outranks a signal that has not moved. Neither short-circuit consults `current`;
+    an entry with no `status` at all falls through to the fingerprint comparison
+    exactly as it always has.
+
     A row absent from the manifest (or when the manifest is empty/absent entirely) is
     included — a resume with no manifest is just a run.
     """
@@ -426,6 +437,16 @@ def rows_to_resume(rows, manifest, *, held_entries=None, current_outcomes=None):
 
         if verdict == CONFIDENCE_HELD:
             entry = held_entries.get(row_id)
+
+            # 260911-w6p (F2-2): a settled/retry verb short-circuits before the
+            # fingerprint comparison, and before `current` is even read.
+            if held_queue.is_settled(entry):
+                skipped.append({"row_id": row_id, "verdict": verdict})
+                continue
+            if held_queue.entry_verb(entry) == held_queue.VERB_RETRY:
+                to_resume.append(row)
+                continue
+
             current = current_outcomes.get(row_id)
             if entry is None or current is None:
                 to_resume.append(row)
