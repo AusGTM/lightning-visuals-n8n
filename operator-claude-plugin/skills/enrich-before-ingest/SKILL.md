@@ -729,7 +729,12 @@ whatever seven columns happened to be in the source file.
 
    `unmatched_rows` is step 4's value — in a fresh process rebuild it from
    `match_state.load(match_run_id)` and step 4's comprehension, never from
-   `preingest.match_batch`.
+   `preingest.match_batch`. `merge_report` is the dispatch step's own value — the
+   same `MergeResult` step 6's preview and step 7's `partition_for_ingest` read — in a
+   fresh process it is rebuilt through `preingest.merge_enriched` over
+   `unmatched_rows` and `responses`, never by dispatching again. If the re-request
+   pass ran for this run, its returned `MergeResult` is the one to use here — it is
+   the later and richer merge.
 
    ```python
    import confidence, held_queue, preingest, run_manifest, run_state
@@ -738,6 +743,9 @@ whatever seven columns happened to be in the source file.
    # flat (one item per row; see that step's own note on why no second flatten belongs
    # here).
    responses_by_id = {item["row_id"]: item for item in responses}
+   # `merge_report.rows` is the dispatch step's own MergeResult, keyed for lookup below
+   # -- a held row's stored value is what the waterfall found, not the source line.
+   merged_by_id = {row["row_id"]: row for row in merge_report.rows}
    held_entries = held_queue.load()
    verdicts = run_manifest.load()
 
@@ -750,7 +758,11 @@ whatever seven columns happened to be in the source file.
        if verdict.verdict == confidence.CONFIDENT:
            continue  # no per-row gate — proceeds to ingest like any other sendable row
 
-       entry = held_queue.build_entry(row, verdict.hold_code, verdict.reason, parsed)
+       # Merged row when this id has one (the normal case); the loop's own source
+       # row only if `merge_report` somehow has no entry for it, so the loop stays
+       # total.
+       entry = held_queue.build_entry(
+           merged_by_id.get(row_id, row), verdict.hold_code, verdict.reason, parsed)
        held_entries[row_id] = entry
        held_queue.save(run_id, held_entries)
        verdicts[row_id] = run_manifest.CONFIDENCE_HELD
@@ -762,6 +774,15 @@ whatever seven columns happened to be in the source file.
 
    progress = run_state.read_progress(run_id)  # done/held/failed, now that verdicts exist
    ```
+
+   **The held entry stores what the round LEARNED about a row, not just the
+   operator's spreadsheet line (F2-1).** A held row's whole value to the operator is
+   what enrichment found for it — the recorded run `a254d1eda71246a2a964922cdf5c2bd2`
+   threw a 7-credit Lusha reveal away by storing the blank source row instead of the
+   merged one. Storing the merged row here does not make it sendable: `run_manifest.
+   rows_to_resume` compares a `confidence_held` row by `resume_fingerprint`, and reads
+   the *caller's* rows on resume, never `entry["row"]` — a `no_match` hold still needs
+   the operator's own approval to become a create (D-70-11).
 
    **The queue entry is written before the manifest verdict, in that order, every
    time** — a crash between the two leaves an unmentioned row that simply gets

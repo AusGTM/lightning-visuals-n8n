@@ -41,6 +41,7 @@ import pytest
 import yaml
 
 import write_grant
+from test_skill_sequence_coverage import extract_python_blocks, parse_calls, scripts_modules
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILL_PATH = PLUGIN_ROOT / "skills" / "enrich-before-ingest" / "SKILL.md"
@@ -703,3 +704,67 @@ def test_step_5s_linkedin_fence_loads_the_persisted_classification_not_a_second_
 def test_step_7_loads_the_persisted_classification_before_confirmed_ids():
     span = _step_span("7")
     assert "classified = match_state.load(match_run_id)" in span
+
+
+# =====================================================================================
+# quick 260911-w6o (F2-1): the persist fence hands build_entry the MERGED row.
+# =====================================================================================
+
+# The fence's own build_entry call, as edited -- first argument is the merged-row
+# lookup, falling back to the loop's own `row` only when this id has no merged entry.
+PERSIST_FENCE_BUILD_ENTRY_CALL = (
+    "entry = held_queue.build_entry(\n"
+    "           merged_by_id.get(row_id, row), verdict.hold_code, verdict.reason, parsed)"
+)
+
+# The OLD call shape (bare `row`, the actual F2-1 defect) -- must be gone.
+OLD_PERSIST_FENCE_BUILD_ENTRY_CALL = (
+    "held_queue.build_entry(row, verdict.hold_code, verdict.reason, parsed)"
+)
+
+
+def test_the_persist_fence_hands_build_entry_the_merged_row_not_the_source_row():
+    """F2-1: a held row's entry used to store the SOURCE spreadsheet line, discarding
+    everything the waterfall found for it -- recorded run
+    a254d1eda71246a2a964922cdf5c2bd2 threw a 7-credit Lusha reveal away this way
+    (executions 12365-12376). The persist fence's build_entry call must pass the
+    merged row, and must name `merge_report` as where it came from."""
+    span = _step_span("5")
+    assert PERSIST_FENCE_BUILD_ENTRY_CALL in span
+    assert OLD_PERSIST_FENCE_BUILD_ENTRY_CALL not in span
+    assert "merge_report" in span, (
+        "the fence must name merge_report as the source of the merged rows it reads"
+    )
+
+
+def test_the_persist_fence_adds_no_merge_call_the_registered_sequence_is_untouched():
+    """The merged rows arrive as a variable from the dispatch step's own
+    `MergeResult` -- never a second `preingest.merge_enriched(...)` call inside this
+    fence, which would silently drift `test_skill_sequence_coverage.py`'s registered
+    call tuple for this exact block. Scoped to the FENCED python block only (via the
+    same `extract_python_blocks`/`parse_calls` extraction that module itself uses),
+    never a whole-file/whole-span grep -- the prose immediately above the fence
+    legitimately names the `preingest.merge_enriched` rebuild path in a sentence, and
+    a whole-span scan would refuse that very sentence."""
+    modules = scripts_modules()
+    persist_fence_source = None
+    for _block_index, _line_number, source in extract_python_blocks(_text()):
+        if "held_queue.build_entry(" in source and "run_state.read_progress(" in source:
+            persist_fence_source = source
+            break
+    assert persist_fence_source is not None, "could not locate the persist fence's own python block"
+
+    calls = parse_calls(persist_fence_source, modules)
+    assert "preingest.merge_enriched" not in calls, (
+        "the persist fence must consume merge_report as a variable, never re-derive "
+        "it with a second merge_enriched call"
+    )
+    # The exact registered sequence (test_skill_sequence_coverage.py's COVERED entry
+    # for this block) must be byte-for-byte unchanged -- a dict comprehension over
+    # merge_report.rows and a .get() on a local dict add no scripts-module call.
+    assert calls == (
+        "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
+        "confidence.assess", "held_queue.build_entry", "held_queue.save",
+        "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
+        "run_state.read_progress",
+    )
