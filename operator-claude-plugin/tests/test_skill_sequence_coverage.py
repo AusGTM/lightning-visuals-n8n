@@ -550,6 +550,20 @@ COVERED = {
             "chunking.chunk_ceiling", "preingest.match_batch", "preingest.classify_matches",
         ),
     ): "test_review_triage_facets.py::test_one_held_new_person_end_to_end_read_render_create_confirm_mark",
+    # Quick 260911-w6r (F2-4): enrich-before-ingest/SKILL.md step 6's own read/bucket
+    # fence -- the identical shape review-triage's step 2b already registers above,
+    # but under THIS skill's own key (the registry is skill-scoped, not shared) and
+    # driven by a NEW test in a new file (test_held_queue_facets.py's own tests
+    # classify dict literals directly, never a loaded queue -- they do not drive this
+    # join; test_review_triage_facets.py's covering test is a different skill's fence).
+    (
+        "enrich-before-ingest",
+        (
+            "held_queue.classify_read", "held_queue.load", "held_queue.open_entries",
+            "held_queue.entry_verb", "held_queue.classify_facet",
+        ),
+    ): "test_held_facet_render_composition.py::"
+       "test_step_6_fence_loads_the_queue_and_facets_what_it_loaded_not_a_dict_literal",
 }
 
 NOT_A_PIPELINE = {
