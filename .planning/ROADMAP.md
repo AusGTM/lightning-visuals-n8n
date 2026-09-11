@@ -376,7 +376,7 @@ row live. Nothing armed during the phase; SAFE-01..05 unchanged.
 criterion: Jimmy Busteed reads `new_person` on both surfaces and lands with one `create all 1`
 reply. Decisions D-71-01..06 (`71-CONTEXT.md`) are what the plans are verified against.
 **Depends on:** Phase 70; quick batch 260911-w6n (plugin 0.47.0)
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -389,4 +389,4 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 71-03-PLAN.md — todo triage, plugin 0.48.0 release, and the single end-of-phase D-71-06 live gate (wave 3)
+- [x] 71-03-PLAN.md — todo triage, plugin 0.48.0 release, and the single end-of-phase D-71-06 live gate (wave 3)

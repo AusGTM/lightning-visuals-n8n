@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 71
 current_phase_name: A held new person lands in HubSpot with one reply
-status: executing
-stopped_at: Completed 71-02-PLAN.md
-last_updated: "2026-09-11T23:46:43.261Z"
+status: verifying
+stopped_at: Completed 71-03-PLAN.md Tasks 1-2; Task 3 halted at blocking-human gate D-71-06, awaiting operator
+last_updated: "2026-09-11T23:58:12.433Z"
 last_activity: 2026-09-12
 last_activity_desc: Phase 71 execution started
-state_head: 05f1a42a6a5925dfe2f31a31fb5b2eab0c47a750
+state_head: 8feb553913a7882001e7be97e79baf8feecb03e3
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 37
-  completed_plans: 36
+  completed_plans: 37
   percent: 25
 ---
 
@@ -360,7 +360,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 71 (A held new person lands in HubSpot with one reply) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-12 — Phase 71 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-11T23:46:43.118Z
-**Stopped at:** Completed 71-02-PLAN.md
+**Last session:** 2026-09-11T23:58:12.290Z
+**Stopped at:** Completed 71-03-PLAN.md Tasks 1-2; Task 3 halted at blocking-human gate D-71-06, awaiting operator
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -661,6 +661,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 70 P18 | 70min | 3 tasks | 6 files |
 | Phase 71 P01 | 55min | 3 tasks | 10 files |
 | Phase 71 P02 | 55min | 3 tasks | 14 files |
+| Phase 71 P03 | 35min | 2 tasks | 10 files |
 
 ## Decisions
 
@@ -824,6 +825,8 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 71]: Task 1 auto-selected 'prefixed' serialised stable-key shape (email::/name::/linkedin::/source-position::), mirroring suggestion_declines.py's KEY_SEPARATOR/NAME_SEPARATOR
 - [Phase 71]: suggest_contacts imported lazily inside held_queue.identity_keys() to avoid a real import cycle through preingest/preview discovered this session
 - [Phase 71]: Wired the persist-time company_known stamp (plan 01) into both operator surfaces: enrich-before-ingest step 6 and review-triage step 2b now derive known_company_domains from held_queue.stamped_domains(held_entries) instead of a hardcoded empty set. run_manifest.rows_to_resume now looks up a held entry by held_queue.stable_key(row) rather than a per-run positional row_id, so a held row survives a row_id change across runs; enrich-before-ingest step 8 wires held_entries=held_queue.load() into watch.resume_or_disclose, making the settled-verb short-circuit live in production for the first time. review-triage gained step 4d recording skip/drop immediately via held_queue.record_verb, closing RESEARCH Assumption A3.
+- [Phase 71]: 71-03: The three folded todos are closed for exactly what Phase 71 built (D-71-01..05); the forbidden-marker fold is closed for held_queue.py and suggestion_declines.py only, with written_records.py's value scan recorded as an accepted won't-fix (T-59-02 pins it load-bearing) rather than a successor todo.
+- [Phase 71]: 71-03: Task 3 (D-71-06's live gate) is not performed by this executor -- gate=blocking-human is never auto-approved in any mode. SUMMARY written with status: halted; Tasks 1-2 complete and committed, Task 3 returned as a checkpoint for the operator.
 
 ### Roadmap Evolution
 
