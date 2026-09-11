@@ -59,3 +59,17 @@ to state plainly that an approved held row still requires a separate, manual re-
 step outside this flow. Either way, whatever is built needs its own test pinning the approved
 row actually reaching the sendable set (or the SKILL's corrected claim actually matching the
 code), the same standard this todo's originating defect was closed to.
+
+## Ruling (operator, 2026-09-11) — RESOLVED BY quick batch 260911-w2i
+
+"F2: no_match holds are faceted at read time (new person / needs company / nothing found);
+`review-triage` reads both queues in one table; `create` lands through the ingest lane under
+a review-lane grant; the batch renders the ready answer and never asks." Criterion stated:
+most frictionless operator experience with relative safety, review over approve. Rejected:
+export-to-`contact-upload` (three prompts to land one person) and an in-flow approve
+question (UAT F4). Two facts that shaped it: `review-triage` today reads only HubSpot
+`lv_enrichment_needs_review` and never opens `held_queue.json`; and `no_match` conflates a
+provider `NOT_FOUND` (Katie Poggioli) with a rich reveal of a new person (Jimmy Busteed).
+Items: 260911-w2j (enriched row into the held entry), 260911-w2k (facet classifier + verbs),
+260911-w2l (review-triage reads both queues, one table, create through the ingest lane),
+260911-w2m (batch renders the ready answer, never asks; 0.47.0).
