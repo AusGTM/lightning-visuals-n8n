@@ -210,6 +210,27 @@ rows 2 and 3 are never sent — the ingest send was 0 rows by construction, and 
 nothing at all. The D-70-17 mixed shape needs `contact-upload`. Record:
 `.planning/UAT-autonomous-batch-2026-09-09.md`.
 
+**Second round, `contact-upload`, built 2026-09-11 after plugin 0.46.0 installed** (the lane
+that actually creates — see the correction above). Files:
+`~/Desktop/uat-2026-09-11/uat-contact-upload-mixed-2026-09-11.csv` (4 rows, chunk cap 2 → 2
+chunks) and `~/Desktop/uat-2026-09-11/uat-contact-upload-single-lane-2026-09-11.csv` (2 rows).
+All six pass `has_identity`, `_first_forbidden`, and `hold_emailless` (6 sendable, 0 held).
+
+| Row | Person | Company (id, domain) | Email | Lane / action | Pre-registered outcome |
+| --- | --- | --- | --- | --- | --- |
+| 1 | John Miller, CEO — contact 3601 | Sunshine Coast Turf Club (`9680907342`, `sctc.com.au`) | `john@sctc.com.au` | domain / update | `update`, `association: associated` (idempotent) |
+| 2 | Jimmy Busteed, GM Hospitality & Sales — ABSENT | Australian Turf Club (`9605284724`, `australianturfclub.com.au`) | `jbusteed@australianturfclub.com.au` (revealed by run a254d1e…) | domain / create | `create`, new id, associated to 9605284724 — the ONE hand-delete |
+| 3 | Katie Poggioli, Secretary — ABSENT | Atherton Turf Club — ABSENT | `secretary@athertonturfclub.com.au` | domain miss + name miss / create | downgraded to `review` at `Decide Action` (§13.0.1), `lv_enrichment_needs_review=true`, NOT in HubSpot |
+| 4 | Katie Devine — contact 1801, freemail | Australian Turf Club (name match, unique) | `katiedevine@optusnet.com.au` (AU ISP → resolves no domain) | name / update | `update`, `company_match: name`. **Pre-registered:** rows 2 and 4 share ATC's association lane — the open Associate Carry Merge condition (2+ permitted rows on one lane + Associate returns nothing) may show row 4 `not_confirmed` while HubSpot shows it associated; log that as the KNOWN condition, not a new finding |
+
+Single-lane (both domain / update, two companies; answers "did the execution settle"):
+Nathan Exelby 37400807974 (Ipswich Turf Club `9604726291`), Chris Chaffe 133443465640 (Darwin
+Turf Club `9605267534`, `cchaffe@darwinturfclub.org.au`). **Grant Dewsbury 7101 deliberately
+dropped**: `held_queue._first_forbidden` matches the `grant` marker on his name (pending todo
+`2026-09-11-forbidden-name-marker-whole-token-still-refuses-grant-token`) — a held row of his
+would be refused and dropped silently. Craig Sheppard 3501 dropped too: the ingest lane's
+identity is email-only, a name-only row can never reach an update there.
+
 Save as `uat-batch-2026-09-09.csv` somewhere outside the repo. Name the people so you can
 find and hand-delete them in HubSpot afterwards — **HubSpot has no rollback.**
 
