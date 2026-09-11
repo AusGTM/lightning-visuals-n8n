@@ -1,14 +1,16 @@
-"""Behavioural drift guard for the forbidden-name refusal, across all eight stores
+"""Behavioural drift guard for the forbidden-name refusal, across all nine stores
 (quick 260911-any, closing todo 2026-09-08-forbidden-name-markers-refuse-secretary-
-and-armidale; widened to eight by quick task 260911-ss4's `match_state.py`).
+and-armidale; widened to eight by quick task 260911-ss4's `match_state.py`, and to
+nine by quick task 260911-ss5's `match_handoff.py`).
 
 Tuple equality alone (`test_run_report.py`'s `is not` checks) cannot catch a copy whose
 *matcher* was left on the old raw-substring rule -- only running one corpus through
 every module's own `_looks_forbidden`(-shaped) function, by name, can. Each of the
-eight modules reimplements its own matcher on purpose (D-69-01); this file is what
-keeps the eight reimplementations behaviourally identical.
+nine modules reimplements its own matcher on purpose (D-69-01); this file is what
+keeps the nine reimplementations behaviourally identical.
 """
 import held_queue
+import match_handoff
 import match_state
 import remainder_queue
 import run_manifest
@@ -17,8 +19,8 @@ import run_state
 import suggestion_declines
 import written_records
 
-# Seven modules expose a plain `_looks_forbidden(value) -> bool`. `run_report` is the
-# eighth and is handled separately below -- it splits into `_looks_forbidden_key`
+# Eight modules expose a plain `_looks_forbidden(value) -> bool`. `run_report` is the
+# ninth and is handled separately below -- it splits into `_looks_forbidden_key`
 # (all ten markers) and `_looks_forbidden_value` (eight, `arm`/`webhook` exempt).
 _KEY_MATCHER_MODULES = (
     held_queue,
@@ -28,6 +30,7 @@ _KEY_MATCHER_MODULES = (
     written_records,
     remainder_queue,
     match_state,
+    match_handoff,
 )
 
 # Real names/values a whole-token matcher must let through unrefused.
