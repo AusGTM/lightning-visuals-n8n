@@ -165,6 +165,43 @@ create path — 2 identity lanes x 2 actions, which is the D-70-17 shape.
 position.** No duplicate, no missing row. That is the single assertion this batch exists to
 make live, and it is the same one the two offline acceptance tests make.
 
+**Built 2026-09-11 (assistant, read-only HubSpot probes + published web pages; nothing armed,
+nothing written).** Files: `~/Desktop/uat-2026-09-11/uat-batch-2026-09-11.csv` (mixed, 4 rows)
+and `~/Desktop/uat-2026-09-11/uat-single-lane-2026-09-11.csv` (2 rows). All six rows pass
+`extraction.has_identity`; every `jobtitle` passes `held_queue._first_forbidden` and
+`run_manifest._looks_forbidden`.
+
+| Row | Person / title | Company (id, domain) | Email | Lane / action | Pre-registered outcome |
+| --- | --- | --- | --- | --- | --- |
+| 1 | John Miller, CEO — contact **3601** | Sunshine Coast Turf Club (`9680907342`, `sctc.com.au`) | `john@sctc.com.au` | domain / update | `written`, id 3601, associated (already associated; PUT idempotent) |
+| 2 | Katie Poggioli, Secretary (title inferred from the mailbox; page gives none) | Atherton Turf Club — **absent** by name, token and domain | `secretary@athertonturfclub.com.au` (Racing Queensland club page, Cloudflare-decoded) | domain miss + name miss / create | `review`, `lv_enrichment_needs_review=true`, NOT in HubSpot afterwards — that absence is the evidence |
+| 3 | Jimmy Busteed, General Manager of Hospitality & Sales (ATC "our team" page) — **absent** | Australian Turf Club (`9605284724`, `australianturfclub.com.au`) | blank | name / create | `hold_emailless` holds it client-side UNLESS the reveal lands an `@australianturfclub.com.au` address, then `written` + associated. Freemail → `email_domain_freemail`; other domain → `email_domain_mismatch`. Only row that can CREATE — the one hand-delete |
+| 4 | Craig Sheppard, Racing Content Producer \| Editor \| Social Media — contact **3501**, no email on record | Ipswich Turf Club (`9604726291`, `ipswichturfclub.com.au`) | blank | name / update (step 3 proposes 3501, `auto: false`, you approve) | as row 3: held unless the reveal lands `@ipswichturfclub.com.au`; a held row 4 means the name-lane UPDATE path was **not reached** this run — record as "path not reached", not a failure |
+
+Reading of this section's row-1 contradiction ("contact created" vs "rows 1+4 are updates"):
+row 1 is an UPDATE, as Gate 12's 7101 was. Creates are rows 2 (refused to review) and 3.
+Both blank-email rows are held by `extraction.hold_emailless` until the enrich pass
+reveals an email — that is the shipped design ("the deployed ingest lane resolves a contact
+by email only"), verified offline on these exact rows.
+
+Single-lane batch (both domain-lane updates, TWO companies — the doc's plural, and it keeps
+the batch clear of the open Associate Carry Merge condition, which needs 2+ permitted rows on
+ONE association lane): Grant Dewsbury, contact **7101**, Darwin Turf Club (`9605267534`);
+Nathan Exelby, contact **37400807974**, Ipswich Turf Club (`9604726291`). The one thing this
+batch answers: did the execution SETTLE.
+
+Dropped candidates, each with the probe that dropped it: David Hines 22901 / RWWA — an
+unattributed `sourceType: API` write at 2026-09-11T00:51Z on both records (operator did not
+claim it; offer him back if it was theirs); Tony Fenlon 6851 "CEO, Rockhampton Jockey Club" —
+the club's own site (2025-11-07) names David Aldred CEO, record stale; Jack Penfold, David
+Aldred, Chris Chaffe, Nathan Exelby, John Miller — all already present (18701, 20801,
+133443465640, 37400807974, 3601), which is why the last two became UPDATE rows instead.
+Fallback for row 2 if ever needed: Kent Alley, Gordonvale Turf Club,
+`info@gordonvaleturfclub.com.au` — company and contact both absent as of 2026-09-11.
+
+Side observation, not a test: ATC (`9605284724`) reports `num_associated_contacts` 4 while 10
+contacts carry `@australianturfclub.com.au` addresses — six unassociated ATC people.
+
 Save as `uat-batch-2026-09-09.csv` somewhere outside the repo. Name the people so you can
 find and hand-delete them in HubSpot afterwards — **HubSpot has no rollback.**
 
