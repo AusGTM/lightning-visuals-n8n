@@ -155,13 +155,14 @@ def test_an_n8n_held_row_lands_in_the_local_held_queue_with_its_reason(monkeypat
 
     entry = preingest.hold_ingest_no_company(row, item)
     held_entries = held_queue.load()
-    held_entries["row-9"] = entry
+    key = held_queue.stable_key(row)
+    held_entries[key] = entry
     held_queue.save("run-abc", held_entries)
 
     reloaded = held_queue.load()
-    assert "row-9" in reloaded
-    assert reloaded["row-9"]["reason"] == item["reason"]
-    assert reloaded["row-9"]["row"]["email"] == "sam@nowhere.example"
+    assert key in reloaded
+    assert reloaded[key]["reason"] == item["reason"]
+    assert reloaded[key]["row"]["email"] == "sam@nowhere.example"
 
 
 # =====================================================================================

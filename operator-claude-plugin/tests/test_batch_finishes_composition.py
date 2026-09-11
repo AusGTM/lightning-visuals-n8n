@@ -78,7 +78,9 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
             continue
 
         entry = held_queue.build_entry(row, verdict.hold_code, verdict.reason, parsed)
-        held_entries[row_id] = entry
+        # Phase 71 (D-71-04): keyed on the SOURCE row's stable identity, mirroring the
+        # SKILL.md step-5 fence this test drives.
+        held_entries[held_queue.stable_key(row)] = entry
         held_queue.save("run-1", held_entries)
         verdicts[row_id] = run_manifest.CONFIDENCE_HELD
         # Shared path (unchanged) — step 8's cross-turn resume reads this file.
@@ -109,17 +111,21 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
     assert processed_row_ids == ["row-1", "row-2", "row-3"]
 
     # row-1 (failed chunk -> unparseable) and row-2 (ambiguous) are both in the durable
-    # queue, each with a reason.
+    # queue, each with a reason -- keyed on their stable identity (D-71-04), not their
+    # positional row_id.
+    row_1_key = held_queue.stable_key(rows[0])
+    row_2_key = held_queue.stable_key(rows[1])
+    row_3_key = held_queue.stable_key(rows[2])
     saved_queue = held_queue.load()
-    assert set(saved_queue) == {"row-1", "row-2"}
-    assert saved_queue["row-1"]["hold_code"] == confidence.HOLD_UNPARSEABLE
-    assert saved_queue["row-1"]["reason"]
-    assert saved_queue["row-2"]["hold_code"] == confidence.HOLD_AMBIGUOUS_CANDIDATES
-    assert saved_queue["row-2"]["reason"]
+    assert set(saved_queue) == {row_1_key, row_2_key}
+    assert saved_queue[row_1_key]["hold_code"] == confidence.HOLD_UNPARSEABLE
+    assert saved_queue[row_1_key]["reason"]
+    assert saved_queue[row_2_key]["hold_code"] == confidence.HOLD_AMBIGUOUS_CANDIDATES
+    assert saved_queue[row_2_key]["reason"]
 
     # row-3 (confident) never entered the held queue or the confidence_held manifest —
     # nothing is guessed, nothing waits for it mid-run.
-    assert "row-3" not in saved_queue
+    assert row_3_key not in saved_queue
     saved_verdicts = run_manifest.load()
     assert saved_verdicts.get("row-1") == run_manifest.CONFIDENCE_HELD
     assert saved_verdicts.get("row-2") == run_manifest.CONFIDENCE_HELD

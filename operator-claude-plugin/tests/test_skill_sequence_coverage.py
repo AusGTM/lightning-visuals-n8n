@@ -347,7 +347,8 @@ COVERED = {
         "enrich-before-ingest",
         (
             "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
-            "confidence.assess", "held_queue.build_entry", "held_queue.save",
+            "confidence.assess", "held_queue.build_entry", "held_queue.stable_key",
+            "held_queue.save",
             "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
             "run_state.read_progress",
         ),

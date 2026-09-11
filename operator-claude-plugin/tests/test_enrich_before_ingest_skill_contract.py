@@ -763,9 +763,12 @@ def test_the_persist_fence_adds_no_merge_call_the_registered_sequence_is_untouch
     # The exact registered sequence (test_skill_sequence_coverage.py's COVERED entry
     # for this block) must be byte-for-byte unchanged -- a dict comprehension over
     # merge_report.rows and a .get() on a local dict add no scripts-module call.
+    # Phase 71 (D-71-04): `held_queue.stable_key` is now the persist key's own
+    # derivation, inserted between `build_entry` and `save`.
     assert calls == (
         "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
-        "confidence.assess", "held_queue.build_entry", "held_queue.save",
+        "confidence.assess", "held_queue.build_entry", "held_queue.stable_key",
+        "held_queue.save",
         "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
         "run_state.read_progress",
     )
