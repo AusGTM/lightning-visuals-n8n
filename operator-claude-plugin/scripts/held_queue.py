@@ -19,6 +19,13 @@ entry carries:
   - `row` — an ALLOWLISTED snapshot of the row (see `ROW_FIELD_ALLOWLIST`), enough to
     re-send it.
 
+**Facets are a READ, never a write.** `classify_facet()` (260911-w6p, F2-2) derives one
+of `new_person` / `needs_company` / `nothing_found` from an existing `no_match` entry
+plus the caller's own resolved company domains. A facet is NEVER persisted and NEVER a
+hold code — `confidence.ALL_HOLD_CODES` stays exactly six words; widening it to a
+seventh would make a review-time distinction a resume-time one, which is not what this
+change does.
+
 `observed_signals` and `resume_fingerprint` are two DIFFERENT fields for two DIFFERENT
 consumers — the review pass reads the first, `run_manifest.rows_to_resume` reads the
 second — because collapsing them into one field is exactly what cycle-3 review found
@@ -155,6 +162,13 @@ PARSEABLE = "parseable"
 ANOMALOUS = "anomalous"
 ANOTHER_RUN = "another_run"
 
+# classify_facet()'s three answers (260911-w6p, F2-2) — a READ over a `no_match` hold,
+# never persisted, never a fourth member of `confidence.ALL_HOLD_CODES`.
+FACET_NEW_PERSON = "new_person"
+FACET_NEEDS_COMPANY = "needs_company"
+FACET_NOTHING_FOUND = "nothing_found"
+ALL_FACETS = frozenset({FACET_NEW_PERSON, FACET_NEEDS_COMPANY, FACET_NOTHING_FOUND})
+
 
 class HeldQueueError(Exception):
     """Raised when an entry cannot be persisted safely — a `hold_code` outside
@@ -252,6 +266,87 @@ def build_entry(row, hold_code, reason, outcome, observed_signals=None) -> dict:
         "resume_fingerprint": fingerprint(hold_code, outcome),
         "row": _allowlisted_row(row),
     }
+
+
+def classify_facet(entry, known_company_domains=frozenset()):
+    """Read-time facet over a `no_match` hold (260911-w6p, F2-2). `confidence.
+    HOLD_NO_MATCH` conflates two situations the operator answers with two different
+    verbs — a provider NOT_FOUND at a company that is not in HubSpot, and a rich
+    reveal of a real new person at a company that IS. This function separates them
+    WITHOUT adding a fourth hold code: it is a pure read over an already-persisted
+    entry, never written back, never validated by `save()`/`load()`.
+
+    `entry` is one `held_queue.json` entry (the value half of the `{row_id: entry}`
+    map). Returns `None` for anything that is not a `no_match` hold — a conflict hold
+    keeps its own approve/reject lane, and this function only ever answers for
+    `no_match`, so the facet vocabulary can never grow into a second hold vocabulary.
+
+    `known_company_domains` is an ARGUMENT, not a lookup this function performs
+    itself: the entry alone cannot tell the two situations apart (both carry a
+    company NAME and an email at a domain built from that name, and nothing in the
+    entry, the merged row, or the propose-lane response records whether the company
+    already exists in HubSpot). The caller resolves the domains (a HubSpot read, or
+    the run's own knowledge) and passes them in; this function stays pure — no
+    network, no config read, no clock. WITH THE DEFAULT EMPTY SET nothing is ever
+    `new_person` — a caller that resolves no domains gets `needs_company` for every
+    usable-email entry, the safe, review-first direction.
+
+    Decision table, read top to bottom, first match wins, TOTAL (mirrors
+    `confidence.assess`'s own shape):
+
+      0. `entry` is not a dict, or its `hold_code` is not `confidence.HOLD_NO_MATCH`
+         -> `None`.
+      1. No usable email -> `FACET_NOTHING_FOUND`. Usable means: `entry["row"]` is a
+         dict carrying an `email` that strips to non-empty, splits on exactly one `@`
+         into a non-empty local part and a non-empty host, that host survives
+         `enrichment._clean_domain` (imported, never re-implemented — one guard,
+         mirrored in `n8n/code/companyLink.js`), and the cleaned host is not in
+         `enrichment.FREEMAIL_DOMAINS`. This row also absorbs every malformed shape
+         `load()` already lets through — a missing or non-dict `row`, a non-string
+         `email` — so this function answers rather than raising on an entry the store
+         already considered valid.
+      2. The cleaned host is in `known_company_domains` (each supplied value
+         normalized through the SAME `_clean_domain` before comparison, so a caller
+         passing a URL or a `www.` host still matches) -> `FACET_NEW_PERSON`.
+      3. Terminal, everything else -> `FACET_NEEDS_COMPANY`. Covers both a blank
+         company column and a company HubSpot does not hold, deliberately: in both
+         the operator's next move is the same one — create the company.
+
+    Two derivation choices, recorded here rather than re-derived by a later reader:
+      - The row's own `company` NAME string is never consulted. The ruling says "at
+        the company's own domain"; the recorded entries prove a name check cannot
+        separate the two cases anyway (`Atherton Turf Club` -> `athertonturfclub.
+        com.au` and `Australian Turf Club` -> `australianturfclub.com.au` are the
+        same shape), and `known_company_domains` already IS the statement that the
+        company is present.
+      - Freemail/ISP addresses land in `nothing_found` conservatively. It is not a
+        claim the person can never be created (§13.0.1's ingest lane can still
+        resolve a company by exact name) — it is a claim that this queue has no
+        address worth pre-suggesting a create with. A fourth facet is outside the
+        ruling.
+    """
+    if not isinstance(entry, dict) or entry.get("hold_code") != confidence.HOLD_NO_MATCH:
+        return None
+
+    row = entry.get("row")
+    email = row.get("email") if isinstance(row, dict) else None
+    if not isinstance(email, str):
+        return FACET_NOTHING_FOUND
+
+    email = email.strip()
+    parts = email.split("@")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return FACET_NOTHING_FOUND
+
+    cleaned = enrichment._clean_domain(parts[1])
+    if not cleaned or cleaned in enrichment.FREEMAIL_DOMAINS:
+        return FACET_NOTHING_FOUND
+
+    known_cleaned = {enrichment._clean_domain(d) for d in known_company_domains}
+    if cleaned in known_cleaned:
+        return FACET_NEW_PERSON
+
+    return FACET_NEEDS_COMPANY
 
 
 def save(run_id, entries, path=None) -> None:
