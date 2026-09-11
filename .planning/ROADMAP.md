@@ -376,12 +376,12 @@ row live. Nothing armed during the phase; SAFE-01..05 unchanged.
 criterion: Jimmy Busteed reads `new_person` on both surfaces and lands with one `create all 1`
 reply. Decisions D-71-01..06 (`71-CONTEXT.md`) are what the plans are verified against.
 **Depends on:** Phase 70; quick batch 260911-w6n (plugin 0.47.0)
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 71-01-PLAN.md — the one cross-item seam: persist-time company-known stamp, stable held-entry identity, forbidden-marker key narrowing, legacy-document refusal (wave 1, tracer-led)
+- [x] 71-01-PLAN.md — the one cross-item seam: persist-time company-known stamp, stable held-entry identity, forbidden-marker key narrowing, legacy-document refusal (wave 1, tracer-led)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
