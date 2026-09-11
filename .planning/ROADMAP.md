@@ -379,7 +379,14 @@ reply. Decisions D-71-01..06 (`71-CONTEXT.md`) are what the plans are verified a
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 71-01-PLAN.md — the one cross-item seam: persist-time company-known stamp, stable held-entry identity, forbidden-marker key narrowing, legacy-document refusal (wave 1, tracer-led)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 71-02-PLAN.md — both surfaces read the stamp, `rows_to_resume` keys on the stable identity, skill-sequence registry updated (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 71-03-PLAN.md — todo triage, plugin 0.48.0 release, and the single end-of-phase D-71-06 live gate (wave 3)

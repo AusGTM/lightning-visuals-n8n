@@ -2,17 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 70
+current_phase: 71
+current_phase_name: a-held-new-person-lands-in-hubspot-with-one-reply
 status: completed
 stopped_at: Phase 71 context gathered — 3 open rulings taken (stamp at persist, wipe queue, fold forbidden-name); next /gsd-plan-phase 71
-last_updated: "2026-09-11T21:20:21.473Z"
+last_updated: "2026-09-11T22:44:39.607Z"
 last_activity: 2026-09-11
 last_activity_desc: Quick batch 260911-anu (8 todos) complete, plugin 0.45.0
-state_head: 2abb10305022ea31eb2818dd32cd2b1d105c8dee
+state_head: 7f2a9344c0d21acd80cb66243bed5173fe2bcf4e
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 34
+  total_plans: 37
   completed_plans: 34
   percent: 25
 ---
@@ -357,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 70
+Phase: 71 (a-held-new-person-lands-in-hubspot-with-one-reply) — READY TO EXECUTE
 Plan: Not started
 Status: All phases complete
 Last activity: 2026-09-11 - Quick tasks 260911-0tz, 1z5, 3mu complete after four review passes (no blocker, no major); master pushed at 4e26a7a1; plugin 0.44.0 released and installed
@@ -1047,6 +1048,10 @@ this milestone (planted 2026-08-04, v0.6 era) and are not v0.8 gaps.
 Note on the second item: it is the same failure class as the known plugin-install trap where a
 version bump breaks a pinned path. Deferring it leaves the unattended sweep quietly fragile
 across the next plugin update — it fails silently, which is the dangerous direction.
+
+## Planning gate overrides
+
+- 2026-09-12 plan-phase 71: decision-coverage gate (`check.decision-coverage-plan`) returned `could-not-parse` (0/6, empty uncovered) because the three carried-forward `**D-69-03**`/`**D-69-04**`/`**D-70-11**` bullets lack the `D-NN:` form; the plan:post gap-analysis gate on the same CONTEXT reads 6/6 D-71 decisions covered and the plan checker confirmed every D-71-01..06 citation. Override recorded: proceeded on checker + gap-analysis evidence.
 
 ## Operator Next Steps
 
