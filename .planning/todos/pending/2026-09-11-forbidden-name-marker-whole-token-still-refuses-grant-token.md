@@ -46,3 +46,19 @@ involved) change than 260911-any's whole-token matching pass.
 Test shape: offline; a row with firstname `"Grant"` or company `"Token"` saves in all
 seven stores; the three value-refusal regression tests above stay red for their existing
 fixtures.
+
+## Update 2026-09-11 (quick 260911-w6o, F2-1)
+
+`held_queue.py`'s `row` payload no longer scans VALUES at all -- only key names (see
+`held_queue._first_forbidden_key` and `save()`'s call site). A held row for a person
+named Grant Dewsbury now persists through this one store, because
+`held_queue.ROW_FIELD_ALLOWLIST` already filters `row` to a closed, enumerated tuple
+before the scan runs, so a forbidden-shaped KEY can never reach `row` through
+`build_entry` at all -- the value scan's only live effect there was refusing legitimate
+values (a person's own name, a company's own name, an email), which is exactly the
+class this todo describes. `held_queue`'s own `observed_signals`, `reason`, and
+`row_id` scans are UNCHANGED (still key-and-value). The other six stores named in this
+todo's `files:` list (`suggestion_declines.py`, `run_manifest.py`, `run_state.py`,
+`run_report.py`, `written_records.py`, `remainder_queue.py`) are untouched by this
+change and still refuse a bare marker-shaped value verbatim. This todo stays open for
+those six.

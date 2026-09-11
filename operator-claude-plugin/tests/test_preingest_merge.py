@@ -686,12 +686,16 @@ def test_a_merged_row_with_a_widened_key_builds_a_remainder_queue_entry_untouche
 def test_a_merged_row_with_a_widened_key_builds_a_held_queue_entry_without_raising():
     # Destination D (held-queue half) -- CORRECTS Finding 8's grep-based claim: unlike
     # remainder_queue, held_queue.build_entry does NOT carry an arbitrary row key
-    # through untouched. `held_queue.ROW_FIELD_ALLOWLIST` (row_id + enrichment.
-    # MATCH_LOOKUP_KEYS) is a DELIBERATE allowlist (module docstring, REVIEW-A7:
-    # "only the identity keys and the columns the envelope projects, never whatever
-    # else happened to be in the operator's spreadsheet") that predates this phase and
-    # is out of scope to widen here. The call must not raise; the widened key is
-    # correctly absent from the stored row.
+    # through untouched. `held_queue.ROW_FIELD_ALLOWLIST` is a DELIBERATE, closed,
+    # enumerated allowlist (module docstring, REVIEW-A7: "only the identity keys and
+    # the columns the envelope projects, never whatever else happened to be in the
+    # operator's spreadsheet"). Quick 260911-w6o (F2-1) widened it from `row_id` +
+    # `enrichment.MATCH_LOOKUP_KEYS` to 11 names -- `jobtitle`, `phone`, `company_id`,
+    # `mobilephone`, `lv_linkedin_url` -- so a held entry carries what the waterfall
+    # actually found, not just the source spreadsheet line; `seniority` was
+    # deliberately left out of that widening (no consumer needs it), which is exactly
+    # what this test still pins. The call must not raise; the widened key used here
+    # is correctly absent from the stored row.
     rows = _rows(1)
     merge_report = preingest.merge_enriched(
         rows, [_response(rows[0]["row_id"], {"email": "a@x.com", "seniority": "Director"})],

@@ -127,11 +127,15 @@ def test_build_entry_carries_observed_signals_and_fingerprint_as_separate_fields
 
 
 def test_build_entry_only_persists_allowlisted_row_fields():
-    row = {"row_id": "row-1", "email": "a@example.com", "phone": "0400000000",
+    # `phone` moved from excluded to included by quick 260911-w6o's widening (see
+    # test_an_enriched_held_row_survives_the_write_to_disk_end_to_end below) --
+    # `seniority` is the still-excluded example here: a real waterfall-promotable
+    # key that stays OUT of ROW_FIELD_ALLOWLIST because no consumer needs it.
+    row = {"row_id": "row-1", "email": "a@example.com", "seniority": "Director",
            "some_random_spreadsheet_column": "should not be persisted"}
     entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
     assert entry["row"] == {"row_id": "row-1", "email": "a@example.com"}
-    assert "phone" not in entry["row"]
+    assert "seniority" not in entry["row"]
     assert "some_random_spreadsheet_column" not in entry["row"]
 
 
@@ -196,6 +200,162 @@ def test_a_held_armidale_jockey_club_entry_saves_and_loads_back_unchanged(tmp_pa
     loaded = held_queue.load(path=target)
     assert loaded["row-1"]["row"]["company"] == "Armidale Jockey Club"
     assert loaded["row-1"]["reason"] == "held for the club Secretary to confirm"
+
+
+# =====================================================================================
+# quick 260911-w6o (F2-1): the entry stores the MERGED row, not the source row.
+# =====================================================================================
+
+
+def _f2_1_response(row_id, properties):
+    return {
+        "action": "enriched", "object_type": "contacts", "hs_object_id": None,
+        "gap_flag": False, "row_id": row_id, "mode": "enrich", "match": None,
+        "properties": properties,
+    }
+
+
+def test_an_enriched_held_row_survives_the_write_to_disk_end_to_end(tmp_path):
+    """Recorded run a254d1eda71246a2a964922cdf5c2bd2 (2026-09-11, executions
+    12365-12376): Jimmy Busteed's held entry carried the source row's blank email
+    while execution 12372's Lusha reveal returned his email, phone, mobile and
+    LinkedIn -- a 7-credit reveal thrown away at the persist boundary. Katie
+    Poggioli's thin enrichment returned only her jobtitle. Feed the MERGED rows
+    (never the source rows) through build_entry/save/load and assert they survive,
+    and that the still-closed allowlist drops `city`."""
+    row_3 = {"row_id": "row-3", "firstname": "Jimmy", "lastname": "Busteed",
+             "company": "Australian Turf Club", "email": ""}
+    row_2 = {"row_id": "row-2", "firstname": "Katie", "lastname": "Poggioli",
+             "company": "Atherton Turf Club",
+             "email": "secretary@athertonturfclub.com.au", "jobtitle": "Secretary"}
+
+    merge_report = preingest.merge_enriched([row_3, row_2], [
+        _f2_1_response("row-3", {
+            "email": "jbusteed@australianturfclub.com.au",
+            "phone": "0298765432",
+            "mobilephone": "0412345678",
+            "lv_linkedin_url": "https://www.linkedin.com/in/jbusteed",
+            "city": "Sydney",
+        }),
+        _f2_1_response("row-2", {"jobtitle": "Club Contact"}),
+    ])
+    merged_by_id = {row["row_id"]: row for row in merge_report.rows}
+    outcome = _outcome(tier="none", candidate_count=0)
+
+    entries = {
+        row_id: held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match found", outcome)
+        for row_id, row in merged_by_id.items()
+    }
+    target = tmp_path / "held_queue.json"
+    held_queue.save("run-1", entries, path=target)
+    loaded = held_queue.load(path=target)
+
+    jimmy = loaded["row-3"]["row"]
+    assert jimmy["email"] == "jbusteed@australianturfclub.com.au"
+    assert jimmy["phone"] == "0298765432"
+    assert jimmy["mobilephone"] == "0412345678"
+    assert jimmy["lv_linkedin_url"] == "https://www.linkedin.com/in/jbusteed"
+    assert "city" not in jimmy  # the allowlist is still closed
+
+    katie = loaded["row-2"]["row"]
+    # jobtitle is the sole refreshable_contact_props() key (operator ruling
+    # 2026-09-11) -- assert the replacement, don't assume the source value survived.
+    assert katie["jobtitle"] == "Club Contact"
+
+
+def test_building_from_the_source_row_instead_of_the_merged_one_still_loses_the_email():
+    """Documents the actual F2-1 defect and must keep passing after the fix -- it is
+    what makes the assertion above mean 'the caller now passes the merged row', not
+    'the allowlist alone fixed this'."""
+    row_3 = {"row_id": "row-3", "firstname": "Jimmy", "lastname": "Busteed",
+             "company": "Australian Turf Club", "email": ""}
+    entry = held_queue.build_entry(
+        row_3, confidence.HOLD_NO_MATCH, "no match found", _outcome(tier="none", candidate_count=0))
+    assert entry["row"]["email"] == ""
+    assert "phone" not in entry["row"]
+
+
+def test_a_row_for_grant_dewsbury_saves_and_loads_back_unchanged(tmp_path):
+    """A firstname that is literally the whole marker word `grant` must not be
+    refused -- the `row` payload's scan is key-names-only as of 260911-w6o."""
+    target = tmp_path / "held_queue.json"
+    entry = held_queue.build_entry(
+        {"row_id": "row-1", "firstname": "Grant", "lastname": "Dewsbury"},
+        confidence.HOLD_NO_MATCH, "no match", _outcome())
+    held_queue.save("run-1", {"row-1": entry}, path=target)
+
+    loaded = held_queue.load(path=target)
+    assert loaded["row-1"]["row"]["firstname"] == "Grant"
+    assert loaded["row-1"]["row"]["lastname"] == "Dewsbury"
+
+
+def test_save_still_refuses_every_forbidden_shape_except_a_row_value(tmp_path):
+    """The guard that stays: a secret-shaped VALUE inside `observed_signals`, a
+    secret-shaped `row_id` key, a secret-shaped `reason`, and a hand-built entry
+    whose `row` carries a forbidden-shaped KEY all still raise -- only a
+    forbidden-shaped VALUE inside `row` is now admitted (the case the widening
+    exists for). Each rejected save leaves the previously-saved queue
+    byte-identical."""
+    target = tmp_path / "held_queue.json"
+    good = held_queue.build_entry(
+        {"row_id": "row-1", "email": "a@example.com"},
+        confidence.HOLD_NO_MATCH, "no match", _outcome())
+    held_queue.save("run-1", {"row-1": good}, path=target)
+    before = target.read_text()
+
+    secret_value_entry = held_queue.build_entry(
+        {"row_id": "row-2"}, confidence.HOLD_NO_MATCH, "x", _outcome(),
+        observed_signals={"leaked": "n8n_api_key=super-secret"},
+    )
+    with pytest.raises(held_queue.HeldQueueError):
+        held_queue.save("run-1", {"row-1": good, "row-2": secret_value_entry}, path=target)
+    assert target.read_text() == before
+
+    secret_row_id_entry = held_queue.build_entry(
+        {"row_id": "armed_row"}, confidence.HOLD_NO_MATCH, "x", _outcome())
+    with pytest.raises(held_queue.HeldQueueError):
+        held_queue.save("run-1", {"row-1": good, "armed_row": secret_row_id_entry}, path=target)
+    assert target.read_text() == before
+
+    secret_reason_entry = held_queue.build_entry(
+        {"row_id": "row-3"}, confidence.HOLD_NO_MATCH,
+        "held pending a webhook token", _outcome())
+    with pytest.raises(held_queue.HeldQueueError):
+        held_queue.save("run-1", {"row-1": good, "row-3": secret_reason_entry}, path=target)
+    assert target.read_text() == before
+
+    forbidden_row_key_entry = {
+        "hold_code": confidence.HOLD_NO_MATCH, "reason": "x",
+        "observed_signals": {}, "resume_fingerprint": "abc",
+        "row": {"n8n_api_key": "x"},
+    }
+    with pytest.raises(held_queue.HeldQueueError):
+        held_queue.save("run-1", {"row-1": good, "row-4": forbidden_row_key_entry}, path=target)
+    assert target.read_text() == before
+
+
+def test_persisting_an_email_into_a_held_row_does_not_make_a_no_match_hold_resumable():
+    """Finding 6, the blocking safety check: `rows_to_resume` reads the CALLER's rows
+    and compares by `fingerprint()`, never `entry['row']` -- so a `confidence_held`
+    `no_match` entry whose stored row has gained an email stays in `still_held` when
+    the current outcome's fingerprint is unchanged. Putting an email in `row` cannot
+    make a hold auto-resume into a send (D-70-11 / the F2 ruling)."""
+    outcome = _outcome(tier="none", candidate_count=0)
+    entry = held_queue.build_entry(
+        {"row_id": "row-1", "email": "jbusteed@australianturfclub.com.au",
+         "firstname": "Jimmy", "lastname": "Busteed"},
+        confidence.HOLD_NO_MATCH, "no match found", outcome,
+    )
+    manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+
+    result = run_manifest.rows_to_resume(
+        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
+        manifest,
+        held_entries={"row-1": entry},
+        current_outcomes={"row-1": outcome},
+    )
+    assert result.rows == ()
+    assert result.still_held == ({"row_id": "row-1", "verdict": run_manifest.CONFIDENCE_HELD},)
 
 
 def test_a_rejected_save_leaves_a_previously_saved_queue_untouched(tmp_path):

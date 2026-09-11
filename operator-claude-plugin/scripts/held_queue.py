@@ -60,10 +60,21 @@ writes) — the two `save()` calls are made by the caller, in this order, and
 **Row content and the allowlist** (REVIEW-A7). A re-send needs the row's original
 specification — a bare `row_id` cannot rebuild a request — but only the identity keys
 and the columns the envelope projects, never whatever else happened to be in the
-operator's spreadsheet. `ROW_FIELD_ALLOWLIST` mirrors `enrichment.MATCH_LOOKUP_KEYS`
-exactly, plus the `row_id` join key itself. The forbidden-name scan below is a SECOND
-line, not the first — it targets grants, secrets, and tokens; the allowlist is what
-actually keeps an arbitrary spreadsheet column off disk.
+operator's spreadsheet. `ROW_FIELD_ALLOWLIST` used to mirror `enrichment.
+MATCH_LOOKUP_KEYS` exactly (`row_id` + the five match keys); quick 260911-w6o widened
+it to 11 names — `row_id` + `MATCH_LOOKUP_KEYS` + `jobtitle`, `phone`, `company_id`
+(the `suggestion_declines.py` precedent, equal to `extraction.canonical_props()`) +
+`mobilephone`, `lv_linkedin_url` (what the waterfall promotes for a mobile and a
+LinkedIn, `preingest.promotable_contact_props()`) — because a held entry used to
+carry only the operator's spreadsheet line, discarding everything the waterfall
+found for it (F2-1: a 7-credit Lusha reveal thrown away at the persist boundary). It
+is still a CLOSED, enumerated tuple, never `extraction.canonical_props()` or
+`preingest.promotable_contact_props()` imported directly (a cycle with `preingest`,
+which imports this module). The forbidden-name scan below is a SECOND line, not the
+first — it targets grants, secrets, and tokens; the allowlist is what actually keeps
+an arbitrary spreadsheet column off disk. As of 260911-w6o that scan targets KEY
+NAMES only for `row` (see `save()`'s call site) — `observed_signals`, `reason`, and
+`row_id` keep full key-and-value scanning, unchanged.
 
 Carries `run_manifest.py`'s Phase 23 D-11 forbidden-name refusal verbatim in substance
 (reimplemented, not imported — the same discipline `written_records.py` already
@@ -95,8 +106,20 @@ RUN_ID_FIELD = "run_id"
 STAMP_FIELD = "saved_at"
 ENTRIES_FIELD = "entries"
 
-# REVIEW-A7: identity keys + the columns the envelope projects, and nothing else.
-ROW_FIELD_ALLOWLIST = ("row_id",) + enrichment.MATCH_LOOKUP_KEYS
+# REVIEW-A7, widened by quick 260911-w6o (F2-1): identity keys + the columns the
+# envelope projects, and nothing else -- still a CLOSED, enumerated tuple. Enumerated
+# rather than derived from `extraction.canonical_props()` / `preingest.
+# promotable_contact_props()` on purpose: `preingest` imports `held_queue` (a cycle),
+# and `extraction._load_mapping` raises when the column mapping is unresolvable,
+# which would turn an importable module into an unimportable one. `jobtitle`,
+# `phone`, `company_id` mirror `suggestion_declines.ROW_FIELD_ALLOWLIST` verbatim;
+# `mobilephone` and `lv_linkedin_url` are the waterfall's own promoted keys for a
+# mobile and a LinkedIn. Deliberately NOT admitted: `seniority`, `lv_persona_group`,
+# and the five location keys -- none is named in F2-1, none is needed by a create,
+# and each is PII this store would then hold with no consumer.
+ROW_FIELD_ALLOWLIST = ("row_id",) + enrichment.MATCH_LOOKUP_KEYS + (
+    "jobtitle", "phone", "company_id", "mobilephone", "lv_linkedin_url",
+)
 
 # Phase 23 D-11, reimplemented (not imported) per `run_manifest.py`'s own precedent.
 _FORBIDDEN_NAME_MARKERS = (
@@ -167,6 +190,31 @@ def _first_forbidden(value):
     return None
 
 
+def _first_forbidden_key(value):
+    """Like `_first_forbidden` but scans KEY NAMES only, never string leaf values --
+    quick 260911-w6o's narrowing of the `row` payload's own scan. Safe only because
+    `_allowlisted_row` already filters `row` to a closed, enumerated tuple before this
+    runs (see `save()`'s call site) -- a forbidden-shaped KEY can never reach `row`
+    through `build_entry` at all, so this scan's only live effect there was refusing
+    VALUES: a person's own name, a company's own name, an email. Deliberately does
+    NOT call `_first_forbidden` for the value case; `run_report.
+    _looks_forbidden_value` is the shipped precedent for a key matcher and a value
+    matcher legitimately differing."""
+    if isinstance(value, dict):
+        for key, sub in value.items():
+            if _looks_forbidden(key):
+                return key
+            found = _first_forbidden_key(sub)
+            if found is not None:
+                return found
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found = _first_forbidden_key(item)
+            if found is not None:
+                return found
+    return None
+
+
 def queue_path() -> Path:
     """Resolved fresh on every call — the same durable directory
     `run_manifest.manifest_path()` and `artifact_store.state_path()` both resolve into,
@@ -226,7 +274,11 @@ def save(run_id, entries, path=None) -> None:
                 f"row {row_id!r} carries hold_code {hold_code!r}, which is not one of "
                 f"confidence.ALL_HOLD_CODES. Nothing was written."
             )
-        offender = _first_forbidden(entry.get("row"))
+        # quick 260911-w6o: `row` scans KEY NAMES only (widened allowlist now
+        # legitimately carries a value like an email or a person's own name that
+        # would otherwise trip a marker); `observed_signals`/`reason`/`row_id` keep
+        # full key-and-value scanning, unchanged.
+        offender = _first_forbidden_key(entry.get("row"))
         if offender is None:
             offender = _first_forbidden(entry.get("observed_signals"))
         if offender is None and _looks_forbidden(entry.get("reason") or ""):
