@@ -345,3 +345,37 @@ Plans:
 - [x] 70-16-PLAN.md — Wave 1: TRACER — every generated workflow flipped onto n8n's v1 execution order from one generator constant, a non-v1 body made a generation-time refusal, and the walker stopped claiming to model the legacy engine it was never observed to model correctly
 - [x] 70-17-PLAN.md — Wave 2: the v1 setting pinned against every path that can revert it — both PUT paths, the bind pipeline, the bounce read-back and the proof driver's verdict
 - [x] 70-18-PLAN.md — Wave 3: the source-cited engine rule and Gate 8's observations recorded with their tags and execution ids, the stale live-state note corrected, and Gates 10/11/12 written up with Gate 9 superseded
+
+### Phase 71: A held new person lands in HubSpot with one reply
+
+**Goal:** a rich `no_match` reveal of a new person (the Jimmy Busteed shape — usable email at a
+company already in HubSpot) reads `new_person` and lands in HubSpot with ONE count-restating
+reply, on both surfaces (`enrich-before-ingest` step 6's ready answer and `review-triage`'s one
+table), with the operator never asked a question. Target function and UX carried from the F2
+ruling (operator, 2026-09-11): most frictionless operator experience with relative safety,
+review over approve, both routes offered with equal weight, absent company stays a server-side
+downgrade (CLAUDE.md §13.0.1).
+
+**Why a phase, not a fourth quick batch:** quick batch `260911-w6n` shipped every item to its own
+plan and still left the headline false end to end — both callers seed `known_company_domains =
+set()`, so `classify_facet` never returns `new_person` (design todo
+`2026-09-11-known-company-domains-never-seeded-...`), and settlement is keyed on a positional
+`row_id` that collides across runs (design todo `2026-09-11-held-queue-row-id-is-positional-...`).
+Seams between parallel-planned items; no batch step owned the cross-item contract.
+
+**Rulings needed before planning (discuss-phase):** (1) which legitimate source seeds
+`known_company_domains` — step-2 match-confirmed domains of the same run, a HubSpot companies
+domain lookup at facet time, operator statement only; (2) the stable held-entry identity that
+replaces positional `row_id`, and who migrates the entries already on disk.
+
+**Gate:** end-of-phase live UAT on the second-round `contact-upload` CSVs
+(`docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md` §1d) — the first run that can observe a `new_person`
+row live. Nothing armed during the phase; SAFE-01..05 unchanged.
+
+**Requirements**: TBD
+**Depends on:** Phase 70; quick batch 260911-w6n (plugin 0.47.0)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 71 to break down)

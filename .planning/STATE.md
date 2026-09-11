@@ -821,6 +821,13 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 
 ### Roadmap Evolution
 
+- **Phase 71 added 2026-09-11: A held new person lands in HubSpot with one reply.** Operator
+  ruling after quick batch `260911-w6n` closed 4/4 yet left the F2 headline false end to end
+  (`known_company_domains` never seeded; positional `row_id`). Three consecutive quick batches
+  (anu → ss3 → w6n) each closed by filing the next batch's todos — cross-item contracts have
+  no owner in a quick batch. Rule going forward: quick batch only when a ruling exists AND
+  items share no new API surface; shared contract → phase. Folds in both pending design todos.
+
 - **Phase 50 added 2026-08-13: Derived Tier Property.** Added during `/gsd-discuss-phase 50`, which
   found no roadmap entry (`init.phase-op 50` → `phase_found: false`). Operator directed adding it
   and **extending v0.9** rather than opening v1.0, because it closes v0.9's own disclosed debt —
