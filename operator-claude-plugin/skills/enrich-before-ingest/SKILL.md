@@ -763,7 +763,13 @@ whatever seven columns happened to be in the source file.
        # total.
        entry = held_queue.build_entry(
            merged_by_id.get(row_id, row), verdict.hold_code, verdict.reason, parsed)
-       held_entries[row_id] = entry
+       # Phase 71 (D-71-04): keyed on the SOURCE row (`row`, this loop's own
+       # `unmatched_rows` item), never the merged one -- the resume side
+       # (`run_manifest.rows_to_resume`, plan 02) only ever sees the caller's source
+       # rows, so keying on the merged row would give a revealed-email person an
+       # email-group key here and a name-group key there: two keys for one person,
+       # the exact cross-run miss D-71-04 exists to close.
+       held_entries[held_queue.stable_key(row)] = entry
        held_queue.save(run_id, held_entries)
        verdicts[row_id] = run_manifest.CONFIDENCE_HELD
        # Shared path (unchanged) — step 8's resume reads this SAME file across turns.
