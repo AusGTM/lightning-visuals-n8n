@@ -167,7 +167,10 @@ whatever seven columns happened to be in the source file.
    unsent.** Only once every row is decided — a yes, a correction, or a decline —
    does `company_domain.to_envelope_spec` turn the table into the spec this batch is
    built from; an undecided row stops the whole batch rather than defaulting either
-   way.
+   way. That result — `company_spec`, or `None` when this batch carried no company
+   rows at all — is what the match fence below folds into `confirmed_domains`
+   (D-71-01): a domain this table just confirmed is a domain step 6's held-row
+   render already knows belongs to a HubSpot company, with no second lookup.
 
    Mint one `row_id` per row, once, for the whole batch — never per chunk, which would
    mint the same id twice:
@@ -191,6 +194,12 @@ whatever seven columns happened to be in the source file.
    match_run_id = outcome.run_id  # the match's own D-70-05 correlation handle, not a new id
    match_state.save(match_run_id, classified)
    print(match_run_id)
+
+   # Phase 71 (D-71-01..03): the zero-new-lookup seed for step 6's held-row render --
+   # a fold over data this ONE match call and the company-row confirm table above
+   # already produced, never a second HubSpot read (D-71-02). `company_spec` binds
+   # to `company_domain.to_envelope_spec`'s own result above, or `None`.
+   confirmed_domains = preingest.confirmed_company_domains(classified, company_spec)
    ```
 
    **This match is sent ONCE for the whole batch.** Its outcome is written to
@@ -301,6 +310,11 @@ whatever seven columns happened to be in the source file.
    resolved = {"row-4": "101452", "row-9": preingest.DECLINE_MATCH}
    classified = preingest.apply_match_decisions(classified, resolved)
    match_state.save(match_run_id, classified)
+
+   # Phase 71 (D-71-01..03): re-derive over the RE-SAVED buckets -- a row this step
+   # just confirmed moved into auto_matched (apply_match_decisions), so it now
+   # counts toward confirmed_domains too, not just step 2's own auto-matched rows.
+   confirmed_domains = preingest.confirmed_company_domains(classified, company_spec)
    ```
 
    The confirmed match is written back here, under the same `match_run_id` step 2
@@ -734,10 +748,13 @@ whatever seven columns happened to be in the source file.
    fresh process it is rebuilt through `preingest.merge_enriched` over
    `unmatched_rows` and `responses`, never by dispatching again. If the re-request
    pass ran for this run, its returned `MergeResult` is the one to use here — it is
-   the later and richer merge.
+   the later and richer merge. `confirmed_domains` is step 2's (or, if it ran,
+   step 3's) value — in a fresh process re-derive it the same way, from
+   `match_state.load(match_run_id)`'s current classification and `company_spec`,
+   never assumed still in scope from an earlier turn.
 
    ```python
-   import confidence, held_queue, preingest, run_manifest, run_state
+   import confidence, enrichment, held_queue, preingest, run_manifest, run_state
 
    # `responses` here is `recovery["responses"]` from the dispatch step above — already
    # flat (one item per row; see that step's own note on why no second flatten belongs
@@ -761,8 +778,22 @@ whatever seven columns happened to be in the source file.
        # Merged row when this id has one (the normal case); the loop's own source
        # row only if `merge_report` somehow has no entry for it, so the loop stays
        # total.
+       merged_row = merged_by_id.get(row_id, row)
+       # Phase 71 (D-71-01..03): this row's own cleaned email domain, looked up in
+       # step 2's `confirmed_domains` -- the SAME `enrichment._clean_domain` cleaning
+       # `classify_facet` itself later applies, so the two never disagree on what
+       # counts as "the same domain".
+       merged_email = merged_row.get("email")
+       merged_domain = None
+       if isinstance(merged_email, str) and "@" in merged_email:
+           merged_domain = enrichment._clean_domain(merged_email.split("@")[-1])
+       company_known = (
+           {"domain": merged_domain, "source": confirmed_domains[merged_domain]}
+           if merged_domain in confirmed_domains else None
+       )
        entry = held_queue.build_entry(
-           merged_by_id.get(row_id, row), verdict.hold_code, verdict.reason, parsed)
+           merged_row, verdict.hold_code, verdict.reason, parsed,
+           company_known=company_known)
        # Phase 71 (D-71-04): keyed on the SOURCE row (`row`, this loop's own
        # `unmatched_rows` item), never the merged one -- the resume side
        # (`run_manifest.rows_to_resume`, plan 02) only ever sees the caller's source
@@ -872,9 +903,10 @@ whatever seven columns happened to be in the source file.
    undecided = {rid: e for rid, e in still_open.items()
                 if held_queue.entry_verb(e) is None}
 
-   known_company_domains = set()  # nothing confirmed yet this run -- w6p's own safe
-                                   # default; classify_facet reads needs_company until
-                                   # a domain is actually resolved
+   # Phase 71 (D-71-01..03): the seed is the entry's OWN stamp, written at persist
+   # time (step 5) -- not a lookup this step performs. `classify_facet` reads
+   # needs_company for any entry whose own domain was never confirmed.
+   known_company_domains = held_queue.stamped_domains(held_entries)
    by_facet = {}
    for rid, entry in undecided.items():
        by_facet.setdefault(
@@ -1198,12 +1230,22 @@ whatever seven columns happened to be in the source file.
    and say its disclosure sentence out loud, VERBATIM, before anything else in this step:
 
    ```python
-   import watch
+   import held_queue, watch
 
-   resume_report = watch.resume_or_disclose(rows)
+   resume_report = watch.resume_or_disclose(rows, held_entries=held_queue.load())
    # Say resume_report.disclosure out loud, verbatim, before proceeding.
    rows = resume_report.rows
    ```
+
+   `held_entries=held_queue.load()` is what makes a `confidence_held` row's recorded
+   verb (`create`/`skip`/`drop`) actually short-circuit the resume (D-71-04) — without
+   it `rows_to_resume`'s fingerprint comparison always took its `entry is None`
+   fallback, re-including a settled row. `current_outcomes` is deliberately left
+   unwired: it would need a fresh, zero-credit free match pass over this run's own
+   rows, a separate gap, filed as its own triaged todo rather than folded in here —
+   the fingerprint comparison keeps taking the same re-include path it always has,
+   which is the money-not-a-contact trade `run_manifest.rows_to_resume`'s own
+   docstring already documents.
 
    This is the report-path half of a deliberate split: the RESUME rule underneath
    (`run_manifest.rows_to_resume`) is unchanged and still degrades a missing or corrupt
