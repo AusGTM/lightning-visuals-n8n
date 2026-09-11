@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "batch_id": "260911-w6n",
+  "created_at": "2026-09-11T13:10:22.311Z",
+  "options": {},
+  "base_revision": "a4e13d08d985f7f27fd34febda72d0dfd06158a2",
+  "items": [
+    {
+      "quick_id": "260911-w6o",
+      "client_id": null,
+      "description": "F2-1 (prerequisite): the held-queue entry stores the SOURCE row, so an enriched reveal is lost from disk (run a254d1eda71246a2a964922cdf5c2bd2: Jimmy Busteed's held entry has email \"\" while the waterfall returned jbusteed@australianturfclub.com.au, phone, mobile, LinkedIn). Persist the MERGED/enriched row into the held entry in operator-claude-plugin/skills/enrich-before-ingest/SKILL.md's persist step (held_queue.build_entry input), keep the forbidden-name guard on names only, and pin it with a test on the recorded run shape. Operator ruling 2026-09-11 (F2): no_match holds are faceted at read time; review-triage reads both queues in one table; create lands through the ingest lane under a review-lane grant; the batch renders the ready answer and never asks.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "operator-claude-plugin/scripts/held_queue.py",
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md",
+        "operator-claude-plugin/tests/test_held_queue.py",
+        "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py",
+        "operator-claude-plugin/tests/test_preingest_merge.py",
+        ".planning/todos/pending/2026-09-11-forbidden-name-marker-whole-token-still-refuses-grant-token.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "3dfbbb44",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-w6p",
+      "client_id": null,
+      "description": "F2-2: add a read-time FACET classifier to operator-claude-plugin/scripts/held_queue.py (no new hold code; confidence.ALL_HOLD_CODES stays closed, SAFE-01 untouched) deriving from a no_match entry's enriched row: new_person (usable email at the company's own domain via enrichment._clean_domain, company present), needs_company (email present, company absent), nothing_found (no usable email). Add durable per-entry verbs create/skip/retry/drop with status, timestamp, run_id, so an approved entry is never re-enriched or re-held on a later run (fingerprint rule). Tests on the recorded a254d1e entries (Katie Poggioli = needs_company, Jimmy Busteed = new_person).",
+      "status": "complete",
+      "depends_on": [
+        "260911-w6o"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/scripts/held_queue.py",
+        "operator-claude-plugin/scripts/run_manifest.py",
+        "operator-claude-plugin/tests/test_held_queue_facets.py",
+        ".planning/todos/pending/2026-09-11-held-queue-row-id-is-positional-not-a-stable-identity.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "66de79b8",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-w6q",
+      "client_id": null,
+      "description": "F2-3: operator-claude-plugin/skills/review-triage/SKILL.md today reads ONLY HubSpot lv_enrichment_needs_review records and never opens the local held_queue.json. Make it read BOTH queues and render ONE numbered table with four facets (conflicts: approve/reject; new people: create/skip, create pre-suggested; needs a company: create company/skip; nothing found: not listed, one parked-count line with show parked). Same numbering and count-restating vocabulary as the match table (create all 2). create dispatches the row through the contact-ingest lane under a review-lane grant (write_grant lanes include review; contacts lane for the ingest write), then confirms by re-reading the record, then marks the entry created. Absent company stays downgraded to review server-side (CLAUDE.md 13.0.1). Offline tests only; no live call.",
+      "status": "complete",
+      "depends_on": [
+        "260911-w6o",
+        "260911-w6p"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/skills/review-triage/SKILL.md",
+        "operator-claude-plugin/tests/test_review_triage_facets.py",
+        "operator-claude-plugin/tests/test_skill_sequence_coverage.py"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 2,
+      "commit": "2101b747",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "260911-w6r",
+      "client_id": null,
+      "description": "F2-4: operator-claude-plugin/skills/enrich-before-ingest/SKILL.md step 6/9: remove the held-rows AskUserQuestion (UAT F4), render the new-people rows from the facet classifier with the ready one-line answer (reply create all N now, or later in /operator-claude-plugin:review-triage), never block; if the operator replies in-conversation, dispatch the create under the standing grant via the same fences review-triage uses. Correct the end-of-run text that today says work them with review-triage (false until F2-3 lands). Pin with the skill-contract and sequence-coverage tests. Bump operator-claude-plugin to 0.47.0 with one CHANGELOG section naming F2-1..F2-4 and the ruling.",
+      "status": "complete",
+      "depends_on": [
+        "260911-w6o",
+        "260911-w6p",
+        "260911-w6q"
+      ],
+      "planned_files": [
+        "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md",
+        "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py",
+        "operator-claude-plugin/tests/test_skill_sequence_coverage.py",
+        "operator-claude-plugin/tests/test_held_facet_render_composition.py",
+        "operator-claude-plugin/.claude-plugin/plugin.json",
+        "operator-claude-plugin/CHANGELOG.md",
+        ".planning/todos/completed/2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row.md"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 3,
+      "commit": "5e71828f",
+      "failure_reason": null
+    }
+  ]
+}
