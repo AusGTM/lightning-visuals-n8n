@@ -89,9 +89,11 @@ DEFAULT_SETTLE_MAX_ATTEMPTS = 4
 # =====================================================================================
 ESTIMATES = {
     "lusha_contacts_first_time_enrich": {
-        "value": 1, "unit": "credits/contact",
-        "citation": "docs/LUSHA-V3-CONTRACT.md — §7-8, live 2026-07-30 probe (first-time contacts enrich)",
-        "confidence": "measured",
+        "value": 7, "unit": "credits/contact",
+        "citation": "docs/LUSHA-V3-CONTRACT.md — §7.1, n8n execution 12372, 2026-09-11 amendment "
+                     "(a real first-time reveal-inclusive call billed 7 credits; the 2026-07-30 "
+                     "probe's 1-credit figure was for a reveal-free search, not a like-for-like call)",
+        "confidence": "measured worst case observed to date (n8n execution 12372, 2026-09-11) — a ceiling, not a flat per-contact price",
     },
     "lusha_companies_match": {
         "value": 2, "unit": "credits/company",

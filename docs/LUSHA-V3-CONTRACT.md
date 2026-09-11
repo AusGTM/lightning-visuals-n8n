@@ -23,6 +23,9 @@ the same session.
   below is the response body's own synchronous `billing.creditsCharged` field (not
   subject to this lag) unless stated otherwise; the balance figures above are settled,
   re-confirmed reads taken several seconds after the last billable call.
+- **2026-09-11 amendment (read this before quoting a flat "1 credit/contact" figure
+  from anywhere below):** a real first-time contacts call that revealed a phone billed
+  **7 credits**, not 1 — see §7.1 for the evidence and what changed the answer.
 
 ## 2. Endpoints and auth
 
@@ -297,6 +300,59 @@ body a second time in this session billed 1 credit again, not 0). The credit sav
 Plan 04 should target is calling `/contacts/enrich` with a **stored `id`** on
 re-enrichment, instead of re-running `search-and-enrich` by identity fields — see §8.
 
+### 7.1 First-time reveal-inclusive call billed 7 credits, not 1 (live, 2026-09-11)
+
+**Evidence:** n8n execution 12372, the `Lusha Enrich` node's own `billing.creditsCharged`
+— **7** for Jimmy Busteed (a first-time `search-and-enrich` whose response revealed
+email + phone + mobile + LinkedIn + location + seniority), **0** for Katie Poggioli
+(`NOT_FOUND`). Settled balance delta 3860 → 3853, confirmed before/after by
+`scripts/check_provider_credits.py` (the same eventually-consistent-read caution as §1
+applies; the delta was read from settled, re-confirmed balances, not an immediate
+re-read).
+
+**What made the 2026-07-30 figure above (1 credit) different, and why it was never a
+like-for-like comparison:** the P1 shape-D probe and the T2b addendum's
+`T2b_contact_search_and_enrich` step (`scripts/probe_lusha_v3.py`) both send
+`{"contacts": [identity]}` — **no `reveal` key at all**. `reveal` is not a parameter this
+script ever sends on `/contacts/search-and-enrich`; it only appears on `/contacts/enrich`
+calls against an already-known `id` (§3, §6, §8). No probe run in this document has ever
+measured a first-time `search-and-enrich` call that also asked for (and received) a
+phone reveal. The shipped backend (`n8n/code/lushaRequest.js`'s `REVEAL_MAP`, mirrored in
+`scripts/build_cloud_workflows.py`'s generator) always sends a non-empty `reveal` derived
+from the gate's `missingFields` — so the 1-credit figure and the shipped call were never
+measuring the same request shape.
+
+**Hypothesis, not an isolated mechanism:** reveal width is plausibly the cost driver.
+What makes it plausible: §6's own advertised sticker prices (`GET /v3/account/usage` →
+`pricing.revealEmail: 1 credit`, `pricing.revealPhone: 5 credits`) sum with the 1-credit
+search to exactly 7 (1 + 1 + 5). What is missing before this can be called confirmed: the
+`reveal` value 12372 actually sent was not read directly off that execution's own runData
+request body — it is DERIVED here from the backend's `REVEAL_MAP` logic (`["emails",
+"phones"]` for a contact missing both) — and no A/B exists at first-time-call granularity
+(no controlled retest of the SAME first-time identity with a narrower vs. wider reveal).
+The cause is not isolated; nothing was A/B'd. No code in `n8n/code` parses
+`creditsCharged` today — the field sits in the `Lusha Enrich` node's raw response body in
+its own runData item, and no parser is being added by this amendment.
+
+**Open question (unanswered, and what would answer it):** is the shipped
+`["emails"]`-only first-time call (the narrowest reveal the current gate can ever send)
+still 1 credit, or does ANY non-empty reveal on a first-time call cost more than a
+reveal-free search? One paid live probe — a first-time `search-and-enrich` call with
+`reveal: ["emails"]` only, on a fresh identity confirmed to have a revealable phone,
+compared against the same identity with `reveal: ["emails", "phones"]` — would answer it.
+Nobody has spent it as of this amendment.
+
+**Stale generator comments, not edited by this amendment:**
+`scripts/build_cloud_workflows.py` lines 6571 and 6607-6608 assert "Lusha bills flat per
+contact regardless of reveal-field count" citing this document's §6 REFUTED verdict.
+That citation is now incomplete: §6's A/B was run entirely on a **stored `id`**
+`/contacts/enrich` call (both arms billed 0), never on a first-time call with a real,
+revealed field. The generator comments are not wrong about the stored-id lane — they are
+silent about the first-time lane this amendment measures for the first time. Left
+un-edited deliberately: correcting a generator comment is backend scope under the
+regeneration-parity rule, and a comment-only edit there would still require regenerating
+every workflow JSON to keep the committed build reproducible from its own source.
+
 ## 8. Record id re-enrichment
 
 Measured across four independent `/contacts/enrich` calls, each passing a previously
@@ -443,7 +499,7 @@ limits). No credit was charged on any 400/401 response observed.
 |---|---|---|---|
 | A1 | `POST /v3/contacts/search-and-enrich` / `POST /v3/companies/search-and-enrich` are the correct v2→v3 endpoint mappings. | **CONFIRMED** | §3 (live 200), §5 (live 200) |
 | A2 | Request body moves query params into JSON body with v2-similar identity key names. | **CONFIRMED, with a correction** | §3, §5 — `firstName`/`lastName`/`companyName`/`companyDomain` (contacts) and `domain` (companies) all work verbatim, but the hypothesized `contactId`/`companyId` indexing keys are REJECTED (400) — v3 has no synthetic per-item index key at all. |
-| A3 | `reveal[]` is an array of field-name strings, with a `canReveal` array of `{field, credits}` describing per-field reveal cost; reveal-nothing should cost less than reveal-phones. | **REFUTED** (the field-name/array-shape half is CONFIRMED; the cost-differentiation half is REFUTED) | §6 — the A/B delta between `reveal:["emails"]` and `reveal:["emails","phones"]` is 0 (identical); an empty `reveal:[]` isn't even a valid request. |
+| A3 | `reveal[]` is an array of field-name strings, with a `canReveal` array of `{field, credits}` describing per-field reveal cost; reveal-nothing should cost less than reveal-phones. | **REFUTED** (the field-name/array-shape half is CONFIRMED; the cost-differentiation half is REFUTED) | §6 — the A/B delta between `reveal:["emails"]` and `reveal:["emails","phones"]` is 0 (identical); an empty `reveal:[]` isn't even a valid request. **AMENDED 2026-09-11 (§7.1): the REFUTED half was measured entirely on the STORED-ID `/contacts/enrich` lane, where both arms billed 0 — the verdict is scoped to that lane. Whether reveal width changes cost on a FIRST-TIME `search-and-enrich` call with a real reveal is unmeasured; execution 12372 billed 7 credits for one such call but no A/B exists at that granularity.** |
 | A4 | Companies lane has no distinct reveal-gated credit model (flat search/enrich charge). | **CONFIRMED** | §5, §6 — no `has`/`canReveal` in the companies response at all. |
 | A5 | Auth stays `api_key` header (not OAuth/Bearer) on v3 enrichment endpoints. | **CONFIRMED** | §2 — every endpoint accepted the `api_key` header live. |
 | A6 | Error shape is roughly `{"error": {code, message}}`/`{"statusCode", "message", "errors"}`; rate-limit signals arrive via `x-rate-limit-*`/`x-*-requests-left` headers; a 429 does not consume a credit. | **CONFIRMED** (error envelopes and rate-limit headers); **UNKNOWN** for the 429-credit claim specifically (no 429 was triggered this session) | §9 |
@@ -496,6 +552,11 @@ refutation`):
   full-sweep cost now projects at flat v3 rates (~1 credit/contact first-time enrich, ~2
   credits/company match, 0 credits on any stored-id re-enrich), comfortably inside the
   ~3.9k balance — see ROADMAP.md success criterion 3 (re-scoped) and REQUIREMENTS.md.
+  **AMENDED 2026-09-11 (§7.1):** the "~1 credit/contact first-time enrich" figure held
+  only for a reveal-free search — no probe run before this date ever measured a
+  first-time call that also revealed a phone. Execution 12372 measured exactly that and
+  billed 7 credits. Treat 7, not 1, as the worst-case first-time contacts figure until a
+  first-time reveal-width A/B (§7.1's open question) says otherwise.
 - **Plan 02 proceeds on the combined `search-and-enrich` endpoint only** (§7
   recommendation) — no two-step topology change.
 - **A7 confirmed — Plan 04 (`lusha_contact_id`/`lusha_company_id` staging) unchanged.**
