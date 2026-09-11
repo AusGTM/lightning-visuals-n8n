@@ -236,7 +236,7 @@ PRUNE_SHORT_TTL_DAYS = 7
 # standing/legacy store this function must never touch (see `PRUNE_NEVER` below).
 # `run_report-*.md` is this same module's own artifact, added to the family it was
 # born into.
-_PRUNE_SHORT_TTL_GLOBS = ("run_state-*.json",)
+_PRUNE_SHORT_TTL_GLOBS = ("run_state-*.json", "match_state-*.json")
 _PRUNE_LONG_TTL_GLOBS = (
     "written_records-*.json", "run_audit-*.json", "run_manifest-*.json",
     "run_report-*.md",
@@ -267,7 +267,8 @@ def prune_durable_state(config=None, now=None) -> list:
     field parsed from its content. Uniform across every JSON store AND the
     plain-text `run_report-*.md` (which carries no such field at all), and immune to
     any clock skew between an embedded timestamp and the actual write:
-      - `run_state-*.json`: `PRUNE_SHORT_TTL_DAYS` (7).
+      - `run_state-*.json` / `match_state-*.json`: `PRUNE_SHORT_TTL_DAYS` (7) — both
+        within-round working files, never a durable outcome record.
       - `written_records-*.json` / `run_audit-*.json` / `run_manifest-*.json` /
         `run_report-*.md`: `artifact_store.TTL_CONFIG_KEY`
         (`dashboard_artifact_ttl_days`, default 30, reused rather than a second key) —
