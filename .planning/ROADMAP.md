@@ -372,10 +372,14 @@ replaces positional `row_id`, and who migrates the entries already on disk.
 (`docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md` §1d) — the first run that can observe a `new_person`
 row live. Nothing armed during the phase; SAFE-01..05 unchanged.
 
-**Requirements**: TBD
+**Requirements**: TBD — no requirement IDs are mapped. The headline claim IS the acceptance
+criterion: Jimmy Busteed reads `new_person` on both surfaces and lands with one `create all 1`
+reply. Decisions D-71-01..06 (`71-CONTEXT.md`) are what the plans are verified against.
 **Depends on:** Phase 70; quick batch 260911-w6n (plugin 0.47.0)
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 71 to break down)
+- [ ] 71-01-PLAN.md — the one cross-item seam: persist-time company-known stamp, stable held-entry identity, forbidden-marker key narrowing, legacy-document refusal (wave 1, tracer-led)
+- [ ] 71-02-PLAN.md — both surfaces read the stamp, `rows_to_resume` keys on the stable identity, skill-sequence registry updated (wave 2)
+- [ ] 71-03-PLAN.md — todo triage, plugin 0.48.0 release, and the single end-of-phase D-71-06 live gate (wave 3)
