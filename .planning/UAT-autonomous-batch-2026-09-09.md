@@ -80,11 +80,23 @@ Exelby 37400807974 Ipswich). Selection record in the UAT doc §1d.
 - **F6 (minor, design hazard): the global `held_queue.json` is keyed by per-run `row_id`.** `held_queue.save` overwrites the whole document with the caller's merged map and stamps the file-level `run_id` with the current run — shipped design, so Barry Milton (Devonport Racing Club, present in four earlier `written_records-*.json`) carrying `a254d1e…` is expected, and the report already declares the missing attribution. The hazard is the key: Barry sits at `row-1`/`row-4`, this run's rows at `row-2`/`row-3`; a later run whose held rows are numbered `row-1` would overwrite Barry silently. No collision happened today, by numbering luck.
 - **F7 (info): 267 stale local state files pruned** at step 1. 3 backend-status executions (12367, 12369, 12371) interleaved with the match sends.
 - **F8 (info): the grant's record scope could not cover Jimmy Busteed** (no email, no domain); the assistant flagged it rather than widening. Moot because nothing was sent.
+- **F10 (major, cost model): Lusha charged 7 credits for ONE contact reveal.** Memory and `docs/LUSHA-V3-CONTRACT.md` hold v3 as flat 1 credit/contact; the grant priced Lusha at 1. Jimmy Busteed's reveal (email + phone + mobile + LinkedIn + location + seniority) cost 7 (`creditsCharged: 7` in `Lusha Enrich`'s own billing block). Katie's `NOT_FOUND` cost 0. Re-measure before any batch is priced on the flat-1 assumption.
+- **F3 addendum:** `Lusha Usage`, `Apollo Usage` and `ZoomInfo Usage` nodes all RAN on 12372, so the backend read balances during the run; the plugin's report still says `not_reported_by_status_endpoint` for all three — the backend-status surface does not expose what the enrichment run already fetched.
 - **F9 (major, AFTER-01): the end-of-run report is not the whole account.** "Row accounting 2/2 — matches the original batch's 2 row(s)" is false against the input: the batch was 4 rows. The report counts only the enrichment leg's `run_state` and never mentions John Miller (3601) or Craig Sheppard (3501). Every-row-back-exactly-once for the 4-row input is demonstrated only by cross-reading the other session's chat, not by any durable store.
 - **MN-01 / NF-MJ-01 (`question` todo, trigger check):** 12372 is the only real waterfall today (125 nodes, `executionOrder` v1). Its only multi-run Merge is `Decide Company Action Merge` — run 0: 2 items from `Companies Absent Sentinel Gate` x2; run 1: 1 item from `Recompute Not Requested Sentinel Gate` + `null` — the identical one-drained-run shape 12354-12356 pinned. Trigger (two partially-filled pending runs, or two grouped producers overlapping on one input) NOT met. Todo stays open.
 
-## HubSpot after
-- pending: read-only probe (contacts 3601/3501/7101/37400807974 `lastmodifieddate`; Katie/Jimmy/Atherton absent).
+## HubSpot after (read-only probe, operator-run, 2026-09-11 ~10:40Z)
+- Contacts untouched: 3601 `lastmodifieddate` 2026-07-18; 3501 2026-07-17; 7101 2026-09-10T14:10 (Gate 12); 37400807974 2026-07-17. Companies 9680907342 / 9605284724 / 9604726291 / 9605267534 untouched (last 2026-08-23, 2026-08-23, 2026-08-23, 2026-09-10).
+- Absent, as required: `secretary@athertonturfclub.com.au`, `jbusteed@australianturfclub.com.au`, Katie Poggioli, Jimmy Busteed, Atherton Turf Club (by name and domain).
+
+## Spend (real, from `scripts/check_provider_credits.py` before/after)
+| Provider | 1b read (morning) | after | delta | grant estimate |
+| --- | --- | --- | --- | --- |
+| Lusha | 3860 | 3853 | **7** | 1 |
+| ZoomInfo | 9367 | 9366 | 1 | 1.08 |
+| Apollo | None | None | unreadable | — |
+
+Execution 12372 runData: `Lusha Enrich` ran on 2 rows — Jimmy Busteed `creditsCharged: 7`, Katie Poggioli `creditsCharged: 0` (`NOT_FOUND`). The six propose sends took the `Lusha Credit Skipped` branch and called no provider.
 
 ## Execution census (n8n API, 2026-09-11 09:56Z-10:18Z)
 | id | workflow | mode | run_id | rows |
