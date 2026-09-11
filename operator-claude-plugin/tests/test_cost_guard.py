@@ -59,7 +59,7 @@ class _ExplodesOnArithmetic:
 def test_load_rates_returns_version_measurement_date_and_rates(rates):
     assert rates["version"]
     assert date.fromisoformat(rates["measured_on"]) == date(2026, 7, 30)
-    assert rates["rates"]["lusha_contacts_first_time_enrich"]["value"] == 1
+    assert rates["rates"]["lusha_contacts_first_time_enrich"]["value"] == 7
 
 
 def test_a_missing_rate_table_raises_a_plugin_local_error_naming_the_file(tmp_path):
@@ -78,6 +78,18 @@ def test_rate_table_age_is_computed_against_a_supplied_reference_date(rates):
 def test_an_unknown_rate_and_a_measured_zero_are_not_the_same_value(rates):
     assert rates["rates"]["apollo_per_match"]["value"] is None
     assert rates["rates"]["lusha_contacts_stored_id_reuse"]["value"] == 0
+
+
+def test_the_first_time_contacts_rate_is_a_ceiling_over_every_observed_charge(rates):
+    """n8n execution 12372 (2026-09-11): a real first-time Lusha contact reveal billed
+    7 credits (`creditsCharged: 7`, balance 3860 -> 3853). The rate this table quotes
+    must never read BELOW the largest charge this repo has actually observed, and must
+    stay strictly above the stored-id re-enrich rate (a real measured 0)."""
+    first_time = rates["rates"]["lusha_contacts_first_time_enrich"]["value"]
+    stored_id_reuse = rates["rates"]["lusha_contacts_stored_id_reuse"]["value"]
+    largest_observed_charge = 7  # n8n execution 12372, 2026-09-11
+    assert first_time >= largest_observed_charge
+    assert first_time > stored_id_reuse
 
 
 def test_the_company_domain_research_rate_is_null_following_the_apollo_precedent(rates):
@@ -99,7 +111,7 @@ def test_a_companies_batch_with_lusha_uses_the_company_rate(rates):
 
 def test_a_contacts_batch_with_lusha_uses_the_contact_rate(rates):
     estimate = cost_guard.estimate_batch(10, "contacts", ["lusha"], rates)
-    assert estimate["provider_credits"]["lusha"]["credits"] == 10
+    assert estimate["provider_credits"]["lusha"]["credits"] == 70
 
 
 def test_a_zoominfo_estimate_carries_its_own_confidence_label_through(rates):

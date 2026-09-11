@@ -4,10 +4,10 @@
   "note": "Plugin-local copy of this repo's measured per-record rates (D-07/D-09). The values, dates and citations below are LITERALS copied in at implementation time from scripts/enrichment_cost_ledger.py's ESTIMATES table, the Phase 22 canary ledger and the Lusha v3 contract. Nothing in the plugin reads those paths at runtime: a runtime coupling to a planning path has already broken once in this repo. A `value` of null means the figure is genuinely unknown and must never be rendered as zero; a `value` of 0 is a real measured zero. Those two are different answers.",
   "rates": {
     "lusha_contacts_first_time_enrich": {
-      "value": 1,
+      "value": 7,
       "unit": "credits/contact",
-      "citation": "Lusha v3 contract sections 7-8, live probe 2026-07-30 (first-time contacts enrich). Flat 1 credit per contact for ANY field set — the v2-era 4.65-credit field bundling no longer applies.",
-      "confidence": "measured"
+      "citation": "Lusha v3 contract sections 7-8. The 2026-07-30 probe billed 1 credit on a search-and-enrich call that sent NO reveal key at all (scripts/probe_lusha_v3.py's P1/T2b steps sent {\"contacts\": [identity]} only); the shipped backend always sends a non-empty reveal. n8n execution 12372 (2026-09-11), the Lusha Enrich node's own billing block, is the first measurement of a first-time call with a real reveal: creditsCharged 7 for one rich reveal (email + phone + mobile + LinkedIn + location + seniority), 0 for a NOT_FOUND row, balance 3860 -> 3853 confirmed by scripts/check_provider_credits.py before/after. 7 is the worst case observed to date and is quoted here as a ceiling, not an invoice.",
+      "confidence": "measured worst case observed to date (n8n execution 12372, 2026-09-11) — a ceiling, not a flat per-contact price"
     },
     "lusha_companies_match": {
       "value": 2,

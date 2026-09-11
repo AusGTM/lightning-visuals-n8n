@@ -55,7 +55,7 @@ def test_stage1_fetch_ceiling_equals_companies_times_max_followup_fetches(rates)
 def test_stage2_credit_ceiling_equals_companies_times_cap_times_contact_rate(rates):
     result = cost_guard.suggestion_line(10, 3, rates)
     contact_rate = rates["rates"][cost_guard.SUGGESTION_STAGE2_RATE_KEY]["value"]
-    assert contact_rate == 1
+    assert contact_rate == 7
     assert result["stage2_contact_ceiling"] == 10 * 3
     assert result["stage2_credit_ceiling"] == 10 * 3 * contact_rate
 
