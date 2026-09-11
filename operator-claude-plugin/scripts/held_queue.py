@@ -18,6 +18,15 @@ entry carries:
   - `resume_fingerprint` — the RESUME-FACING comparison key (see `fingerprint()`).
   - `row` — an ALLOWLISTED snapshot of the row (see `ROW_FIELD_ALLOWLIST`), enough to
     re-send it.
+  - `status` — OPTIONAL, added by quick 260911-w6p (F2-2). `{"verb", "at", "run_id"}`
+    once an operator has recorded a decision (`create`/`skip`/`retry`/`drop`); absent
+    means undecided, which is what every entry saved before this widening still is.
+    A deliberate entry-schema widening under the 2026-09-11 F2 ruling, cited by
+    date, not drift — this module's own standing warning is that a store which
+    accepts arbitrary keys becomes a general-purpose store one commit later, and
+    this key is closed-vocabulary and validated on both the read and the write side
+    precisely so it is not that. See `record_verb()`/`entry_verb()`/`is_settled()`/
+    `open_entries()`.
 
 **Facets are a READ, never a write.** `classify_facet()` (260911-w6p, F2-2) derives one
 of `new_person` / `needs_company` / `nothing_found` from an existing `no_match` entry
@@ -168,6 +177,16 @@ FACET_NEW_PERSON = "new_person"
 FACET_NEEDS_COMPANY = "needs_company"
 FACET_NOTHING_FOUND = "nothing_found"
 ALL_FACETS = frozenset({FACET_NEW_PERSON, FACET_NEEDS_COMPANY, FACET_NOTHING_FOUND})
+
+# The four durable verbs an operator can record against a held entry (260911-w6p,
+# F2-2). `retry` is deliberately not in SETTLED_VERBS — see `is_settled()`.
+VERB_CREATE = "create"
+VERB_SKIP = "skip"
+VERB_RETRY = "retry"
+VERB_DROP = "drop"
+ALL_VERBS = frozenset({VERB_CREATE, VERB_SKIP, VERB_RETRY, VERB_DROP})
+SETTLED_VERBS = frozenset({VERB_CREATE, VERB_SKIP, VERB_DROP})
+STATUS_FIELD = "status"
 
 
 class HeldQueueError(Exception):
@@ -349,6 +368,81 @@ def classify_facet(entry, known_company_domains=frozenset()):
     return FACET_NEEDS_COMPANY
 
 
+def entry_verb(entry):
+    """The verb recorded against `entry`, or `None` — tolerant of a non-dict `entry`
+    and a non-dict `status`, so a reader never has to guard the shape itself."""
+    if not isinstance(entry, dict):
+        return None
+    status = entry.get(STATUS_FIELD)
+    if not isinstance(status, dict):
+        return None
+    verb = status.get("verb")
+    return verb if verb in ALL_VERBS else None
+
+
+def is_settled(entry) -> bool:
+    """`True` when `entry` carries one of the three SETTLED verbs (`create`, `skip`,
+    `drop`). `retry` is deliberately NOT settled — it is the operator asking to look
+    again, the same disposition `rows_to_resume` already gives `unchecked`."""
+    return entry_verb(entry) in SETTLED_VERBS
+
+
+def open_entries(entries: dict) -> dict:
+    """The subset of an `{row_id: entry}` map with no settled verb — one filter every
+    later report or review table calls, instead of each growing its own."""
+    return {row_id: entry for row_id, entry in entries.items() if not is_settled(entry)}
+
+
+def record_verb(row_id, verb, run_id, path=None) -> dict:
+    """Load the current queue, stamp `row_id`'s entry with `verb`/timestamp/`run_id`,
+    save, and return the updated `{row_id: entry}` map.
+
+    Refuses — raising `HeldQueueError`, writing nothing — a `verb` outside
+    `ALL_VERBS`, a `row_id` the loaded queue does not hold (never silently creating an
+    entry with no hold), and a `run_id` that trips the store's existing
+    `_looks_forbidden` name check.
+
+    The `run_id` recorded is the one PASSED IN, so the file keeps naming the run that
+    LAST TOUCHED it rather than the run that first held the rows. Safe today because
+    `held_queue.classify_read()` has exactly one caller (`run_report.py:995`) and it
+    passes no `expected_run_id`, so nothing compares the document's run id to an
+    expected one — a future caller that does must read this line first.
+
+    None of the four verbs deletes an entry. The memory IS the protection: an entry
+    that disappeared on `create` would be re-held identically by the next run that
+    meets the same row.
+    """
+    if verb not in ALL_VERBS:
+        raise HeldQueueError(
+            f"refusing to record verb {verb!r} against row {row_id!r} — not one of "
+            "held_queue.ALL_VERBS. Nothing was written."
+        )
+    if _looks_forbidden(run_id):
+        raise HeldQueueError(
+            f"refusing to record a verb under run_id {run_id!r} — its name suggests "
+            "an arming grant, a live-write permission, a secret, or an API key. "
+            "Nothing was written."
+        )
+
+    entries = load(path=path)
+    if row_id not in entries:
+        raise HeldQueueError(
+            f"refusing to record verb {verb!r} — row {row_id!r} is not in the held "
+            "queue. Nothing was written."
+        )
+
+    entries = dict(entries)
+    entry = dict(entries[row_id])
+    entry[STATUS_FIELD] = {
+        "verb": verb,
+        "at": datetime.now(timezone.utc).isoformat(),
+        "run_id": run_id,
+    }
+    entries[row_id] = entry
+    save(run_id, entries, path=path)
+    return entries
+
+
 def save(run_id, entries, path=None) -> None:
     """Persist the WHOLE current set of held entries — mirrors `run_manifest.save`'s
     contract exactly: the caller assembles the full `{row_id: entry}` map (typically
@@ -368,6 +462,17 @@ def save(run_id, entries, path=None) -> None:
             raise HeldQueueError(
                 f"row {row_id!r} carries hold_code {hold_code!r}, which is not one of "
                 f"confidence.ALL_HOLD_CODES. Nothing was written."
+            )
+        # 260911-w6p (F2-2): `status` is OPTIONAL; when present, its `verb` must be
+        # one of the four closed words. Mirrors the `hold_code` check immediately
+        # above — a missing `status` is valid, a present one is vocabulary-checked.
+        status = entry.get(STATUS_FIELD) if isinstance(entry, dict) else None
+        if status is not None and (
+            not isinstance(status, dict) or status.get("verb") not in ALL_VERBS
+        ):
+            raise HeldQueueError(
+                f"row {row_id!r} carries a status whose verb is not one of "
+                "held_queue.ALL_VERBS. Nothing was written."
             )
         # quick 260911-w6o: `row` scans KEY NAMES only (widened allowlist now
         # legitimately carries a value like an email or a person's own name that
@@ -408,6 +513,14 @@ def _validated_entries(document):
         if entry.get("hold_code") not in confidence.ALL_HOLD_CODES:
             return None
         if not isinstance(entry.get("resume_fingerprint"), str):
+            return None
+        # 260911-w6p (F2-2): mirrors the hold_code check above — status is optional,
+        # a present one must be a dict whose verb is in ALL_VERBS, or the whole
+        # queue degrades to unusable (never a partially-trusted status).
+        status = entry.get(STATUS_FIELD)
+        if status is not None and (
+            not isinstance(status, dict) or status.get("verb") not in ALL_VERBS
+        ):
             return None
     return entries
 
