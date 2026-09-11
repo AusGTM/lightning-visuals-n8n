@@ -1240,6 +1240,12 @@ whatever seven columns happened to be in the source file.
     ```python
     import write_grant
 
+    # `grant` lives in the process that opened it at step 5 — nothing durable holds it
+    # (D-53-03). A fresh process reaching this step has no name to close, so read it
+    # defensively (the same `globals().get` idiom step 9 uses for its optional
+    # `rerequest_dispatch_outcome`) and treat "no grant in this process" as nothing to
+    # close, never as a NameError on the healthy exit.
+    grant = globals().get("grant")
     if grant is not None and grant.get("state") == write_grant.OPEN:
         grant = write_grant.close_grant(grant, write_grant.CLOSED_BATCH_COMPLETE)
         # Say "batch_complete" out loud to the operator as the close reason.
