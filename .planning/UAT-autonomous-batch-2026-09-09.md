@@ -122,6 +122,5 @@ Nothing to delete in HubSpot. Held-queue entries for Katie Poggioli and Jimmy Bu
 
 ## Next
 1. Decide the F2 design (the todo's `decision_needed`) — now with real held rows.
-2. Fix F1 (persist the match outcome per run_id) before any batch that costs credits; it is the cheapest budget leak found so far.
-3. Persist the matched-id handoff per run and rename the report's scope line (F9); add a `close_grant` step (F11).
-4. Re-run the write half of this UAT through `contact-upload` with the same 6 rows, Jimmy's revealed email included: that is the D-70-17 shape on the lane that actually creates.
+2. ~~Fix F1 / F9 / F11 / F10~~ **Shipped 2026-09-11 in plugin 0.46.0** (quick batch 260911-ss3, commits 9918994c..058ee899, docs cd6df824, step-10 guard aba500e5): F1 `match_state` store + single `match_batch` fence; F9 `match_handoff` store + `enrichment_scope_row_count`; F11 step-10 `close_grant`; F10 Lusha first-time rate 1→7 + contract amendment. Not yet pushed, not yet installed.
+3. Re-run the write half of this UAT through `contact-upload` with the same 6 rows, Jimmy's revealed email included: that is the D-70-17 shape on the lane that actually creates. **Drop Grant Dewsbury (7101) from that CSV, or fix todo `2026-09-11-forbidden-name-marker-whole-token-still-refuses-grant-token` first:** `held_queue._first_forbidden` scans string leaves and `" grant dewsbury "` matches the `grant` marker, so if his row is held for any reason the held-queue save refuses and the row drops silently. Use Nathan Exelby (37400807974) + Chris Chaffe (133443465640, Darwin Turf Club, `cchaffe@darwinturfclub.org.au`) for the two-update pair instead.
