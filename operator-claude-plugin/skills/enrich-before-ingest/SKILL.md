@@ -1226,3 +1226,52 @@ whatever seven columns happened to be in the source file.
    real time, and autonomy is precisely the condition under which that premise stops
    holding: nobody is necessarily watching that lane in real time either. Its own step-7
    per-record report is unchanged and still renders first.
+
+10. **Close the grant, after the report — every run, every exit (F11,
+    `.planning/UAT-autonomous-batch-2026-09-09.md`).** Step 7 already closes the grant
+    twice — `write_grant.CLOSED_CEILING_BREACH` on a pre-call ceiling stop and
+    `write_grant.CLOSED_UNHANDLED_ERROR` from its `finally` arm — but nothing ever closed
+    it on an ordinary healthy finish, and nothing closed it on the run this UAT item was
+    found on, where nothing was sendable at all. Reach this step on EVERY exit of the
+    flow: a batch that was sent, a batch declined at step 6 or step 7, and a batch with
+    nothing sendable at all — the last of those is the shape most likely to be skipped by
+    a reader who thinks a close belongs only after a write.
+
+    ```python
+    import write_grant
+
+    if grant is not None and grant.get("state") == write_grant.OPEN:
+        grant = write_grant.close_grant(grant, write_grant.CLOSED_BATCH_COMPLETE)
+        # Say "batch_complete" out loud to the operator as the close reason.
+    ```
+
+    Three states, three readings. **Already closed** — step 7's ceiling-breach or crash
+    arm got there first: leave it alone and report the reason IT recorded, never this
+    one. **Open, the standing grant opened at step 5** — close it here and name the
+    reason word. **Open, but only the single-use grant `authorize_ungranted_send` built
+    for one send** — closing it is harmless, but do not announce it as though a standing
+    grant had been open all along.
+
+    The state test is load-bearing, not defensive noise: `close_grant` does not inspect
+    state, so a grant another path already closed is never closed a second time here —
+    because a second close overwrites `closed_reason`, and a grant closed for a ceiling
+    breach or an unhandled error re-reading as ordinary batch completion misreports the
+    one close the operator most needs to read correctly. This is the same reason
+    `revoke_grant` returns an already-closed grant unchanged rather than re-closing it.
+
+    Closing arms nothing and disarms nothing by itself — each send already disarmed its
+    own window.
+
+    `write_grant.CLOSED_SESSION_END` is for a sitting that ends with the grant still open
+    and no further batch coming: close it before the conversation ends and say so. Keep
+    it distinct from its two neighbours — an operator saying stop is
+    `write_grant.revoke_grant` (idempotent, reason-preserving), never relabelled a
+    session end, and a crash is step 7's `CLOSED_UNHANDLED_ERROR`.
+
+    The accepted gap, stated plainly rather than left to be discovered: a grant exists
+    only as a value in this conversation and is never written to disk, so a session that
+    dies mid-turn makes no close at all. That is D-53-03, put to the operator on
+    2026-08-25 and accepted after a durable expiry was offered and declined. What catches
+    it is Guardrail A — the next session's plan reads the live write-safety state and
+    refuses to open a grant over an armed backend. This is a designed gap with a named
+    counterpart, and the answer to a missed close is never a durable grant store.

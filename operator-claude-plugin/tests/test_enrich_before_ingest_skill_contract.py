@@ -40,6 +40,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+import write_grant
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILL_PATH = PLUGIN_ROOT / "skills" / "enrich-before-ingest" / "SKILL.md"
 
@@ -516,6 +518,56 @@ def test_the_skill_asks_nothing_at_the_waterfall_step_under_a_grant():
     body = _normalized(_text()).lower()
     assert "if a write grant covering this lane and these rows is open, ask for nothing here" in body
     assert "d-53-06" in body
+
+
+# ---------------------------------------------------------------------------------
+# F11 (`.planning/UAT-autonomous-batch-2026-09-09.md`, quick task 260911-ss6): the
+# skill's own sentence at step 9 already claims a grant "ends on completion, revocation,
+# session end, error or a ceiling breach" -- step 7 (formerly 5/7) supplies the
+# revocation/error/ceiling-breach closes, but nothing ever closed on ordinary completion,
+# and nothing closes at session end either. These four pin the fix: a step-10 close
+# reached on every exit, positioned after the end-of-run report, guarded so it never
+# re-closes a grant another path already closed.
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_closes_the_grant_after_the_end_of_run_report():
+    text = _text()
+    assert "write_grant.close_grant(" in text, (
+        "the healthy-completion close has no call site at all -- F11's own gap"
+    )
+    assert text.index("write_grant.close_grant(") > text.rindex("build_run_report("), (
+        "the operator reads the end-of-run report first; the grant's close comes after it"
+    )
+
+
+def test_the_skill_names_batch_complete_and_session_end_as_its_two_closes():
+    text = _text()
+    assert "write_grant.CLOSED_BATCH_COMPLETE" in text
+    assert "write_grant.CLOSED_SESSION_END" in text
+
+
+def test_the_skill_never_re_closes_a_grant_another_path_already_closed():
+    text = _text()
+    assert 'grant.get("state") == write_grant.OPEN' in text, (
+        "close_grant does not inspect state -- the fence must gate on OPEN itself, in "
+        "exactly this shape, or a ceiling-breach/crash close can be silently overwritten"
+    )
+    body = _normalized(text).lower()
+    assert "never closed a second time" in body
+
+
+def test_every_close_reason_the_skill_names_is_a_real_close_reason():
+    text = _text()
+    names = sorted(set(re.findall(r"write_grant\.CLOSED_[A-Z_]+", text)))
+    assert names, "expected at least one write_grant.CLOSED_* reference in the skill"
+    for qualified in names:
+        name = qualified.split(".", 1)[1]
+        assert hasattr(write_grant, name), f"{name} does not exist on the write_grant module"
+        value = getattr(write_grant, name)
+        assert value in write_grant.CLOSE_REASONS, (
+            f"write_grant.{name} = {value!r} is not a member of write_grant.CLOSE_REASONS"
+        )
 
 
 # ---------------------------------------------------------------------------------
