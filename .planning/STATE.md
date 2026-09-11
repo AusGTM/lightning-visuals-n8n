@@ -500,8 +500,9 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-10T23:00:20Z
-**Stopped at:** Quick batch 260911-anu complete (8/8 verified passed; plugin 0.45.0 cut, pushed, marketplace clone refreshed; SAFE-01 ticked; todo triage rules §31 live). Todos: 11 -> 6 pending (3 new residuals). Next: restart Claude Code for 0.45.0 (x-enrichment-secret rotated 2026-09-11, operator-confirmed), then first supervised armed batch per docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md (operator go required).
+**Last session:** 2026-09-11T10:30:00Z
+**Stopped at:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
+**Previous stop:** Quick batch 260911-anu complete (8/8 verified passed; plugin 0.45.0 cut, pushed, marketplace clone refreshed; SAFE-01 ticked; todo triage rules §31 live). Todos: 11 -> 6 pending (3 new residuals). Next: restart Claude Code for 0.45.0 (x-enrichment-secret rotated 2026-09-11, operator-confirmed), then first supervised armed batch per docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md (operator go required).
 per 70-05-SUMMARY.md's "Next Phase Readiness" — 2c's hazard (Associate/Review Lane Sentinel's
 pre-gate anyWrite check needs to account for gate refusal once the ingest precheck is removed)
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints

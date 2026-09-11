@@ -202,6 +202,14 @@ Fallback for row 2 if ever needed: Kent Alley, Gordonvale Turf Club,
 Side observation, not a test: ATC (`9605284724`) reports `num_associated_contacts` 4 while 10
 contacts carry `@australianturfclub.com.au` addresses — six unassociated ATC people.
 
+**Corrected after the run (2026-09-11, run `a254d1e…`, executions 12365-12376, 0 writes):**
+the pre-registered outcomes for rows 2 and 3 above were written against `contact-upload`'s
+behaviour. `enrich-before-ingest` holds EVERY create `no_match` (D-70-11) and hands every
+matched row to `enrich-records` by id, so on this lane rows 1 and 4 are never ingested and
+rows 2 and 3 are never sent — the ingest send was 0 rows by construction, and batch 2 sent
+nothing at all. The D-70-17 mixed shape needs `contact-upload`. Record:
+`.planning/UAT-autonomous-batch-2026-09-09.md`.
+
 Save as `uat-batch-2026-09-09.csv` somewhere outside the repo. Name the people so you can
 find and hand-delete them in HubSpot afterwards — **HubSpot has no rollback.**
 
