@@ -711,11 +711,13 @@ def test_step_7_loads_the_persisted_classification_before_confirmed_ids():
 # quick 260911-w6o (F2-1): the persist fence hands build_entry the MERGED row.
 # =====================================================================================
 
-# The fence's own build_entry call, as edited -- first argument is the merged-row
-# lookup, falling back to the loop's own `row` only when this id has no merged entry.
+# The fence's own build_entry call, as edited -- first argument is the merged row,
+# bound to `merged_row` above this call (Phase 71: also used to derive the
+# `company_known` stamp), and the call now carries that stamp as a keyword.
 PERSIST_FENCE_BUILD_ENTRY_CALL = (
     "entry = held_queue.build_entry(\n"
-    "           merged_by_id.get(row_id, row), verdict.hold_code, verdict.reason, parsed)"
+    "           merged_row, verdict.hold_code, verdict.reason, parsed,\n"
+    "           company_known=company_known)"
 )
 
 # The OLD call shape (bare `row`, the actual F2-1 defect) -- must be gone.
@@ -765,9 +767,14 @@ def test_the_persist_fence_adds_no_merge_call_the_registered_sequence_is_untouch
     # merge_report.rows and a .get() on a local dict add no scripts-module call.
     # Phase 71 (D-71-04): `held_queue.stable_key` is now the persist key's own
     # derivation, inserted between `build_entry` and `save`.
+    # Phase 71 Plan 02 (D-71-01..03): `enrichment._clean_domain` is now the
+    # company_known stamp's own domain-cleaning call, inserted between
+    # `confidence.assess` and `held_queue.build_entry` -- read from this test's own
+    # failure output, not guessed.
     assert calls == (
         "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
-        "confidence.assess", "held_queue.build_entry", "held_queue.stable_key",
+        "confidence.assess", "enrichment._clean_domain",
+        "held_queue.build_entry", "held_queue.stable_key",
         "held_queue.save",
         "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
         "run_state.read_progress",

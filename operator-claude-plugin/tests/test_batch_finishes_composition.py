@@ -11,6 +11,7 @@ row, never stopping at either.
 """
 import chunking
 import confidence
+import enrichment
 import held_queue
 import preingest
 import run_manifest
@@ -35,10 +36,15 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
 
     rows = [
         {"row_id": "row-1", "firstname": "A", "lastname": "Fails", "company": "X"},
-        {"row_id": "row-2", "firstname": "B", "lastname": "Held", "company": "Y"},
+        {"row_id": "row-2", "firstname": "B", "lastname": "Held", "company": "Y",
+         "email": "b@heldco.example"},
         {"row_id": "row-3", "firstname": "C", "lastname": "Confident", "company": "Z",
          "email": "c@example.com"},
     ]
+    # Phase 71 (D-71-01..03): step 2's own fold, standing in for a real
+    # `preingest.confirmed_company_domains(classified, company_spec)` result --
+    # row-2's own domain is already confirmed, so its held entry gets stamped.
+    confirmed_domains = {"heldco.example": "step2_match"}
     spec = {"rows": rows, "object_type": "contacts"}
     plan = chunking.plan_chunks(spec, ceiling=1)  # one chunk per row
 
@@ -77,7 +83,18 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
             processed_row_ids.append(row_id)
             continue
 
-        entry = held_queue.build_entry(row, verdict.hold_code, verdict.reason, parsed)
+        # Phase 71 (D-71-01..03): mirrors the SKILL.md step-5 fence's own domain
+        # derivation and company_known stamp.
+        email = row.get("email")
+        domain = None
+        if isinstance(email, str) and "@" in email:
+            domain = enrichment._clean_domain(email.split("@")[-1])
+        company_known = (
+            {"domain": domain, "source": confirmed_domains[domain]}
+            if domain in confirmed_domains else None
+        )
+        entry = held_queue.build_entry(
+            row, verdict.hold_code, verdict.reason, parsed, company_known=company_known)
         # Phase 71 (D-71-04): keyed on the SOURCE row's stable identity, mirroring the
         # SKILL.md step-5 fence this test drives.
         held_entries[held_queue.stable_key(row)] = entry
@@ -109,6 +126,14 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
     # (row-3, confident) despite row-1's chunk failing outright and row-2 being held —
     # a held row or a failed chunk never stops the rows behind it.
     assert processed_row_ids == ["row-1", "row-2", "row-3"]
+
+    # Phase 71 (D-71-01..03): row-2's held entry carries the company_known stamp its
+    # own confirmed domain earned; row-1 (no email at all) carries none.
+    reloaded = held_queue.load()
+    row2_entry = reloaded[held_queue.stable_key(rows[1])]
+    assert row2_entry["company_known"] == {"domain": "heldco.example", "source": "step2_match"}
+    row1_entry = reloaded[held_queue.stable_key(rows[0])]
+    assert "company_known" not in row1_entry
 
     # row-1 (failed chunk -> unparseable) and row-2 (ambiguous) are both in the durable
     # queue, each with a reason -- keyed on their stable identity (D-71-04), not their

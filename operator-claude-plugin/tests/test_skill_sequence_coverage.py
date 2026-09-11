@@ -301,11 +301,17 @@ COVERED = {
     # covering nodeid repoints to the Task 1 composition test that actually drives a
     # save (never `test_chunking.py`'s existing match-lane test, which has no
     # business touching this new store).
+    #
+    # Phase 71 Plan 02 (D-71-01..03): the tuple gains `preingest.
+    # confirmed_company_domains`, added right after `match_state.save` -- the
+    # zero-new-lookup seed for step 6's held-row render. The covering test is
+    # extended (not replaced) to also call it over the round-tripped classification.
     (
         "enrich-before-ingest",
         (
             "config_gate.load_config", "chunking.plan_chunks", "chunking.chunk_ceiling",
             "preingest.match_batch", "preingest.classify_matches", "match_state.save",
+            "preingest.confirmed_company_domains",
         ),
     ): "test_match_state.py::test_the_recorded_batch_round_trips_through_save_load_apply_and_save_again",
     # Quick task 260911-ss4 (F1): step 3's own fence, new -- load the classification
@@ -313,10 +319,15 @@ COVERED = {
     # back under the same `match_run_id`. Same covering test as the entry above; the
     # checker requires only that the test mention the sink (`match_state.save`), and
     # that test drives it for real, twice, across this exact sequence.
+    #
+    # Phase 71 Plan 02 (D-71-01..03): re-derives `confirmed_domains` after
+    # `apply_match_decisions`, so a step-3 confirmation counts too -- same
+    # `preingest.confirmed_company_domains` addition as the entry above.
     (
         "enrich-before-ingest",
         (
             "match_state.load", "preingest.apply_match_decisions", "match_state.save",
+            "preingest.confirmed_company_domains",
         ),
     ): "test_match_state.py::test_the_recorded_batch_round_trips_through_save_load_apply_and_save_again",
     # Quick task 260911-ss4 (F1): the linkedin fence used to rebuild the WHOLE match
@@ -343,11 +354,17 @@ COVERED = {
         "enrich-before-ingest",
         ("config_gate.load_config", "run_report.prune_durable_state"),
     ): "test_run_report.py::test_config_load_composed_with_prune_durable_state_respects_the_operators_configured_ttl",
+    # Phase 71 Plan 02 (D-71-01..03): the tuple gains `enrichment._clean_domain`,
+    # inserted between `confidence.assess` and `held_queue.build_entry` -- the
+    # company_known stamp's own domain-cleaning call. Read from this test's own
+    # failure output, not guessed. The covering test is extended to actually stamp
+    # a held entry and assert it, not merely re-pinned.
     (
         "enrich-before-ingest",
         (
             "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
-            "confidence.assess", "held_queue.build_entry", "held_queue.stable_key",
+            "confidence.assess", "enrichment._clean_domain",
+            "held_queue.build_entry", "held_queue.stable_key",
             "held_queue.save",
             "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
             "run_state.read_progress",
@@ -557,14 +574,29 @@ COVERED = {
     # driven by a NEW test in a new file (test_held_queue_facets.py's own tests
     # classify dict literals directly, never a loaded queue -- they do not drive this
     # join; test_review_triage_facets.py's covering test is a different skill's fence).
+    # Phase 71 Plan 02 (D-71-01..03): the tuple gains `held_queue.stamped_domains`,
+    # inserted between `held_queue.entry_verb` and `held_queue.classify_facet` -- the
+    # stamp-read that replaces the old hardcoded `known_company_domains = set()`.
+    # Read from this test's own failure output, not guessed. The covering test now
+    # derives `known_company_domains` from a real saved-and-reloaded queue's own
+    # stamp, never a domain the test hands the fence directly.
     (
         "enrich-before-ingest",
         (
             "held_queue.classify_read", "held_queue.load", "held_queue.open_entries",
-            "held_queue.entry_verb", "held_queue.classify_facet",
+            "held_queue.entry_verb", "held_queue.stamped_domains", "held_queue.classify_facet",
         ),
     ): "test_held_facet_render_composition.py::"
        "test_step_6_fence_loads_the_queue_and_facets_what_it_loaded_not_a_dict_literal",
+    # Phase 71 Plan 02 (D-71-04): step 8's resume fence now wires `held_entries=` into
+    # `watch.resume_or_disclose`, so `held_queue.load` joins it as a nested call in the
+    # SAME fenced block -- a NEW two-call identity (the fence carried only one
+    # scripts-module call before this wiring, below the >=2 registration threshold).
+    (
+        "enrich-before-ingest",
+        ("watch.resume_or_disclose", "held_queue.load"),
+    ): "test_run_manifest.py::"
+       "test_resume_or_disclose_with_held_entries_wired_skips_a_settled_row_end_to_end",
 }
 
 NOT_A_PIPELINE = {

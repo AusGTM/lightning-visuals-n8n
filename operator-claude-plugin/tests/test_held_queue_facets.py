@@ -273,11 +273,13 @@ def test_a_settled_row_is_not_resumed_even_when_the_fingerprint_now_differs(verb
     entry = _held_row("row-1", verb=verb)
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
     current_outcome_now_matches = _outcome(tier="high", candidate_count=1)
+    resume_row = {"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}
 
     result = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
+        [resume_row],
         manifest,
-        held_entries={"row-1": entry},
+        # Phase 71 (D-71-04): keyed by the resuming row's own stable key.
+        held_entries={held_queue.stable_key(resume_row): entry},
         current_outcomes={"row-1": current_outcome_now_matches},
     )
 
@@ -290,11 +292,13 @@ def test_a_retry_row_is_resumed_even_when_the_fingerprint_is_equal():
     outcome = _outcome(tier="none", candidate_count=0)
     entry = _held_row("row-1", verb=held_queue.VERB_RETRY)
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    resume_row = {"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}
 
     result = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
+        [resume_row],
         manifest,
-        held_entries={"row-1": entry},
+        # Phase 71 (D-71-04): keyed by the resuming row's own stable key.
+        held_entries={held_queue.stable_key(resume_row): entry},
         current_outcomes={"row-1": outcome},  # identical fingerprint to hold time
     )
 
@@ -308,31 +312,33 @@ def test_an_entry_with_no_status_keeps_todays_fingerprint_behaviour_exactly():
     outcome = _outcome(tier="none", candidate_count=0)
     entry = _held_row("row-1")  # no verb recorded
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    resume_row = {"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}
+    key = held_queue.stable_key(resume_row)  # Phase 71 (D-71-04)
 
     # equal fingerprint -> still held
     equal = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
-        manifest, held_entries={"row-1": entry}, current_outcomes={"row-1": outcome},
+        [resume_row],
+        manifest, held_entries={key: entry}, current_outcomes={"row-1": outcome},
     )
     assert equal.rows == ()
     assert equal.still_held == ({"row_id": "row-1", "verdict": run_manifest.CONFIDENCE_HELD},)
 
     # differing fingerprint -> resumed
     differing = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
-        manifest, held_entries={"row-1": entry},
+        [resume_row],
+        manifest, held_entries={key: entry},
         current_outcomes={"row-1": _outcome(tier="high", candidate_count=1)},
     )
     assert len(differing.rows) == 1
 
     # missing entry or missing current outcome -> resumed
     missing_entry = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
+        [resume_row],
         manifest, held_entries={}, current_outcomes={"row-1": outcome},
     )
     assert len(missing_entry.rows) == 1
     missing_current = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
-        manifest, held_entries={"row-1": entry}, current_outcomes={},
+        [resume_row],
+        manifest, held_entries={key: entry}, current_outcomes={},
     )
     assert len(missing_current.rows) == 1

@@ -750,6 +750,39 @@ def test_a_row_with_no_identity_group_resolves_through_the_total_fallback_withou
     assert {e["row_id"] for e in result.still_held} == {"row-42"}
 
 
+def test_resume_or_disclose_with_held_entries_wired_skips_a_settled_row_end_to_end(tmp_path):
+    """Drives `enrich-before-ingest/SKILL.md` step 8's new fence for real --
+    `watch.resume_or_disclose(rows, held_entries=held_queue.load())` -- over a REAL
+    held_queue.json file, never a dict literal handed straight to `rows_to_resume`.
+    Before this wiring, the settled row's own `create` verb was dead code in
+    production: `resume_or_disclose(rows)` passed neither keyword argument.
+
+    The held entry is persisted under a PRIOR run's own row_id ("row-99") -- proving
+    the lookup is by the row's stable identity (D-71-04), not by whatever row_id
+    happened to be current when the entry was written."""
+    import watch
+
+    manifest_path = tmp_path / "run_manifest.json"
+    queue_path = tmp_path / "held_queue.json"
+
+    source_row = {"row_id": "row-99", "email": _JIMMY_EMAIL}
+    # THIS run's manifest and resuming row both use "row-1" -- the manifest's own
+    # verdict map is a per-run/per-source concept, unaffected by D-71-04.
+    run_manifest.save("run-1", {"row-1": run_manifest.CONFIDENCE_HELD}, path=manifest_path)
+    held_queue.save(
+        "run-1",
+        {held_queue.stable_key(source_row): _settled_entry_for(source_row, held_queue.VERB_CREATE)},
+        path=queue_path,
+    )
+
+    resume_row = {"row_id": "row-1", "email": _JIMMY_EMAIL}
+    report = watch.resume_or_disclose(
+        [resume_row], path=manifest_path, held_entries=held_queue.load(path=queue_path))
+
+    assert report.rows == ()
+    assert report.skipped == ({"row_id": "row-1", "verdict": run_manifest.CONFIDENCE_HELD},)
+
+
 # =====================================================================================
 # Phase 61 Plan 04 Task 3: run_manifest_path / load_scoped (REVIEW-07)
 # =====================================================================================

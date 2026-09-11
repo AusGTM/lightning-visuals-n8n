@@ -459,11 +459,14 @@ def test_persisting_an_email_into_a_held_row_does_not_make_a_no_match_hold_resum
         confidence.HOLD_NO_MATCH, "no match found", outcome,
     )
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    resume_row = {"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}
 
     result = run_manifest.rows_to_resume(
-        [{"row_id": "row-1", "firstname": "Jimmy", "lastname": "Busteed"}],
+        [resume_row],
         manifest,
-        held_entries={"row-1": entry},
+        # Phase 71 (D-71-04): keyed by the resuming row's own stable key -- this row
+        # has no company, so it falls to the total source-position fallback.
+        held_entries={held_queue.stable_key(resume_row): entry},
         current_outcomes={"row-1": outcome},
     )
     assert result.rows == ()

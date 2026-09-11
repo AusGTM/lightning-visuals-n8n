@@ -97,6 +97,16 @@ def test_the_recorded_batch_round_trips_through_save_load_apply_and_save_again(t
     assert [e["row_id"] for e in loaded_again["unmatched"]] == ["row-2", "row-3"]
     assert loaded_again["proposed"] == []
 
+    # Phase 71 Plan 02 (D-71-01..03): the same fences now also fold `confirmed_domains`
+    # -- John Miller's own auto-matched email domain, plus a company row this batch's
+    # own confirm table decided.
+    company_spec = {"companies": [{"name": "Acme Racing", "domain": "acmeracing.example"}]}
+    confirmed_domains = preingest.confirmed_company_domains(loaded_again, company_spec)
+    assert confirmed_domains == {
+        "example.com": "step2_match",
+        "acmeracing.example": "step2_company_row",
+    }
+
 
 def test_a_row_named_grant_persists_unchanged(tmp_path):
     """The load-bearing case: recorded UAT batch 2, row-1, Grant Dewsbury. A
