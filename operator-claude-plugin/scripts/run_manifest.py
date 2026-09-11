@@ -389,8 +389,8 @@ def rows_to_resume(rows, manifest, *, held_entries=None, current_outcomes=None):
 
     A row verdicted `confidence_held` (Phase 61 Plan 04 Task 3, REVIEW-C10) is compared
     by FINGERPRINT rather than by re-checking a single field like `held` does:
-    `held_entries[row_id]["resume_fingerprint"]` (recorded at hold time) against
-    `held_queue.fingerprint(held_entries[row_id]["hold_code"], current_outcomes[row_id])`
+    `held_entries[key]["resume_fingerprint"]` (recorded at hold time) against
+    `held_queue.fingerprint(held_entries[key]["hold_code"], current_outcomes[row_id])`
     (derived fresh from a CURRENT outcome — in production, one the caller obtained from
     a zero-credit free match pass, per `preingest.fetch_matches`'s own contract). Equal
     -> still excluded (`still_held`); different, or either `held_entries`/
@@ -400,6 +400,19 @@ def rows_to_resume(rows, manifest, *, held_entries=None, current_outcomes=None):
     parameters default to `None`, so every existing positional call
     (`rows_to_resume(rows, manifest)`) is byte-for-byte unchanged; only a row actually
     carrying `confidence_held` ever reads either of them.
+
+    Phase 71 (D-71-04): the `held_entries` LOOKUP KEY is `held_queue.stable_key(row)`
+    — the row's own stable identity, computed fresh from THIS call's row — never the
+    row's freshly-minted, per-run positional `row_id`. `held_entries` is keyed the
+    SAME way on the write side (`enrich-before-ingest` step 5), so an entry held in
+    an earlier run is found by a later run's row even though the two runs mint
+    different `row_id`s for it (RESEARCH Pitfall 2: never re-derive the key
+    independently in two places — call `held_queue.stable_key` on both sides). The
+    `row_id` REPORTED inside every `skipped`/`still_held` record stays
+    `row.get("row_id")` (D-69-04, source position) — only the DICT LOOKUP changes.
+    `current_outcomes` stays keyed by `row_id` (unchanged) — it is populated from a
+    fresh free match pass over THIS run's own rows, which only ever has this run's
+    `row_id`s to key by; no cross-run identity is needed there.
 
     Since 260911-w6p (F2-2), a `confidence_held` row's VERB is checked before any of
     the above: `held_queue.is_settled(entry)` (verb `create`/`skip`/`drop`) reports
@@ -436,7 +449,7 @@ def rows_to_resume(rows, manifest, *, held_entries=None, current_outcomes=None):
             continue
 
         if verdict == CONFIDENCE_HELD:
-            entry = held_entries.get(row_id)
+            entry = held_entries.get(held_queue.stable_key(row))
 
             # 260911-w6p (F2-2): a settled/retry verb short-circuits before the
             # fingerprint comparison, and before `current` is even read.
