@@ -67,6 +67,7 @@ import artifact_store
 import chunking
 import durable_paths
 import held_queue
+import match_handoff
 import remainder_queue
 import run_manifest
 import run_state
@@ -239,7 +240,7 @@ PRUNE_SHORT_TTL_DAYS = 7
 _PRUNE_SHORT_TTL_GLOBS = ("run_state-*.json", "match_state-*.json")
 _PRUNE_LONG_TTL_GLOBS = (
     "written_records-*.json", "run_audit-*.json", "run_manifest-*.json",
-    "run_report-*.md",
+    "run_report-*.md", "match_handoff-*.json",
 )
 
 # Never pruned, named explicitly rather than "everything not otherwise matched" — a
@@ -694,24 +695,31 @@ def _find_contradictions(run_id, records, scoped_verdicts, remainder_entries,
 
 
 def _render_block(run_id, records, held_section, remainder_entries, spend, disarm,
-                  balances, contradictions, gaps, total_row_ids_count, original_row_count):
+                  balances, contradictions, gaps, total_row_ids_count,
+                  enrichment_scope_row_count, handoff_classification, handoff_entries):
     lines = []
     if gaps or contradictions:
         lines.append(
             f"**REPORT INCOMPLETE** — {len(gaps)} gap(s), {len(contradictions)} "
             "contradiction(s) named below. This report joins FIVE primary durable "
-            "stores plus one run-audit record; not all of them could be read cleanly."
+            "stores, one run-audit record, and the matched-id handoff; not all of "
+            "them could be read cleanly."
         )
         lines.append("")
 
     lines.append(f"## End-of-run report — {run_id}")
     lines.append("")
 
-    # F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09): states this
-    # run's own registered row count against the caller-supplied original batch
-    # count, so a row that never reached `run_state.start_run` at all (whatever the
-    # cause — an out-of-band dispatch, a future code defect, anything) is visible on
-    # the report's own face rather than only discoverable by diffing store files.
+    # F4 (uat-batch-review-row-reads-failed, gap-closure 2026-09-09), corrected by F9
+    # (uat-autonomous-batch-2026-09-09.md): states this run's own registered row count
+    # against the caller-supplied ENRICHMENT SCOPE — never "the original batch". A row
+    # that matched an existing HubSpot record at step 2/3 is deliberately NOT in this
+    # run's scope (it never calls run_state.start_run; it is handed to enrich-records
+    # instead, see the Matched-id handoff section below) — naming the scope this way
+    # means a match here is actually true, and a mismatch still means a row that never
+    # reached run_state.start_run at all (whatever the cause — an out-of-band dispatch,
+    # a future code defect, anything), visible on the report's own face rather than
+    # only discoverable by diffing store files.
     lines.append("### Row accounting")
     if total_row_ids_count is None:
         lines.append(
@@ -722,23 +730,30 @@ def _render_block(run_id, records, held_section, remainder_entries, spend, disar
             f"- This run's own registered row count (run_state.total_row_ids): "
             f"{total_row_ids_count}."
         )
-    if original_row_count is None:
+    if enrichment_scope_row_count is None:
         lines.append(
-            "- Original batch row count: not provided by the caller — a mismatch "
+            "- This run's enrichment scope: not provided by the caller — a mismatch "
             "cannot be checked this run."
         )
-    elif original_row_count == total_row_ids_count:
+    elif enrichment_scope_row_count == total_row_ids_count:
         lines.append(
-            f"- Matches the original batch's {original_row_count} row(s) — every "
-            "row accounted for."
+            f"- Matches this run's enrichment scope of {enrichment_scope_row_count} "
+            "row(s) — every row in scope is accounted for."
         )
     else:
         lines.append(
-            f"- **MISMATCH**: the original batch named {original_row_count} row(s), "
-            f"but only {total_row_ids_count} ever reached this run's own tracked "
-            f"scope. {abs(original_row_count - (total_row_ids_count or 0))} row(s) "
+            f"- **MISMATCH**: this run's enrichment scope named "
+            f"{enrichment_scope_row_count} row(s), but only {total_row_ids_count} "
+            "ever reached this run's own tracked scope. "
+            f"{abs(enrichment_scope_row_count - (total_row_ids_count or 0))} row(s) "
             "never registered with run_state at all — check for a dispatch outside "
             "chunking.dispatch_plan."
+        )
+    if handoff_classification == PARSEABLE:
+        lines.append(
+            f"- {len(handoff_entries)} row(s) matched an existing HubSpot record and "
+            "were deliberately NOT in this run's enrichment scope — they were handed "
+            "to enrich-records instead; see the Matched-id handoff section below."
         )
     lines.append("")
 
@@ -758,6 +773,37 @@ def _render_block(run_id, records, held_section, remainder_entries, spend, disar
                 )
     else:
         lines.append("- (no records)")
+    lines.append("")
+
+    # F9 (uat-autonomous-batch-2026-09-09.md): the matched-id handoff — persisted by
+    # enrich-before-ingest step 7 (match_handoff.record_handoff) — is the durable
+    # record of every row this run handed to enrich-records via `confirmed_ids`.
+    # Named by FILE NAME only, never an absolute path (prune_durable_state's own
+    # home-directory rule).
+    lines.append("### Matched-id handoff")
+    handoff_file_name = f"match_handoff-{run_id}.json"
+    if handoff_classification == PARSEABLE:
+        if handoff_entries:
+            lines.append(
+                f"- {len(handoff_entries)} matched row(s) handed to enrich-records, "
+                f"recorded in {handoff_file_name}:"
+            )
+            for entry in handoff_entries:
+                lines.append(
+                    f"  - {entry.get('row_id')} -> {entry.get('hs_object_id')}"
+                )
+        else:
+            lines.append(
+                f"- Nothing was handed onward — {handoff_file_name} recorded an "
+                "empty handoff."
+            )
+    elif handoff_classification == ABSENT:
+        lines.append("- No matched-id handoff was recorded for this run.")
+    else:
+        lines.append(
+            f"- {handoff_file_name} could not be read cleanly for this run — see "
+            "Known gaps below."
+        )
     lines.append("")
 
     lines.append("### Held rows")
@@ -862,11 +908,12 @@ def _render_block(run_id, records, held_section, remainder_entries, spend, disar
 
 
 def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
-                     ceiling=None, original_row_count=None):
+                     ceiling=None, enrichment_scope_row_count=None):
     """One end-of-run report over FIVE primary durable stores
-    (`written_records`, `run_state`, `run_manifest`, `held_queue`, `remainder_queue`)
-    plus one run-audit record (`record_audit`/`load_audit`) — AFTER-01, AFTER-03's
-    operator-facing half, G-4's disclosure half.
+    (`written_records`, `run_state`, `run_manifest`, `held_queue`, `remainder_queue`),
+    one run-audit record (`record_audit`/`load_audit`), and the matched-id handoff
+    (`match_handoff`) — AFTER-01, AFTER-03's operator-facing half, G-4's disclosure
+    half.
 
     `outcomes` is a SEQUENCE of this run's `chunking.DispatchOutcome`s (plural — the
     pair pipeline runs match/enrich/re-request/ingest passes under one grant and one
@@ -875,15 +922,21 @@ def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
     a stated gap. Never raises: a missing or malformed input degrades to a named entry
     in `gaps`, never an exception.
 
-    `original_row_count` (F4, uat-batch-review-row-reads-failed, gap-closure
-    2026-09-09): keyword-only, defaults to `None` — the caller's own count of rows the
-    batch started with (e.g. the spreadsheet's row count), compared in the rendered
-    block against `run_state.total_row_ids`'s own count for this run. A mismatch
-    means some row never reached `run_state.start_run` at all — the exact shape F4
-    found live (a row dispatched out-of-band, bypassing every SKILL.md-sanctioned
-    bookkeeping path) — named on the report's own face rather than only discoverable
-    by diffing store files by hand. `None` (the caller did not pass it) states the
-    comparison as unavailable rather than guessing.
+    `enrichment_scope_row_count` (F4, uat-batch-review-row-reads-failed, gap-closure
+    2026-09-09; RENAMED by F9, uat-autonomous-batch-2026-09-09.md — a hard rename, no
+    alias): keyword-only, defaults to `None` — the caller's own count of rows THIS
+    RUN'S ENRICHMENT SCOPE covers (the rows that entered `run_state.start_run`), never
+    the whole original batch. A row that matched an existing HubSpot record at step
+    2/3 is deliberately NOT in this run's scope — it is handed to `enrich-records` via
+    the matched-id handoff instead (see `match_handoff.py`) — so this argument was
+    renamed from `original_row_count`: naming it "the original batch" produced a false
+    MISMATCH on every batch with an ordinary matched row (F9). Compared in the
+    rendered block against `run_state.total_row_ids`'s own count for this run; a
+    mismatch still means some row never reached `run_state.start_run` at all — the
+    exact shape F4 found live (a row dispatched out-of-band, bypassing every
+    SKILL.md-sanctioned bookkeeping path) — named on the report's own face rather than
+    only discoverable by diffing store files by hand. `None` (the caller did not pass
+    it) states the comparison as unavailable rather than guessing.
 
     The rendered block is PERSISTED to `report_path(run_id)` before this function
     returns — for both the happy path and the internal-error degrade path below —
@@ -893,7 +946,7 @@ def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
     try:
         report = _build_run_report(
             run_id, config, tuple(outcomes or ()), disarm, balances, ceiling,
-            original_row_count,
+            enrichment_scope_row_count,
         )
     except Exception as exc:  # noqa: BLE001 — this is the report's own never-raise contract.
         gaps = [f"internal report error: {exc!r} — this report is incomplete."]
@@ -904,13 +957,14 @@ def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
         report = {
             "run_id": run_id, "records": {}, "held": {"this_run": [], "backlog": {}},
             "remainder": [], "spend": {}, "disarm": None, "balances": {},
-            "contradictions": [], "gaps": gaps, "block": block,
+            "contradictions": [], "gaps": gaps, "block": block, "handoff": [],
         }
     _persist_report(run_id, report["block"])
     return report
 
 
-def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling, original_row_count):
+def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling,
+                      enrichment_scope_row_count):
     gaps = []
 
     # --- written_records --------------------------------------------------------------
@@ -970,6 +1024,24 @@ def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling, origi
     resolved_disarm = disarm if disarm is not None else audit_facts.get("disarm")
     resolved_balances = balances if balances is not None else audit_facts.get("balances")
 
+    # --- the matched-id handoff (F9, uat-autonomous-batch-2026-09-09.md) -------------
+    handoff_classification = match_handoff.classify_read(run_id)
+    _add_gap(gaps, "match_handoff", handoff_classification)
+    if handoff_classification == ABSENT and enrichment_scope_row_count is not None:
+        # This store departs from the sibling contract on purpose: a blanket ABSENT
+        # gap would raise REPORT INCOMPLETE on every report the three other
+        # report-calling skills (contact-upload, suggest-contacts, enrich-records)
+        # produce, for a file they were never meant to write. `enrichment_scope_row_
+        # count` is passed by enrich-before-ingest and by nothing else, so this fires
+        # exactly on the lane whose step 7 was supposed to write the handoff, and
+        # stays silent everywhere else. Never widen this to a plain ABSENT check.
+        gaps.append(
+            "match_handoff: absent — this run's enrichment scope was reported, so "
+            "enrich-before-ingest's step 7 was expected to record a matched-id "
+            "handoff for it; none exists."
+        )
+    handoff_entries = match_handoff.load(run_id)
+
     # --- spend -------------------------------------------------------------------------
     projected_from_outcomes = (
         sum(chunking.projected_spend(o) for o in outcomes) if outcomes else None
@@ -1001,7 +1073,8 @@ def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling, origi
 
     block = _render_block(
         run_id, records, held_section, remainder_entries, spend, resolved_disarm,
-        resolved_balances, contradictions, gaps, progress.total, original_row_count)
+        resolved_balances, contradictions, gaps, progress.total,
+        enrichment_scope_row_count, handoff_classification, handoff_entries)
 
     return {
         "run_id": run_id,
@@ -1014,4 +1087,5 @@ def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling, origi
         "contradictions": contradictions,
         "gaps": gaps,
         "block": block,
+        "handoff": handoff_entries,
     }

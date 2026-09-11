@@ -18,6 +18,7 @@ import chunking
 import confidence
 import durable_paths
 import held_queue
+import match_handoff
 import remainder_queue
 import run_manifest
 import run_report
@@ -262,9 +263,11 @@ def test_row_accounting_states_unknown_when_no_original_row_count_is_given(tmp_p
 def test_row_accounting_reports_a_match(tmp_path, monkeypatch):
     _patch_durable_dir(monkeypatch, tmp_path)
     run_state.start_run("run-rowcount-2", ["row-1", "row-2"])
-    report = run_report.build_run_report("run-rowcount-2", {}, original_row_count=2)
-    assert "every row accounted for" in report["block"]
+    report = run_report.build_run_report(
+        "run-rowcount-2", {}, enrichment_scope_row_count=2)
+    assert "enrichment scope" in report["block"]
     assert "MISMATCH" not in report["block"]
+    assert "matches the original batch" not in report["block"].lower()
 
 
 def test_row_accounting_flags_a_mismatch(tmp_path, monkeypatch):
@@ -272,9 +275,90 @@ def test_row_accounting_flags_a_mismatch(tmp_path, monkeypatch):
     ever registered 2 of them."""
     _patch_durable_dir(monkeypatch, tmp_path)
     run_state.start_run("run-rowcount-3", ["row-1", "row-2"])
-    report = run_report.build_run_report("run-rowcount-3", {}, original_row_count=3)
+    report = run_report.build_run_report(
+        "run-rowcount-3", {}, enrichment_scope_row_count=3)
     assert "MISMATCH" in report["block"]
     assert "3" in report["block"] and "2" in report["block"]
+
+
+def test_build_run_report_signature_has_the_renamed_keyword_only():
+    params = inspect.signature(run_report.build_run_report).parameters
+    assert "enrichment_scope_row_count" in params
+    assert not [n for n in params if n.startswith("original")]
+
+
+# =====================================================================================
+# F9 (uat-autonomous-batch-2026-09-09.md): the matched-id handoff section — rows that
+# matched an existing HubSpot record at step 2/3 are deliberately NOT in this run's
+# enrichment scope (they never call run_state.start_run); the handoff file is where
+# they are accounted for instead.
+# =====================================================================================
+
+
+def test_handoff_section_renders_recorded_entries_and_a_scope_note(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    run_state.start_run("run-handoff-1", ["row-2", "row-3"])
+    match_handoff.record_handoff("run-handoff-1", [
+        {"row_id": "row-1", "hs_object_id": "3601", "confirmed": False},
+        {"row_id": "row-4", "hs_object_id": "3501", "confirmed": True},
+    ])
+    report = run_report.build_run_report(
+        "run-handoff-1", {}, enrichment_scope_row_count=2)
+
+    assert "### Matched-id handoff" in report["block"]
+    assert "match_handoff-run-handoff-1.json" in report["block"]
+    assert "row-1" in report["block"] and "3601" in report["block"]
+    assert "row-4" in report["block"] and "3501" in report["block"]
+    # scope note in the row-accounting section, so scope + handoff add back to 4
+    assert "2" in report["block"]
+    assert report["handoff"] == [
+        {"row_id": "row-1", "hs_object_id": "3601", "confirmed": False},
+        {"row_id": "row-4", "hs_object_id": "3501", "confirmed": True},
+    ]
+
+
+def test_handoff_section_states_none_recorded_when_absent_and_no_gap_without_scope(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    report = run_report.build_run_report("run-handoff-2", {})
+    assert "### Matched-id handoff" in report["block"]
+    assert not any("match_handoff" in g for g in report["gaps"])
+
+
+def test_absent_handoff_is_a_named_gap_only_when_scope_count_is_supplied(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    report = run_report.build_run_report(
+        "run-handoff-3", {}, enrichment_scope_row_count=0)
+    assert any("match_handoff" in g and "absent" in g for g in report["gaps"])
+    assert "REPORT INCOMPLETE" in report["block"]
+
+
+def test_empty_but_present_handoff_renders_nothing_handed_onward_with_no_gap(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    match_handoff.record_handoff("run-handoff-4", [])
+    report = run_report.build_run_report(
+        "run-handoff-4", {}, enrichment_scope_row_count=0)
+    assert "nothing was handed onward" in report["block"].lower()
+    assert not any("match_handoff" in g for g in report["gaps"])
+
+
+def test_a_malformed_handoff_file_is_a_named_gap_regardless_of_scope_count(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        match_handoff, "handoff_path",
+        lambda run_id: tmp_path / f"match_handoff-{run_id}.json")
+    (tmp_path / "match_handoff-run-handoff-5.json").write_text("{not valid json")
+    report = run_report.build_run_report("run-handoff-5", {})
+    assert any("match_handoff" in g and "anomalous" in g for g in report["gaps"])
+
+
+def test_a_foreign_run_handoff_file_is_a_named_gap_regardless_of_scope_count(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        match_handoff, "handoff_path",
+        lambda run_id: tmp_path / "match_handoff-shared.json")
+    match_handoff.record_handoff("run-other", [{"row_id": "r1", "hs_object_id": "1"}])
+    report = run_report.build_run_report("run-handoff-6", {})
+    assert any("match_handoff" in g and "another run" in g for g in report["gaps"])
 
 
 def test_build_run_report_signature_takes_outcomes_plural_not_outcome():
@@ -735,7 +819,7 @@ def test_prune_durable_state_keeps_a_run_state_file_within_the_short_ttl(tmp_pat
 
 @pytest.mark.parametrize("name", [
     "written_records-abc.json", "run_audit-abc.json", "run_manifest-abc.json",
-    "run_report-abc.md",
+    "run_report-abc.md", "match_handoff-abc.json",
 ])
 def test_prune_durable_state_deletes_each_long_ttl_family_past_its_ttl(tmp_path, monkeypatch, name):
     _patch_durable_dir(monkeypatch, tmp_path)
@@ -751,7 +835,7 @@ def test_prune_durable_state_deletes_each_long_ttl_family_past_its_ttl(tmp_path,
 
 @pytest.mark.parametrize("name", [
     "written_records-abc.json", "run_audit-abc.json", "run_manifest-abc.json",
-    "run_report-abc.md",
+    "run_report-abc.md", "match_handoff-abc.json",
 ])
 def test_prune_durable_state_keeps_each_long_ttl_family_within_its_ttl(tmp_path, monkeypatch, name):
     _patch_durable_dir(monkeypatch, tmp_path)
