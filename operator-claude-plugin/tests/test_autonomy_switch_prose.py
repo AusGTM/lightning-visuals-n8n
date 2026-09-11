@@ -310,9 +310,17 @@ def test_review_triage_and_backend_control_read_no_autonomy_level():
 
 def test_enrich_before_ingest_and_readme_state_the_never_created_without_approval_fact():
     """Matches on short clauses genuinely common to both files rather than a whole
-    paragraph: the README addresses the operator directly ("your end-of-run
-    approval") while the SKILL addresses Claude ("the operator's end-of-run
-    approval"), so the possessive itself cannot be part of the matched substring."""
+    paragraph: the README addresses the operator directly ("your explicit reply")
+    while the SKILL addresses Claude ("the operator's explicit reply"), so the
+    possessive itself cannot be part of the matched substring.
+
+    RECORDED EDIT -- quick 260911-w6r, F2, operator ruling 2026-09-11. The clause used
+    to read "...without the operator's/your end-of-run approval" -- true when this
+    test was written, false once the ruling replaced the end-of-run approve/deny/pick
+    review pass (never actually implemented in code for a no_match hold) with step 6's
+    facet render and ready answer. The reply can land right at step 6, mid-run, never
+    only "at the end" -- so the clause is corrected to "explicit reply", the shared
+    fact both files still need to state: a new person is never created silently."""
     skill_text = _text(TARGETS["enrich-before-ingest"]["path"])
     readme_text = _text(PLUGIN_ROOT / "README.md")
 
@@ -320,7 +328,7 @@ def test_enrich_before_ingest_and_readme_state_the_never_created_without_approva
         assert "is never created without" in text, (
             f"{label} must state the never-created-without-approval clause"
         )
-        assert "end-of-run approval" in text, (
-            f"{label} must state the end-of-run-approval clause"
+        assert "explicit reply" in text, (
+            f"{label} must state the explicit-reply clause"
         )
 

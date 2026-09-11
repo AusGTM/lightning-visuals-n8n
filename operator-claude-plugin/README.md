@@ -145,13 +145,17 @@ A batch of three hundred contacts must not become three hundred conversations. S
 - **A row it is not confident about is held** — never guessed, never written, and never asked
   about in the middle of the run.
 - **The batch always finishes.** A held row never stops the rows behind it.
-- **Held rows collect into one review queue**, cleared in a single pass at the end, in the same
-  approve / deny / pick vocabulary the rest of the flow already uses.
-- **A new person is never created without your end-of-run approval.** This follows from the
+- **Held rows are shown, never silently dropped.** A no-match hold is faceted at read time (new
+  person / needs a company / nothing found) and answered by a ready reply — in the conversation
+  right there, or later in a dedicated review pass; every other hold still uses the same
+  approve / deny / pick vocabulary the rest of the flow already uses. (F2, operator ruling
+  2026-09-11.)
+- **A new person is never created without your explicit reply.** This follows from the
   first two points rather than being a separate rule: a row with no HubSpot match is by
   definition a row the system is not confident about, so it is held — and every create is a
-  no-match row. Autonomy makes the batch finish; it never makes a person. (Stated plainly here
-  in Phase 70, D-70-11 — this is unchanged behaviour being made legible, not a new policy.)
+  no-match row. Autonomy makes the batch finish; it never makes a person, and the batch never
+  waits for that reply either. (Stated plainly here in Phase 70, D-70-11, reply shape corrected
+  by the F2 ruling, 2026-09-11.)
 
 Confidence here is a deterministic decision table over signals the pipeline already produces —
 how strong the HubSpot match was, whether the providers agreed, and whether a material conflict

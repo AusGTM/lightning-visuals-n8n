@@ -798,26 +798,23 @@ whatever seven columns happened to be in the source file.
    A row this table cannot confirm is HELD, not guessed and not asked about here — the
    run moves straight to the next row regardless of what this one did, and reaches its
    last row whatever any single row's chunk or verdict was. Held rows do not join the
-   `sendable`/`send` set below; they are collected, and shown ONCE, in the end-of-run
-   review pass described after step 7's report.
+   `sendable`/`send` set below; they are collected and shown at step 6, faceted by
+   `held_queue.classify_facet`, before step 7 ever asks for a write.
 
-   **A new person is never created without the operator's end-of-run approval.** A row
-   with no HubSpot match is by definition a row the system is unconfident about, so it
-   is held — and every create is such a row (D-70-11). One honest gap found while
-   closing this todo: nothing in this flow today turns an approved held row into a
-   send — `held_queue.py` exposes no approve verb, `partition_for_ingest` takes no
-   approved-rows input, and step 8's resume re-includes a held row only when it gains
-   an email, which does not make an unmatched row matched. How a new person reaches
-   HubSpot once the operator approves the hold is open; see
-   `.planning/todos/pending/2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row.md`.
+   **A new person is never created without the operator's explicit reply (F2, operator
+   ruling 2026-09-11).** A row with no HubSpot match is by definition a row the system
+   is unconfident about, so it is held — and every create is such a row (D-70-11).
+   Step 6 facets each `no_match` hold at read time (new person / needs a company /
+   nothing found) and renders a ready answer; a new person reaches HubSpot only through
+   a count-restating reply in this conversation, or later in
+   `/operator-claude-plugin:review-triage` — never guessed, and never silent.
 
-   **The end-of-run review reuses step 3's own numbered-table vocabulary — `approve` /
-   `deny` / `pick <sub-label>` / `email: <address>` — never a second decision
-   vocabulary.** Its two safety rules carry over unchanged: a bare blanket approval
-   with no named scope is refused, and one malformed line refuses the whole table
-   before anything is applied. `approve` on a held row means proceed with it despite
-   the hold; `pick` selects among a `HOLD_AMBIGUOUS_CANDIDATES` row's own real
-   candidates, the same as an ordinary ambiguous, multi-candidate proposal.
+   **A `HOLD_AMBIGUOUS_CANDIDATES` row keeps step 3's own vocabulary — `approve` /
+   `deny` / `pick <sub-label>` / `email: <address>` — untouched by this ruling.**
+   `pick` selects among its own real candidates, the same as an ordinary ambiguous,
+   multi-candidate proposal. This is a different hold code from `no_match`;
+   `held_queue.classify_facet` reads `None` for it, so it is never routed through step
+   6's facet render or its ready answer.
 
    **What stays exactly as it is, said here so it is not mistaken for relaxed:** the
    non-clobber merge policy, the write-safety gate nodes, `plan_grant`'s empty-record-
@@ -853,6 +850,69 @@ whatever seven columns happened to be in the source file.
    the provider's newer value instead — say plainly which happened, never assume the
    source value survived. This is the moment the operator is actually deciding
    something, not a status update on the way to a decision already made.
+
+   **This run's held rows, faceted at read time, never asked about (F2, operator
+   ruling 2026-09-11).** The recorded run `a254d1eda71246a2a964922cdf5c2bd2` asked
+   "how do you want to handle batch 1's two held rows?" at this exact step (UAT F4) —
+   that question is the rejected shape and is not restored here as a courtesy. What
+   runs instead is a read, not a question:
+
+   ```python
+   import held_queue
+
+   held_state = held_queue.classify_read()
+   held_entries = held_queue.load()
+   still_open = held_queue.open_entries(held_entries)
+   undecided = {rid: e for rid, e in still_open.items()
+                if held_queue.entry_verb(e) is None}
+
+   known_company_domains = set()  # nothing confirmed yet this run -- w6p's own safe
+                                   # default; classify_facet reads needs_company until
+                                   # a domain is actually resolved
+   by_facet = {}
+   for rid, entry in undecided.items():
+       by_facet.setdefault(
+           held_queue.classify_facet(entry, known_company_domains), []).append(rid)
+   ```
+
+   Render three groups from `by_facet`, in this order. `held_queue.FACET_NEW_PERSON`
+   rows are named individually, by person, with what the waterfall actually revealed —
+   the email, phone, or LinkedIn the merged row now carries (F2-1: this data reaches
+   disk now, so read it from the entry, never re-derive it). `held_queue.
+   FACET_NEEDS_COMPANY` rows are named separately, by person, with what is missing — a
+   usable email but no company yet known to HubSpot. `held_queue.FACET_NOTHING_FOUND`
+   rows are never named individually here; they are one parked count line, since there
+   is nothing found to show per person.
+
+   State the one ready answer, on one line, offering both routes with equal weight and
+   defaulting to neither: reply in this conversation with a count-restating `create all
+   2` (an actual number, restating the new-person count shown — a scopeless reply is
+   refused, the same rule step 3's own `approve all 6` already obeys), or work them
+   later in `/operator-claude-plugin:review-triage`.
+
+   **This is a rendering, not a question.** No `AskUserQuestion`, no stop-and-wait —
+   silence is a valid outcome, and the batch continues to step 7 and the report
+   whatever the operator does or does not say about these rows.
+
+   If the operator does reply in this conversation with a count-restating create, do
+   not build a create here — run review-triage's own create block against these
+   entries, by heading, never a second copy of it: **"Held rows: build the CSV for the
+   creates this sitting chose (2c's `create` verb)."**, **"Send it — contact-upload's
+   own dispatch, by heading, never a second copy of it here."**, and **"Confirm by
+   re-reading, then mark — ONE call for the whole create batch, never one per row."**
+   Same functions, same order, same per-record confirmation as that block already
+   runs — this is the identical by-reference discipline this skill already applies to
+   `contact-upload` steps 6-10, and the identical reason CLAUDE.md §13.0.1 gives for
+   refusing rather than duplicating the association rule: one implementation, in one
+   file.
+
+   The create runs under the standing grant opened at step 5, whose scope was fixed at
+   open time from step 2's confirmed domains. When `write_grant.covers()` refuses a row
+   whose enriched domain that table never named (the F8 shape, recorded run above),
+   relay the refusal in the operator's own terms — exactly as review-triage's own step
+   7 relays `grant_not_authorized` — and take the second route instead, where
+   review-triage opens a review-lane grant over exactly those records. The grant is
+   never widened here, and no second standing grant is opened.
 
 7. **Ask for the HubSpot write, then ingest.** Skip this step entirely if step 1 reported
    `can_send: false`. Otherwise: disarmed is the default here too. Say plainly that sending
@@ -1247,6 +1307,16 @@ whatever seven columns happened to be in the source file.
    real time, and autonomy is precisely the condition under which that premise stops
    holding: nobody is necessarily watching that lane in real time either. Its own step-7
    per-record report is unchanged and still renders first.
+
+   **Restate the held-row facets and the ready answer, once more, in one short
+   paragraph (F2, 2026-09-11).** An operator who reads only the end of a long run
+   still needs the route: repeat this run's own `held_queue.FACET_NEW_PERSON` /
+   `held_queue.FACET_NEEDS_COMPANY` / `held_queue.FACET_NOTHING_FOUND` counts step 6
+   already rendered, and the same one-line ready answer — reply `create all 2`
+   (restating the count) now, or work them later in
+   `/operator-claude-plugin:review-triage`. This is a restatement of step 6's own
+   numbers, never a second read of the queue, and it must not contradict what
+   `report["block"]`'s own Held rows section already printed above it.
 
 10. **Close the grant, after the report — every run, every exit (F11,
     `.planning/UAT-autonomous-batch-2026-09-09.md`).** Step 7 already closes the grant

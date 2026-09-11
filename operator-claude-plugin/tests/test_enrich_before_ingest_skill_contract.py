@@ -40,6 +40,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import held_queue
 import write_grant
 from test_skill_sequence_coverage import extract_python_blocks, parse_calls, scripts_modules
 
@@ -768,3 +769,126 @@ def test_the_persist_fence_adds_no_merge_call_the_registered_sequence_is_untouch
         "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
         "run_state.read_progress",
     )
+
+
+# =====================================================================================
+# Quick 260911-w6r (F2-4): step 6 shows the held rows by facet and hands over a ready
+# answer, never a question (UAT F4); step 5's stale review-pass/open-todo text is
+# corrected; step 9 restates the facets and the answer. Operator ruling 2026-09-11.
+# =====================================================================================
+
+# The recorded run's own asked question (UAT F4, .planning/UAT-autonomous-batch-
+# 2026-09-09.md line 78) -- the rejected shape, quoted exactly rather than paraphrased.
+F4_REJECTED_QUESTION = "how do you want to handle batch 1's two held rows?"
+
+# review-triage/SKILL.md's create-step headings (4a/4b/4c), exact bold text -- quoted
+# by heading in step 6, never reproduced. Same idiom as CONTACT_UPLOAD_HANDOFF_HEADINGS
+# above, plus a cross-file existence check that pin does not have.
+REVIEW_TRIAGE_CREATE_HEADINGS = (
+    "Held rows: build the CSV for the creates this sitting chose (2c's `create` verb).",
+    "Send it — contact-upload's own dispatch, by heading, never a second copy of it here.",
+    "Confirm by re-reading, then mark — ONE call for the whole create batch, never one per row",
+)
+
+# A distinctive literal from review-triage's OWN create fence (4a) -- its presence here
+# would mean the mechanics were copied, not referenced (mirrors
+# test_the_skill_does_not_reproduce_contact_upload_step_bodies above).
+REVIEW_TRIAGE_CREATE_FENCE_LITERAL = 'held_entries[rid]["row"] for rid in chosen_row_ids'
+
+REVIEW_TRIAGE_SKILL_PATH = PLUGIN_ROOT / "skills" / "review-triage" / "SKILL.md"
+
+
+def test_step_6_asks_nothing_about_held_rows_and_names_f4_as_the_rejected_shape():
+    """UAT F4: step 6 used to ask "how do you want to handle batch 1's two held
+    rows?" on a lane whose own doc says it does not ask at step 6. The 2026-09-11 F2
+    ruling replaces the question with a facet render and a ready answer."""
+    span = _step_span("6")
+    normalized = _normalized(span).lower()
+    assert "this is a rendering, not a question" in normalized
+    assert F4_REJECTED_QUESTION.lower() in normalized
+    assert "is the rejected shape" in normalized
+
+
+@pytest.mark.parametrize("facet", sorted(held_queue.ALL_FACETS))
+def test_step_6_names_every_shipped_facet(facet):
+    """Read off held_queue.ALL_FACETS -- never a hand-typed list that can drift."""
+    span = _step_span("6")
+    assert f"FACET_{facet.upper()}" in span, (
+        f"held_queue.ALL_FACETS names {facet!r}; step 6 must render it by the "
+        "classifier's own constant name"
+    )
+
+
+def test_step_6_carries_the_ready_answer_with_both_routes():
+    span = _step_span("6")
+    normalized = _normalized(span).lower()
+    assert "create all 2" in normalized
+    assert "/operator-claude-plugin:review-triage" in span
+
+
+def test_bare_create_all_never_appears_without_a_trailing_count_or_scope():
+    """Direct mirror of test_bare_approve_all_never_appears_without_a_trailing_count_
+    or_scope's own \\s*\\d regex, reused unchanged -- a bare 'create all' would repeat
+    the original nine-directors mistake for a create instead of a match."""
+    body = _normalized(_text())
+    matches = list(re.finditer(r"create all", body, re.IGNORECASE))
+    assert matches, "expected at least one 'create all' (scoped) example in SKILL.md"
+    for match in matches:
+        tail = body[match.end():match.end() + 6]
+        assert re.match(r"\s*\d", tail), (
+            f"found a bare 'create all' with no trailing count/scope at character "
+            f"offset {match.start()}: {body[max(0, match.start() - 20):match.end() + 20]!r}"
+        )
+
+
+def test_step_6_never_waits_and_reaches_step_7_regardless():
+    span = _step_span("6")
+    normalized = _normalized(span).lower()
+    assert "silence is a valid outcome" in normalized
+    assert "the batch continues to step 7" in normalized
+
+
+def test_step_6_quotes_review_triages_create_headings_and_they_still_exist_there():
+    span = _step_span("6")
+    review_triage_text = REVIEW_TRIAGE_SKILL_PATH.read_text(encoding="utf-8")
+    for heading in REVIEW_TRIAGE_CREATE_HEADINGS:
+        assert _normalized(heading) in _normalized(span), (
+            f"expected review-triage/SKILL.md's create-step heading {heading!r} to be "
+            "quoted by step 6, not paraphrased or reproduced as new prose"
+        )
+        assert _normalized(heading) in _normalized(review_triage_text), (
+            f"the quoted heading {heading!r} no longer exists verbatim in "
+            "review-triage/SKILL.md -- a renamed heading must be re-quoted here too"
+        )
+
+
+def test_step_6_does_not_reproduce_review_triages_create_mechanics():
+    assert REVIEW_TRIAGE_CREATE_FENCE_LITERAL not in _text()
+
+
+def test_step_6_states_the_grant_boundary_the_refusal_relay_and_no_widening():
+    span = _step_span("6")
+    normalized = _normalized(span).lower()
+    assert "standing grant opened at step 5" in normalized
+    assert "relay the refusal in the operator's own terms" in normalized
+    assert "grant_not_authorized" in normalized
+    assert "the grant is never widened here" in normalized
+    assert "no second standing grant is opened" in normalized
+
+
+def test_step_5_no_longer_promises_a_review_pass_positioned_after_the_report_step():
+    span = _step_span("5")
+    assert "review pass described after step 7's report" not in span
+
+
+def test_step_5_no_longer_points_at_the_closed_pending_todo():
+    text = _text()
+    assert "no-plugin-path-turns-an-approved-held-row-into-a-sent-row" not in text
+
+
+def test_step_9_restates_the_facet_counts_and_the_ready_answer():
+    span = _step_span("9")
+    normalized = _normalized(span).lower()
+    for facet in held_queue.ALL_FACETS:
+        assert f"facet_{facet}" in normalized
+    assert "create all 2" in normalized
