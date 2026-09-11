@@ -37,7 +37,7 @@ import preingest
 # recorded run a254d1eda71246a2a964922cdf5c2bd2 shape, reused rather than re-derived.
 # =====================================================================================
 
-def _entry(email, company, hold_code=confidence.HOLD_NO_MATCH, status=None):
+def _entry(email, company, hold_code=confidence.HOLD_NO_MATCH, status=None, company_known=None):
     entry = {
         "hold_code": hold_code,
         "reason": "no match found for this row",
@@ -47,13 +47,19 @@ def _entry(email, company, hold_code=confidence.HOLD_NO_MATCH, status=None):
     }
     if status is not None:
         entry["status"] = status
+    if company_known is not None:
+        entry["company_known"] = company_known
     return entry
 
 
 # Jimmy Busteed: a real new person at Australian Turf Club, once that club's own
-# domain is known to already be in HubSpot.
-JIMMY_ENTRY = _entry("jbusteed@australianturfclub.com.au", "Australian Turf Club")
+# domain is known to already be in HubSpot. Phase 71 (D-71-01..03): stamped at
+# persist time -- a cold start reads him as new_person from the stamp alone, with
+# no domain the test hands the fence directly.
 JIMMY_DOMAIN = "australianturfclub.com.au"
+JIMMY_ENTRY = _entry(
+    "jbusteed@australianturfclub.com.au", "Australian Turf Club",
+    company_known={"domain": JIMMY_DOMAIN, "source": "step2_match"})
 
 # Katie Poggioli: carries a company NAME (Atherton Turf Club), but classify_facet
 # never reads that column -- what puts her in needs_company is that HER OWN domain
@@ -77,17 +83,21 @@ SETTLED_ENTRY = _entry(
 
 def _read_and_facet(path, known_company_domains=frozenset()):
     """The documented step 2b/2c read/bucket fence, run for real — see
-    `review-triage/SKILL.md` step 2b."""
+    `review-triage/SKILL.md` step 2b. `known_company_domains` here is what an
+    in-conversation source (2c) would ADD on top of the cold-start seed -- the seed
+    itself is always folded in from the queue's own `company_known` stamps
+    (`held_queue.stamped_domains`), never supplied by a caller from scratch."""
     held_state = held_queue.classify_read(path=path)
     held_entries = held_queue.load(path=path)
     still_open = held_queue.open_entries(held_entries)
     undecided = {rid: e for rid, e in still_open.items()
                  if held_queue.entry_verb(e) is None}
 
+    domains = held_queue.stamped_domains(held_entries) | set(known_company_domains)
     by_facet = {}
     for rid, entry in undecided.items():
         by_facet.setdefault(
-            held_queue.classify_facet(entry, known_company_domains), []).append(rid)
+            held_queue.classify_facet(entry, domains), []).append(rid)
 
     shown = (set(by_facet.get(held_queue.FACET_NEW_PERSON, []))
              | set(by_facet.get(held_queue.FACET_NEEDS_COMPANY, [])))
@@ -119,16 +129,21 @@ def recovers_matches(monkeypatch):
 
 def test_one_held_new_person_end_to_end_read_render_create_confirm_mark(
         tmp_path, fake_config, stub_post_transport_factory, recovers_matches):
+    """A COLD START: no prior conversation, no domain the test hands the fence
+    directly -- Jimmy's own `company_known` stamp (written at persist time,
+    D-71-01) is the ONLY thing that puts him in new_person here."""
     queue_path = tmp_path / "held_queue.json"
     held_queue.save(
         "run-1", {"row-jimmy": JIMMY_ENTRY, "row-settled": SETTLED_ENTRY},
         path=queue_path)
 
     # Behaviour 1: a no_match entry whose row carries an email, bucketed under
-    # new-person once its own domain is known.
+    # new-person from its own stamp -- no known_company_domains supplied by the
+    # caller at all.
     held_state, held_entries, still_open, undecided, by_facet, parked_ids = (
-        _read_and_facet(queue_path, known_company_domains={JIMMY_DOMAIN}))
+        _read_and_facet(queue_path))
     assert held_state == held_queue.PARSEABLE
+    assert held_queue.stamped_domains(held_entries) == {JIMMY_DOMAIN}
     assert by_facet[held_queue.FACET_NEW_PERSON] == ["row-jimmy"]
     # Same call `_read_and_facet` makes internally, inline here too so this test
     # function's OWN source names the sink `test_skill_sequence_coverage.py` checks

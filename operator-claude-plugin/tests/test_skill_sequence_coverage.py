@@ -542,11 +542,18 @@ COVERED = {
     # output feeds the undecided comprehension (entry_verb per entry), whose output feeds
     # classify_facet per entry. One test drives the whole read-render-create-confirm-mark
     # flow for real, so all three review-triage identities below share its nodeid.
+    #
+    # Phase 71 Plan 02 (D-71-01..03): the tuple gains `held_queue.stamped_domains`,
+    # inserted between `held_queue.entry_verb` and `held_queue.classify_facet` -- the
+    # stamp-read that replaces the old hardcoded `known_company_domains = set()`. Read
+    # from this test's own failure output, not guessed. The covering test now drives a
+    # COLD START -- a stamped queue saved to a temp path and loaded fresh, with no
+    # domain the test hands the fence directly.
     (
         "review-triage",
         (
             "held_queue.classify_read", "held_queue.load", "held_queue.open_entries",
-            "held_queue.entry_verb", "held_queue.classify_facet",
+            "held_queue.entry_verb", "held_queue.stamped_domains", "held_queue.classify_facet",
         ),
     ): "test_review_triage_facets.py::test_one_held_new_person_end_to_end_read_render_create_confirm_mark",
     # Quick 260911-w6q (F2-3): step 4a's CSV-build fence, ported from
