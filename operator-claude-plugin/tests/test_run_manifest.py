@@ -22,6 +22,7 @@ import artifact_store
 import chunking
 import confidence
 import durable_paths
+import held_queue
 import preingest
 import run_manifest
 
@@ -554,11 +555,12 @@ def _held_entry(row_id, hold_code, outcome):
 
 
 def test_confidence_held_row_is_excluded_when_its_fingerprint_is_unchanged():
-    import held_queue as hq
     rows = [{"row_id": "row-1", "email": "a@example.com"}]
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
     recorded_outcome = preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)
-    held_entries = {"row-1": _held_entry("row-1", "no_match", recorded_outcome)}
+    # Phase 71 (D-71-04): keyed by the resuming row's OWN stable key, not the
+    # positional row_id -- the lookup `rows_to_resume` now performs.
+    held_entries = {held_queue.stable_key(rows[0]): _held_entry("row-1", "no_match", recorded_outcome)}
     current_outcomes = {"row-1": preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)}
 
     result = run_manifest.rows_to_resume(
@@ -572,7 +574,7 @@ def test_confidence_held_row_is_reincluded_when_its_fingerprint_changes():
     rows = [{"row_id": "row-1", "email": "a@example.com"}]
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
     recorded_outcome = preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)
-    held_entries = {"row-1": _held_entry("row-1", "no_match", recorded_outcome)}
+    held_entries = {held_queue.stable_key(rows[0]): _held_entry("row-1", "no_match", recorded_outcome)}
     # The row's match situation genuinely moved: it now matches (tier high).
     current_outcomes = {"row-1": preingest.Outcome(parseable=True, match_tier="high", candidate_count=0)}
 
@@ -604,7 +606,10 @@ def test_an_unadjudicated_conflict_held_row_resumed_against_an_unchanged_free_ma
     rows = [{"row_id": "row-1", "email": "a@example.com"}]
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
     recorded_outcome = preingest.Outcome(parseable=True, match_tier="high", candidate_count=0)
-    held_entries = {"row-1": _held_entry("row-1", confidence.HOLD_UNADJUDICATED_CONFLICT, recorded_outcome)}
+    held_entries = {
+        held_queue.stable_key(rows[0]):
+            _held_entry("row-1", confidence.HOLD_UNADJUDICATED_CONFLICT, recorded_outcome),
+    }
     current_outcomes = {"row-1": preingest.Outcome(parseable=True, match_tier="high", candidate_count=0)}
 
     result = run_manifest.rows_to_resume(
@@ -626,7 +631,7 @@ def test_every_match_stage_hold_code_stays_excluded_on_an_unchanged_resume(hold_
     manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
     outcome = preingest.Outcome(parseable=(hold_code != confidence.HOLD_UNPARSEABLE),
                                  match_tier=tier, candidate_count=count)
-    held_entries = {"row-1": _held_entry("row-1", hold_code, outcome)}
+    held_entries = {held_queue.stable_key(rows[0]): _held_entry("row-1", hold_code, outcome)}
     current_outcomes = {"row-1": outcome}
 
     result = run_manifest.rows_to_resume(
@@ -654,6 +659,95 @@ def test_existing_positional_only_calls_are_unaffected_by_the_new_keyword_parame
     rows = [{"row_id": "row-1"}]
     result = run_manifest.rows_to_resume(rows, {"row-1": "matched"})
     assert result.rows == ()
+
+
+# =====================================================================================
+# Phase 71 Plan 02 Task 1 (D-71-04): the CONFIDENCE_HELD lookup is by
+# `held_queue.stable_key(row)`, computed fresh from the RESUMING row -- never by the
+# row's freshly-minted, per-run positional row_id. RED-first: run this test against
+# today's `held_entries.get(row_id)` lookup and it fails (`skipped == ()`, the row
+# lands in `to_resume` because "row-9" is never in a map keyed "email::...").
+# =====================================================================================
+
+_JIMMY_EMAIL = "jbusteed@australianturfclub.com.au"
+
+
+def _settled_entry_for(source_row, verb):
+    outcome = preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)
+    entry = _held_entry(source_row.get("row_id"), "no_match", outcome)
+    entry["row"] = dict(source_row)
+    entry["status"] = {"verb": verb, "at": "2026-09-01T00:00:00+00:00", "run_id": "run-a"}
+    return entry
+
+
+def test_a_prior_runs_held_entry_is_found_by_this_runs_differently_positioned_row():
+    """A held entry saved in run A under `held_queue.stable_key(source_row)`; run B's
+    own row carries the SAME identity (the email) but a freshly-minted, DIFFERENT
+    row_id ("row-9" vs run A's "row-1"). The create verb must short-circuit to
+    `skipped` -- proving the entry was FOUND, not merely that no exception fired."""
+    source_row = {"row_id": "row-1", "email": _JIMMY_EMAIL}
+    held_entries = {
+        held_queue.stable_key(source_row): _settled_entry_for(source_row, held_queue.VERB_CREATE),
+    }
+    resume_row = {"row_id": "row-9", "email": _JIMMY_EMAIL}
+    manifest = {"row-9": run_manifest.CONFIDENCE_HELD}
+
+    result = run_manifest.rows_to_resume(
+        [resume_row], manifest, held_entries=held_entries)
+
+    assert result.skipped == ({"row_id": "row-9", "verdict": run_manifest.CONFIDENCE_HELD},)
+    assert result.rows == ()
+
+
+def test_a_prior_runs_retry_verb_re_includes_this_runs_differently_positioned_row():
+    source_row = {"row_id": "row-1", "email": _JIMMY_EMAIL}
+    held_entries = {
+        held_queue.stable_key(source_row): _settled_entry_for(source_row, held_queue.VERB_RETRY),
+    }
+    resume_row = {"row_id": "row-9", "email": _JIMMY_EMAIL}
+    manifest = {"row-9": run_manifest.CONFIDENCE_HELD}
+
+    result = run_manifest.rows_to_resume(
+        [resume_row], manifest, held_entries=held_entries)
+
+    assert result.rows == (resume_row,)
+    assert result.skipped == ()
+
+
+def test_the_reported_row_id_stays_the_resuming_rows_own_source_position_never_the_stable_key():
+    """The DICT LOOKUP key changes; the row_id REPORTED inside skipped/still_held does
+    not (D-69-04) -- it is always `row.get("row_id")`."""
+    source_row = {"row_id": "row-1", "email": _JIMMY_EMAIL}
+    held_entries = {
+        held_queue.stable_key(source_row): _settled_entry_for(source_row, held_queue.VERB_CREATE),
+    }
+    resume_row = {"row_id": "row-9", "email": _JIMMY_EMAIL}
+    manifest = {"row-9": run_manifest.CONFIDENCE_HELD}
+
+    result = run_manifest.rows_to_resume(
+        [resume_row], manifest, held_entries=held_entries)
+
+    assert result.skipped[0]["row_id"] == "row-9"
+    assert result.skipped[0]["row_id"] != held_queue.stable_key(source_row)
+
+
+def test_a_row_with_no_identity_group_resolves_through_the_total_fallback_without_raising():
+    """A row with no email, no name+company, and no linkedin_url still resolves a
+    stable key (the total `source-position::` fallback) rather than raising -- the
+    lookup must be safe over every row shape `rows_to_resume` can be handed."""
+    resume_row = {"row_id": "row-42"}
+    outcome = preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)
+    entry = _held_entry("row-42", "no_match", outcome)
+    entry["row"] = dict(resume_row)
+    held_entries = {held_queue.stable_key(resume_row): entry}
+    manifest = {"row-42": run_manifest.CONFIDENCE_HELD}
+
+    result = run_manifest.rows_to_resume(
+        [resume_row], manifest, held_entries=held_entries,
+        current_outcomes={"row-42": outcome})
+
+    assert result.rows == ()
+    assert {e["row_id"] for e in result.still_held} == {"row-42"}
 
 
 # =====================================================================================
