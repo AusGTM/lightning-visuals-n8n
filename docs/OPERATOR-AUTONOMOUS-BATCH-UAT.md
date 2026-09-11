@@ -32,6 +32,22 @@ writes; every command that could is yours to run.
 
 Guardrail A (dirty-backend refusal) will pass: both flags read `"false"` at rest.
 
+**Re-read 2026-09-11 (read-only, plugin key, before the first supervised batch):**
+
+| Fact | Value |
+| --- | --- |
+| Installed plugin | **`0.44.0`** (`installed_plugins.json`, lastUpdated 2026-09-10T17:20Z) — one behind |
+| Marketplace clone | `0.45.0` at `65c9198` — Update in Claude Code, then restart, before 1a |
+| `x-enrichment-secret` | rotated 2026-09-11, operator-confirmed (STATE.md, commit `e6594548`) |
+| Live enrichment `950HPb7a1GgSAIyZ` | active; both write flags `"false"`; last execution `12356` (Gate 11, 2026-09-10) |
+| Live contact ingest `AwbBeShdPgV48eiY` | active; both flags `"false"`; last execution `12363` (Gate 12 armed write, 2026-09-10) |
+| Committed vs live JSON | level (Phase 70 Gates 10–12, commit `ec102a4`); no n8n JSON changed since |
+| Executions, last 24 h | 15 listed, listing exhausted |
+| `config_gate.py` | `"ok": true`, `"can_send": true` |
+| Pending todos | 5, all triaged (§31) |
+
+Section 1a's `0.42.0` target is stale: the current target is **`0.45.0`**.
+
 ---
 
 ## 1. Preconditions — you run these
