@@ -39,6 +39,10 @@ def _new_person_entry():
             "email": "jbusteed@australianturfclub.com.au",
             "company": "Australian Turf Club",
         },
+        # Phase 71 (D-71-01..03): stamped at persist time by step 5 -- the whole
+        # point of this test is that step 6 reads the SEED from this stamp, never
+        # from a domain the test hands the fence directly.
+        "company_known": {"domain": "australianturfclub.com.au", "source": "step2_match"},
     }
 
 
@@ -47,7 +51,12 @@ def test_step_6_fence_loads_the_queue_and_facets_what_it_loaded_not_a_dict_liter
     recorded entry shapes (the needs-a-company one and the new-person one, run
     a254d1eda71246a2a964922cdf5c2bd2) -- the whole point being that `classify_facet`
     is fed entries `held_queue.load()` actually returned, never a dict built by hand
-    inline and handed straight to the classifier."""
+    inline and handed straight to the classifier.
+
+    Phase 71 (D-71-01..03): `known_company_domains` is no longer a hardcoded empty
+    set nor a domain named by the test -- it is folded from the queue's OWN
+    `company_known` stamp via `held_queue.stamped_domains`, over a queue this test
+    actually saved and reloaded from disk (a real cold start, not a dict literal)."""
     queue_path = tmp_path / "held_queue.json"
     held_queue.save(
         "run-1",
@@ -61,16 +70,16 @@ def test_step_6_fence_loads_the_queue_and_facets_what_it_loaded_not_a_dict_liter
     undecided = {rid: e for rid, e in still_open.items()
                  if held_queue.entry_verb(e) is None}
 
-    # This sitting already knows australianturfclub.com.au is a HubSpot company (the
-    # w6p precedent's own resolved-domain source); atherton is not yet known, so it
-    # stays needs_company -- the step 6 fence's own w6p safe default.
-    known_company_domains = {"australianturfclub.com.au"}
+    # Jimmy's own entry carries the stamp; Katie's does not -- she stays
+    # needs_company, the step 6 fence's own safe default for an unstamped entry.
+    known_company_domains = held_queue.stamped_domains(held_entries)
     by_facet = {}
     for rid, entry in undecided.items():
         by_facet.setdefault(
             held_queue.classify_facet(entry, known_company_domains), []).append(rid)
 
     assert held_state == held_queue.PARSEABLE
+    assert known_company_domains == {"australianturfclub.com.au"}
     assert by_facet[held_queue.FACET_NEEDS_COMPANY] == ["row-katie"]
     assert by_facet[held_queue.FACET_NEW_PERSON] == ["row-jimmy"]
     # Inline call, so this test function's OWN source text names the sink

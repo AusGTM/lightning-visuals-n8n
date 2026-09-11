@@ -20,6 +20,7 @@ import pytest
 import chunking
 import config_gate
 import enrichment
+import held_queue
 import preingest
 from dispatch import DispatchError
 
@@ -615,3 +616,71 @@ def test_apply_match_decisions_does_not_mutate_the_input_classification():
 
     assert classified["proposed"] == snapshot_proposed
     assert classified["auto_matched"] == snapshot_auto_matched
+
+
+# =====================================================================================
+# Phase 71 Plan 02 Task 2 (D-71-01..03): confirmed_company_domains -- the
+# zero-new-lookup fold over data step 2's ONE match call and step 2's own company-row
+# confirm table already produced.
+# =====================================================================================
+
+def _classified_with_auto_matched(email):
+    return {
+        "auto_matched": [{"row_id": "row-1", "row": {"email": email}, "hs_object_id": "1"}],
+        "proposed": [], "unmatched": [], "unchecked": [], "unknown_response_row_ids": [],
+    }
+
+
+def test_an_auto_matched_rows_own_email_domain_is_confirmed_under_step2_match():
+    classified = _classified_with_auto_matched("jbusteed@australianturfclub.com.au")
+    domains = preingest.confirmed_company_domains(classified)
+    assert domains == {"australianturfclub.com.au": "step2_match"}
+
+
+def test_a_step_3_confirmed_row_moved_into_auto_matched_contributes_identically():
+    """apply_match_decisions moves a step-3-confirmed row INTO auto_matched -- one
+    code path in confirmed_company_domains, never a second branch for it."""
+    classified, row_id = _classified_with_one_proposed()
+    classified["proposed"][0]["row"]["email"] = "secretary@athertonturfclub.com.au"
+    confirmed = preingest.apply_match_decisions(classified, {row_id: "111"})
+
+    domains = preingest.confirmed_company_domains(confirmed)
+    assert domains == {"athertonturfclub.com.au": "step2_match"}
+
+
+def test_a_company_spec_domain_is_confirmed_under_step2_company_row():
+    company_spec = {"companies": [{"name": "Australian Turf Club", "domain": "australianturfclub.com.au"}]}
+    domains = preingest.confirmed_company_domains({}, company_spec)
+    assert domains == {"australianturfclub.com.au": "step2_company_row"}
+
+
+def test_a_name_only_company_entry_contributes_nothing_and_does_not_raise():
+    company_spec = {"companies": [{"name": "Nameless FC"}]}
+    domains = preingest.confirmed_company_domains({}, company_spec)
+    assert domains == {}
+
+
+def test_a_freemail_auto_matched_email_contributes_nothing():
+    classified = _classified_with_auto_matched("someone@gmail.com")
+    domains = preingest.confirmed_company_domains(classified)
+    assert domains == {}
+
+
+def test_when_both_sources_name_the_same_domain_the_company_row_word_wins():
+    classified = _classified_with_auto_matched("jbusteed@australianturfclub.com.au")
+    company_spec = {"companies": [{"name": "Australian Turf Club", "domain": "australianturfclub.com.au"}]}
+    domains = preingest.confirmed_company_domains(classified, company_spec)
+    assert domains == {"australianturfclub.com.au": "step2_company_row"}
+
+
+def test_every_confirmed_company_domains_value_is_a_member_of_company_known_sources():
+    classified = _classified_with_auto_matched("jbusteed@australianturfclub.com.au")
+    company_spec = {"companies": [{"name": "Atherton Turf Club", "domain": "athertonturfclub.com.au"}]}
+    domains = preingest.confirmed_company_domains(classified, company_spec)
+    assert domains
+    assert set(domains.values()) <= set(held_queue.COMPANY_KNOWN_SOURCES)
+
+
+def test_confirmed_company_domains_with_no_arguments_returns_empty():
+    assert preingest.confirmed_company_domains({}) == {}
+    assert preingest.confirmed_company_domains(None) == {}
