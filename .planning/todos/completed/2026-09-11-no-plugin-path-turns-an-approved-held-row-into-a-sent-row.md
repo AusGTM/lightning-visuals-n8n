@@ -73,3 +73,30 @@ provider `NOT_FOUND` (Katie Poggioli) with a rich reveal of a new person (Jimmy 
 Items: 260911-w6o (enriched row into the held entry), 260911-w6p (facet classifier + verbs),
 260911-w6q (review-triage reads both queues, one table, create through the ingest lane),
 260911-w6r (batch renders the ready answer, never asks; 0.47.0).
+
+### Resolution — all four items shipped, plugin `0.47.0`
+
+- **260911-w6o** (`3d264b3f`, `3dfbbb44`) — closed the prerequisite: `held_queue.
+  ROW_FIELD_ALLOWLIST` widened to 11 names, and `enrich-before-ingest`'s persist fence
+  now hands `held_queue.build_entry` the dispatch step's own MERGED row (email, phone,
+  mobile, LinkedIn) instead of the loop's bare source row — the enriched reveal this
+  whole todo's gap needed to have something to read.
+- **260911-w6p** (`15349f77`, `af653e46`, `66de79b8`) — closed the classifier half:
+  `held_queue.classify_facet` splits a `no_match` hold into `new_person` /
+  `needs_company` / `nothing_found`, and `record_verb`/`entry_verb`/`is_settled`/
+  `open_entries` give an entry a durable `create`/`skip`/`retry`/`drop` status —
+  the "approve verb" this todo's Fix section named as missing.
+- **260911-w6q** (`7e6af271`, `2101b747`) — closed the create-route half:
+  `review-triage/SKILL.md` reads `held_queue.json` alongside HubSpot's own review
+  queue in one table, and a `new_person` row's `create` reaches HubSpot through
+  `contact-upload`'s own dispatch, by heading, confirmed by an independent re-read —
+  this todo's own missing "no plugin-side path" link.
+- **260911-w6r** (`6de7a55c`, `23fa724a`, this item's own SUMMARY commit) — closed the
+  face: `enrich-before-ingest` step 6 renders the facets and a ready answer instead of
+  asking (closing UAT F4), step 9 restates them, and the release ships as plugin
+  `0.47.0`.
+
+Resolved in full by quick batch `260911-w6n`. This todo's original `Fix` section asked
+for either a built approve path or a corrected SKILL claim — the ruling chose neither
+literally: `no_match` holds route through the facet classifier and the ready answer
+above, never through an `approve` verb on the hold itself.

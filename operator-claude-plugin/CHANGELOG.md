@@ -16,6 +16,54 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-09-11
+
+Quick batch `260911-w6n`: F2 — the operator's 2026-09-11 ruling on how a `no_match`
+held row becomes a new HubSpot contact. Four items: `260911-w6o` (the held entry
+stores what enrichment found, not the operator's blank source line), `260911-w6p` (a
+read-time facet classifier and durable create/skip/retry/drop verbs), `260911-w6q`
+(`review-triage` reads both queues and gives a held new-person row a route to
+HubSpot), `260911-w6r` (this release: `enrich-before-ingest` renders the ready
+answer instead of asking). Rejected: an in-flow approve question at step 6 (the
+recorded UAT F4) and an export-to-`contact-upload` round trip (three prompts to land
+one person).
+
+### Fixed
+- **A held row's entry stores the merged row the waterfall actually found, not the
+  operator's blank source line** (F2-1, quick `260911-w6o`). The recorded run
+  `a254d1eda71246a2a964922cdf5c2bd2` threw a 7-credit Lusha reveal away this way.
+  `held_queue.ROW_FIELD_ALLOWLIST` widened from 6 to 11 enumerated names (adding
+  job title, phone, company id, mobile, LinkedIn); `enrich-before-ingest`'s persist
+  fence now hands `held_queue.build_entry` the dispatch step's own merged row instead
+  of the loop's bare source row.
+- **`enrich-before-ingest` step 6 no longer asks how to handle held rows** (F2-4,
+  quick `260911-w6r`, closing UAT F4's recorded question). Step 6 now loads the held
+  queue, facets each `no_match` hold (new person / needs a company / nothing found),
+  names new-person and needs-company rows individually and carries nothing-found as
+  one parked count line, and states one ready answer offering both an
+  in-conversation count-restating `create all N` reply and the `review-triage`
+  route — the run never waits for an answer and always reaches step 7 and the report
+  regardless. Step 9 restates the same facets and answer for an operator who reads
+  only the end of the run. Step 5's stale promise of a review pass positioned after
+  the report, and its pointer at the now-resolved pending todo, are corrected.
+
+### Added
+- **A read-time facet classifier and durable per-row verbs on the held queue**
+  (F2-2, quick `260911-w6p`). `held_queue.classify_facet` splits a `no_match` hold
+  into `new_person` / `needs_company` / `nothing_found` from the entry plus a
+  caller-resolved set of company domains — never from the row's own company-name
+  column. `record_verb`/`entry_verb`/`is_settled`/`open_entries` give an entry a
+  durable `create`/`skip`/`retry`/`drop` status, so an operator's decision on a held
+  row is never silently reopened by a later resume.
+- **`review-triage` reads both the HubSpot review queue and the local held queue, in
+  one table, and gives a held new person a route to HubSpot** (F2-3, quick
+  `260911-w6q`). A `new_person` row's `create` builds a CSV of exactly the chosen
+  rows and dispatches through `contact-upload`'s own steps, by heading, under a
+  widened `lanes=["review","contacts"]` grant; the result is confirmed by an
+  independent re-read joined on email before the row is marked created. A
+  `needs_company` row hands off to `enrich-records`' company-creation form and
+  re-facets to `new_person` once the company lands, offered in the same sitting.
+
 ## [0.46.0] - 2026-09-11
 
 Quick batch `260911-ss3`: four findings from `.planning/UAT-autonomous-batch-2026-09-09.md`
