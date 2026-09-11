@@ -141,20 +141,21 @@ def test_build_entry_only_persists_allowlisted_row_fields():
 
 def test_save_then_load_round_trips_entries(tmp_path):
     target = tmp_path / "held_queue.json"
+    row = {"row_id": "row-1", "email": "a@example.com"}
     entry = held_queue.build_entry(
-        {"row_id": "row-1", "email": "a@example.com"},
-        confidence.HOLD_NO_MATCH, "no match found", _outcome())
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+        row, confidence.HOLD_NO_MATCH, "no match found", _outcome())
+    key = held_queue.stable_key(row)
+    held_queue.save("run-1", {key: entry}, path=target)
 
-    assert held_queue.load(path=target) == {"row-1": entry}
+    assert held_queue.load(path=target) == {key: entry}
 
 
 def test_save_writes_at_mode_0600(tmp_path):
     target = tmp_path / "held_queue.json"
+    row = {"row_id": "row-1", "email": "a@example.com"}
     entry = held_queue.build_entry(
-        {"row_id": "row-1", "email": "a@example.com"},
-        confidence.HOLD_NO_MATCH, "no match", _outcome())
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+        row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    held_queue.save("run-1", {held_queue.stable_key(row): entry}, path=target)
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
@@ -163,7 +164,7 @@ def test_save_refuses_a_hold_code_outside_the_closed_set(tmp_path):
     bad_entry = {"hold_code": "definitely_not_a_real_code", "reason": "x",
                  "observed_signals": {}, "resume_fingerprint": "abc", "row": {}}
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-1", {"row-1": bad_entry}, path=target)
+        held_queue.save("run-1", {"test-entry": bad_entry}, path=target)
     assert not target.exists()
 
 
@@ -182,7 +183,7 @@ def test_save_refuses_an_arming_shaped_value_inside_observed_signals(tmp_path):
         observed_signals={"leaked": "n8n_api_key=super-secret"},
     )
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-1", {"row-1": entry}, path=target)
+        held_queue.save("run-1", {"test-entry": entry}, path=target)
     assert not target.exists()
 
 
@@ -191,15 +192,16 @@ def test_a_held_armidale_jockey_club_entry_saves_and_loads_back_unchanged(tmp_pa
     Secretary' trips 'secret' -- both must survive whole-token matching, exercising
     both the allowlisted `row` scan and the free-text `reason` scan (quick 260911-any)."""
     target = tmp_path / "held_queue.json"
+    row = {"row_id": "row-1", "company": "Armidale Jockey Club"}
     entry = held_queue.build_entry(
-        {"row_id": "row-1", "company": "Armidale Jockey Club"},
-        confidence.HOLD_NO_MATCH, "held for the club Secretary to confirm", _outcome(),
+        row, confidence.HOLD_NO_MATCH, "held for the club Secretary to confirm", _outcome(),
     )
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+    key = held_queue.stable_key(row)
+    held_queue.save("run-1", {key: entry}, path=target)
 
     loaded = held_queue.load(path=target)
-    assert loaded["row-1"]["row"]["company"] == "Armidale Jockey Club"
-    assert loaded["row-1"]["reason"] == "held for the club Secretary to confirm"
+    assert loaded[key]["row"]["company"] == "Armidale Jockey Club"
+    assert loaded[key]["reason"] == "held for the club Secretary to confirm"
 
 
 # =====================================================================================
@@ -243,21 +245,24 @@ def test_an_enriched_held_row_survives_the_write_to_disk_end_to_end(tmp_path):
     outcome = _outcome(tier="none", candidate_count=0)
 
     entries = {
-        row_id: held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match found", outcome)
-        for row_id, row in merged_by_id.items()
+        held_queue.stable_key(row): held_queue.build_entry(
+            row, confidence.HOLD_NO_MATCH, "no match found", outcome)
+        for row in merged_by_id.values()
     }
     target = tmp_path / "held_queue.json"
     held_queue.save("run-1", entries, path=target)
     loaded = held_queue.load(path=target)
 
-    jimmy = loaded["row-3"]["row"]
+    jimmy_key = held_queue.stable_key(merged_by_id["row-3"])
+    jimmy = loaded[jimmy_key]["row"]
     assert jimmy["email"] == "jbusteed@australianturfclub.com.au"
     assert jimmy["phone"] == "0298765432"
     assert jimmy["mobilephone"] == "0412345678"
     assert jimmy["lv_linkedin_url"] == "https://www.linkedin.com/in/jbusteed"
     assert "city" not in jimmy  # the allowlist is still closed
 
-    katie = loaded["row-2"]["row"]
+    katie_key = held_queue.stable_key(merged_by_id["row-2"])
+    katie = loaded[katie_key]["row"]
     # jobtitle is the sole refreshable_contact_props() key (operator ruling
     # 2026-09-11) -- assert the replacement, don't assume the source value survived.
     assert katie["jobtitle"] == "Club Contact"
@@ -279,14 +284,116 @@ def test_a_row_for_grant_dewsbury_saves_and_loads_back_unchanged(tmp_path):
     """A firstname that is literally the whole marker word `grant` must not be
     refused -- the `row` payload's scan is key-names-only as of 260911-w6o."""
     target = tmp_path / "held_queue.json"
+    row = {"row_id": "row-1", "firstname": "Grant", "lastname": "Dewsbury",
+           "company": "Darwin Turf Club"}
     entry = held_queue.build_entry(
-        {"row_id": "row-1", "firstname": "Grant", "lastname": "Dewsbury"},
-        confidence.HOLD_NO_MATCH, "no match", _outcome())
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+        row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    key = held_queue.stable_key(row)
+    held_queue.save("run-1", {key: entry}, path=target)
 
     loaded = held_queue.load(path=target)
-    assert loaded["row-1"]["row"]["firstname"] == "Grant"
-    assert loaded["row-1"]["row"]["lastname"] == "Dewsbury"
+    assert loaded[key]["row"]["firstname"] == "Grant"
+    assert loaded[key]["row"]["lastname"] == "Dewsbury"
+
+
+def test_a_grant_dewsbury_stable_key_is_a_name_group_key_and_persists(tmp_path):
+    """Phase 71 (D-71-04, Pitfall 1): the stable key itself is name-shaped
+    (`name::grant|dewsbury|...`) -- a whole-token marker collision that the
+    pre-Phase-71 positional key (`row-N`) could never produce. Must still persist."""
+    target = tmp_path / "held_queue.json"
+    row = {"firstname": "Grant", "lastname": "Dewsbury", "company": "Darwin Turf Club"}
+    key = held_queue.stable_key(row)
+    assert key == "name::grant|dewsbury|darwin turf club"
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    held_queue.save("run-1", {key: entry}, path=target)
+
+    loaded = held_queue.load(path=target)
+    assert key in loaded
+    assert loaded[key]["row"]["firstname"] == "Grant"
+
+
+def test_a_linkedin_only_grant_dewsbury_row_persists_under_its_linkedin_key(tmp_path):
+    """The exemption is EXACT MEMBERSHIP in `identity_keys` -- a linkedin-only row's
+    key tokenises to contain `grant` and must still be exempt."""
+    target = tmp_path / "held_queue.json"
+    row = {"linkedin_url": "https://www.linkedin.com/in/grant-dewsbury"}
+    key = held_queue.stable_key(row)
+    assert key.startswith("linkedin::")
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    held_queue.save("run-1", {key: entry}, path=target)
+
+    loaded = held_queue.load(path=target)
+    assert key in loaded
+
+
+def test_save_refuses_a_key_that_is_marker_shaped_and_not_the_entrys_own_identity(tmp_path):
+    """The exemption is EXACT MEMBERSHIP -- a marker-shaped key that is NOT the
+    entry's own derived identity is still refused (T-71-01)."""
+    target = tmp_path / "held_queue.json"
+    row = {"firstname": "Grant", "lastname": "Dewsbury", "company": "Darwin Turf Club"}
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    with pytest.raises(held_queue.HeldQueueError):
+        held_queue.save("run-1", {"webhook_secret": entry}, path=target)
+    assert not target.exists()
+
+
+def test_company_known_stamp_round_trips_through_save_and_load(tmp_path):
+    target = tmp_path / "held_queue.json"
+    row = {"email": "jbusteed@australianturfclub.com.au"}
+    key = held_queue.stable_key(row)
+    entry = held_queue.build_entry(
+        row, confidence.HOLD_NO_MATCH, "no match", _outcome(),
+        company_known={"domain": "AustralianTurfClub.com.au", "source": "step2_match"},
+    )
+    held_queue.save("run-1", {key: entry}, path=target)
+
+    loaded = held_queue.load(path=target)
+    assert loaded[key]["company_known"] == {
+        "domain": "australianturfclub.com.au", "source": "step2_match",
+    }
+
+
+def test_company_known_stamp_with_an_invalid_source_refuses_the_whole_save(tmp_path):
+    target = tmp_path / "held_queue.json"
+    row = {"email": "jbusteed@australianturfclub.com.au"}
+    entry = held_queue.build_entry(
+        row, confidence.HOLD_NO_MATCH, "no match", _outcome(),
+        company_known={"domain": "australianturfclub.com.au", "source": "same_run_create"},
+    )
+    with pytest.raises(held_queue.HeldQueueError):
+        held_queue.save("run-1", {held_queue.stable_key(row): entry}, path=target)
+    assert not target.exists()
+
+
+def test_stamped_domains_collects_only_present_valid_stamps():
+    stamped = held_queue.build_entry(
+        {"email": "a@example.com"}, confidence.HOLD_NO_MATCH, "x", _outcome(),
+        company_known={"domain": "example.com", "source": "step2_match"},
+    )
+    unstamped = held_queue.build_entry(
+        {"email": "b@example.com"}, confidence.HOLD_NO_MATCH, "x", _outcome())
+    entries = {"a": stamped, "b": unstamped, "c": "not-a-dict"}
+    assert held_queue.stamped_domains(entries) == {"example.com"}
+    assert held_queue.stamped_domains({}) == set()
+    assert held_queue.stamped_domains(None) == set()
+
+
+def test_cross_run_record_verb_settles_a_row_saved_under_a_stable_key(tmp_path):
+    """Cross-run invariant (Task 2): save under run A's run_id, load, record_verb under
+    run B, reload -- is_settled is True, and a fresh row with a DIFFERENT positional
+    row_id but the same identity derives the SAME stable key."""
+    target = tmp_path / "held_queue.json"
+    row_run_a = {"row_id": "row-1", "email": "jbusteed@australianturfclub.com.au"}
+    key = held_queue.stable_key(row_run_a)
+    entry = held_queue.build_entry(row_run_a, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    held_queue.save("run-A", {key: entry}, path=target)
+
+    held_queue.record_verb(key, held_queue.VERB_CREATE, "run-B", path=target)
+    loaded = held_queue.load(path=target)
+    assert held_queue.is_settled(loaded[key])
+
+    row_run_b = {"row_id": "row-9", "email": "jbusteed@australianturfclub.com.au"}
+    assert held_queue.stable_key(row_run_b) == key
 
 
 def test_save_still_refuses_every_forbidden_shape_except_a_row_value(tmp_path):
@@ -300,7 +407,7 @@ def test_save_still_refuses_every_forbidden_shape_except_a_row_value(tmp_path):
     good = held_queue.build_entry(
         {"row_id": "row-1", "email": "a@example.com"},
         confidence.HOLD_NO_MATCH, "no match", _outcome())
-    held_queue.save("run-1", {"row-1": good}, path=target)
+    held_queue.save("run-1", {"good-entry": good}, path=target)
     before = target.read_text()
 
     secret_value_entry = held_queue.build_entry(
@@ -308,20 +415,23 @@ def test_save_still_refuses_every_forbidden_shape_except_a_row_value(tmp_path):
         observed_signals={"leaked": "n8n_api_key=super-secret"},
     )
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-1", {"row-1": good, "row-2": secret_value_entry}, path=target)
+        held_queue.save(
+            "run-1", {"good-entry": good, "secret-value-entry": secret_value_entry}, path=target)
     assert target.read_text() == before
 
     secret_row_id_entry = held_queue.build_entry(
         {"row_id": "armed_row"}, confidence.HOLD_NO_MATCH, "x", _outcome())
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-1", {"row-1": good, "armed_row": secret_row_id_entry}, path=target)
+        held_queue.save(
+            "run-1", {"good-entry": good, "armed_row": secret_row_id_entry}, path=target)
     assert target.read_text() == before
 
     secret_reason_entry = held_queue.build_entry(
         {"row_id": "row-3"}, confidence.HOLD_NO_MATCH,
         "held pending a webhook token", _outcome())
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-1", {"row-1": good, "row-3": secret_reason_entry}, path=target)
+        held_queue.save(
+            "run-1", {"good-entry": good, "secret-reason-entry": secret_reason_entry}, path=target)
     assert target.read_text() == before
 
     forbidden_row_key_entry = {
@@ -330,7 +440,9 @@ def test_save_still_refuses_every_forbidden_shape_except_a_row_value(tmp_path):
         "row": {"n8n_api_key": "x"},
     }
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-1", {"row-1": good, "row-4": forbidden_row_key_entry}, path=target)
+        held_queue.save(
+            "run-1", {"good-entry": good, "forbidden-row-key-entry": forbidden_row_key_entry},
+            path=target)
     assert target.read_text() == before
 
 
@@ -361,13 +473,13 @@ def test_persisting_an_email_into_a_held_row_does_not_make_a_no_match_hold_resum
 def test_a_rejected_save_leaves_a_previously_saved_queue_untouched(tmp_path):
     target = tmp_path / "held_queue.json"
     good = held_queue.build_entry({"row_id": "row-1"}, confidence.HOLD_NO_MATCH, "x", _outcome())
-    held_queue.save("run-1", {"row-1": good}, path=target)
+    held_queue.save("run-1", {"good-entry": good}, path=target)
     before = target.read_text()
 
     bad = {"hold_code": "nope", "reason": "x", "observed_signals": {},
            "resume_fingerprint": "abc", "row": {}}
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.save("run-2", {"row-2": bad}, path=target)
+        held_queue.save("run-2", {"bad-entry": bad}, path=target)
 
     assert target.read_text() == before
 
@@ -390,7 +502,7 @@ def test_load_on_malformed_json_returns_empty(tmp_path):
 def test_load_on_a_truncated_queue_returns_empty(tmp_path):
     target = tmp_path / "held_queue.json"
     entry = held_queue.build_entry({"row_id": "row-1"}, confidence.HOLD_NO_MATCH, "x", _outcome())
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+    held_queue.save("run-1", {"entry-a": entry}, path=target)
     full_text = target.read_text()
     target.write_text(full_text[: len(full_text) // 2], encoding="utf-8")
     assert held_queue.load(path=target) == {}
@@ -401,9 +513,9 @@ def test_load_on_an_entry_with_an_invalid_hold_code_degrades_the_whole_queue(tmp
     target.write_text(json.dumps({
         "run_id": "run-1", "saved_at": "2026-08-30T00:00:00Z",
         "entries": {
-            "row-1": {"hold_code": confidence.HOLD_NO_MATCH, "reason": "x",
+            "entry-a": {"hold_code": confidence.HOLD_NO_MATCH, "reason": "x",
                        "observed_signals": {}, "resume_fingerprint": "abc", "row": {}},
-            "row-2": {"hold_code": "not_a_real_code", "reason": "x",
+            "entry-b": {"hold_code": "not_a_real_code", "reason": "x",
                        "observed_signals": {}, "resume_fingerprint": "def", "row": {}},
         },
     }), encoding="utf-8")
@@ -422,7 +534,7 @@ def test_classify_read_on_a_missing_file_is_absent(tmp_path):
 def test_classify_read_on_a_good_file_is_parseable(tmp_path):
     target = tmp_path / "held_queue.json"
     entry = held_queue.build_entry({"row_id": "row-1"}, confidence.HOLD_NO_MATCH, "x", _outcome())
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+    held_queue.save("run-1", {"entry-a": entry}, path=target)
     assert held_queue.classify_read(path=target) == held_queue.PARSEABLE
 
 
@@ -445,7 +557,7 @@ def test_classify_read_never_reports_a_row_count_for_an_anomalous_file(tmp_path)
 def test_classify_read_on_a_different_runs_file_is_another_run(tmp_path):
     target = tmp_path / "held_queue.json"
     entry = held_queue.build_entry({"row_id": "row-1"}, confidence.HOLD_NO_MATCH, "x", _outcome())
-    held_queue.save("run-1", {"row-1": entry}, path=target)
+    held_queue.save("run-1", {"entry-a": entry}, path=target)
     assert held_queue.classify_read(path=target, expected_run_id="run-2") == held_queue.ANOTHER_RUN
     assert held_queue.classify_read(path=target, expected_run_id="run-1") == held_queue.PARSEABLE
 
@@ -457,6 +569,46 @@ def test_load_still_degrades_whole_regardless_of_classify_reads_answer(tmp_path)
     target.write_text("not json", encoding="utf-8")
     assert held_queue.classify_read(path=target) == held_queue.ANOMALOUS
     assert held_queue.load(path=target) == {}
+
+
+# =====================================================================================
+# D-71-05 — a legacy (pre-Phase-71 positional-key) document is refused, not silently
+# read as empty.
+# =====================================================================================
+
+
+def _legacy_document_path(tmp_path):
+    """The live `a254d1e`-shaped document: positional `row-N` keys, no stamp."""
+    target = tmp_path / "held_queue.json"
+    target.write_text(json.dumps({
+        "run_id": "a254d1eda71246a2a964922cdf5c2bd2", "saved_at": "2026-09-11T00:00:00Z",
+        "entries": {
+            "row-1": {"hold_code": confidence.HOLD_NO_MATCH, "reason": "no match found",
+                      "observed_signals": {}, "resume_fingerprint": "a" * 64,
+                      "row": {"email": "", "company": "Australian Turf Club"}},
+        },
+    }), encoding="utf-8")
+    return target
+
+
+def test_a_legacy_row_n_keyed_document_classifies_anomalous_with_a_wipe_naming_reason(tmp_path):
+    target = _legacy_document_path(tmp_path)
+    assert held_queue.classify_read(path=target) == held_queue.ANOMALOUS
+    assert held_queue.load(path=target) == {}
+    reason = held_queue.legacy_reason(path=target)
+    assert reason is not None
+    assert "held_queue.json" in reason
+
+
+def test_legacy_reason_is_none_for_a_stable_keyed_document(tmp_path):
+    target = tmp_path / "held_queue.json"
+    entry = held_queue.build_entry({"row_id": "row-1"}, confidence.HOLD_NO_MATCH, "x", _outcome())
+    held_queue.save("run-1", {"entry-a": entry}, path=target)
+    assert held_queue.legacy_reason(path=target) is None
+
+
+def test_legacy_reason_is_none_for_a_missing_file(tmp_path):
+    assert held_queue.legacy_reason(path=tmp_path / "held_queue.json") is None
 
 
 # =====================================================================================
@@ -473,10 +625,11 @@ def test_a_failed_manifest_write_after_a_successful_queue_write_leaves_the_row_u
     queue_target = tmp_path / "held_queue.json"
     manifest_target = tmp_path / "run_manifest.json"
 
+    row = {"row_id": "row-1", "email": "a@example.com"}
     entry = held_queue.build_entry(
-        {"row_id": "row-1", "email": "a@example.com"},
-        confidence.HOLD_NO_MATCH, "no match found", _outcome(tier="none", candidate_count=0))
-    held_queue.save("run-1", {"row-1": entry}, path=queue_target)
+        row, confidence.HOLD_NO_MATCH, "no match found", _outcome(tier="none", candidate_count=0))
+    key = held_queue.stable_key(row)
+    held_queue.save("run-1", {key: entry}, path=queue_target)
 
     def _boom(*args, **kwargs):
         raise OSError("disk full")
@@ -486,7 +639,7 @@ def test_a_failed_manifest_write_after_a_successful_queue_write_leaves_the_row_u
         run_manifest.save("run-1", {"row-1": run_manifest.CONFIDENCE_HELD}, path=manifest_target)
 
     # The queue entry survived; the manifest never recorded the verdict.
-    assert held_queue.load(path=queue_target) == {"row-1": entry}
+    assert held_queue.load(path=queue_target) == {key: entry}
     assert run_manifest.load(path=manifest_target) == {}
 
     # And a resume treats the row as needing work again — re-run, not stranded.

@@ -449,6 +449,46 @@ def test_a_secretary_at_armidale_jockey_club_saves_and_loads_back_unchanged(tmp_
     assert loaded[key]["row"]["jobtitle"] == "Secretary"
 
 
+# =====================================================================================
+# Phase 71 (D-71-04's todo fold): the ALREADY-LIVE defect -- a person named Grant
+# could not be persisted, because `entry_key` has always produced name-shaped keys.
+# =====================================================================================
+
+
+def test_a_decline_for_grant_dewsbury_persists(tmp_path):
+    """Before this narrowing, `entry_key`'s composite key for Grant Dewsbury tripped
+    the whole-token `grant` marker and `save()` raised -- in production, today."""
+    target = tmp_path / "suggestion_declines.json"
+    row = {"firstname": "Grant", "lastname": "Dewsbury", "company": "Darwin Turf Club"}
+    entry = suggestion_declines.build_entry(row, "no_email", "x", "run-1", "9605284724")
+    key = suggestion_declines.entry_key("9605284724", row)
+    assert key is not None
+
+    suggestion_declines.save({key: entry}, path=target)
+
+    loaded = suggestion_declines.load(path=target)
+    assert loaded[key]["row"]["firstname"] == "Grant"
+    assert loaded[key]["row"]["lastname"] == "Dewsbury"
+
+
+def test_first_refusal_still_refuses_a_webhook_secret_shaped_key():
+    """The exemption is EXACT MEMBERSHIP -- a marker-shaped key that is NOT the
+    entry's own recomputed `entry_key` is still refused."""
+    entry = suggestion_declines.build_entry(
+        {"firstname": "Pat", "lastname": "Lee"}, "no_email", "x", "run-1", "123")
+    sentence = suggestion_declines.first_refusal("webhook_secret", entry)
+    assert sentence is not None
+
+
+def test_save_refuses_a_webhook_secret_shaped_key_that_is_not_the_entrys_own_identity(tmp_path):
+    target = tmp_path / "suggestion_declines.json"
+    entry = suggestion_declines.build_entry(
+        {"firstname": "Pat", "lastname": "Lee"}, "no_email", "x", "run-1", "123")
+    with pytest.raises(suggestion_declines.SuggestionDeclineError):
+        suggestion_declines.save({"webhook_secret": entry}, path=target)
+    assert not target.exists()
+
+
 def test_a_genuine_marker_in_provenance_or_reason_still_refuses_nothing_written(tmp_path):
     """The `unstorable` reporting path (plan 02) stays load-bearing: a genuine
     marker -- a `provenance` key named `grant`, or a `reason` carrying a raw secret --

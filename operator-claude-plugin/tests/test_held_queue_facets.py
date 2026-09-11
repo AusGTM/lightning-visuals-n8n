@@ -49,6 +49,11 @@ BARRY_ENTRY = _entry("Devraclb@bigpond.net.au", "Devonport Racing Club")
 
 ATC_DOMAINS = {"australianturfclub.com.au"}
 
+# Phase 71 (D-71-04): the stable key each frozen entry's own `row` derives -- computed,
+# never a new hardcoded literal (RESEARCH Pitfall 2).
+KATIE_KEY = held_queue.stable_key(KATIE_ENTRY["row"])
+JIMMY_KEY = held_queue.stable_key(JIMMY_ENRICHED_ENTRY["row"])
+
 
 # =====================================================================================
 # Task 1 -- classify_facet()
@@ -133,7 +138,7 @@ def test_an_email_with_two_at_signs_reads_nothing_found():
 
 def _saved_two_row_queue(tmp_path):
     target = tmp_path / "held_queue.json"
-    entries = {"row-1": dict(KATIE_ENTRY), "row-2": dict(JIMMY_ENRICHED_ENTRY)}
+    entries = {KATIE_KEY: dict(KATIE_ENTRY), JIMMY_KEY: dict(JIMMY_ENRICHED_ENTRY)}
     held_queue.save("run-1", entries, path=target)
     return target, entries
 
@@ -141,18 +146,18 @@ def _saved_two_row_queue(tmp_path):
 def test_record_verb_round_trips_verb_timestamp_and_run_id(tmp_path):
     target, entries = _saved_two_row_queue(tmp_path)
 
-    held_queue.record_verb("row-1", held_queue.VERB_CREATE, "run-2", path=target)
+    held_queue.record_verb(KATIE_KEY, held_queue.VERB_CREATE, "run-2", path=target)
     loaded = held_queue.load(path=target)
 
-    status = loaded["row-1"]["status"]
+    status = loaded[KATIE_KEY]["status"]
     assert status["verb"] == held_queue.VERB_CREATE
     assert status["run_id"] == "run-2"
     stamp = datetime.fromisoformat(status["at"])
     assert stamp.tzinfo is not None  # UTC ISO timestamp, not a naive one
 
-    # every other field of row-1, and all of row-2, byte-identical
-    assert {k: v for k, v in loaded["row-1"].items() if k != "status"} == entries["row-1"]
-    assert loaded["row-2"] == entries["row-2"]
+    # every other field of Katie's entry, and all of Jimmy's, byte-identical
+    assert {k: v for k, v in loaded[KATIE_KEY].items() if k != "status"} == entries[KATIE_KEY]
+    assert loaded[JIMMY_KEY] == entries[JIMMY_KEY]
 
 
 def test_record_verb_refuses_an_unrecognised_verb_and_leaves_the_file_untouched(tmp_path):
@@ -160,7 +165,7 @@ def test_record_verb_refuses_an_unrecognised_verb_and_leaves_the_file_untouched(
     before = target.read_text()
 
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.record_verb("row-1", "delete", "run-2", path=target)
+        held_queue.record_verb(KATIE_KEY, "delete", "run-2", path=target)
 
     assert target.read_text() == before
 
@@ -180,7 +185,7 @@ def test_record_verb_refuses_a_grant_shaped_run_id(tmp_path):
     before = target.read_text()
 
     with pytest.raises(held_queue.HeldQueueError):
-        held_queue.record_verb("row-1", held_queue.VERB_CREATE, "armed-run-1", path=target)
+        held_queue.record_verb(KATIE_KEY, held_queue.VERB_CREATE, "armed-run-1", path=target)
 
     assert target.read_text() == before
 
@@ -196,7 +201,7 @@ def test_a_malformed_status_on_disk_degrades_load_to_empty_and_classifies_anomal
     entry["status"] = {"verb": "delete"}  # not one of ALL_VERBS
     target.write_text(_json.dumps({
         "run_id": "run-1", "saved_at": "2026-09-11T00:00:00Z",
-        "entries": {"row-1": entry},
+        "entries": {KATIE_KEY: entry},
     }), encoding="utf-8")
 
     assert held_queue.load(path=target) == {}
@@ -210,7 +215,7 @@ def test_a_non_dict_status_on_disk_also_degrades_load_to_empty_and_classifies_an
     entry["status"] = "create"  # not a dict at all
     target.write_text(_json.dumps({
         "run_id": "run-1", "saved_at": "2026-09-11T00:00:00Z",
-        "entries": {"row-1": entry},
+        "entries": {KATIE_KEY: entry},
     }), encoding="utf-8")
 
     assert held_queue.load(path=target) == {}
@@ -221,8 +226,8 @@ def test_an_entry_with_no_status_at_all_loads_exactly_as_it_does_today(tmp_path)
     target, entries = _saved_two_row_queue(tmp_path)
     loaded = held_queue.load(path=target)
     assert loaded == entries
-    assert held_queue.entry_verb(loaded["row-1"]) is None
-    assert not held_queue.is_settled(loaded["row-1"])
+    assert held_queue.entry_verb(loaded[KATIE_KEY]) is None
+    assert not held_queue.is_settled(loaded[KATIE_KEY])
 
 
 def test_open_entries_drops_settled_and_keeps_retry_and_undecided():
