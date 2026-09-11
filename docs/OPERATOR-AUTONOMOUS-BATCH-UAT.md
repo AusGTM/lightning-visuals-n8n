@@ -79,6 +79,13 @@ The deploy dry-run should name the five `wf_*_cloud.json` for update, zero creat
 `apollo: credits=None status=200`, `zoominfo: credits=9371 status=200`. Dry-run named all
 five for update, zero to create, no `REFUSED` line.
 
+**Read 2026-09-11 (operator ran it, plugin still `0.44.0` at this point):**
+`lusha: credits=3860 status=200`, `apollo: credits=None status=200`,
+`zoominfo: credits=9367 status=200`. Delta since 09-09: Lusha -6, ZoomInfo -4 (Gate 11/12
+spend). Dry-run named all five for update, zero to create, no `REFUSED` line. The
+"update" listing is expected on every dry-run — the diff always shows credentials/webhookId
+noise — and is not evidence of a committed-vs-live gap (level per Gate 10).
+
 ### 1c. Decide the backend version
 
 Two options. Recommended: **A**, because the client is `0.42.0` and its report reads a
