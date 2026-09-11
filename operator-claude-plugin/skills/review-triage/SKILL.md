@@ -95,7 +95,9 @@ written, and a second opinion here would be a second authority that drifts from 
    undecided = {rid: e for rid, e in still_open.items()
                 if held_queue.entry_verb(e) is None}             # also drops retry
 
-   known_company_domains = set()  # grows during this sitting -- see 2c below
+   # Phase 71 (D-71-01..03): the seed is what each entry recorded at persist time --
+   # not a lookup this step performs. 2c's in-conversation route still ADDS to it.
+   known_company_domains = held_queue.stamped_domains(held_entries)
    by_facet = {}
    for rid, entry in undecided.items():
        by_facet.setdefault(
@@ -105,7 +107,10 @@ written, and a second opinion here would be a second authority that drifts from 
    **If `held_state` is `held_queue.ANOMALOUS`, the held queue was NOT read** — the same
    rule step 2's `available: false` branch already carries: say so plainly and do not
    render it as empty. `held_queue.ABSENT` (no file) IS legitimately empty — say that
-   instead, never the same sentence as `ANOMALOUS`.
+   instead, never the same sentence as `ANOMALOUS`. When `held_queue.legacy_reason()`
+   returns a sentence, say THAT sentence instead of the generic unreadable line — it
+   names the D-71-05 wipe as what is needed, so the operator learns the backlog is a
+   pre-Phase-71 document to delete, not that it is empty or broken.
 
    **A `retry`-marked entry is not in `undecided` and is not lost — it is `held_queue.
    open_entries`'s own "still open" but has already been looked at once this backlog's
@@ -113,23 +118,24 @@ written, and a second opinion here would be a second authority that drifts from 
    rows_to_resume` reads it there), not to this table. Count it in the parked line (2c)
    so no open entry is both unlisted and uncounted.
 
-   **`known_company_domains` is conversation knowledge, never a lookup this step
-   performs.** `held_queue.classify_facet` discriminates on whether the entry's OWN email
-   domain is already known to exist as a HubSpot company — never on whether the entry's
-   `row["company"]` column happens to be filled in (a row can carry a company name and
-   still read `needs_company`, because the classifier never reads that field at all). With
-   nothing yet confirmed this sitting, every entry reads `needs_company` — the function's
-   own documented safe, review-first default. Add a domain only from a legitimate source —
-   the same closed vocabulary `enrich-records/SKILL.md` step 7 already names
-   (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`):
-   an enrich-records or contact-upload batch that already ran earlier in this sitting, an
-   operator statement naming a company already in HubSpot, or 2c's own company-verb
-   handoff landing. Never Claude's own recall, never a domain inferred from a company's
-   name. This step performs no HubSpot search of its own to populate it — that would be
-   exactly the widening `write_grant.py`'s own docstring already refuses to take on
-   (`plan_grant`'s resolution happens in a skill, never inside the authorization
-   boundary), and giving THIS read a lookup of its own would be the identical widening one
-   step earlier.
+   **`known_company_domains` starts from what each entry recorded at persist time
+   (D-71-01), and still only ever GROWS from conversation knowledge on top of that —
+   never a lookup this step performs itself.** `held_queue.classify_facet`
+   discriminates on whether the entry's OWN email domain is already known to exist as
+   a HubSpot company — never on whether the entry's `row["company"]` column happens to
+   be filled in (a row can carry a company name and still read `needs_company`, because
+   the classifier never reads that field at all). Add a domain on top of the seed only
+   from a legitimate source — the same closed vocabulary `enrich-records/SKILL.md`
+   step 7 already names (`hubspot_lookup`, `operator_statement`, `provider_result`,
+   `same_row_derivation`): an enrich-records or contact-upload batch that already ran
+   earlier in this sitting, an operator statement naming a company already in HubSpot,
+   or 2c's own company-verb handoff landing. Never Claude's own recall, never a domain
+   inferred from a company's name. This step performs no HubSpot search of its own to
+   populate it — that would be exactly the widening `write_grant.py`'s own docstring
+   already refuses to take on (`plan_grant`'s resolution happens in a skill, never
+   inside the authorization boundary), and giving THIS read a lookup of its own would
+   be the identical widening one step earlier (D-71-02 is the same refusal). The
+   anomalous / absent distinction above is unchanged by any of this.
 
 2c. **Render one table, continuously numbered from 1 — HubSpot conflicts first, then the
    held rows.** Number every row from step 2's HubSpot render onward without resetting,
@@ -296,6 +302,14 @@ written, and a second opinion here would be a second authority that drifts from 
    `extraction.canonical_props()`, and skipping this strip raises `non_canonical_key_in_row`
    at the write, not here where it could still be fixed.
 
+   **`rid` here is the entry's stable key (D-71-04), carried unchanged from 2b's own
+   `held_queue.load()` through 2c's table and into `chosen_row_ids`** — 2b iterates
+   whatever keys `load()` returns, so this identifier was never a positional row id to
+   begin with. `created_by_row_id`'s own name is the one historical exception: despite
+   the name, its keys are the same stable keys, not `run_manifest`-style positional
+   ids — 4c's confirm pass mints its own, unrelated, throwaway `row_id`s for the match
+   request, and those never reach `created_by_row_id` at all.
+
    `created_by_row_id[rid]` is never `None` for a row reached this way: `chosen_row_ids`
    only ever names rows 2c offered `create` for, and `held_queue.classify_facet` only
    ever returns `FACET_NEW_PERSON` for an entry it has already proven carries a usable
@@ -357,6 +371,11 @@ written, and a second opinion here would be a second authority that drifts from 
            held_queue.record_verb(row_id, held_queue.VERB_CREATE, run_id)
    ```
 
+   `row_id` here is the entry's own stable key (D-71-04) — the identifier
+   `held_queue.record_verb` was already called with is the SAME identifier the entry
+   was saved under, so a create the operator lands is settled under the same key it
+   will be looked up by next sitting, never re-offered.
+
    A row not in `landed` keeps its open status and is shown again next sitting — never
    marked on a hope.
 
@@ -378,6 +397,25 @@ written, and a second opinion here would be a second authority that drifts from 
    (`held_queue.classify_facet(entry, known_company_domains)`) — it now reads
    `FACET_NEW_PERSON`. Offer that row's create in the **same sitting**, immediately after
    the company lands, through 4a-4c above.
+
+4d. **Held rows: skip/drop — record immediately, no grant and no confirm needed.**
+   Neither verb writes to HubSpot, so neither waits for step 4's window: as soon as the
+   operator answers a held row's own table label with `skip` or `drop`, record it in
+   the SAME idiom 4c already uses — one call per decided row, after the decision, never
+   on a hope:
+
+   ```python
+   import held_queue
+
+   for row_id, verb in skip_or_drop_by_row_id.items():
+       held_queue.record_verb(row_id, verb, run_id)
+   ```
+
+   `row_id` here is the SAME stable key 2b/2c/4a already carry — never a re-derivation.
+   A row `skip`d or `drop`ped this way is settled exactly like a landed `create`: gone
+   from `held_queue.open_entries` next sitting, never re-offered. Neither verb has a
+   distinct effect beyond that closed status today — the distinction between "skip" and
+   "drop" is the operator's own bookkeeping, not a behavioural fork this skill acts on.
 
 5. **Elicit the decision and a reason.**
 
