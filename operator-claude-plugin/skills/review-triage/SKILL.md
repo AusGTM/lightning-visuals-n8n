@@ -80,9 +80,105 @@ written, and a second opinion here would be a second authority that drifts from 
    rendering already says so. Companies and contacts are separate fetches; if the operator
    asks "what needs review" without saying which, show both.
 
+2b. **Read the held queue too (F2-3, 2026-09-11 ruling).** The pipeline also holds rows
+   that never reached HubSpot at all — a contact-ingest row `held_queue.json` parked on a
+   `no_match` hold. Those never show up in step 2's HubSpot fetch because there is no
+   HubSpot record to search for. Reading this file is local and costs nothing — no network,
+   no provider credit:
+
+   ```python
+   import held_queue
+
+   held_state = held_queue.classify_read()
+   held_entries = held_queue.load()
+   still_open = held_queue.open_entries(held_entries)          # drops create/skip/drop
+   undecided = {rid: e for rid, e in still_open.items()
+                if held_queue.entry_verb(e) is None}             # also drops retry
+
+   known_company_domains = set()  # grows during this sitting -- see 2c below
+   by_facet = {}
+   for rid, entry in undecided.items():
+       by_facet.setdefault(
+           held_queue.classify_facet(entry, known_company_domains), []).append(rid)
+   ```
+
+   **If `held_state` is `held_queue.ANOMALOUS`, the held queue was NOT read** — the same
+   rule step 2's `available: false` branch already carries: say so plainly and do not
+   render it as empty. `held_queue.ABSENT` (no file) IS legitimately empty — say that
+   instead, never the same sentence as `ANOMALOUS`.
+
+   **A `retry`-marked entry is not in `undecided` and is not lost — it is `held_queue.
+   open_entries`'s own "still open" but has already been looked at once this backlog's
+   life.** It belongs to the next enrichment run's own resume (`run_manifest.
+   rows_to_resume` reads it there), not to this table. Count it in the parked line (2c)
+   so no open entry is both unlisted and uncounted.
+
+   **`known_company_domains` is conversation knowledge, never a lookup this step
+   performs.** `held_queue.classify_facet` discriminates on whether the entry's OWN email
+   domain is already known to exist as a HubSpot company — never on whether the entry's
+   `row["company"]` column happens to be filled in (a row can carry a company name and
+   still read `needs_company`, because the classifier never reads that field at all). With
+   nothing yet confirmed this sitting, every entry reads `needs_company` — the function's
+   own documented safe, review-first default. Add a domain only from a legitimate source —
+   the same closed vocabulary `enrich-records/SKILL.md` step 7 already names
+   (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`):
+   an enrich-records or contact-upload batch that already ran earlier in this sitting, an
+   operator statement naming a company already in HubSpot, or 2c's own company-verb
+   handoff landing. Never Claude's own recall, never a domain inferred from a company's
+   name. This step performs no HubSpot search of its own to populate it — that would be
+   exactly the widening `write_grant.py`'s own docstring already refuses to take on
+   (`plan_grant`'s resolution happens in a skill, never inside the authorization
+   boundary), and giving THIS read a lookup of its own would be the identical widening one
+   step earlier.
+
+2c. **Render one table, continuously numbered from 1 — HubSpot conflicts first, then the
+   held rows.** Number every row from step 2's HubSpot render onward without resetting,
+   then continue the same sequence for `by_facet[held_queue.FACET_NEW_PERSON]` and
+   `by_facet[held_queue.FACET_NEEDS_COMPANY]`, in that order. Each held row shows the
+   person (first name, last name), the company, the enriched email the waterfall found, and
+   the hold's own reason. Say plainly that the email shown is what the run recovered, not a
+   guess, and name its source (`entry["row"]`, the merged row `held_queue.build_entry`
+   persisted — see `260911-w6o-SUMMARY.md`).
+
+   - **A `held_queue.FACET_NEW_PERSON` row offers `create`** — this row's own domain is
+     already known to exist in HubSpot, so its create is expected to land.
+   - **A `held_queue.FACET_NEEDS_COMPANY` row offers `company`, not `create`** — see step
+     4c for what that verb does and why the label does not change once the company lands.
+
+   **Pre-suggest the create, under the table, as a ready answer the operator can send back
+   verbatim.** One line offering the bulk create for the new-person facet, restating its
+   count in the same shape `enrich-before-ingest/SKILL.md` step 3's own bulk example uses.
+   This is an OFFER, never an action, and the count in it is the count of new-person rows
+   actually shown — never a total that folds in a parked or a conflict row.
+
+   **Print exactly one parked line under the table.** `parked_ids` is every entry in
+   `still_open` that the table did not list — `held_queue.FACET_NOTHING_FOUND` rows (no
+   usable email to create by), every entry whose `classify_facet` reads `None` (a hold code
+   other than `no_match` — five others: `unparseable`, `unadjudicated_conflict`, an
+   unrecognized match signal, `ambiguous_candidates`, `no_table_row_matched`), and every
+   `retry`-marked entry. Give the count and the words that show them, each with its own
+   hold reason when the operator asks. Say in one sentence why they are parked rather than
+   dropped: an unread or unshown queue presented as an empty one is the worst answer this
+   skill can give.
+
 3. **Let the operator pick which records to work this sitting.** Do not pick for them. They
    may name one record, several, or say to work the whole page shown — either way, the
    records named here are what step 4 scopes the sitting's authority to.
+
+   **The answer vocabulary for the numbered table is ONE vocabulary, ported by heading from
+   `enrich-before-ingest/SKILL.md` step 3** ("Confirm the proposed matches — one numbered
+   markdown table, one line per decision") — never a second one invented here: per-item
+   answers keyed by the row's own label; a blanket decline is accepted; a bare blanket
+   approval with no named scope is refused outright; a bulk affirmative must restate its
+   count, in the same shape that step's own example uses, because restating the count is
+   what proves the scope was seen rather than assumed; an unanswered row stays pending and
+   is restated in full next turn, never defaulted in either direction; and one malformed
+   answer line refuses the WHOLE table before anything is applied, naming the offending
+   line. **On a HubSpot-flagged conflict, `approve`/`reject` remain the only decision
+   words — that vocabulary is not widened by this table.** A held row answers with its own
+   facet's verb instead: `create` (new-person), `company` (needs-company; step 4c), or the
+   backlog's own `skip`/`drop` (`held_queue.VERB_SKIP`/`held_queue.VERB_DROP`) to close a
+   row out with no further action.
 
 4. **Open the sitting — one grant, one batch window, for the whole sitting (D-60-06).**
 
@@ -102,15 +198,19 @@ written, and a second opinion here would be a second authority that drifts from 
    second deliberate yes.
 
    **Otherwise, plan and open a grant over exactly the records step 3 named,** naming
-   `lanes=["review"]` and `providers=[]` — a review batch spends no provider credit, and
-   naming the configured provider selection here would price the envelope against credits
-   this sitting never touches:
+   `providers=[]` always — a review batch spends no provider credit, and a create spends
+   none either (the enrichment already happened; this is the ingest write only), so naming
+   the configured provider selection here would price the envelope against credits this
+   sitting never touches. **`lanes` and `allow_create` widen only when this sitting
+   includes at least one held-row create** (2c/3): `lanes=["review", "contacts"]` and
+   `allow_create=True` in that case; otherwise `lanes=["review"]` and `allow_create=False`,
+   exactly as before:
 
    ```python
    proposal = write_grant.plan_grant(
-       config, lanes=["review"], object_type=object_type,
-       record_ids=record_ids, record_domains=record_domains, allow_create=False,
-       providers=[])
+       config, lanes=["review", "contacts"] if any_create_chosen else ["review"],
+       object_type=object_type, record_ids=record_ids, record_domains=record_domains,
+       allow_create=any_create_chosen, providers=[])
    ```
 
    Present the proposal exactly as any other grant offer is presented, and only once the
@@ -164,9 +264,126 @@ written, and a second opinion here would be a second authority that drifts from 
    mid-sitting, exactly as if no window were open at all — the batch window widens WHEN
    the backend accepts a review write, never WHAT it may write.
 
+   **This window covers the review workflow only — a held-row create (4a-4c below) opens
+   its own, separate window on the ingest workflow, and the two never collide.** An
+   ingest send's own pre-flight (`write_grant.preflight_before_send`) scopes its liveness
+   read to that one lane's workflow id, never to every workflow a grant happens to cover
+   (`n8n_arming.arm_for_dispatch`/`arm_for_review` each target exactly one `workflow_id`'s
+   own declaring nodes — confirmed on disk, not merely assumed). So the review window's own
+   arm is never mistaken for a dirty ingest backend, and an ingest create can run before,
+   after, or between conflict decisions, in whatever order the operator's picks make
+   natural — 4a-4c do not need to nest inside the `with` block above.
+
+4a. **Held rows: build the CSV for the creates this sitting chose (2c's `create` verb).**
+   A rewritten CSV of exactly the chosen rows is the only shape allowed to reach the
+   backend — a held row nobody chose must be unable to travel with one that was:
+
+   ```python
+   import extraction, preingest
+
+   create_rows = [held_entries[rid]["row"] for rid in chosen_row_ids]
+   created_by_row_id = {rid: held_entries[rid]["row"].get("email") for rid in chosen_row_ids}
+   create_rows = preingest.strip_enrichment_extras(create_rows)
+   create_rows = extraction.strip_row_id(create_rows)
+   extraction.write_dispatch_csv(create_rows, send_path)
+   send_row_count = len(create_rows)
+   ```
+
+   `chosen_row_ids` and `send_path` bind by name from the operator's answered table lines
+   and this sitting's scratch directory. `strip_enrichment_extras` runs before
+   `strip_row_id` for the same reason `enrich-before-ingest/SKILL.md` step 7 already
+   orders them — a held row's stored fields (`mobilephone`, `lv_linkedin_url`) are not in
+   `extraction.canonical_props()`, and skipping this strip raises `non_canonical_key_in_row`
+   at the write, not here where it could still be fixed.
+
+   `created_by_row_id[rid]` is never `None` for a row reached this way: `chosen_row_ids`
+   only ever names rows 2c offered `create` for, and `held_queue.classify_facet` only
+   ever returns `FACET_NEW_PERSON` for an entry it has already proven carries a usable
+   email (its own decision table, step 1) — so a row with no email can never be `create`d
+   here, and 4c's `if email` filter is a defensive read of that guarantee, not a silent
+   drop of a row the operator actually chose.
+
+4b. **Send it — contact-upload's own dispatch, by heading, never a second copy of it
+   here.** From here the create follows `contact-upload/SKILL.md`'s own steps, unmodified,
+   naming them exactly: **"Dispatch under an open grant, or otherwise only once the
+   operator has said yes to this send."**, **"Report the outcome — per record, not a bare
+   acceptance."**, **"Re-check, only when the operator asks."**, **"Retry a transport
+   failure — same dispatch, same arming gate."**, and **"Clean up."** Two reasons, one
+   clause each: there is exactly ONE ingest dispatch implementation in this plugin and a
+   second copy here would drift from it; and because 4's grant already covers the
+   `contacts` lane when a create is chosen, that step's `grant is not None` branch asks the
+   operator nothing further — no export, no second skill invocation, no extra prompt. Hand
+   it `send_path`, `send_row_count`, `send_ids=[]` (a create names no existing record),
+   `send_domains` — the domain of each chosen row's own enriched email, the same shape
+   `suggestion_declines.py`'s own precedent already binds it (`row["email"].rpartition
+   ("@")[2]`, verified on disk) — and `allow_create=True`, plus the open `grant`.
+
+4c. **Confirm by re-reading, then mark — ONE call for the whole create batch, never one
+   per row** (the F1 lesson: each of these costs an n8n execution):
+
+   ```python
+   import chunking, config_gate, preingest
+
+   cfg = config_gate.load_config()
+   confirm_spec = preingest.build_rows_spec(
+       [{"email": email} for email in created_by_row_id.values() if email])
+   confirm_plan = chunking.plan_chunks(
+       confirm_spec, chunking.chunk_ceiling(cfg, key="max_rows_per_match_request"))
+   confirm_outcome = preingest.match_batch(confirm_plan, cfg)
+   confirmed = preingest.classify_matches(
+       confirm_spec["rows"], confirm_outcome.responses,
+       unchecked_row_ids=confirm_outcome.unchecked_row_ids)
+   landed = {entry["row"]["email"]: entry["hs_object_id"]
+             for entry in confirmed["auto_matched"]}
+   ```
+
+   The verdict comes from this independent re-read, never from 4b's own dispatch report —
+   this skill's standing rule (step 8) applies here too. The join is on email, not
+   `row_id`: `build_rows_spec` mints fresh ids and refuses a row that already carries one,
+   so the held row's id does not survive this confirm pass. An `unchecked` or `unmatched`
+   confirm row is **"sent, not yet confirmed"** with an offer to re-read — never inverted
+   into "the create failed": a HubSpot search index can genuinely lag a fresh create by
+   seconds to about a minute, and `unmatched` here means "not yet visible", not "not
+   there".
+
+   Then mark, only for a row the re-read actually found — `held_queue.record_verb` loads
+   and saves itself, so there is nothing to `load()` or `save()` separately:
+
+   ```python
+   import held_queue
+
+   for row_id, email in created_by_row_id.items():
+       if email and email in landed:
+           held_queue.record_verb(row_id, held_queue.VERB_CREATE, run_id)
+   ```
+
+   A row not in `landed` keeps its open status and is shown again next sitting — never
+   marked on a hope.
+
+   **A `held_queue.FACET_NEEDS_COMPANY` row's `company` verb (2c) hands off BY HEADING to
+   `enrich-records/SKILL.md`'s "Companies that may not be in HubSpot yet" form** —
+   unmodified, its own website-confirm table and mandatory-domain rule included. What this
+   skill supplies is the domain, derived from the held row's own email address; the
+   company's NAME comes from the operator, never guessed from a domain. Per CLAUDE.md
+   §13.0.1 the ingest lane resolves a row's company by manual id, then the email's own
+   domain, then an exact name — and a create that resolves none is downgraded to review
+   **server-side**. This plugin does not and will not reproduce that downgrade
+   client-side: the backend is the one authority on it.
+
+   **The facet does not flip on its own.** `held_queue.classify_facet` is pure over the
+   entry plus whatever `known_company_domains` the caller supplies — nothing writes a
+   confirmed company back into the held entry, and nothing re-derives the facet from disk.
+   Once the company create/confirm lands, add that domain to this sitting's own
+   `known_company_domains` and re-facet **that one row**
+   (`held_queue.classify_facet(entry, known_company_domains)`) — it now reads
+   `FACET_NEW_PERSON`. Offer that row's create in the **same sitting**, immediately after
+   the company lands, through 4a-4c above.
+
 5. **Elicit the decision and a reason.**
 
-   The two decisions are **approve** and **reject**, and nothing else is a decision word.
+   **On a HubSpot-flagged conflict**, the two decisions are **approve** and **reject**, and
+   nothing else is a decision word — the held-queue rows step 2c/3 added have their own
+   verbs, named where their facet is (2c), and do not widen this pair.
 
    - **Approve** promotes the record's own held candidate through the backend's existing
      non-clobber merge.
