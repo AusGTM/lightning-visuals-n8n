@@ -16,6 +16,55 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-12
+
+Phase 71 (`71-01`, `71-02`, `71-03`) — the F2 shape closes: a held new person now reads
+`new_person` on both surfaces because the run records, once, what it already knew about
+their company; the held backlog is now keyed by the person rather than their line number,
+so a second run's own held row can no longer silently overwrite a first run's still-open
+entry; a person named Grant persists; an old-format backlog file says so instead of reading
+as empty. Decisions `D-71-01`..`D-71-06`.
+
+### Fixed
+- **A held row's `company_known` stamp, written once at persist time, drives `new_person`
+  on both surfaces — no per-facet lookup, no operator-typed domain required for a cold
+  start** (D-71-01..03). `preingest.confirmed_company_domains` folds step 2's own matched
+  rows and an optional company-row confirm-table spec into a domain→source map with zero
+  new lookups; `held_queue.build_entry(..., company_known=...)` stamps it onto the entry;
+  both `enrich-before-ingest` step 6 and a cold-start `review-triage` step 2b derive
+  `known_company_domains` from `held_queue.stamped_domains(held_entries)` instead of a
+  hardcoded empty set. `classify_facet()` itself is unchanged.
+- **A held entry's identity is the row's own email/name/LinkedIn, never its line number in
+  the spreadsheet, so a second run's held row can no longer silently overwrite a first
+  run's still-open entry, and a settled entry is found again after a run boundary**
+  (D-71-04..05). `held_queue.identity_keys`/`stable_key` derive a group-prefixed key from
+  `required_identity.any_of`; both the persist-time write and `run_manifest.rows_to_resume`'s
+  resume lookup key on the same derivation, computed fresh from each side's own row.
+  `enrich-before-ingest` step 8 now wires `held_entries=held_queue.load()` into
+  `watch.resume_or_disclose`, making a settled row's recorded verb (`create`/`skip`/`drop`)
+  actually short-circuit its resume in production for the first time.
+- **A pre-Phase-71 held-queue file is refused with a one-sentence instruction instead of
+  silently reading as empty** (D-71-05). A document keyed by the old positional `row-N`
+  scheme is detected and refused outright (`load()` → `{}`, refusal names the wipe); no
+  lazy migration code exists — the live file is deleted by hand as part of the release gate.
+- **A person named Grant, or a company named Token, can be held without being refused by
+  the forbidden-marker scan — for the two stores whose key or row payload is derived from a
+  name.** `held_queue.py`'s and `suggestion_declines.py`'s entries-map key checks now exempt
+  a key that is the entry's own identity from the whole-token scan; any other marker-shaped
+  key (e.g. a webhook secret) is still refused exactly as before. `written_records.py`'s
+  value scan is unchanged by design (a regression test pins it load-bearing); five other
+  stores were never in scope (none keys or allowlists a value derived from a person's or
+  company's own name).
+- **`review-triage`'s `skip`/`drop` answers now record immediately**, in the same idiom the
+  `create` route already used — closing a gap where those two verbs were named in the
+  skill's own answer vocabulary but had no call site recording them.
+
+### Notes
+- A lazy (function-scoped) cross-module import in `held_queue.py` breaks a real import
+  cycle discovered this session; the public contract it calls is unchanged.
+- No n8n workflow, deploy, bounce, or arming occurred anywhere in Phase 71 — the release
+  changes client-side state stores and skill wiring only.
+
 ## [0.47.0] - 2026-09-11
 
 Quick batch `260911-w6n`: F2 — the operator's 2026-09-11 ruling on how a `no_match`

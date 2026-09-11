@@ -237,6 +237,48 @@ find and hand-delete them in HubSpot afterwards — **HubSpot has no rollback.**
 Expected spend for the whole batch: ~2–4 provider credits (Lusha 1/contact, 2/company),
 one Anthropic call per unmatched company, roughly 8–15 n8n executions.
 
+### 1e. The D-71-06 gate's CSV — a row that actually gets HELD and reads `new_person`
+
+**Why a THIRD CSV is needed at all.** §1d's second round sends Jimmy Busteed through
+`contact-upload` with his email ALREADY REVEALED — that is a straight `create` with no
+`no_match` hold anywhere in the path, so it exercises none of Phase 71 (71-RESEARCH.md
+§ Seam Map 10). The D-71-06 gate needs a row that actually gets HELD on a `no_match` verdict
+and is then read back as `new_person` from the stamp Phase 71 built. It runs through
+**`enrich-before-ingest`, not `contact-upload`.**
+
+| Row | Person / company | Email column | What it exercises | Expected |
+| --- | --- | --- | --- | --- |
+| A | Jimmy Busteed, ABSENT from HubSpot, Australian Turf Club (`9605284724`, `australianturfclub.com.au`) | **BLANK** | the waterfall reveals `jbusteed@australianturfclub.com.au`; `confidence.assess` holds him `no_match`; the entry is stamped and reads `new_person` — the whole phase's headline case | held, then step 6 names him under "new person"; `create all N` lands him, associated to `9605284724` |
+| B | the stamp's source — one real contact already in HubSpot at a genuine `@australianturfclub.com.au` address | filled (their real, on-file email) | matches at step 2; that domain enters `confirmed_company_domains` under `step2_match` — this is what makes row A read `new_person` instead of `needs_company` | matched normally, no hold |
+| C | Grant Dewsbury, contact `7101`, Darwin Turf Club (`9605267534`) | filled | §1d dropped him because the forbidden-name marker refused his name; his persisting here is this fold's own live proof | matches/updates normally — the point is that he is IN the CSV and is NOT silently dropped |
+| D | a second ABSENT person at a company HubSpot already holds, email BLANK | **BLANK** | reserved for the cold-start half — do NOT include in the batch-surface `create all N` reply; leave it held | held as `new_person`; created from a FRESH `review-triage` sitting, not this conversation |
+
+**Row B's source — default (c), zero credit; fallback (a).** Default: pick any one of the
+roughly ten contacts ATC already carries at `@australianturfclub.com.au` (RESEARCH § Seam
+Map 4) and put them in the CSV with their real, on-file email — this contact MATCHES at step
+2, so their domain enters `confirmed_company_domains` under `step2_match` and spends zero
+extra credit. Fallback (a), only if no such contact is convenient at gate time: add an ATC
+COMPANY row to the CSV instead, so step 2's company-row confirm table supplies the domain
+under `step2_company_row` — this option spends one company-enrichment credit where (c) spends
+none. **Record which option supplied the stamp in `71-UAT.md`.**
+
+**Keep §1d's `jobtitle` warning in force**: no `secret`/`arm` substrings ("Secretary",
+"Armidale") in any row's `jobtitle` — the forbidden-marker scan on row payloads is otherwise
+unrelated to this phase's fix and would still refuse to persist a held row carrying one. Note
+the change this phase DOES make: as of `0.48.0`, the `grant`/`token` markers no longer refuse
+a person's or company's own NAME (that is what lets row C persist) — they still refuse an
+actual grant token or secret VALUE wherever one appears.
+
+**Clean-up, part of the gate, not an afterthought:**
+- Hand-delete every contact created in HubSpot. HubSpot has no rollback.
+- Delete `held_queue.json` from the plugin's durable state directory —
+  **this deletion IS the D-71-05 wipe.** It is a manual step by design, not code: no
+  migration or lazy-rekey path exists for a pre-Phase-71 file, by the same ruling that makes
+  `load()` refuse one outright rather than silently reading it as empty.
+- Delete any driver script written during the session (operator scripts ruling, §2 below).
+
+No arming instruction belongs in this subsection — the D-71-06 gate task owns every send.
+
 ---
 
 ## 2. The run — say this, watch for that
