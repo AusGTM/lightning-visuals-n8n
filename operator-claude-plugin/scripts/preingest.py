@@ -651,6 +651,63 @@ def apply_match_decisions(classified, resolved):
     }
 
 
+def confirmed_company_domains(classified, company_spec=None) -> dict:
+    """Phase 71 (D-71-01..03): the zero-new-lookup fold that seeds a caller's
+    `known_company_domains` -- a mapping of cleaned domain -> the word naming which
+    source confirmed it, both members of `held_queue.COMPANY_KNOWN_SOURCES`. Reads
+    only data step 2's own ONE match call and step 2's own company-row confirm table
+    already produced -- no new HubSpot read, and neither `index_company_dependencies`
+    nor `assign_same_run_company_ids` is wired here (RESEARCH Pitfall 3: both have
+    zero skill call sites today and stay dormant).
+
+    Two sources, folded in this order so the SECOND overrides the FIRST on a shared
+    domain (a company row the operator confirmed outranks a same-batch contact's own
+    email domain):
+
+      1. `classified["auto_matched"]` -- each entry's own `row["email"]`, cleaned via
+         `enrichment._clean_domain` and excluded when empty or in
+         `enrichment.FREEMAIL_DOMAINS`. `apply_match_decisions` moves a step-3-
+         confirmed row INTO this same bucket, so a confirmed MEDIUM match is covered
+         by this one branch, never a second one. Word: `"step2_match"`.
+      2. `company_spec` -- the `{"companies": [{"name","domain"}|{"name"}]}` dict
+         `company_domain.to_envelope_spec` returns when the batch's extraction pass
+         also yielded company rows. A name-only entry (no `domain` key) contributes
+         nothing. Word: `"step2_company_row"`.
+
+    This is EVIDENCE, not proof: an existing HubSpot contact's own email domain is
+    not guaranteed to be that company's canonical property (the UAT's own ATC
+    observation -- 10 contacts at `@australianturfclub.com.au`, only 4 associated).
+    Being wrong here is bounded, though: the ingest lane resolves the company
+    server-side and downgrades an unresolvable create to review (CLAUDE.md
+    §13.0.1), so a false new-person reading costs one offered row, never a bad
+    landing.
+    """
+    domains: dict = {}
+
+    for entry in (classified or {}).get("auto_matched") or []:
+        row = entry.get("row") if isinstance(entry, dict) else None
+        email = row.get("email") if isinstance(row, dict) else None
+        if not isinstance(email, str):
+            continue
+        parts = email.strip().split("@")
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            continue
+        cleaned = enrichment._clean_domain(parts[1])
+        if not cleaned or cleaned in enrichment.FREEMAIL_DOMAINS:
+            continue
+        domains[cleaned] = "step2_match"
+
+    for company in (company_spec or {}).get("companies") or []:
+        if not isinstance(company, dict):
+            continue
+        cleaned = enrichment._clean_domain(company.get("domain"))
+        if not cleaned:
+            continue
+        domains[cleaned] = "step2_company_row"
+
+    return domains
+
+
 class MergeError(Exception):
     """Raised when a response set cannot be merged safely: a duplicated `row_id` (two
     items claiming one row means the join is not a function, and there is no safe
