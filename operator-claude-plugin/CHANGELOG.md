@@ -30,14 +30,15 @@ one person).
 
 ### Fixed
 - **A held row's entry stores the merged row the waterfall actually found, not the
-  operator's blank source line** (F2-1, quick `260911-w6o`). The recorded run
-  `a254d1eda71246a2a964922cdf5c2bd2` threw a 7-credit Lusha reveal away this way.
-  `held_queue.ROW_FIELD_ALLOWLIST` widened from 6 to 11 enumerated names (adding
-  job title, phone, company id, mobile, LinkedIn); `enrich-before-ingest`'s persist
-  fence now hands `held_queue.build_entry` the dispatch step's own merged row instead
-  of the loop's bare source row.
+  operator's blank source line** (F2-1, quick `260911-w6o`, commits `3d264b3f`
+  `3dfbbb44`). The recorded run `a254d1eda71246a2a964922cdf5c2bd2` threw a 7-credit
+  Lusha reveal away this way. `held_queue.ROW_FIELD_ALLOWLIST` widened from 6 to 11
+  enumerated names (adding job title, phone, company id, mobile, LinkedIn);
+  `enrich-before-ingest`'s persist fence now hands `held_queue.build_entry` the
+  dispatch step's own merged row instead of the loop's bare source row.
 - **`enrich-before-ingest` step 6 no longer asks how to handle held rows** (F2-4,
-  quick `260911-w6r`, closing UAT F4's recorded question). Step 6 now loads the held
+  quick `260911-w6r`, commits `6de7a55c` `23fa724a` `f5a01134`, closing UAT F4's
+  recorded question). Step 6 now loads the held
   queue, facets each `no_match` hold (new person / needs a company / nothing found),
   names new-person and needs-company rows individually and carries nothing-found as
   one parked count line, and states one ready answer offering both an
@@ -49,15 +50,17 @@ one person).
 
 ### Added
 - **A read-time facet classifier and durable per-row verbs on the held queue**
-  (F2-2, quick `260911-w6p`). `held_queue.classify_facet` splits a `no_match` hold
-  into `new_person` / `needs_company` / `nothing_found` from the entry plus a
-  caller-resolved set of company domains — never from the row's own company-name
-  column. `record_verb`/`entry_verb`/`is_settled`/`open_entries` give an entry a
-  durable `create`/`skip`/`retry`/`drop` status, so an operator's decision on a held
-  row is never silently reopened by a later resume.
+  (F2-2, quick `260911-w6p`, commits `15349f77` `af653e46` `66de79b8`).
+  `held_queue.classify_facet` splits a `no_match` hold into `new_person` /
+  `needs_company` / `nothing_found` from the entry plus a caller-resolved set of
+  company domains — never from the row's own company-name column.
+  `record_verb`/`entry_verb`/`is_settled`/`open_entries` give an entry a durable
+  `create`/`skip`/`retry`/`drop` status, so an operator's decision on a held row is
+  never silently reopened by a later resume.
 - **`review-triage` reads both the HubSpot review queue and the local held queue, in
   one table, and gives a held new person a route to HubSpot** (F2-3, quick
-  `260911-w6q`). A `new_person` row's `create` builds a CSV of exactly the chosen
+  `260911-w6q`, commits `7e6af271` `2101b747`). A `new_person` row's `create`
+  builds a CSV of exactly the chosen
   rows and dispatches through `contact-upload`'s own steps, by heading, under a
   widened `lanes=["review","contacts"]` grant; the result is confirmed by an
   independent re-read joined on email before the row is marked created. A
