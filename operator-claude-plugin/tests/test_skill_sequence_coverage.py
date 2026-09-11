@@ -520,6 +520,36 @@ COVERED = {
             "extraction.hold_emailless",
         ),
     ): "test_suggestion_declines_skill.py::test_a_drained_send_clears_the_same_gates_a_normal_send_clears",
+    # Quick 260911-w6q (F2-3): step 2b's held-queue read/bucket fence -- open_entries's
+    # output feeds the undecided comprehension (entry_verb per entry), whose output feeds
+    # classify_facet per entry. One test drives the whole read-render-create-confirm-mark
+    # flow for real, so all three review-triage identities below share its nodeid.
+    (
+        "review-triage",
+        (
+            "held_queue.classify_read", "held_queue.load", "held_queue.open_entries",
+            "held_queue.entry_verb", "held_queue.classify_facet",
+        ),
+    ): "test_review_triage_facets.py::test_one_held_new_person_end_to_end_read_render_create_confirm_mark",
+    # Quick 260911-w6q (F2-3): step 4a's CSV-build fence, ported from
+    # `enrich-before-ingest/SKILL.md` step 7's own tail (minus the merge/partition head,
+    # which does not apply to a held row already carrying its merged fields).
+    (
+        "review-triage",
+        (
+            "preingest.strip_enrichment_extras", "extraction.strip_row_id",
+            "extraction.write_dispatch_csv",
+        ),
+    ): "test_review_triage_facets.py::test_one_held_new_person_end_to_end_read_render_create_confirm_mark",
+    # Quick 260911-w6q (F2-3): step 4c's confirm fence -- one match_batch call for the
+    # whole create batch, joined back to the held rows by email at classify_matches.
+    (
+        "review-triage",
+        (
+            "config_gate.load_config", "preingest.build_rows_spec", "chunking.plan_chunks",
+            "chunking.chunk_ceiling", "preingest.match_batch", "preingest.classify_matches",
+        ),
+    ): "test_review_triage_facets.py::test_one_held_new_person_end_to_end_read_render_create_confirm_mark",
 }
 
 NOT_A_PIPELINE = {
