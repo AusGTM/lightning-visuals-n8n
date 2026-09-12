@@ -323,3 +323,74 @@ def test_pav_field_without_system_correctable_sources_is_unchanged():
     g = pav_gate(json.dumps({"domain": pav_entry()}), policy=policy)
     assert g["decision"] == "stage_only"
     assert g["reason"] == "Field is manual_protected."
+
+
+# --- Phase 72 Plan 04: recency/TTL gate for stale_refreshable fields -----------------
+#
+# Mirrors tests/n8n/mergeRecencyGate.test.mjs's shared fixture table -- the three
+# engines (mergeContacts.js, mergeCompanies.js, this Python oracle) must agree
+# field-for-field. Before this plan, ANY non-blank stale_refreshable candidate answered
+# needs_review unconditionally, regardless of staleness -- this is genuinely new logic.
+
+NOW = "2026-09-12T00:00:00+00:00"
+STALE_400D = "2025-08-08T00:00:00+00:00"  # >365 days before NOW
+FRESH_100D = "2026-06-04T00:00:00+00:00"  # <365 days before NOW
+
+INDUSTRY_POLICY = {"class": "stale_refreshable", "min_confidence": 75, "stale_after_days": 365}
+
+
+def industry_gate(current_value, candidates, *, now=NOW, history_by_field=None, policy=None):
+    return deterministic_gate(None, "industry", current_value, candidates,
+                               policy or INDUSTRY_POLICY, PRIORITY,
+                               now=now, history_by_field=history_by_field)
+
+
+def test_recency_stale_existing_value_plus_provider_observation_newer_promotes():
+    g = industry_gate("Sports", [make_candidate("industry", "zoominfo", "Media Production", 90)],
+                       history_by_field={"industry": STALE_400D})
+    assert g["decision"] == "promote"
+
+
+def test_recency_fresh_existing_value_needs_review_unchanged_pre72_reason():
+    g = industry_gate("Sports", [make_candidate("industry", "zoominfo", "Media Production", 90)],
+                       history_by_field={"industry": FRESH_100D})
+    assert g["decision"] == "needs_review"
+    assert g["reason"] == "Refresh candidate requires review in MVP."
+
+
+def test_recency_no_history_timestamp_needs_review_naming_unknown_freshness():
+    g = industry_gate("Sports", [make_candidate("industry", "zoominfo", "Media Production", 90)],
+                       history_by_field=None)
+    assert g["decision"] == "needs_review"
+    assert "unknown freshness" in g["reason"].lower()
+
+
+def test_recency_stale_but_candidate_carries_no_clock_needs_review():
+    # A "csv"-provenanced candidate carries no observation time -- this is the Python
+    # twin of the JS engines' clockless-source case (no real CSV concept exists in this
+    # oracle, so a synthetic non-provider "csv" candidate proves the same mechanism).
+    g = industry_gate("Sports", [make_candidate("industry", "csv", "Media Production", 90)],
+                       history_by_field={"industry": STALE_400D})
+    assert g["decision"] == "needs_review"
+    assert g["reason"] != "Refresh candidate requires review in MVP."
+
+
+def test_recency_blank_current_value_still_promotes_unconditionally():
+    g = industry_gate(None, [make_candidate("industry", "csv", "Media Production", 90)])
+    assert g["decision"] == "promote"
+
+
+def test_recency_fill_blank_only_field_unaffected():
+    policy = {"class": "fill_blank_only", "min_confidence": 70}
+    g = deterministic_gate(None, "numberofemployees", "50",
+                            [make_candidate("numberofemployees", "zoominfo", "80", 90)],
+                            policy, PRIORITY, now=NOW, history_by_field={"numberofemployees": STALE_400D})
+    assert g["decision"] == "stage_only"
+
+
+def test_recency_manual_protected_field_unaffected():
+    g = deterministic_gate(None, "domain", "example.example",
+                            [make_candidate("domain", "zoominfo", "other.example", 95)],
+                            {"class": "manual_protected", "min_confidence": 95}, PRIORITY,
+                            now=NOW, history_by_field={"domain": STALE_400D})
+    assert g["decision"] == "stage_only"
