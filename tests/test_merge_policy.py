@@ -30,6 +30,7 @@ from src.merge_policy import (
     has_conflict,
     choose_best,
     group_candidates,
+    route_overflow,
 )
 
 FIX_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -466,3 +467,70 @@ def test_sc_domain_create_seed_correction_under_manual_protected_is_unaffected_r
     # (260904-pav) must keep working unchanged after object_type-aware provenance-key
     # selection lands.
     assert pav_gate(json.dumps({"domain": pav_entry()}))["decision"] == "promote"
+
+
+# --- Phase 72 Plan 05 (D-72-11/D-72-12): overflow-slot routing -----------------------
+# JS twin: tests/n8n/overflowSlots.test.mjs's identical fixture table, exercised against
+# mergeContacts.js/mergeCompanies.js's opts.rankedByField. Here `route_overflow` is
+# exercised directly against `group_candidates`' output — the same grouped dict
+# `build_merge_result` mutates in place.
+
+
+def test_route_overflow_contacts_runner_up_lands_in_overflow_slot():
+    grouped = group_candidates([
+        make_candidate("mobilephone", "zoominfo", "+61400000001", 90),
+        make_candidate("mobilephone", "apollo", "+61400000002", 80),
+    ])
+    tails = route_overflow("contacts", grouped, {})
+    assert choose_best(grouped["mobilephone"], PRIORITY).provider == "zoominfo"
+    assert len(grouped["lv_mobilephone_2"]) == 1
+    assert grouped["lv_mobilephone_2"][0].provider == "apollo"
+    assert tails == {}
+
+
+def test_route_overflow_companies_runner_up_lands_in_overflow_slot():
+    grouped = group_candidates([
+        make_candidate("phone", "zoominfo", "+61212340001", 90),
+        make_candidate("phone", "apollo", "+61212340002", 80),
+    ])
+    tails = route_overflow("companies", grouped, {})
+    assert grouped["lv_phone_2"][0].provider == "apollo"
+    assert tails == {}
+
+
+def test_route_overflow_third_candidate_is_provenance_tail_only_no_slot_3():
+    grouped = group_candidates([
+        make_candidate("mobilephone", "zoominfo", "+61400000001", 90),
+        make_candidate("mobilephone", "apollo", "+61400000002", 80),
+        make_candidate("mobilephone", "lusha", "+61400000003", 70),
+    ])
+    tails = route_overflow("contacts", grouped, {})
+    assert "lv_mobilephone_3" not in grouped
+    assert tails == {"mobilephone": [{"source": "lusha", "value": "+61400000003"}]}
+
+
+def test_route_overflow_agreeing_candidates_do_not_manufacture_an_overflow():
+    grouped = group_candidates([
+        make_candidate("mobilephone", "zoominfo", "0400000001", 90),
+        make_candidate("mobilephone", "apollo", "0400000001", 80),
+    ])
+    route_overflow("contacts", grouped, {})
+    assert "lv_mobilephone_2" not in grouped
+
+
+def test_route_overflow_field_with_no_configured_slot_is_a_noop():
+    grouped = group_candidates([
+        make_candidate("email", "zoominfo", "a@example.com", 90),
+        make_candidate("email", "apollo", "b@example.com", 80),
+    ])
+    tails = route_overflow("contacts", grouped, {})
+    assert "lv_email_2" not in grouped
+    assert tails == {"email": [{"source": "apollo", "value": "b@example.com"}]}
+
+
+def test_route_overflow_no_material_conflict_groups_touched_ro2():
+    from src.judge import MATERIAL_CONFLICT_GROUPS
+    watched = {f for g in MATERIAL_CONFLICT_GROUPS for f in g["fields"]}
+    assert "phone" not in watched
+    assert "mobilephone" not in watched
+    assert "email" not in watched
