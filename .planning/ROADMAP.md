@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 2/8 plans executed
+**Plans:** 3/8 plans executed
 
 Plans:
 **Wave 1**
@@ -432,7 +432,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 72-03-PLAN.md — `merge_enriched`: LinkedIn name reconciliation, CREATE-time provider-wins, held-row carry, a truthful round-level `source_by_field`; the strip goes inert (D-72-19, D-72-05, D-72-20)
+- [x] 72-03-PLAN.md — `merge_enriched`: LinkedIn name reconciliation, CREATE-time provider-wins, held-row carry, a truthful round-level `source_by_field`; the strip goes inert (D-72-19, D-72-05, D-72-20)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
