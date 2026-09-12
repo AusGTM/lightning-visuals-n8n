@@ -173,6 +173,23 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
   `companies.hs_additional_domains` exists (enumeration, checkbox); `companies.hs_country_region_code`
   does not exist (404) — plan 06 reads both facts from the probe file.
 
+- **D-72-24: D-72-10's second-email fallback is closed by an OFFLINE test, not a live run
+  (post-verification ruling, 2026-09-13).** No gate ever produced a person with two emails, so
+  the provenance-only path stayed `behavior_unverified`. Ruling: one unit test feeds a
+  two-distinct-email candidate set through `mergeContacts()` and asserts the runner-up lands in
+  the provenance blob only and `hs_additional_emails` is never written. No credits spent hunting a
+  dual-email person; the live path is revisited only if such a case appears naturally.
+- **D-72-25: A mobile that duplicates the contact's existing `phone` is ACCEPTABLE (ruling
+  2026-09-13, F72-3 item 1).** Telfer `1251`: `mobilephone` blank → filled `+61 409 390 022`,
+  identical to `phone`. `fill_blank_only` did its job and the provider labelled the number a
+  mobile; the duplication is a data-quality note, not a merge-policy defect. No cross-field
+  equality suppression is added.
+- **D-72-26: Identity fields (`firstname`/`lastname`/`company`) on a matched UPDATE row are
+  CRM-owned and CSV corrections to them never auto-apply (ruling 2026-09-13, F72-3 item 2).**
+  D-72-05's IDENTITY_FIELDS carve-out (provider wins on CREATE only) stands; a spreadsheet must
+  not rename an existing person. Operators correct identity in HubSpot directly. No review-queue
+  routing added for this case.
+
 ### Claude's Discretion
 - Exact parity-test shape for the YAML/JS/policy three-way list (extend
   `tests/n8n/columnMapIdentityParity.test.mjs`'s idiom or a new test).
