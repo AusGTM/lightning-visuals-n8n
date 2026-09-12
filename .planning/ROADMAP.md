@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 8/8 plans executed
+**Plans:** 12 plans (8 executed; 09-12 are gap closure)
 
 Plans:
 **Wave 1**
@@ -453,3 +453,19 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 
 - [x] 72-08-PLAN.md — The one live gate: create the properties, deploy + bounce disarmed, one armed record, read it back, delete it (D-72-11, D-72-17, D-72-21)
+
+**Wave 9** *(gap closure — blocked on 72-VERIFICATION.md)*
+
+- [ ] 72-09-PLAN.md — G1: one candidate-alias map in `MERGE_CONTACTS` so a CREATE row's LinkedIn lands in BOTH properties; fixture reseeded with production's pre-alias key (D-72-04, D-72-17, D-72-19, D-72-22)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 72-10-PLAN.md — G2: the local-live lane's two fetch lists widened to its merge engine's non-clobber-critical set, pinned by a derived fetch-gate assertion (D-72-01, D-72-06)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 72-11-PLAN.md — G3: case-insensitive overflow dedup in all three merge engines, one commit, pinned by a mixed-case fixture on both sides (D-72-09)
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 72-12-PLAN.md — Gap-closure seal: idempotent regeneration, both suites, the live deploy + one armed CREATE read-back, CLAUDE.md updated to observed-closed (D-72-04, D-72-17, D-72-21)
