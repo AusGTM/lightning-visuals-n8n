@@ -16,6 +16,46 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-12
+
+Phase 72 (`72-01`..`72-06`) — the ingest lane stops dropping what the waterfall already paid
+for. A batch's mobile number, LinkedIn profile, seniority, persona and city/state/country now
+reach the contact they were found for, instead of being stripped at the CSV boundary before
+upload. Decisions `D-72-01`..`D-72-16`, `D-72-19`..`D-72-23`.
+
+### Changed
+- **A spreadsheet column headed "Mobile" now lands in HubSpot's Mobile Phone field
+  (`mobilephone`), not the Phone field.** Previously every "Mobile"/"Cell"/"Mobile Phone"
+  column collapsed onto `phone` alongside a real landline/office number, silently overwriting
+  whichever value arrived second. From this release the two are separate fields — check any
+  saved template that relies on the old collapse behaviour.
+- Enrichment extras a batch already paid for now reach the created contact instead of being
+  dropped before upload: mobile phone, LinkedIn URL, seniority, persona group, and
+  city/state/country (plus ISO state/country codes where a provider supplies them).
+- LinkedIn now lands in HubSpot's own `LinkedIn URL` field (`hs_linkedin_url`) as well as the
+  enrichment pipeline's own field — previously only the latter.
+- On a brand-new person, a value the waterfall researched now takes precedence over a
+  differing spreadsheet cell for every field except the person's own name, email and company
+  (those three are never overwritten). The spreadsheet's original value is not discarded — it
+  is shown in the run report as a recorded conflict, never silently lost.
+- A second phone or mobile number the waterfall finds is now kept (in a second HubSpot field)
+  rather than thrown away once the first slot is filled.
+- A person held for a later sitting (no usable email yet) now keeps the location, seniority
+  and persona group the waterfall found, so a later create from that held row lands with them
+  intact instead of only the bare identity fields.
+- A job title older than its own refresh window (180 days) can now be updated by newer
+  research; a recent one is still left alone exactly as before.
+
+### Notes
+- **This release pairs with a backend workflow deploy.** The client-side changes above take
+  effect immediately, but the newer HubSpot fields (mobile phone lands in HubSpot; LinkedIn's
+  second field; job-title refresh) only take full effect once the paired n8n Cloud workflows
+  are deployed and bounced. Running this client against an un-deployed backend shows only the
+  client-side behaviour (what gets sent), not the backend's new merge/promotion rules.
+- No n8n workflow was armed, deployed, or bounced by this release itself — that remains a
+  separate, disarmed-then-armed operator gate (see the repository's
+  `docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md`).
+
 ## [0.48.0] - 2026-09-12
 
 Phase 71 (`71-01`, `71-02`, `71-03`) — the F2 shape closes: a held new person now reads
