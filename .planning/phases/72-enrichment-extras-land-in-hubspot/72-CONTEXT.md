@@ -151,6 +151,28 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
   `mobilephone`-only override (no principle; LinkedIn hits the same wall in plan 02),
   retargeting the tracer to the merge decision (plan's must-have goes unmet).
 
+- **D-72-23: The three overflow-slot properties are created live in plan 05, not plan 08
+  (execution-time ruling, 2026-09-12, raised by plan 05 Task 2 as a blocking-human decision;
+  amends plan 05's T-72-03 "only in plan 08").** `tests/test_hubspot_schema_coverage.py` (the
+  BUG-14 guard) refuses any cloud workflow JSON that references a property the portal snapshot
+  or a migration undo-manifest does not record as created — correctly, and by the same rule
+  every prior new-property commit in this repo satisfied by creating the property in the same
+  commit as the reference. Plan 05's declare-now/create-in-08 split was novel and the guard was
+  never written to admit it; plan 06 depends on plan 05's overflow map, so deferral was not free.
+  Ruling: run `scripts/sync_hubspot_properties.py` under its existing two-key gate
+  (`DRY_RUN=false` AND `ALLOW_HUBSPOT_PROPERTY_WRITES=true`) now for `lv_phone_2` (contacts),
+  `lv_mobilephone_2` (contacts) and `lv_phone_2` (companies) — a schema-only write, no record
+  touched, reversible by deleting the property — commit the undo-manifest, and land Task 2 on
+  top of it. Plan 08's gate therefore starts at "level the workflows disarmed"; its
+  create-properties step becomes a verify-exists step. Rejected: a `PENDING_CREATION` allowlist
+  in the guard (weakens it by the exact mechanism its docstring forbids); moving Task 2 into
+  plan 08 (leaves D-72-10..13 unmet and breaks plan 06).
+- **D-72-10 outcome, recorded:** the read-only probe (`72-PORTAL-PROBE.json`) found
+  `contacts.hs_additional_emails` exists and is writable but is typed `enumeration`, so the
+  second-email write is NOT built; the second email lands in provenance only.
+  `companies.hs_additional_domains` exists (enumeration, checkbox); `companies.hs_country_region_code`
+  does not exist (404) — plan 06 reads both facts from the probe file.
+
 ### Claude's Discretion
 - Exact parity-test shape for the YAML/JS/policy three-way list (extend
   `tests/n8n/columnMapIdentityParity.test.mjs`'s idiom or a new test).
