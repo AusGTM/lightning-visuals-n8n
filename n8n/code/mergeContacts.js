@@ -338,10 +338,14 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   // overflow slot, offering BOTH as ordinary candidateRow entries through the SAME
   // gate below -- no second ranking, no second threshold, no bypass. `rankedByField
   // [field]` is the CALLER's own existing sort (n8n wrapper: scoreCandidates().ranked)
-  // -- this function does not re-sort, only dedupes on normalizedValue (two sources
-  // agreeing on the SAME normalized value produce ONE candidate, never a phantom
-  // overflow) and splits winner / single overflow / provenance-only tail. Absent for
-  // every caller before this plan, so every existing call site stays byte-identical.
+  // -- this function does not re-sort, only dedupes on normalizedValue CASE-
+  // INSENSITIVELY (Phase 72 Plan 11, D-72-09, review WR-02 -- mirrors has_conflict()'s
+  // own case-insensitive comparison convention and src/merge_policy.py's
+  // route_overflow, which was already case-insensitive). Two sources agreeing on the
+  // SAME normalized value, even if they differ only in case, produce ONE candidate,
+  // never a phantom overflow, and splits winner / single overflow / provenance-only
+  // tail. Absent for every caller before this plan, so every existing call site stays
+  // byte-identical.
   const rankedByField = (opts && opts.rankedByField) || {};
   const overflowTailByField = {};
   for (const field of Object.keys(rankedByField)) {
@@ -349,8 +353,8 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     const deduped = [];
     for (const c of list) {
       if (!c || _isBlank(c.value)) continue;
-      const key = String(c.normalizedValue != null ? c.normalizedValue : c.value);
-      if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value) === key)) {
+      const key = String(c.normalizedValue != null ? c.normalizedValue : c.value).toLowerCase();
+      if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value).toLowerCase() === key)) {
         deduped.push(c);
       }
     }

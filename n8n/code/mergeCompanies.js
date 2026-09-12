@@ -369,7 +369,9 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
 
   // Phase 72 Plan 05 (D-72-11/D-72-12): mirrors mergeContacts.js's identical routing --
   // see that file's comment for the full rationale. `_overflowSlot("companies", field)`
-  // is the only difference from the contacts twin.
+  // is the only difference from the contacts twin. Dedup is CASE-INSENSITIVE (Phase 72
+  // Plan 11, D-72-09, review WR-02 -- mirrors has_conflict()'s convention and
+  // src/merge_policy.py's route_overflow, which was already case-insensitive).
   const rankedByField = (opts && opts.rankedByField) || {};
   const overflowTailByField = {};
   for (const field of Object.keys(rankedByField)) {
@@ -377,8 +379,8 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     const deduped = [];
     for (const c of list) {
       if (!c || _isBlank(c.value)) continue;
-      const key = String(c.normalizedValue != null ? c.normalizedValue : c.value);
-      if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value) === key)) {
+      const key = String(c.normalizedValue != null ? c.normalizedValue : c.value).toLowerCase();
+      if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value).toLowerCase() === key)) {
         deduped.push(c);
       }
     }
