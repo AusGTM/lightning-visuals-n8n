@@ -37,7 +37,7 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
   fill_blank_only from the Apollo org record. **58-06** — material-conflict judge gate unchanged.
 - **Phase 46 parity rule** — any merge-policy predicate change lands in both engines
   (`n8n/code/mergeContacts.js` + `mergeCompanies.js` and `src/merge_policy.py`) in one commit.
-- **D-70-11, D-71-01..05** — verdicts, facets, held-entry keys and stamp untouched.
+- **Carried forward, D-70-11 and D-71-01..05** — verdicts, facets, held-entry keys and stamp untouched.
 
 ### Where the mapping lives
 - **D-72-01: Widen the ingest lane; the plugin stops stripping.** `config/column_mapping.yaml` and
@@ -82,7 +82,7 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
 - **D-72-10: A second email goes to `hs_additional_emails` (native, writable, `;`-separated); the
   primary `email` is never rewritten on an existing record.** On create the CSV email is primary and
   the provider's becomes additional.
-- **D-72-11: Fixed-cap overflow: exactly one `_2` slot per kind** — `lv_phone_2`, `lv_mobilephone_2`
+- **D-72-11: Fixed-cap overflow, exactly one `_2` slot per kind** — `lv_phone_2`, `lv_mobilephone_2`
   on contacts, `lv_phone_2` on companies — created ONCE at setup by a property script (schema-level,
   per object type; never per record, never during a run). A third value goes to
   `lv_enrichment_provenance` only. No `_3`, ever. — **Reversibility:** costly — custom properties on
@@ -93,8 +93,8 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
 - **D-72-13: Verification stamps = provenance JSON only.** `lv_enrichment_provenance` records
   source/confidence/timestamp per landed slot; no new per-field `_source`/`_verified_at`
   properties. `lv_mobilephone_verified_at` keeps its one existing use.
-- **D-72-14: Companies: `phone` (fill_blank_only) + `lv_phone_2` in scope; `hs_additional_domains`
-  in scope for extra provider domains; company email is a stated non-goal** (no such property).
+- **D-72-14: Companies gain phone and domain slots** — `phone` (fill_blank_only) + `lv_phone_2` in scope; `hs_additional_domains`
+  in scope for extra provider domains; company email is a stated non-goal (no such property).
 
 ### Geo + live gate
 - **D-72-15: Geo lands as names into `city`/`state`/`country` and as ISO codes into
@@ -104,7 +104,7 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
 - **D-72-16: Contact geo never feeds the company's `lv_country_region_normalized`.** Region stays a
   company-waterfall + judge-gated ICP input (58-06); a person's location is not evidence of the
   org's region.
-- **D-72-17: One end-of-phase live gate (backloaded, operator ruling 2026-09-09):** re-run one absent
+- **D-72-17: One end-of-phase live gate (backloaded, operator ruling 2026-09-09)** — re-run one absent
   person at a company HubSpot holds through `enrich-before-ingest`, `create all 1`, then read the
   contact back and assert `mobilephone`, `hs_linkedin_url` + `lv_linkedin_url`, and geo landed; plus
   one UPDATE row proving a non-blank `fill_blank_only` field was NOT overwritten. Hand-delete after.
