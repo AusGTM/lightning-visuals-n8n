@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 10/12 plans executed (8 executed; 09-12 are gap closure)
+**Plans:** 11/12 plans executed (8 executed; 09-12 are gap closure)
 
 Plans:
 **Wave 1**
@@ -464,7 +464,7 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 72-11-PLAN.md — G3: case-insensitive overflow dedup in all three merge engines, one commit, pinned by a mixed-case fixture on both sides (D-72-09)
+- [x] 72-11-PLAN.md — G3: case-insensitive overflow dedup in all three merge engines, one commit, pinned by a mixed-case fixture on both sides (D-72-09)
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
