@@ -504,6 +504,144 @@ def test_write_dispatch_csv_accepts_a_merged_row_with_every_promotable_key(tmp_p
     extraction.write_dispatch_csv(sendable, tmp_path / "dispatch.csv")  # must not raise
 
 
+# =====================================================================================
+# Phase 72 Plan 03 (D-72-05/D-72-07/D-72-20): on a CREATE, the provider wins over the
+# CSV for every non-identity field; the CSV loser is recorded in the merge report
+# only. `provider_sourced_fields` computes the round-level, truthful `source_by_field`
+# D-72-22's ingest-lane confidence override reads.
+# =====================================================================================
+
+def test_merge_enriched_without_create_row_ids_is_byte_identical_to_the_empty_set():
+    rows = _rows(1)
+    rows[0]["seniority"] = "Old"
+    responses = [_response(rows[0]["row_id"], {"seniority": "New"})]
+
+    default_call = preingest.merge_enriched(rows, responses)
+    explicit_empty = preingest.merge_enriched(rows, responses, create_row_ids=frozenset())
+
+    assert default_call == explicit_empty
+    assert default_call.rows[0]["seniority"] == "Old", "not a create -- CSV protected"
+
+
+@pytest.mark.parametrize("field_name,csv_value,provider_value", [
+    ("jobtitle", "Old Title", "New Title"),
+    ("phone", "0400000001", "0400000002"),
+    ("mobilephone", "0411111111", "0422222222"),
+    ("seniority", "Manager", "Director"),
+    ("city", "Sydney", "Melbourne"),
+    ("state", "NSW", "VIC"),
+    ("country", "Australia", "New Zealand"),
+    ("hs_state_code", "NSW", "VIC"),
+    ("hs_country_region_code", "AU", "NZ"),
+    ("lv_persona_group", "Ops", "Sales"),
+    ("linkedin_url", "https://li/old", "https://li/new"),
+])
+def test_a_create_row_conflict_promotes_the_provider_value_for_non_identity_fields(
+        field_name, csv_value, provider_value):
+    rows = _rows(1)
+    rows[0][field_name] = csv_value
+    # D-72-19: the response uses the WATERFALL's own name for linkedin -- the alias
+    # resolves it onto the row's `linkedin_url` key before this rule ever runs.
+    response_key = "lv_linkedin_url" if field_name == "linkedin_url" else field_name
+    responses = [_response(rows[0]["row_id"], {response_key: provider_value})]
+
+    result = preingest.merge_enriched(
+        rows, responses, create_row_ids={rows[0]["row_id"]},
+    )
+
+    assert result.rows[0][field_name] == provider_value
+    assert result.conflicts == (
+        {"row_id": rows[0]["row_id"], "field": field_name,
+         "source_value": csv_value, "provider_value": provider_value,
+         "replaced": True},
+    )
+
+
+@pytest.mark.parametrize("field_name", ["email", "firstname", "lastname", "company"])
+def test_a_create_row_conflict_never_replaces_an_identity_field(field_name):
+    rows = _rows(1)
+    rows[0][field_name] = "operator-typed"
+    responses = [_response(rows[0]["row_id"], {field_name: "provider-said"})]
+
+    result = preingest.merge_enriched(
+        rows, responses, create_row_ids={rows[0]["row_id"]},
+    )
+
+    assert result.rows[0][field_name] == "operator-typed"
+    assert result.conflicts == (
+        {"row_id": rows[0]["row_id"], "field": field_name,
+         "source_value": "operator-typed", "provider_value": "provider-said",
+         "replaced": False},
+    )
+    assert preingest.IDENTITY_FIELDS == ("email", "firstname", "lastname", "company")
+
+
+def test_a_create_row_id_does_not_affect_a_different_row_not_named():
+    rows = _rows(2)
+    rows[0]["seniority"] = "Old"
+    rows[1]["seniority"] = "Old2"
+    responses = [
+        _response(rows[0]["row_id"], {"seniority": "New"}),
+        _response(rows[1]["row_id"], {"seniority": "New2"}),
+    ]
+
+    result = preingest.merge_enriched(rows, responses, create_row_ids={rows[0]["row_id"]})
+
+    by_id = {r["row_id"]: r for r in result.rows}
+    assert by_id[rows[0]["row_id"]]["seniority"] == "New", "create -- provider wins"
+    assert by_id[rows[1]["row_id"]]["seniority"] == "Old2", "not a create -- CSV protected"
+
+
+def test_a_blank_csv_value_is_filled_from_the_provider_on_a_create_row_too():
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {"seniority": "Director"})]
+
+    result = preingest.merge_enriched(rows, responses, create_row_ids={rows[0]["row_id"]})
+
+    assert result.rows[0]["seniority"] == "Director"
+    assert result.conflicts == ()
+
+
+def test_provider_sourced_fields_names_a_field_answered_for_every_row_and_omits_a_partial_one():
+    rows = _rows(2)
+    responses = [
+        _response(rows[0]["row_id"], {"seniority": "Director", "jobtitle": "CEO"}),
+        _response(rows[1]["row_id"], {"seniority": "Manager"}),  # no jobtitle for row 1
+    ]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert preingest.provider_sourced_fields(result) == {"seniority"}
+
+
+def test_provider_sourced_fields_is_empty_when_nothing_was_answered():
+    rows = _rows(1)
+    result = preingest.merge_enriched(rows, [])
+    assert preingest.provider_sourced_fields(result) == set()
+
+
+def test_provider_sourced_fields_never_names_a_dropped_key():
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {
+        "seniority": "Director", "lastmodifieddate": "2026-01-01",
+    })]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert preingest.provider_sourced_fields(result) == {"seniority"}
+
+
+def test_held_queue_build_entry_key_set_is_unchanged_by_this_plan():
+    row = {"row_id": "row-1", "email": "a@example.com"}
+    outcome = SimpleNamespace(match_tier=None, candidate_count=None)
+
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "test reason", outcome)
+
+    assert set(entry) == {
+        "hold_code", "reason", "observed_signals", "resume_fingerprint", "row",
+    }
+
+
 def test_strip_enrichment_extras_drops_exactly_the_policy_only_keys():
     # Phase 72 Plan 02 (D-72-01): `seniority` is now also a `column_mapping.yaml`
     # canonical alias target, so it is no longer an "extra" -- `lv_linkedin_url`
