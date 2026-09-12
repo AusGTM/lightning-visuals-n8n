@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 3/8 plans executed
+**Plans:** 4/8 plans executed
 
 Plans:
 **Wave 1**
@@ -436,7 +436,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 72-04-PLAN.md — Recency: a real TTL gate + generalized system-correctable clause in all three engines, plus the ingest lane's `propertiesWithHistory` hop (D-72-06..09)
+- [x] 72-04-PLAN.md — Recency: a real TTL gate + generalized system-correctable clause in all three engines, plus the ingest lane's `propertiesWithHistory` hop (D-72-06..09)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

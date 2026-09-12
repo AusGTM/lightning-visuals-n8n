@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 72
 current_phase_name: Enrichment extras land in HubSpot
 status: executing
-stopped_at: Completed 72-03-PLAN.md
-last_updated: "2026-09-12T09:54:07.356Z"
+stopped_at: Completed 72-04-PLAN.md
+last_updated: "2026-09-12T11:04:30.837Z"
 last_activity: 2026-09-12
 last_activity_desc: Phase 72 execution started
-state_head: dbb1cee1391d402df3009d1db3869476169bf370
+state_head: 254a78b91f99ad01ced5458baa870d587b9e9135
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 45
-  completed_plans: 39
+  completed_plans: 41
   percent: 22
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 72 (Enrichment extras land in HubSpot) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-09-12 — Phase 72 execution started
 
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-12T09:54:07.058Z
-**Stopped at:** Completed 72-03-PLAN.md
+**Last session:** 2026-09-12T11:04:30.686Z
+**Stopped at:** Completed 72-04-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -665,6 +665,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 72 P01 | 55min | 3 tasks | 12 files |
 | Phase 72 P02 | N/A | 3 tasks | 21 files |
 | Phase 72 P03 | 60min | 3 tasks | 8 files |
+| Phase 72 P04 | 240min | 3 tasks | 25 files |
 
 ## Decisions
 
@@ -839,6 +840,9 @@ PN-1-renamed lv_ field, plus a named NEVER_CHASE exclusion documenting the D-66-
 T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having one.
 
 - [Phase 72]: D-72-19/D-72-01/D-72-05/D-72-20/D-72-07: LinkedIn naming alias (PROVIDER_KEY_ALIASES), create-time provider-wins with source_by_field, and held_queue geo/persona widening landed in preingest.py/held_queue.py — Closes the plugin-side half of F71-5's drop: paid-for LinkedIn/geo/seniority/persona now reach a HubSpot create instead of being stripped at the dispatch boundary or lost between hold and resume.
+- [Phase 72]: D-72-06/07/09: recency/TTL gate lands in all three merge engines in one commit, per-field (not per-call) source resolution via opts.sourceByField
+- [Phase 72]: D-72-08: system-correctable predicate generalizes unchanged to stale_refreshable fields (contacts.jobtitle, companies.industry); companies.domain's create_seed list untouched
+- [Phase 72]: Task 3 scope held to the ingest lane only; enrichment-lane contacts branch and companies branch have no history hop (design gap filed, WINDOWS.md)
 
 ### Roadmap Evolution
 
