@@ -3325,7 +3325,11 @@ return $input.all().map((it) => {
     ...toCandidates("zoominfo", p.zoominfo, "companies"),
   ];
   const gap_flag = cands.length === 0;
-  const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
+  // Phase 72 Plan 06 (D-72-14): `ranked` destructured too -- scoreCandidates()'s
+  // pre-existing, pre-sorted-per-field candidate list (same field Plan 05 already reads
+  // on the contacts side) so Merge Company can route a phone runner-up to lv_phone_2
+  // through opts.rankedByField, exactly like the contacts lane already does.
+  const { best, winners, ranked } = scoreCandidates(cands, { now: new Date().toISOString() });
   // Per-field {source, value} list — lets the merge node report WHICH providers disagreed
   // rather than just that they did.
   const sourcesByField = {};
@@ -3337,7 +3341,7 @@ return $input.all().map((it) => {
   const lushaId = lushaRecordId(p.lusha, "companies");
   const lusha_ids = lushaId ? { lusha_company_id: lushaId } : null;
   const { lusha_result, apollo_result, zoominfo_result, ...cleanRow } = row;
-  return { json: { ...cleanRow, providers: p, scored: { best, winners, sourcesByField }, gap_flag,
+  return { json: { ...cleanRow, providers: p, scored: { best, winners, ranked, sourcesByField }, gap_flag,
     ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
@@ -4036,7 +4040,10 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   // here before ever reaching mergeCompanies() -- this loop is the write-map allowlist for
   // these three fields, the one this plan's gap_closure_context did not name.
   const winners = (row.scored && row.scored.winners) || {};
-  for (const f of ["country", "city", "numberofemployees"]) {
+  // Phase 72 Plan 06 (D-72-15): `state`/`hs_state_code` join this raw-value loop --
+  // native, non-enum HubSpot fields exactly like country/city/numberofemployees above,
+  // sourced from Task 1's new company producers.
+  for (const f of ["country", "city", "numberofemployees", "state", "hs_state_code"]) {
     // T-58-26 (gap-closure 58-06): this raw-value loop had NO conflict guard at all.
     // Catches `country` conflicting on ITS OWN raw values; when only its sibling
     // lv_country_region_normalized conflicts (11983's exact shape: lusha/apollo agree
@@ -4048,6 +4055,26 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     const v = winners[f];
     if (v != null && String(v).trim() !== "") candidate[f] = v;
   }
+  // Phase 72 Plan 06 (D-72-14): `phone` is deliberately NOT in the raw-value loop above.
+  // Unlike country/city/state/hs_state_code, phone has a configured overflow slot
+  // (lv_phone_2, Phase 72 Plan 05) -- it is admitted below via opts.rankedByField, which
+  // both assigns the primary winner (mergeCompanies' own `candidateRow[field] == null`
+  // fallback) AND routes the trust-rank runner-up to lv_phone_2 in one pass. Adding it to
+  // the raw-value loop too would be redundant, not wrong, so it stays out to keep each
+  // field's admission path singular. This candidate loop (raw-value + rankedByField) is
+  // the write-map ALLOWLIST -- deliberately a DIFFERENT list from ENRICH_CO_GATE's
+  // REQUIRED chase list above: REQUIRED names fields the pipeline actively CHASES
+  // (marks a company incomplete until filled), while this loop names fields the pipeline
+  // is willing to WRITE when a candidate happens to exist. `state`/`hs_state_code`/
+  // `phone` are write-map-only -- adding any of them to REQUIRED would mark every company
+  // permanently incomplete, since the pipeline has no way to force a provider to return
+  // them (same reasoning ENRICH_CO_GATE's own comment already gives for `domain`/
+  // `annualrevenue`).
+  const rankedAll = (row.scored && row.scored.ranked) || {};
+  const rankedByField = {};
+  for (const f of ["phone"]) {
+    if (rankedAll[f]) rankedByField[f] = rankedAll[f];
+  }
   // 260904-pav: rowConflicted is the harveynorman.com.au franchisor guard, threaded into
   // mergeCompanies' provenance-aware manual_protected correction rather than reinvented —
   // `conflicts` is the SAME array computed 30 lines above. On the waterfall fold ONLY: it
@@ -4057,7 +4084,7 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   // it there would be decoration. mergeCompanies requires `=== false` strictly, so those
   // three folds keep today's behaviour by omission rather than by a permissive default.
   const merged = mergeCompanies(existingRecord, candidate, undefined,
-                                { source: "waterfall", confidence: 85,
+                                { source: "waterfall", confidence: 85, rankedByField,
                                   rowConflicted: conflicts.length > 0 });
 
   let finalMerge = merged;
@@ -6331,7 +6358,12 @@ ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     # the same non-clobber correctness reason as the contacts search CSV's identical
     # addition -- an unfetched lv_phone_2 would read as blank forever and defeat
     # fill_blank_only the moment a producer exists.
-    "lv_phone_2"
+    "lv_phone_2,"
+    # Phase 72 Plan 06 (D-72-14/D-72-15): state/hs_state_code/phone fetched now, for the
+    # SAME non-clobber correctness reason as every prior addition to this constant -- an
+    # unfetched property reads as absent on existingRecord, which turns mergeCompanies'
+    # fill_blank_only comparison into a silent permit to overwrite a populated value.
+    "state,hs_state_code,phone"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""

@@ -75,6 +75,18 @@ const DEFAULT_COMPANY_POLICY = {
   // 58-05 Task 2: native `city` -- same class/confidence reasoning as `country` above
   // (same fill_blank_only behaviour, same provider location signal family).
   city:                    { class: "fill_blank_only",   min_confidence: 75 },
+  // Phase 72 Plan 06 (D-72-15): native `state` -- mirrors country/city's shape. 80, not
+  // 75: this plan's own instruction for its three new entries (config/field_policy.yaml
+  // carries the identical mirror + rationale).
+  state:                   { class: "fill_blank_only",   min_confidence: 80 },
+  // Phase 72 Plan 06 (D-72-15): native `hs_state_code` -- code-shaped-only guarded
+  // producer (normalizeProviders.js). No hs_country_region_code entry here --
+  // 72-PORTAL-PROBE.json confirmed that property does not exist on companies (404).
+  hs_state_code:           { class: "fill_blank_only",   min_confidence: 80 },
+  // Phase 72 Plan 06 (D-72-14): native `phone` -- an existing HubSpot company property.
+  // The trust-rank runner-up routes to lv_phone_2 (declared below, Phase 72 Plan 05) via
+  // opts.rankedByField.
+  phone:                   { class: "fill_blank_only",   min_confidence: 80 },
   lv_org_type:             { class: "system_owned",      min_confidence: 80,
                              require_evidence_url_for: EVIDENCE_GATED_ORG_TYPES },
   lv_produces_content:     { class: "system_owned",      min_confidence: 85,

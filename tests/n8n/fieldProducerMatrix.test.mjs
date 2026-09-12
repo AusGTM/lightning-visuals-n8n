@@ -413,7 +413,17 @@ test("fetch gate (WR-03): every REQUIRED member is requested, in EVERY generated
 // REQUIRED anyway — a blank native mirror must not mark a contact incomplete and trigger
 // provider spend (the D-66-01/T-66-04 economics this whole gate exists to protect). Pinned
 // by name, not silently swallowed, so a second such field needs the same explicit call-out.
-const NEVER_CHASE = new Set(["contacts.hs_linkedin_url"]);
+// Phase 72 Plan 06 (D-72-14/D-72-15, T-72-09): state/hs_state_code/phone all HAVE
+// producers (normalizeProviders.js's Lusha/Apollo company branches) and ARE promotable,
+// but are write-map-only by design -- chasing them would mark every company incomplete
+// and drive provider spend on every scheduled tick, since the pipeline has no way to
+// force a provider to return a state, a state code, or a phone number. Same economics
+// as contacts.hs_linkedin_url above; see scripts/build_cloud_workflows.py's comment
+// above the widened Merge Company candidate loop for the write-map-vs-chase-list split.
+const NEVER_CHASE = new Set([
+  "contacts.hs_linkedin_url",
+  "companies.state", "companies.hs_state_code", "companies.phone",
+]);
 
 test("chase gate: every producer-having, promotable, non-recomputed policy key is REQUIRED", () => {
   for (const lane of ["contacts", "companies"]) {
