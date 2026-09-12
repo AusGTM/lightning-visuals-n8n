@@ -443,7 +443,7 @@ test("D-72-04: a linkedin_url header value produces a Create body carrying BOTH 
     triggerNode: "Webhook Trigger",
     triggerItems: [
       {
-        body: { source_by_field: { lv_linkedin_url: "apollo", hs_linkedin_url: "apollo" } },
+        body: { source_by_field: { linkedin_url: "apollo" } },
         email: ROW_H_EMAIL, firstname: "Linked", lastname: "InBoth", company: "Widened Fields Co",
         linkedin_url: LINKEDIN_URL,
       },
@@ -478,7 +478,7 @@ test("D-72-04: hs_linkedin_url is withheld from an update whose contact already 
     triggerNode: "Webhook Trigger",
     triggerItems: [
       {
-        body: { source_by_field: { lv_linkedin_url: "apollo", hs_linkedin_url: "apollo" } },
+        body: { source_by_field: { linkedin_url: "apollo" } },
         email: ROW_I_EMAIL, firstname: "Linked", lastname: "InUpdate", company: "Widened Fields Co",
         linkedin_url: LINKEDIN_URL,
       },
