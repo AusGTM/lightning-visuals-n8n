@@ -902,3 +902,56 @@ def test_step_9_restates_the_facet_counts_and_the_ready_answer():
     for facet in held_queue.ALL_FACETS:
         assert f"facet_{facet}" in normalized
     assert "create all 2" in normalized
+
+
+# ---------------------------------------------------------------------------------
+# 71-REVIEW.md WR-01: `company_spec` (minted at step 2 from the operator's
+# company-confirm-table answers) is an in-conversation Python variable only -- it is
+# never written to `match_state` or any other durable store, unlike `classified` and
+# `match_run_id`. Step 5 used to say plainly that a fresh process re-derives
+# `confirmed_domains` "from match_state.load(match_run_id)'s current classification
+# and company_spec", implying company_spec was just as recoverable as classified --
+# it is not, and a literal fresh-process execution of that guidance raised
+# NameError. These pins mirror test_step_2_binds_and_prints_match_run_id_then_saves's
+# shape: the SKILL now states the non-persistence and the accepted degradation in
+# words, at every site that uses `company_spec`, instead of implying full
+# re-derivability.
+# ---------------------------------------------------------------------------------
+
+
+def test_step_2_states_company_spec_is_not_persisted_and_names_the_degradation():
+    span = _step_span("2")
+    assert "company_spec" in span
+    assert "NOT persisted" in span, (
+        "step 2 must say plainly that company_spec does not survive a fresh "
+        "process -- it is the only site that mints the variable"
+    )
+    assert "company_spec=None" in span
+    assert "step2_company_row" in span, (
+        "the degradation must name which confirmed_domains source is lost when "
+        "company_spec is unavailable"
+    )
+
+
+def test_step_3_points_back_to_step_2s_company_spec_note_rather_than_assuming_scope():
+    span = _step_span("3")
+    assert "company_spec" in span
+    assert "NOT persisted" in span
+    assert "company_spec=None" in span
+
+
+def test_step_5_no_longer_implies_company_spec_is_recoverable_the_same_way_as_classified():
+    span = _step_span("5")
+    assert "company_spec" in span
+    assert "does NOT survive a fresh process" in span
+    assert "company_spec=None" in span
+    assert "needs_company" in span and "new_person" in span, (
+        "the degradation must be stated in the operator-facing facet vocabulary, "
+        "not just as an abstract data-loss note"
+    )
+    # The old, misleading claim this WR-01 finding quotes verbatim must be gone.
+    assert (
+        "re-derive it the same way, from\n   `match_state.load(match_run_id)`'s "
+        "current classification and `company_spec`,\n   never assumed still in "
+        "scope from an earlier turn."
+    ) not in _text()

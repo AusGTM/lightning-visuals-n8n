@@ -172,6 +172,19 @@ whatever seven columns happened to be in the source file.
    (D-71-01): a domain this table just confirmed is a domain step 6's held-row
    render already knows belongs to a HubSpot company, with no second lookup.
 
+   **`company_spec` is an in-conversation Python variable only — it is NOT persisted
+   to `match_state` or anywhere else durable (WR-01, 71-REVIEW.md).** Only
+   `classified` (via `match_state.save`) and `match_run_id` (printed, and reloadable
+   by every later step) survive a fresh process. A step that runs cold and needs
+   `confirmed_domains` cannot recover `company_spec` — pass `company_spec=None` to
+   `preingest.confirmed_company_domains` in that case. The stated, accepted
+   degradation: any domain this table confirmed for a company row
+   (`"step2_company_row"` in `confirmed_domains`) is lost, and a held row whose only
+   confirming signal was that company-row answer reads `needs_company` instead of
+   `new_person` until this table is answered again in the current process. Every
+   domain a matched contact's own email supplied (`"step2_match"`) is unaffected,
+   since that comes from persisted `classified`, not `company_spec`.
+
    Mint one `row_id` per row, once, for the whole batch — never per chunk, which would
    mint the same id twice:
 
@@ -198,7 +211,9 @@ whatever seven columns happened to be in the source file.
    # Phase 71 (D-71-01..03): the zero-new-lookup seed for step 6's held-row render --
    # a fold over data this ONE match call and the company-row confirm table above
    # already produced, never a second HubSpot read (D-71-02). `company_spec` binds
-   # to `company_domain.to_envelope_spec`'s own result above, or `None`.
+   # to `company_domain.to_envelope_spec`'s own result above, or `None` -- an
+   # in-conversation variable only, NOT persisted (WR-01, 71-REVIEW.md); a fresh
+   # process passes `company_spec=None` here, see this step's note above.
    confirmed_domains = preingest.confirmed_company_domains(classified, company_spec)
    ```
 
@@ -314,6 +329,8 @@ whatever seven columns happened to be in the source file.
    # Phase 71 (D-71-01..03): re-derive over the RE-SAVED buckets -- a row this step
    # just confirmed moved into auto_matched (apply_match_decisions), so it now
    # counts toward confirmed_domains too, not just step 2's own auto-matched rows.
+   # `company_spec` is step 2's in-conversation variable, NOT persisted -- in a
+   # fresh process pass `company_spec=None` here (WR-01, see step 2's note).
    confirmed_domains = preingest.confirmed_company_domains(classified, company_spec)
    ```
 
@@ -749,9 +766,15 @@ whatever seven columns happened to be in the source file.
    `unmatched_rows` and `responses`, never by dispatching again. If the re-request
    pass ran for this run, its returned `MergeResult` is the one to use here — it is
    the later and richer merge. `confirmed_domains` is step 2's (or, if it ran,
-   step 3's) value — in a fresh process re-derive it the same way, from
-   `match_state.load(match_run_id)`'s current classification and `company_spec`,
-   never assumed still in scope from an earlier turn.
+   step 3's) value — in a fresh process re-derive it from
+   `match_state.load(match_run_id)`'s current classification, the same call step 2
+   makes. **`company_spec` does NOT survive a fresh process (WR-01, see step 2's
+   note) — pass `company_spec=None` here, never assume it is still in scope from an
+   earlier turn.** The accepted, stated degradation: any domain the company-row
+   confirm table confirmed is lost, so a held row whose only confirming signal was
+   that table reads `needs_company` instead of `new_person` until step 2's table is
+   answered again in the current process; a row a matched contact's own email
+   confirmed is unaffected.
 
    ```python
    import confidence, enrichment, held_queue, preingest, run_manifest, run_state
