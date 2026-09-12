@@ -154,9 +154,13 @@ def test_exact_counts_guard_against_manifest_drift():
     # Quick task 260823-ono added one company property, lv_named_account_score_floor
     # (the metro peak-body override number, retargeted post-CP1 from an enum after
     # halt-b), bumping 33 -> 34.
+    # Phase 72 Plan 05 (D-72-11/D-72-12) added the three overflow-slot properties:
+    # companies.lv_phone_2 (34 -> 35), contacts.lv_phone_2 and
+    # contacts.lv_mobilephone_2 (17 -> 19). None declared yet -- Task 3 declares and
+    # dry-runs only; plan 08 creates them live.
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 34
-    assert len(cfg["contacts"]["properties"]) == 17
+    assert len(cfg["companies"]["properties"]) == 35
+    assert len(cfg["contacts"]["properties"]) == 19
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1
 

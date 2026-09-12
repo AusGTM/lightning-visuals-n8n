@@ -247,6 +247,16 @@ companies:
       value: 'false'
       displayOrder: 1
       hidden: false
+  # D-72-11 (Phase 72 Plan 05): the single overflow slot for a second company phone
+  # number a live provider disagreement supplies. D-72-11 caps overflow at exactly ONE
+  # slot per kind -- a `_3` slot is forbidden anywhere in this repo, so do not "complete
+  # the set" by adding one.
+  - name: lv_phone_2
+    label: LV Phone 2
+    type: string
+    fieldType: text
+    groupName: lv_enrichment
+    options: []
   - name: lusha_company_id
     label: Lusha Company Id
     type: string
@@ -473,6 +483,22 @@ contacts:
     options: []
   - name: lv_persona_group
     label: LV Persona Group
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
+  # D-72-11 (Phase 72 Plan 05): the single overflow slots for a second phone and a
+  # second mobile a live waterfall disagreement supplies. D-72-11 caps overflow at
+  # exactly ONE slot per kind -- a `_3` slot is forbidden anywhere in this repo, so do
+  # not "complete the set" by adding one.
+  - name: lv_phone_2
+    label: LV Phone 2
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_mobilephone_2
+    label: LV Mobile Phone 2
     type: string
     fieldType: text
     groupName: lv_enrichment_contacts
