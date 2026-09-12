@@ -1,0 +1,44 @@
+[
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_phone_2",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "text",
+      "groupName": "lv_enrichment",
+      "label": "LV Phone 2",
+      "name": "lv_phone_2",
+      "options": [],
+      "type": "string"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_phone_2",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "text",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV Phone 2",
+      "name": "lv_phone_2",
+      "options": [],
+      "type": "string"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_mobilephone_2",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "text",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV Mobile Phone 2",
+      "name": "lv_mobilephone_2",
+      "options": [],
+      "type": "string"
+    }
+  }
+]
