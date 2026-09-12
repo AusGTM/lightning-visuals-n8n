@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 7/8 plans executed
+**Plans:** 8/8 plans executed
 
 Plans:
 **Wave 1**
@@ -452,4 +452,4 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 72-08-PLAN.md — The one live gate: create the properties, deploy + bounce disarmed, one armed record, read it back, delete it (D-72-11, D-72-17, D-72-21)
+- [x] 72-08-PLAN.md — The one live gate: create the properties, deploy + bounce disarmed, one armed record, read it back, delete it (D-72-11, D-72-17, D-72-21)

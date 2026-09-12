@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 72
 current_phase_name: Enrichment extras land in HubSpot
-status: executing
-stopped_at: Completed 72-07-PLAN.md
-last_updated: "2026-09-12T13:10:23.605Z"
+status: verifying
+stopped_at: Completed 72-08-PLAN.md
+last_updated: "2026-09-12T14:20:39.609Z"
 last_activity: 2026-09-12
 last_activity_desc: Phase 72 execution started
-state_head: dc3ac3cf9635cc54cd446021f91ea50ece9f13ff
+state_head: 8448302bea7cfd896821ad1db5143410cee062f1
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 45
-  completed_plans: 44
+  completed_plans: 45
   percent: 22
 ---
 
@@ -360,7 +360,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 72 (Enrichment extras land in HubSpot) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-12 — Phase 72 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-12T13:10:23.445Z
-**Stopped at:** Completed 72-07-PLAN.md
+**Last session:** 2026-09-12T14:20:39.444Z
+**Stopped at:** Completed 72-08-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -669,6 +669,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 72 P05 | 55min | 3 tasks | 21 files |
 | Phase 72 P06 | 95min | 3 tasks | 15 files |
 | Phase 72 P07 | 45min | 3 tasks | 6 files |
+| Phase 72 P08 | ~50min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -850,6 +851,7 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 72]: D-72-10: hs_additional_emails is an enumeration (writable but not string-typed); the second-email write is not built, second email lands in provenance only.
 - [Phase 72]: Companies gain state/hs_state_code/phone producers only where Lusha/Apollo evidence supports them; hs_country_region_code and hs_additional_domains stay accepted gaps (property absence, no domain producer respectively); D-72-16 boundary enforced by a permanent guard test.
 - [Phase 72]: Phase 72 plan 07: retired the D-71-06 charter todo with a resolution noting three differences from its original mapping table (capped _2 overflow, provenance-only stamps, companies in scope); filed a new triaged design todo for the enrichment-lane/companies-branch property-history gap; shipped plugin 0.49.0; added CLAUDE.md as-built delta and the D-72-17 gate spec.
+- [Phase 72]: F72-1: lv_linkedin_url does not land on the ingest CREATE path; recorded for gap-closure, not patched inside the gate. — The plan's own prohibition forbids patching a gate-found defect inside the gate; root cause fully traced (confidenceByField keyed pre-PN-1-rename).
 
 ### Roadmap Evolution
 
@@ -1009,6 +1011,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 - lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
 - Open UAT item: 70-02 Task 2's disarmed Merge-semantics probe (Gate 1, deferred per operator ruling 2026-09-09) must be exercised in the end-of-phase UAT — see .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md.
+- F72-1: lv_linkedin_url does not land on the ingest CREATE path (D-72-04's dual write incomplete on create) -- WINDOWS.md id 30, gap-closure plan pending.
 
 ### Quick Tasks Completed
 
