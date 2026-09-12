@@ -19,8 +19,13 @@ import extraction  # noqa: E402
 # because Map Columns drops any column that is not in it.
 # Phase 72 Plan 01 (D-72-03): `mobilephone` split off the `phone` alias group into its
 # own canonical target.
-CANONICAL_PROPS = ["company", "company_id", "email", "firstname", "jobtitle", "lastname",
-                   "linkedin_url", "mobilephone", "phone"]
+# Phase 72 Plan 02 (D-72-01): the remaining seven promotable_contact_props() keys
+# (city, state, country, hs_state_code, hs_country_region_code, seniority,
+# lv_persona_group) now have their own canonical alias targets too.
+CANONICAL_PROPS = ["city", "company", "company_id", "country", "email", "firstname",
+                   "hs_country_region_code", "hs_state_code", "jobtitle", "lastname",
+                   "linkedin_url", "lv_persona_group", "mobilephone", "phone", "seniority",
+                   "state"]
 
 
 def test_canonical_props_returns_exactly_the_alias_targets():

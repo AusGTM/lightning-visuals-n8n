@@ -167,18 +167,25 @@ out of this file and runs it through the real validator, so it cannot quietly st
 ## Canonical props — the entire vocabulary
 
 ```
-company, email, firstname, jobtitle, lastname, linkedin_url, mobilephone, phone
+city, company, country, email, firstname, hs_country_region_code, hs_state_code, jobtitle,
+lastname, linkedin_url, lv_persona_group, mobilephone, phone, seniority, state
 ```
 
 `phone` is the landline/office slot; `mobilephone` (D-72-03) is its own canonical target — a
 source column headed "mobile", "cell", or similar means `mobilephone`, never `phone`.
+
+`city`/`state`/`country` are geo names; `hs_state_code`/`hs_country_region_code` are their ISO
+code counterparts (Phase 72 Plan 02, D-72-01/D-72-15) — extract a code only when the source
+literally supplies one, never derive one by guessing. `seniority` and `lv_persona_group`
+(PN-1: not a HubSpot-native property, hence the prefix) round out the waterfall's promotable
+set.
 
 Plus one routing field, `company_id`, which is not a contact property at all: it is the
 operator's manual contact -> company association override (2026-08-25), read only by the ingest
 lane's company resolver and never written to HubSpot as a property. Extract it only when the
 source literally states a HubSpot company record id for that person; never infer one.
 
-These nine are all there is. The backend's `Map Columns` node drops anything outside this set
+These sixteen are all there is. The backend's `Map Columns` node drops anything outside this set
 with no error and no report of its own — so a key outside this set only ever reaches the
 operator because the validator here surfaces it first. Never assume the backend will tell anyone
 about a key it silently dropped.

@@ -314,3 +314,116 @@ test("existingProps gate: phone/firstname/lastname/jobtitle/email all stay off a
     );
   }
 });
+
+// --- Plan 02 Task 1: the remaining seven widened keys (D-72-01) --------------------------
+//
+// Mirrors the Task 1 <behavior>: a net_new row with all seven values produces a Create body
+// carrying all seven; a matched row whose HubSpot contact already holds different non-blank
+// values withholds the five fill_blank_only location keys but STILL promotes the two
+// system_owned keys (seniority, lv_persona_group — mergeContacts.js's _gate never consults
+// currentValue for system_owned, only the confidence threshold).
+
+const WIDENED_VALUES = {
+  city: "Sydney", state: "NSW", country: "Australia",
+  hs_state_code: "NSW", hs_country_region_code: "AU",
+  seniority: "Director", lv_persona_group: "marketing",
+};
+const WIDENED_KEYS = Object.keys(WIDENED_VALUES);
+const LOCATION_KEYS = ["city", "state", "country", "hs_state_code", "hs_country_region_code"];
+const SYSTEM_OWNED_KEYS = ["seniority", "lv_persona_group"];
+
+test("a CSV column headed 'persona group'/'state/region'/'country code' etc. maps to the new widened canonical keys", () => {
+  assert.deepEqual(mapRow({ "Persona Group": "marketing" }), { lv_persona_group: "marketing" });
+  assert.deepEqual(mapRow({ "State/Region": "NSW" }), { state: "NSW" });
+  assert.deepEqual(mapRow({ "Country Code": "AU" }), { hs_country_region_code: "AU" });
+  assert.deepEqual(mapRow({ "Seniority Level": "Director" }), { seniority: "Director" });
+  // A header outside the table is still dropped.
+  assert.deepEqual(mapRow({ Notes: "irrelevant" }), {});
+});
+
+const ROW_F_EMAIL = "widenextras@" + DOMAIN; // net_new -> all seven must reach Create
+
+test("D-72-01: the remaining seven widened keys reach HubSpot Create for a net_new row", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      { email: ROW_F_EMAIL, firstname: "Widen", lastname: "Extras", company: "Widened Fields Co",
+        ...WIDENED_VALUES },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: ROW_F_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [] }], // net_new
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Create": (items) => items.map((it) => ({ id: "777777", properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), []);
+
+  const createRows = nodeItems(runData, "HubSpot Create");
+  assert.equal(createRows.length, 1);
+  for (const key of WIDENED_KEYS) {
+    assert.equal(createRows[0].properties[key], WIDENED_VALUES[key],
+      `${key} must reach the HubSpot Create body on a net_new row`);
+  }
+});
+
+const ROW_G_EMAIL = "widenupdate@" + DOMAIN;
+const ROW_G_CONTACT_ID = "888";
+const ROW_G_EXISTING = {
+  city: "Melbourne", state: "VIC", country: "Australia",
+  hs_state_code: "VIC", hs_country_region_code: "AU",
+  seniority: "Manager", lv_persona_group: "sales",
+};
+
+test("D-72-01: the five location keys are withheld from an update that already holds different values; the two system_owned keys still promote", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      { email: ROW_G_EMAIL, firstname: "Widen", lastname: "Update", company: "Widened Fields Co",
+        ...WIDENED_VALUES },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: ROW_G_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{
+        results: [{ id: ROW_G_CONTACT_ID, properties: { email: ROW_G_EMAIL, ...ROW_G_EXISTING } }],
+      }],
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), []);
+
+  const merged = nodeItems(runData, "Merge Contacts");
+  assert.equal(merged.length, 1);
+  const decisions = merged[0].merge.decisions || [];
+  const decisionFor = (field) => decisions.find((d) => d.field === field);
+
+  for (const key of LOCATION_KEYS) {
+    assert.equal(decisionFor(key).decision, "stage_only",
+      `${key}: fill_blank_only with a differing non-blank existing value must not clobber`);
+  }
+  for (const key of SYSTEM_OWNED_KEYS) {
+    assert.equal(decisionFor(key).decision, "promote",
+      `${key}: system_owned promotes on confidence alone, regardless of the existing value`);
+  }
+
+  const updateRows = nodeItems(runData, "HubSpot Update");
+  assert.equal(updateRows.length, 1);
+  const properties = updateRows[0].properties;
+  for (const key of LOCATION_KEYS) {
+    assert.equal(Object.prototype.hasOwnProperty.call(properties, key), false,
+      `${key} must not appear in the update body — existingProps protects it`);
+  }
+  for (const key of SYSTEM_OWNED_KEYS) {
+    assert.equal(properties[key], WIDENED_VALUES[key],
+      `${key} must land with the CSV's new value even though HubSpot already held a different one`);
+  }
+});

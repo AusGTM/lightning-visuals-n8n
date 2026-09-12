@@ -48,6 +48,34 @@ aliases:
   cell: mobilephone
   "cell phone": mobilephone
   "mobile number": mobilephone
+  # city (Phase 72 Plan 02, D-72-01: the remaining promotable_contact_props() keys
+  # reach the ingest lane's candidate)
+  city: city
+  town: city
+  locality: city
+  # state
+  state: state
+  region: state
+  province: state
+  "state/region": state
+  # country
+  country: country
+  "country/region": country
+  # hs_state_code
+  hs_state_code: hs_state_code
+  "state code": hs_state_code
+  "state/region code": hs_state_code
+  # hs_country_region_code
+  hs_country_region_code: hs_country_region_code
+  "country code": hs_country_region_code
+  "country/region code": hs_country_region_code
+  # seniority
+  seniority: seniority
+  "seniority level": seniority
+  # lv_persona_group (PN-1: not HubSpot-native)
+  lv_persona_group: lv_persona_group
+  persona: lv_persona_group
+  "persona group": lv_persona_group
   # company
   company: company
   organization: company

@@ -62,7 +62,13 @@ NAME_SEPARATOR = "|"
 # carries one). Equals `extraction.canonical_props()` exactly -- pinned by test.
 # Phase 72 Plan 01 (D-72-03): `mobilephone` split off the `phone` alias group into its
 # own canonical target -- added here to keep this literal equal to canonical_props().
-ROW_FIELD_ALLOWLIST = enrichment.MATCH_LOOKUP_KEYS + ("jobtitle", "phone", "mobilephone", "company_id")
+# Phase 72 Plan 02 (D-72-01): the remaining six promotable_contact_props() keys added
+# too -- same reason, keep this literal equal to canonical_props() as it widens.
+ROW_FIELD_ALLOWLIST = enrichment.MATCH_LOOKUP_KEYS + (
+    "jobtitle", "phone", "mobilephone", "company_id",
+    "city", "state", "country", "hs_state_code", "hs_country_region_code",
+    "seniority", "lv_persona_group",
+)
 
 # Reimplemented (not imported) per `held_queue.py:101-144`'s own precedent.
 _FORBIDDEN_NAME_MARKERS = (

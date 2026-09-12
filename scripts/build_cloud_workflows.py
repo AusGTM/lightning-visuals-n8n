@@ -440,6 +440,14 @@ MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 // field, because the flat csv confidence never clears their threshold. A field
 // resolving to "csv", or absent from the map, is unaffected: an operator-typed guess
 // stays exactly as untrusted as before (SAFE-01 — no min_confidence moved).
+//
+// Phase 72 Plan 02 (D-72-01): widened to mirror ENRICH_MERGE's already-wide loop —
+// every promotable_contact_props() key except lv_linkedin_url (still handled below,
+// PN-1 rename) now reaches the candidate. Unlike ENRICH_MERGE's winners object (which
+// uses each PROVIDER's own unprefixed field name, e.g. winners.persona_group),
+// columnMap.js already maps a CSV header straight to the PN-1-renamed canonical key
+// (lv_persona_group) — so this loop reads row.lv_persona_group directly, no separate
+// rename block is needed the way ENRICH_MERGE needs one for winners.persona_group.
 return $input.all().map((it) => {
   const row = it.json;
   const sourceByField = row.source_by_field || {};
@@ -448,7 +456,9 @@ return $input.all().map((it) => {
     if (sourceByField[f] && sourceByField[f] !== "csv") confidenceByField[f] = 85;
   }
   const candidate = {};
-  for (const f of ["email", "firstname", "lastname", "jobtitle", "company", "mobilephone"]) {
+  for (const f of ["email", "firstname", "lastname", "jobtitle", "company", "mobilephone",
+                    "seniority", "city", "state", "country", "hs_state_code",
+                    "hs_country_region_code", "lv_persona_group"]) {
     if (row[f] != null && String(row[f]).trim() !== "") candidate[f] = row[f];
   }
   if (row.linkedin_url != null && String(row.linkedin_url).trim() !== "") {
@@ -1229,7 +1239,9 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
                    "\"email\", operator: \"EQ\", value: ($json.email_normalized || $json.email || "
                    "\"no-email@invalid.invalid\") } ] } ], "
                    "properties: [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"phone\", "
-                   "\"mobilephone\", \"hs_object_id\"], limit: 10 }) }}"),
+                   "\"mobilephone\", \"city\", \"state\", \"country\", \"hs_state_code\", "
+                   "\"hs_country_region_code\", \"seniority\", \"lv_persona_group\", "
+                   "\"lv_linkedin_url\", \"hs_object_id\"], limit: 10 }) }}"),
     )
     nodes.append(hs_search)
 

@@ -412,6 +412,10 @@ def test_a_key_in_neither_set_is_still_dropped_and_reported():
 
 
 def test_strip_enrichment_extras_drops_exactly_the_policy_only_keys():
+    # Phase 72 Plan 02 (D-72-01): `seniority` is now also a `column_mapping.yaml`
+    # canonical alias target, so it is no longer an "extra" -- `lv_linkedin_url`
+    # (D-72-19's naming fork, resolved in a later plan) is the one remaining key in
+    # `promotable_contact_props() - canonical_props()` this function still strips.
     row = {
         "row_id": "row-1", "email": "amy@example.com", "seniority": "Director",
         "lv_linkedin_url": "https://li/amy",
@@ -419,7 +423,9 @@ def test_strip_enrichment_extras_drops_exactly_the_policy_only_keys():
 
     stripped = preingest.strip_enrichment_extras([row])
 
-    assert stripped[0] == {"row_id": "row-1", "email": "amy@example.com"}
+    assert stripped[0] == {
+        "row_id": "row-1", "email": "amy@example.com", "seniority": "Director",
+    }
     # never mutates the input row
     assert row == {
         "row_id": "row-1", "email": "amy@example.com", "seniority": "Director",
@@ -511,8 +517,11 @@ def test_without_the_new_strip_the_step_7_chain_raises_non_canonical_key_in_row(
     # The negative half of the extended step-7 sequence test above -- proves
     # `strip_enrichment_extras` is load-bearing, not decorative: the SAME chain with
     # only `strip_row_id` (no `strip_enrichment_extras`) must still raise.
+    # Phase 72 Plan 02 (D-72-01): `seniority` is now canonical too -- `lv_linkedin_url`
+    # is the key that still demonstrates this (D-72-19's naming fork).
     rows = _rows(1)
-    responses = [_response(rows[0]["row_id"], {"email": "amy@example.com", "seniority": "Director"})]
+    responses = [_response(rows[0]["row_id"],
+                            {"email": "amy@example.com", "lv_linkedin_url": "https://li/amy"})]
 
     merge_report = preingest.merge_enriched(rows, responses)
     sendable, held = extraction.hold_emailless(merge_report.rows)
@@ -528,6 +537,8 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
     # dispatch -> extraction.validate -- a widened key must be ACCEPTED (never
     # rejected), reported in dropped_keys, because that path reaches no CSV of its own
     # (SKILL.md step 7's dispatch block is the one strip site both callers share).
+    # Phase 72 Plan 02 (D-72-01): `seniority` is now canonical too -- `lv_linkedin_url`
+    # is the key that still demonstrates this (D-72-19's naming fork).
     rows = preingest.build_rows_spec(
         [{"firstname": "Amy", "lastname": "Smith", "company": "Acme"}]
     )["rows"]
@@ -535,7 +546,7 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
 
     merge_report = preingest.merge_enriched(
         rows, [_response(rows[0]["row_id"], {
-            "email": "amy@acme.com", "seniority": "Director",
+            "email": "amy@acme.com", "lv_linkedin_url": "https://li/amy",
         })],
     )
     records = suggest_contacts.rejoin_enriched(records, merge_report.rows)
@@ -548,9 +559,9 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
     result = extraction.validate(suggest_contacts.round_artifact(records))
 
     assert len(result.accepted) == 1
-    assert {"index": 0, "key": "seniority"} in result.dropped_keys
+    assert {"index": 0, "key": "lv_linkedin_url"} in result.dropped_keys
     assert result.accepted[0]["row"]["email"] == "amy@acme.com"
-    assert "seniority" not in result.accepted[0]["row"]
+    assert "lv_linkedin_url" not in result.accepted[0]["row"]
 
 
 def test_a_rerequest_response_carrying_a_widened_key_keeps_it_on_the_row(
@@ -600,10 +611,13 @@ def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unread
         "replace-everything -- the opposite direction from promotable_contact_props()"
     )
 
+    # Phase 72 Plan 02 (D-72-01): `seniority` is now canonical too, so an unresolvable
+    # policy no longer drops it -- `lv_linkedin_url` is the key that still demonstrates
+    # the fallback (D-72-19's naming fork).
     rows = _rows(1)
     rows[0]["jobtitle"] = "Director"
     responses = [_response(rows[0]["row_id"], {
-        "email": "a@x.com", "phone": "555", "seniority": "Director",
+        "email": "a@x.com", "phone": "555", "lv_linkedin_url": "https://li/x",
         "jobtitle": "Analyst",
     })]
     result = preingest.merge_enriched(rows, responses)
@@ -611,7 +625,7 @@ def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unread
     allowed = set(extraction.canonical_props()) | {"row_id"}
     for row in result.rows:
         assert set(row) <= allowed
-    assert {"row_id": rows[0]["row_id"], "key": "seniority"} in result.dropped_property_keys
+    assert {"row_id": rows[0]["row_id"], "key": "lv_linkedin_url"} in result.dropped_property_keys
     assert result.rows[0]["jobtitle"] == "Director", (
         "with the policy unresolvable, even jobtitle -- normally refreshable -- "
         "must NOT be replaced"
@@ -629,8 +643,16 @@ def test_the_allowlist_is_a_union_and_a_shared_key_behaves_as_before():
     # its own canonical target, and it is ALSO a `field_policy.yaml` promotable-contact
     # key (fill_blank_only @ 85) -- a fourth shared key, added by widening the alias
     # table, not a regression of the three above.
+    # Phase 72 Plan 02 (D-72-01): the remaining six promotable_contact_props() keys
+    # (city, state, country, hs_state_code, hs_country_region_code, seniority,
+    # lv_persona_group -- all but lv_linkedin_url, D-72-19's naming fork) now have
+    # canonical alias targets too, so they join the shared set.
     shared = set(extraction.canonical_props()) & set(preingest.promotable_contact_props())
-    assert shared == {"email", "phone", "jobtitle", "mobilephone"}
+    assert shared == {
+        "email", "phone", "jobtitle", "mobilephone",
+        "city", "state", "country", "hs_state_code", "hs_country_region_code",
+        "seniority", "lv_persona_group",
+    }
 
     rows = _rows(1)
     rows[0]["email"] = "amy@x.com"
