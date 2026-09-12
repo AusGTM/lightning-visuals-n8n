@@ -287,6 +287,16 @@ written, and a second opinion here would be a second authority that drifts from 
    ```python
    import extraction, preingest
 
+   # Phase 72 Plan 03 (D-72-05): `preingest.merge_enriched`'s `create_row_ids` kwarg
+   # does NOT apply on this route. `held_entries[rid]["row"]` is already the FINAL
+   # merged row from whichever original merge held it (enrich-before-ingest or
+   # suggest-contacts) -- no raw provider `properties` survive on disk to re-merge
+   # against (held_queue stores the merged row, never the response it came from), so
+   # this route calls no merge at all. A row held via enrich-before-ingest already
+   # had provider-wins applied at ITS merge time (that skill passes every unmatched
+   # row_id as create_row_ids, since an unmatched row is a create either now or
+   # later via this very route) -- the decision review-triage 4a inherits is already
+   # baked into `held_entries[rid]["row"]`.
    create_rows = [held_entries[rid]["row"] for rid in chosen_row_ids]
    created_by_row_id = {rid: held_entries[rid]["row"].get("email") for rid in chosen_row_ids}
    create_rows = preingest.strip_enrichment_extras(create_rows)

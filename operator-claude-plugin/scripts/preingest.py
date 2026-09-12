@@ -757,6 +757,16 @@ class MergeResult:
     # grant can decrement its remaining allowance with `chunking.projected_spend`. None
     # when there was nothing unanswered and no dispatch happened at all.
     dispatch_outcome: object = None
+    # D-72-07 (Phase 72 Plan 03): one entry per ANSWERED row — `{"row_id", "fields"}`,
+    # `fields` the sorted tuple of keys that row's own response supplied AND that
+    # passed the `allowed_keys` test — never a key the row's CSV happened to carry
+    # already, and never a key the response sent but this merge dropped.
+    # `provider_sourced_fields()` reduces this to the round-level, truthful
+    # `source_by_field` map D-72-22's ingest-lane confidence override reads. The
+    # signature `provider_sourced_fields(merge_result)` forces this onto the result:
+    # `conflicts` alone cannot recover "the provider answered this field" for a
+    # blank-fill or a byte-equal value, since neither produces a conflict entry.
+    answered_fields: tuple = field(default_factory=tuple)
 
 
 def _present(value) -> bool:
@@ -780,8 +790,13 @@ def _present(value) -> bool:
 # read in the ingest lane.
 PROVIDER_KEY_ALIASES = {"lv_linkedin_url": "linkedin_url"}
 
+# D-72-05 (Phase 72 Plan 03): the row's identity, supplied by the operator, never
+# re-decided by a provider — the CREATE-time provider-wins rule below never applies
+# to these four, whatever `create_row_ids` says.
+IDENTITY_FIELDS = ("email", "firstname", "lastname", "company")
 
-def merge_enriched(rows, responses):
+
+def merge_enriched(rows, responses, *, create_row_ids=frozenset()):
     """Join `responses` onto `rows` by `row_id` — the ONLY join key, never position.
     Not pure in the I/O sense any more (Phase 65 Plan 02, RICH-04): building the
     allowlist below reads `extraction.canonical_props()` (a config read `merge_enriched`
@@ -848,6 +863,18 @@ def merge_enriched(rows, responses):
     `conflicts`, which says whether it was written. Per-field `min_confidence` is
     deliberately NOT read here — out of scope for this ruling.
 
+    On a row named in `create_row_ids` (D-72-05, Phase 72 Plan 03): a differing
+    provider value for any field OTHER than `IDENTITY_FIELDS` REPLACES the CSV value
+    too — there is no existing HubSpot record to protect on a brand-new contact, and
+    the spreadsheet cell is often the operator's own guess. `email`/`firstname`/
+    `lastname`/`company` are the row's identity and are never subject to this,
+    whatever `create_row_ids` says. Every replacement — refreshable-field or
+    create-time — is recorded in `conflicts` exactly as before; this is the ONLY
+    place the CSV loser is recorded (D-72-20) — the persisted held-entry schema
+    (`held_queue.build_entry`) gains no `source_values` key. `create_row_ids`
+    defaults to the empty set, so a caller that never passes it gets byte-identical
+    pre-72 behaviour.
+
     Never mutates an input row — every merged row is a fresh dict.
     """
     index = {}
@@ -882,6 +909,7 @@ def merge_enriched(rows, responses):
     dropped_property_keys = []
     conflicts = []
     unanswered = []
+    answered_fields = []
 
     for row in rows:
         row_id = row["row_id"]
@@ -893,6 +921,7 @@ def merge_enriched(rows, responses):
             merged_rows.append(merged)
             continue
 
+        row_answered_fields = set()
         for key, value in (item.get("properties") or {}).items():
             # D-72-19: translate BEFORE the allowlist test, so the aliased name is
             # what is checked, compared, recorded, and written — `dropped_property_
@@ -902,10 +931,19 @@ def merge_enriched(rows, responses):
             if aliased_key not in allowed_keys:
                 dropped_property_keys.append({"row_id": row_id, "key": key})
                 continue
+            # D-72-07: this row's answered fields, for `provider_sourced_fields()` —
+            # only a key that PASSED the allowlist test above, never a dropped one.
+            row_answered_fields.add(aliased_key)
             current = merged.get(aliased_key)
             if _present(current):
                 if str(value).strip() != str(current).strip():
-                    replaced = aliased_key in refreshable_keys
+                    # D-72-05: on a CREATE, the provider wins over the CSV for any
+                    # non-identity field too — never IDENTITY_FIELDS, whatever
+                    # `create_row_ids` says.
+                    replaced = (
+                        aliased_key in refreshable_keys
+                        or (row_id in create_row_ids and aliased_key not in IDENTITY_FIELDS)
+                    )
                     conflicts.append({
                         "row_id": row_id, "field": aliased_key,
                         "source_value": current, "provider_value": value,
@@ -916,6 +954,7 @@ def merge_enriched(rows, responses):
                 continue
             merged[aliased_key] = value
 
+        answered_fields.append({"row_id": row_id, "fields": tuple(sorted(row_answered_fields))})
         merged_rows.append(merged)
 
     return MergeResult(
@@ -924,6 +963,7 @@ def merge_enriched(rows, responses):
         dropped_property_keys=tuple(dropped_property_keys),
         conflicts=tuple(conflicts),
         unanswered=tuple(unanswered),
+        answered_fields=tuple(answered_fields),
     )
 
 
@@ -949,6 +989,29 @@ def strip_enrichment_extras(rows, policy_path=None) -> list[dict]:
     """
     extras = set(promotable_contact_props(policy_path)) - set(extraction.canonical_props())
     return [{k: v for k, v in row.items() if k not in extras} for row in rows]
+
+
+def provider_sourced_fields(merge_result) -> set:
+    """The round-level, truthful field set D-72-22's ingest-lane confidence override
+    reads via `source_by_field` (`dispatch.py`'s `source_by_field=` kwarg): names a
+    field ONLY when the waterfall supplied it, and it passed the allowlist, for
+    EVERY answered row in `merge_result` — a field the provider answered for some
+    rows and not others is NOT named.
+
+    Under-claiming is deliberate (D-72-07): `extraction.write_dispatch_csv`'s
+    STRUCT-01 allowlist forbids per-row provenance, so a round-level claim is honest
+    only when it holds for every row it would apply to. Naming a field the CSV
+    actually supplied would let a stale spreadsheet cell win a later recency
+    comparison it never earned — the exact vector D-72-07 exists to close.
+
+    Returns an empty set when `merge_result.answered_fields` is empty — there is no
+    truthful claim to make about zero answered rows. Pure: reads only
+    `merge_result.answered_fields`, no I/O.
+    """
+    field_sets = [set(entry["fields"]) for entry in merge_result.answered_fields]
+    if not field_sets:
+        return set()
+    return set.intersection(*field_sets)
 
 
 def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests, *,

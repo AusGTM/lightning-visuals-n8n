@@ -244,6 +244,13 @@ COVERED = {
     # enrich-before-ingest ingest leg now grow a `run_report.record_audit` call right
     # after them — the second is the new sink, since it is textually last in the
     # block. The covering nodeid is extended (not replaced) to mention it.
+    #
+    # Phase 72 Plan 03 (D-72-07/D-72-22): `preingest.provider_sourced_fields` is a
+    # new, pure, local computation (builds `source_by_field` from the already-
+    # computed `merge_report` — no I/O, no new HTTP call) inserted right before the
+    # armed window it feeds. It does not change the `record_dispatch_outcome`/
+    # `run_report.record_audit` composition this nodeid actually drives, so the
+    # tuple is widened in place rather than pointing at a new composition test.
     (
         "enrich-before-ingest",
         (
@@ -251,6 +258,7 @@ COVERED = {
             "write_grant.authorize_ungranted_send",
             "remainder_queue.save", "remainder_queue.build_entry",
             "write_grant.record_dispatch_outcome", "run_report.record_audit",
+            "preingest.provider_sourced_fields",
             "n8n_arming.armed_window", "dispatch.dispatch",
             "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
             "run_report.record_audit",

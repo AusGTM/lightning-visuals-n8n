@@ -362,7 +362,7 @@ def test_step_5_does_not_hand_dispatch_plans_raw_responses_straight_to_merge_enr
     )
 
 
-RECOVERED_MERGE_CALL = 'preingest.merge_enriched(unmatched_rows, recovery["responses"])'
+RECOVERED_MERGE_CALL = 'preingest.merge_enriched(\n           unmatched_rows, recovery["responses"],'
 
 
 def test_step_5_merges_the_recovered_async_payload_not_dispatch_plans_raw_per_chunk_body():
@@ -375,7 +375,11 @@ def test_step_5_merges_the_recovered_async_payload_not_dispatch_plans_raw_per_ch
     belongs in this step; it survives, unchanged, in `preingest.rerequest_unanswered`'s
     own re-request pass. What this test still pins: the call that reaches
     `merge_enriched` is the recovered payload, never `outcome.responses` unflattened
-    (see the sibling test above, still pinned unchanged)."""
+    (see the sibling test above, still pinned unchanged).
+
+    Phase 72 Plan 03 (D-72-05): the call now spans multiple lines (a `create_row_ids=`
+    kwarg was added), so the pinned literal is the call's opening two lines rather
+    than the whole single-line call."""
     body = _text()
     assert "watch.recover_async_dispatch" in body, (
         "step 5 must recover the proposed values from the settled execution, not "

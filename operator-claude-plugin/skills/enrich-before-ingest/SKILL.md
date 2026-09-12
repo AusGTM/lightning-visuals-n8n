@@ -652,7 +652,18 @@ whatever seven columns happened to be in the source file.
        # with this SAME run_id, never by re-dispatching (that sends the same rows twice).
        ...
    else:
-       merge_report = preingest.merge_enriched(unmatched_rows, recovery["responses"])
+       # D-72-05 (Phase 72 Plan 03): every row in `unmatched_rows` is, by definition,
+       # a row this run's match step found no HubSpot record for — it becomes a
+       # HubSpot CREATE, either now (sendable at step 7) or later (held, then
+       # created via review-triage's own 4a). Naming the WHOLE set here means the
+       # provider-wins rule applies uniformly to a row regardless of which of those
+       # two routes it eventually takes. `{row["row_id"] for row in unmatched_rows}`
+       # is exactly `{e["row_id"] for e in classified["unmatched"]}` — `unmatched_
+       # rows` IS step 4's `[entry["row"] for entry in classified["unmatched"]]`.
+       merge_report = preingest.merge_enriched(
+           unmatched_rows, recovery["responses"],
+           create_row_ids={row["row_id"] for row in unmatched_rows},
+       )
    ```
 
    **When `outcome.ceiling_stop` is present, this is a budget stop, not a chunk
@@ -1034,7 +1045,7 @@ whatever seven columns happened to be in the source file.
    (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, run_report, write_grant
+   import chunking, config_gate, dispatch, n8n_arming, preingest, remainder_queue, run_report, write_grant
 
    cfg = config_gate.load_config()
    decision = (
@@ -1095,6 +1106,20 @@ whatever seven columns happened to be in the source file.
        except run_report.RunReportError:
            pass
    else:
+       # D-72-07/D-72-22 (Phase 72 Plan 03): a truthful, round-level `source_by_
+       # field` map — names a field ONLY when the waterfall answered it for EVERY
+       # answered row in this batch (`preingest.provider_sourced_fields`). This is
+       # the ingest lane's ONLY source of provider-grade confidence for a widened
+       # field (`mobilephone`, `linkedin_url`, ...): with no entry, the ingest
+       # lane's `MERGE_CONTACTS` wrapper falls back to the flat csv/80 confidence,
+       # which a `fill_blank_only@85` field can never clear even into a blank
+       # field. Under-claiming is the safe direction (D-72-07) — never per-row,
+       # since `extraction.write_dispatch_csv`'s STRUCT-01 allowlist forbids it.
+       source_by_field = {
+           field_name: "waterfall"
+           for field_name in preingest.provider_sourced_fields(merge_report)
+       }
+
        # Grant closure on every exit (REVIEW-57-H8/M5): `outcome_ingest`/`disarm` start
        # None so an exception raised before `dispatch.dispatch()` returns cannot leave
        # either name unbound when the closure below runs.
@@ -1104,7 +1129,8 @@ whatever seven columns happened to be in the source file.
        try:
            with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
                                         allow_create, cfg, grant=decision["grant"]) as window:
-               result = dispatch.dispatch(out_path, True, cfg, run_id=outcome.run_id)
+               result = dispatch.dispatch(out_path, True, cfg, run_id=outcome.run_id,
+                                           source_by_field=source_by_field)
                # One spend vocabulary (REVIEW-57-H7): wrap this single-shot send's
                # result into the SAME `DispatchOutcome` shape every chunked leg
                # produces, so `chunking.projected_spend` and 57-05's

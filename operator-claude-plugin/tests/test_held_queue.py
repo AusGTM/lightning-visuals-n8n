@@ -258,7 +258,12 @@ def test_an_enriched_held_row_survives_the_write_to_disk_end_to_end(tmp_path):
     assert jimmy["email"] == "jbusteed@australianturfclub.com.au"
     assert jimmy["phone"] == "0298765432"
     assert jimmy["mobilephone"] == "0412345678"
-    assert jimmy["lv_linkedin_url"] == "https://www.linkedin.com/in/jbusteed"
+    # Phase 72 Plan 03 (D-72-19): the response's own `lv_linkedin_url` is now aliased
+    # onto the row's `linkedin_url` key before merge_enriched's allowlist test --
+    # `linkedin_url` was already in held_queue.ROW_FIELD_ALLOWLIST via
+    # enrichment.MATCH_LOOKUP_KEYS, so it survives unchanged.
+    assert jimmy["linkedin_url"] == "https://www.linkedin.com/in/jbusteed"
+    assert "lv_linkedin_url" not in jimmy
     assert "city" not in jimmy  # the allowlist is still closed
 
     katie_key = held_queue.stable_key(merged_by_id["row-2"])
