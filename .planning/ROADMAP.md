@@ -415,10 +415,19 @@ lane's contact property assembly in `scripts/build_cloud_workflows.py` (regenera
 **Gate:** end-of-phase live UAT re-running one held new person and confirming the mapped fields
 on the created contact; nothing armed before it.
 
-**Requirements**: TBD
+**Requirements**: TBD — no requirement IDs are mapped. Coverage is by DECISION ID: the plans are
+verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
+plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 0 plans
+**Plans:** 8 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 72 to break down)
+- [ ] 72-01-PLAN.md — Tracer: `mobilephone` lands on create and is protected on update; the ingest lane starts merging against real existing HubSpot props instead of `{}` (D-72-01, D-72-03)
+- [ ] 72-02-PLAN.md — The remaining seven widened keys reach the ingest candidate; `hs_linkedin_url` as a second write target; derived three-way parity test (D-72-01, D-72-02, D-72-04)
+- [ ] 72-03-PLAN.md — `merge_enriched`: LinkedIn name reconciliation, CREATE-time provider-wins, held-row carry; the strip goes inert (D-72-19, D-72-05, D-72-20)
+- [ ] 72-04-PLAN.md — Recency: a real TTL gate + generalized system-correctable clause in all three engines, plus the ingest lane's `propertiesWithHistory` hop (D-72-06..09)
+- [ ] 72-05-PLAN.md — Portal probe, the three `_2` slot declarations, and winner/loser slot routing stamped in provenance (D-72-10..13)
+- [ ] 72-06-PLAN.md — Company geo/phone producers where a provider really supplies them; contact geo can never reach the company region signal (D-72-14..16)
+- [ ] 72-07-PLAN.md — Closing: charter todo retired, history gap filed, plugin 0.49.0, CLAUDE.md as-built delta, D-72-17 gate spec
+- [ ] 72-08-PLAN.md — The one live gate: create the properties, deploy + bounce disarmed, one armed record, read it back, delete it (D-72-11, D-72-17, D-72-21)
