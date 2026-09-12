@@ -380,6 +380,23 @@ function lushaCandidates(rawResponse, objectType) {
     // (empty location) in the 2/4 sampled executions where Lusha found no match.
     const cityName = co.location && co.location.city;
     _push(out, "city", src, cityName, _norm(cityName), 0.6, updated);
+    // Phase 72 Plan 06 (D-72-15): native `state` candidate -- the full state/region NAME,
+    // same discipline as country/city above. Documented live (LUSHA-V3-CONTRACT.md §5,
+    // confirmed-live companies/search-and-enrich example): co.location carries a `state`
+    // key alongside city/country/countryIso2 ("New South Wales"), never a dedicated
+    // state-code field. The hs_state_code push below is therefore a STRUCTURAL
+    // code-shaped-only guard (mirrors every contacts branch's identical rule) that has
+    // never been observed to fire for Lusha company data -- not dead code, the same
+    // discipline every other branch in this file already applies.
+    const stateName = co.location && co.location.state;
+    _push(out, "state", src, stateName, _norm(stateName), 0.6, updated);
+    const lushaCoStateCode = _codeShaped(stateName, 2, 3);
+    if (lushaCoStateCode) {
+      _push(out, "hs_state_code", src, stateName, lushaCoStateCode, 0.6, updated);
+    }
+    // Phase 72 Plan 06 (D-72-14): Lusha's dedicated companies/search-and-enrich response
+    // (LUSHA-V3-CONTRACT.md §5) carries no phone field on the company object at all --
+    // documented absence, not a gap. No `phone` push in this branch.
   }
   return out;
 }
@@ -488,6 +505,29 @@ function apolloCandidates(raw, objectType) {
     // 58-05 Task 2: native `city` candidate — live evidence execs 11929/11932/11975/11979:
     // org.city present 4/4 times ("Cairns"/"Sydney"/"Cairns"/"Melbourne").
     _push(out, "city", src, org.city, _norm(org.city), 0.6, updated);
+    // Phase 72 Plan 06 (D-72-15): native `state` candidate -- live evidence
+    // docs/reports/2026-07-17-dryrun-batch.md (FanDuel org: state:"New York", a full
+    // name). Apollo's org.state is always a full name in every sample seen, so the
+    // hs_state_code push below is a structural code-shaped-only guard that has never
+    // fired for Apollo company data -- mirrors the identical rule already documented for
+    // Apollo's own CONTACTS branch above ("these two never fire from Apollo today").
+    _push(out, "state", src, org.state, _norm(org.state), 0.6, updated);
+    const apolloCoStateCode = _codeShaped(org.state, 2, 3);
+    if (apolloCoStateCode) {
+      _push(out, "hs_state_code", src, org.state, apolloCoStateCode, 0.6, updated);
+    }
+    // Phase 72 Plan 06 (D-72-14): native `phone` candidate -- live evidence
+    // docs/reports/2026-07-15-dry-run-gillon-mclachlan.md (Tabcorp org: phone:
+    // "+61 3 9246 6010", primary_phone.sanitized_number:"+61392466010"). Prefer the
+    // already-sanitized primary_phone number when present (same E.164-ready shape
+    // Apollo's own contact-side phone_numbers[].sanitized_number already supplies this
+    // file); fall back to the raw `phone` string through normalizePhone like every other
+    // phone producer here. FanDuel's live org showed primary_phone:{} (empty object) for
+    // an absent number -- `.sanitized_number` on an empty object is undefined, so the
+    // fallback to `org.phone` (also null there) correctly yields no candidate.
+    const orgPhoneRaw = (org.primary_phone && org.primary_phone.sanitized_number) || org.phone;
+    const orgPhoneNorm = normalizePhone(orgPhoneRaw, _iso2(org.country));
+    if (orgPhoneNorm) _push(out, "phone", src, orgPhoneRaw, orgPhoneNorm, 0.6, updated);
   }
   return out;
 }
@@ -605,6 +645,14 @@ function zoominfoCandidates(rawResponse, objectType) {
     // has no city entry) and none of the 4 sampled live company executions carried one —
     // documented absence, not a gap (Task 2 leaves this branch without a city push).
     _push(out, "country", src, raw.country, _norm(raw.country), 0.6, recency);
+    // Phase 72 Plan 06 (D-72-14/D-72-15): state/hs_state_code/phone -- no producer.
+    // ZOOM_CO_OUTPUT_FIELDS (build_cloud_workflows.py) requests neither `state` nor
+    // `phone` for companies today (same documented-absence discipline as the `city`
+    // comment above). Both ARE valid, individually-probed GTM outputFields per the
+    // zoominfo-gtm-companies-contract memory note -- this is a scoping choice mirroring
+    // 58-05's city precedent, not an API limitation. Widening ZOOM_CO_OUTPUT_FIELDS is
+    // out of scope for this plan: no live probe has confirmed requesting them together
+    // does not 400 the whole company batch.
     // Live GTM naicsCodes are OBJECTS ({id,name}, most-general first); the flat fixtures
     // are bare code strings. String(obj) would have staged "[object Object]" as industry.
     // primaryIndustry is an array in the live response (["Hospitality", "Sports Teams ..."]).

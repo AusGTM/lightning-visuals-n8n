@@ -250,7 +250,11 @@ test("toCandidates('apollo', <fixture with organization.primary_phone.sanitized_
   const cands = toCandidates("apollo", raw, "companies");
   const phone = byField(cands, "phone");
   assert.ok(phone, "phone candidate present");
-  assert.equal(phone.value, "+61 3 9246 6010");
+  // The already-sanitized primary_phone.sanitized_number is preferred over the raw
+  // `phone` string -- both `value` (the raw input fed to normalizePhone) and
+  // `normalizedValue` reflect the sanitized form.
+  assert.equal(phone.value, "+61392466010");
+  assert.equal(phone.normalizedValue, "+61392466010");
 });
 
 test("toCandidates('apollo', <fixture with primary_phone:{} (FanDuel live shape) and null phone>, 'companies') yields no phone candidate", () => {
