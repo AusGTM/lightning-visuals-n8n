@@ -7,6 +7,7 @@
 // Run: node --test tests/n8n/mergeCompanies.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
@@ -15,6 +16,7 @@ import { stripVerifiedAt } from "./verifiedAtStrip.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const PY = path.join(ROOT, ".venv/bin/python");
 const { mergeCompanies, DEFAULT_COMPANY_POLICY } =
   require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
 const { scoreResearchCandidates } = require(path.join(ROOT, "n8n/code/judge.js"));
@@ -544,4 +546,54 @@ test("mergeCompanies: DEFAULT_COMPANY_POLICY carries explicit state/hs_state_cod
   // (72-PORTAL-PROBE.json, 404) -- an explicit policy for it would be permanently
   // unreachable configuration.
   assert.ok(!("hs_country_region_code" in DEFAULT_COMPANY_POLICY));
+});
+
+// =========================================================================================
+// Phase 72 Plan 06, Task 3 (D-72-16) — a person's location is not evidence of the
+// organisation's region. lv_country_region_normalized drives a hard veto and a tier
+// (CLAUDE.md §10.3, §15.0); a wrong region is the most damaging single-field error in
+// this system. This is a permanent regression guard, not a driver of new behaviour --
+// mergeCompanies() has no code path that derives lv_country_region_normalized from
+// city/state/country at all (it only ever writes whichever candidateRow key it is
+// handed), so this test can never go RED under the current engine. RED evidence was
+// captured once by TEMPORARILY injecting a fake derivation into mergeCompanies() (see
+// the SUMMARY's TDD Gate Compliance section for the exact diff and command output),
+// then reverting -- the committed code below is the real, unmodified engine.
+// =========================================================================================
+
+test("mergeCompanies: a contact-shaped geo candidate set (city/state/country as if from a person) never produces an lv_country_region_normalized key (D-72-16)", () => {
+  // Deliberately NOT including lv_country_region_normalized in the candidate row --
+  // the only way that field could ever appear is if some future change derived it FROM
+  // city/state/country inside the merge, which this asserts never happens.
+  const contactShapedGeo = { city: "Sydney", state: "New South Wales", country: "Australia" };
+  const { canonicalPatch } = mergeCompanies({}, contactShapedGeo, undefined,
+    { source: "waterfall", confidence: 90 });
+  assert.ok(!("lv_country_region_normalized" in canonicalPatch),
+    "D-72-16: a person's location (city/state/country) must never become the company's " +
+    "lv_country_region_normalized -- region is a company-waterfall, judge-gated ICP " +
+    "input (58-06), never derived from contact-shaped geo inside the merge.");
+});
+
+// Python oracle: PyYAML parses the real config file, no JS-side YAML reimplementation
+// (same idiom as tests/n8n/columnMapAliasParity.test.mjs).
+function materialConflictGroups() {
+  const script =
+    "import yaml,json;" +
+    "g=yaml.safe_load(open('config/escalation_policy.yaml'))['sonnet_5']['material_conflict_field_groups'];" +
+    "print(json.dumps(g))";
+  return JSON.parse(execFileSync(PY, ["-c", script], { cwd: ROOT }).toString());
+}
+
+test("config/escalation_policy.yaml: lv_country_region_normalized and country stay in ONE material_conflict_field_groups entry (58-06 boundary unweakened)", () => {
+  const groups = materialConflictGroups();
+  const hit = groups.find((g) =>
+    g.fields.includes("lv_country_region_normalized") && g.fields.includes("country"));
+  assert.ok(hit,
+    "D-72-16/58-06: lv_country_region_normalized and country must stay paired in one " +
+    "material_conflict_field_groups entry -- Phase 72's widening must not quietly " +
+    "split them, which would let an unadjudicated region conflict promote unchecked.");
+  // No OTHER group may also carry lv_country_region_normalized -- exactly one group.
+  const carriers = groups.filter((g) => g.fields.includes("lv_country_region_normalized"));
+  assert.equal(carriers.length, 1,
+    "lv_country_region_normalized must belong to exactly one material-conflict group");
 });
