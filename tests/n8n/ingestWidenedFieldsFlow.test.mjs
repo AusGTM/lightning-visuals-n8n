@@ -1,0 +1,241 @@
+// tests/n8n/ingestWidenedFieldsFlow.test.mjs
+//
+// Phase 72 Plan 01 (D-72-01 tracer, D-72-03, D-72-22). Drives the COMMITTED
+// n8n/wf_contact_ingest_cloud.json through the 70-01 walker to prove the thinnest
+// end-to-end path this phase exists to open: a `mobilephone` value travels
+// CSV header -> columnMap.js -> the ingest lane's candidate -> mergeContacts() -> the
+// HubSpot Create/Update body, and is PROTECTED rather than clobbered when the matched
+// HubSpot contact already holds a different value.
+//
+// F71-5 recorded Busteed 352422766048 landing with email + phone + title while his held
+// row carried a paid-for mobilephone +61 419 212 580 — this is the tracer for that
+// defect.
+//
+// D-72-22 (operator ruling, 2026-09-12, raised as a blocking-human checkpoint by this
+// very task): mergeContacts() is called with a flat `{ source: "csv", confidence: 80 }`,
+// while `mobilephone` is fill_blank_only @ 85 — so a CSV-carried mobile could never
+// promote, even into a blank field, without a per-field confidence override. Every
+// positive fixture below therefore carries `source_by_field: { mobilephone: <provider> }`
+// on the request envelope (the same request-level multipart field dispatch.py sends,
+// parsed once by "Set Config Fields" and broadcast onto every row by the "Source By
+// Field Broadcast" combineAll merge — see suggestionProvenanceFlow.test.mjs's Task 1/2
+// for the same mechanism's isolated-jsCode proof). The negative test at the bottom pins
+// the other half of the ruling: a field resolving to the flat csv source stays exactly
+// as untrusted as before.
+//
+// Same ARM()/loadArmedWorkflow() idiom as ingestTracerFlow.test.mjs / ingestCarryMerge.test.mjs
+// — the committed JSON ships disarmed; an offline proof of the armed shape mutates the
+// LOADED jsCode strings in memory, never the file on disk. Arms EVERY node's jsCode by
+// regex sweep (mirrors operator-claude-plugin/scripts/n8n_arming.py's set_write_safety),
+// never a hand-written node-name list — a subset-armed workflow is a test artifact, not
+// a deployable state.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import fs from "node:fs";
+import { createRequire } from "node:module";
+import { walkWorkflow, nodeItems, starvedWithData } from "./lib/walkWorkflow.mjs";
+
+const require = createRequire(import.meta.url);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const WF_PATH = path.join(ROOT, "n8n", "wf_contact_ingest_cloud.json");
+
+const { mapRow } = require(path.join(ROOT, "n8n/code/columnMap.js"));
+
+const DOMAIN = "widenedfields.example";
+const COMPANY_ID = "9700001";
+
+function armWorkflow(wf, { testRecordDomains = "" } = {}) {
+  // Sweep EVERY node's jsCode for both write-safety declarations, whatever value they
+  // currently hold — mirrors n8n_arming.set_write_safety's bidirectional regex, not a
+  // hand-written list of node names. "Decide Action" bakes ALLOW_HUBSPOT_CREATE
+  // independently of the write gates (it decides net_new -> create vs. review before
+  // any gate runs), so it must be swept too, not just the two write gates.
+  let recordWritesHits = 0;
+  let createHits = 0;
+  for (const node of wf.nodes) {
+    const js = node.parameters && node.parameters.jsCode;
+    if (typeof js !== "string") continue;
+    let next = js.replace(
+      /const\s+ALLOW_HUBSPOT_RECORD_WRITES\s*=\s*[^;]+;/,
+      'const ALLOW_HUBSPOT_RECORD_WRITES = "true";'
+    );
+    if (next !== js) recordWritesHits += 1;
+    const beforeCreate = next;
+    next = next.replace(
+      /const\s+ALLOW_HUBSPOT_CREATE\s*=\s*[^;]+;/,
+      'const ALLOW_HUBSPOT_CREATE = "true";'
+    );
+    if (next !== beforeCreate) createHits += 1;
+    next = next.replace(
+      'const TEST_RECORD_DOMAINS = "";',
+      `const TEST_RECORD_DOMAINS = "${testRecordDomains}";`
+    );
+    node.parameters.jsCode = next;
+  }
+  assert.ok(recordWritesHits >= 1, "ALLOW_HUBSPOT_RECORD_WRITES must be declared somewhere on this lane");
+  assert.ok(createHits >= 1, "ALLOW_HUBSPOT_CREATE must be declared somewhere on this lane (Decide Action)");
+  return wf;
+}
+
+function loadArmedWorkflow(opts) {
+  const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
+  return armWorkflow(wf, opts);
+}
+
+// --- Header aliasing (D-72-03) — cheap direct check, independent of the walker -----------
+
+test("a CSV column headed 'mobile' maps to canonical key mobilephone; 'phone' still maps to phone", () => {
+  assert.deepEqual(mapRow({ mobile: "0411 111 111" }), { mobilephone: "0411 111 111" });
+  assert.deepEqual(mapRow({ phone: "02 9000 0000" }), { phone: "02 9000 0000" });
+  assert.deepEqual(mapRow({ Mobile: "0411 111 111", Phone: "02 9000 0000" }),
+    { mobilephone: "0411 111 111", phone: "02 9000 0000" });
+});
+
+// --- Main tracer: create / protect / fill, all in one batch -----------------------------
+
+const ROW_A_EMAIL = "newmobile@" + DOMAIN;   // net_new -> create
+const ROW_B_EMAIL = "protected@" + DOMAIN;   // matched, HubSpot holds a DIFFERENT mobile
+const ROW_C_EMAIL = "fillme@" + DOMAIN;      // matched, HubSpot holds NO mobile
+const ROW_B_CONTACT_ID = "222";
+const ROW_C_CONTACT_ID = "333";
+
+const ROW_B_EXISTING_MOBILE = "+61400000000";
+const ROW_A_MOBILE = "+61411111111";
+const ROW_B_MOBILE = "+61422222222"; // the CSV's own value for row B — must NOT land
+const ROW_C_MOBILE = "+61433333333";
+
+function tracerFixture() {
+  return {
+    // Only item[0]'s `body` is read by "Set Config Fields" ($input.first()) — the
+    // round-level source map is genuinely one-per-request, matching dispatch.py's own
+    // multipart field (CLAUDE.md D-72-22 / §13.0.2's `source_by_field` idiom).
+    triggerItems: [
+      {
+        body: { source_by_field: { mobilephone: "zoominfo" } },
+        email: ROW_A_EMAIL, firstname: "New", lastname: "Mobile", company: "Widened Fields Co",
+        mobilephone: ROW_A_MOBILE,
+      },
+      { email: ROW_B_EMAIL, firstname: "Pro", lastname: "Tected", company: "Widened Fields Co",
+        mobilephone: ROW_B_MOBILE },
+      { email: ROW_C_EMAIL, firstname: "Fill", lastname: "Me", company: "Widened Fields Co",
+        mobilephone: ROW_C_MOBILE },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{
+        results: [
+          { email: ROW_A_EMAIL, status: "VALID" },
+          { email: ROW_B_EMAIL, status: "VALID" },
+          { email: ROW_C_EMAIL, status: "VALID" },
+        ],
+      }],
+      "HubSpot Search by Email": (items) => items.map((it) => {
+        const email = it.email_normalized || it.email;
+        if (email === ROW_B_EMAIL) {
+          return { results: [{ id: ROW_B_CONTACT_ID,
+            properties: { email: ROW_B_EMAIL, mobilephone: ROW_B_EXISTING_MOBILE } }] };
+        }
+        if (email === ROW_C_EMAIL) {
+          // No mobilephone property at all — a genuinely blank/absent existing value.
+          return { results: [{ id: ROW_C_CONTACT_ID, properties: { email: ROW_C_EMAIL } }] };
+        }
+        return { results: [] }; // row A: net_new
+      }),
+      "HubSpot Company Search by Domain": (items) => items.map((it) =>
+        it.company_search_domain === DOMAIN
+          ? { results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }
+          : { results: [] }
+      ),
+      "HubSpot Company Search by Name": (items) => items.map(() => ({ results: [] })),
+      "HubSpot Create": (items) => items.map((it) => ({ id: "555555", properties: it.properties })),
+      "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  };
+}
+
+test("D-72-01 tracer: mobilephone reaches HubSpot Create for a net_new row, is withheld from an update that already holds a different value, and fills a blank one", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const fixture = tracerFixture();
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: fixture.triggerItems,
+    httpStubs: fixture.httpStubs,
+  });
+
+  assert.deepEqual(starvedWithData(trace), [], "no Merge on this lane may lose a row on this batch");
+
+  // Semantic check at the merge decision itself, before the write-node proof below.
+  const merged = nodeItems(runData, "Merge Contacts");
+  const byEmail = Object.fromEntries(merged.map((r) => [r.email, r]));
+  const decisionFor = (email, field) =>
+    (byEmail[email].merge.decisions || []).find((d) => d.field === field);
+
+  assert.equal(decisionFor(ROW_A_EMAIL, "mobilephone").decision, "promote",
+    "row A: blank existing (net_new -> {}), provider-graded confidence clears 85 -> promote");
+  assert.equal(decisionFor(ROW_B_EMAIL, "mobilephone").decision, "stage_only",
+    "row B: fill_blank_only with a non-blank existing value -> stage_only, never a clobber");
+  assert.equal(decisionFor(ROW_C_EMAIL, "mobilephone").decision, "promote",
+    "row C: existing mobilephone genuinely blank/absent -> promote");
+
+  // The tracer's actual proof: walk the real HubSpot Create / Update request bodies.
+  const createRows = nodeItems(runData, "HubSpot Create");
+  assert.equal(createRows.length, 1, "only row A is a create");
+  assert.equal(createRows[0].properties.mobilephone, ROW_A_MOBILE,
+    "F71-5's exact defect: a paid-for mobile must reach the HubSpot Create body");
+
+  const updateRows = nodeItems(runData, "HubSpot Update");
+  assert.equal(updateRows.length, 2, "rows B and C are both updates");
+  const updateByObjectId = Object.fromEntries(updateRows.map((r) => [r.id, r]));
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(updateByObjectId[ROW_B_CONTACT_ID].properties, "mobilephone"),
+    false,
+    "row B: a DIFFERENT non-blank existing mobilephone must not be overwritten"
+  );
+  assert.equal(updateByObjectId[ROW_C_CONTACT_ID].properties.mobilephone, ROW_C_MOBILE,
+    "row C: a blank/absent existing mobilephone must be filled");
+});
+
+// --- Negative: no source_by_field entry for mobilephone -> stays at the flat csv 80 -----
+
+test("D-72-22 negative: without source_by_field naming mobilephone, a CSV mobile stays at the flat csv confidence and never reaches HubSpot Create", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const email = "noprovenance@" + DOMAIN;
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      { email, firstname: "No", lastname: "Provenance", company: "Widened Fields Co",
+        mobilephone: "+61455555555" },
+      // No `body.source_by_field` at all on this batch's item[0] — the round-level map
+      // is genuinely absent, not merely empty for this one field.
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [] }], // net_new
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Create": (items) => items.map((it) => ({ id: "666666", properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), []);
+
+  const merged = nodeItems(runData, "Merge Contacts");
+  assert.equal(merged.length, 1);
+  const decision = (merged[0].merge.decisions || []).find((d) => d.field === "mobilephone");
+  assert.ok(decision, "mobilephone must still be a candidate field even though it cannot promote");
+  assert.equal(decision.decision, "needs_review",
+    "flat csv confidence (80) is below mobilephone's fill_blank_only threshold (85) — the ruling's csv-typed-stays-untrusted half");
+  assert.equal(decision.confidence, 80, "no source_by_field entry -> the flat csv confidence, never the provider grade");
+
+  const createRows = nodeItems(runData, "HubSpot Create");
+  assert.equal(createRows.length, 1);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(createRows[0].properties, "mobilephone"),
+    false,
+    "a needs_review field must never reach the HubSpot Create body"
+  );
+});
