@@ -50,7 +50,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: ($json.identity_keys.email ? [ { propertyName: \"email\", operator: \"EQ\", value: $json.identity_keys.email } ] : [ { propertyName: \"firstname\", operator: \"EQ\", value: $json.identity_keys.firstName }, { propertyName: \"lastname\", operator: \"EQ\", value: $json.identity_keys.lastName } ]) } ], properties: [\"email\",\"firstname\",\"lastname\",\"jobtitle\",\"phone\",\"mobilephone\",\"lv_jobtitle_verified_at\",\"lv_mobilephone_verified_at\",\"seniority\",\"lv_contact_enrichment_provenance\",\"lusha_contact_id\",\"city\",\"state\",\"country\",\"hs_state_code\",\"hs_country_region_code\",\"lv_linkedin_url\",\"lv_persona_group\",\"hs_linkedin_url\"], limit: 5 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: ($json.identity_keys.email ? [ { propertyName: \"email\", operator: \"EQ\", value: $json.identity_keys.email } ] : [ { propertyName: \"firstname\", operator: \"EQ\", value: $json.identity_keys.firstName }, { propertyName: \"lastname\", operator: \"EQ\", value: $json.identity_keys.lastName } ]) } ], properties: [\"email\",\"firstname\",\"lastname\",\"jobtitle\",\"phone\",\"mobilephone\",\"lv_jobtitle_verified_at\",\"lv_mobilephone_verified_at\",\"seniority\",\"lv_contact_enrichment_provenance\",\"lusha_contact_id\",\"city\",\"state\",\"country\",\"hs_state_code\",\"hs_country_region_code\",\"lv_linkedin_url\",\"lv_persona_group\",\"hs_linkedin_url\",\"lv_phone_2\",\"lv_mobilephone_2\"], limit: 5 }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -532,7 +532,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"domain\", operator: \"EQ\", value: $json.identity_keys.domain } ] } ], properties: [\"name\",\"domain\",\"industry\",\"annualrevenue\",\"numberofemployees\",\"lv_org_type\",\"lv_produces_content\",\"lv_content_type\",\"lv_is_hardware_vendor\",\"lv_is_gambling_operator\",\"lv_icp_tier\",\"lv_icp_fit_score\",\"lv_anti_icp_flag\",\"lv_enrichment_provenance\",\"lv_org_type_verified_at\",\"lv_produces_content_verified_at\",\"lusha_company_id\",\"num_associated_contacts\",\"lv_revenue_band\",\"lv_employee_band\",\"lv_country_region_normalized\",\"country\",\"city\",\"lv_sponsorship_reliant\"], limit: 5 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"domain\", operator: \"EQ\", value: $json.identity_keys.domain } ] } ], properties: [\"name\",\"domain\",\"industry\",\"annualrevenue\",\"numberofemployees\",\"lv_org_type\",\"lv_produces_content\",\"lv_content_type\",\"lv_is_hardware_vendor\",\"lv_is_gambling_operator\",\"lv_icp_tier\",\"lv_icp_fit_score\",\"lv_anti_icp_flag\",\"lv_enrichment_provenance\",\"lv_org_type_verified_at\",\"lv_produces_content_verified_at\",\"lusha_company_id\",\"num_associated_contacts\",\"lv_revenue_band\",\"lv_employee_band\",\"lv_country_region_normalized\",\"country\",\"city\",\"lv_sponsorship_reliant\",\"lv_phone_2\",\"state\",\"hs_state_code\",\"phone\"], limit: 5 }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

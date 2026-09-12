@@ -2883,6 +2883,14 @@ return $input.all().map((it) => {
 # existingRecord that never fetches it would always read blank and silently overwrite
 # a real value on a second enrichment pass. Deliberately NOT added to REQUIRED itself
 # (unchanged, stays 12 keys) — this is a fetch-list widening only, not a chase-list one.
+#
+# Phase 72 gap closure (CR-01, plan 10, D-72-01/D-72-06): `lv_phone_2`/`lv_mobilephone_2`
+# added — Phase 72 Plan 05 gave ENRICH_MERGE's shared opts.rankedByField loop these two
+# overflow candidates for BOTH lanes, and widened this fetch list's cloud sibling
+# (ENRICH_CONTACT_SEARCH_PROPERTIES_CSV) to match, but never this local-live one. Both
+# slots are fill_blank_only/protect_if_current_present, so an existingRecord that never
+# fetches them reads `undefined`, `_isBlank(undefined)` is `true`, and the gate promotes
+# a candidate over what may already be a real recorded overflow value.
 HS_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '($json.identity_keys.email ? [ { propertyName: "email", operator: "EQ", value: $json.identity_keys.email } ] '
@@ -2892,7 +2900,8 @@ HS_SEARCH_BODY_EXPR = (
     '"lv_jobtitle_verified_at","lv_mobilephone_verified_at","seniority",'
     '"lv_contact_enrichment_provenance","lusha_contact_id",'
     '"city","state","country","hs_state_code","hs_country_region_code",'
-    '"lv_linkedin_url","lv_persona_group","hs_linkedin_url"], limit: 5 }) }}'
+    '"lv_linkedin_url","lv_persona_group","hs_linkedin_url",'
+    '"lv_phone_2","lv_mobilephone_2"], limit: 5 }) }}'
 )
 
 # ---- COMPANIES branch -------------------------------------------------------
@@ -3027,6 +3036,14 @@ return $input.all().map((it) => {
 # HS_SEARCH_BODY_EXPR above: REQUIRED is a JS array literal inside a `r"""..."""` string,
 # not a Python-level list either could import without a real refactor (out of scope here).
 # fieldProducerMatrix.test.mjs's generic fetch-gate assertion (WR-03) is the drift guard.
+#
+# Phase 72 gap closure (CR-01, plan 10, D-72-01/D-72-06): `lv_phone_2`/`state`/
+# `hs_state_code`/`phone` added — Phase 72 Plans 05/06 gave ENRICH_MERGE_CO's shared
+# opts.rankedByField loop and write-map loop these four candidates, and widened this
+# fetch list's cloud sibling (ENRICH_COMPANY_SEARCH_PROPERTIES_CSV) to match, but never
+# this local-live one. All four are fill_blank_only/protect_if_current_present, so an
+# existingRecord that never fetches them reads `undefined`, `_isBlank(undefined)` is
+# `true`, and the gate promotes a candidate over a real recorded phone/state value.
 HS_CO_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
@@ -3040,7 +3057,7 @@ HS_CO_SEARCH_BODY_EXPR = (
     # a write; the suggestion round's zero-associated-contacts check reads this.
     '"num_associated_contacts",'
     '"lv_revenue_band","lv_employee_band","lv_country_region_normalized","country","city",'
-    '"lv_sponsorship_reliant"], '
+    '"lv_sponsorship_reliant","lv_phone_2","state","hs_state_code","phone"], '
     'limit: 5 }) }}'
 )
 
