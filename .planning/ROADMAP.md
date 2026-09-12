@@ -64,6 +64,7 @@ carrying its live evidence.
 - [x] Phase 69: Held rows survive the round (completed 2026-09-08)
 - [x] Phase 70: One merge, one result channel — n8n runtime truth (added 2026-09-09 from the first live batch UAT) (completed 2026-09-11)
 - [x] Phase 71: A held new person lands in HubSpot with one reply (added 2026-09-12 after quick batch 260911-w6n) (completed 2026-09-12)
+- [x] Phase 72: Enrichment extras land in HubSpot (added 2026-09-12 after Phase 71 F71-5; 8 plans + 4 gap-closure plans) (completed 2026-09-13)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
