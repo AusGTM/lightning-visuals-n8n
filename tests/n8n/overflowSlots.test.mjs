@@ -126,7 +126,10 @@ test("mergeContacts overflow: existing non-blank lv_mobilephone_2 is not overwri
 
 // --- (5) No candidate for a field with no configured overflow slot leaks a "_2" ------
 
-test("mergeContacts overflow: a field with no configured overflow slot (email) never gains a _2 property", () => {
+// D-72-10 / D-72-24: hs_additional_emails is an enumeration on this portal, so the second
+// email is recorded in provenance ONLY -- the engine must never write hs_additional_emails.
+// Closed by this offline test rather than a live dual-email run (operator ruling 2026-09-13).
+test("mergeContacts overflow: a field with no configured overflow slot (email) never gains a _2 property, and hs_additional_emails is never written (D-72-10)", () => {
   const ranked = { email: [
     rc("email", "zoominfo", "a@example.com"),
     rc("email", "apollo", "b@example.com"),
@@ -136,6 +139,8 @@ test("mergeContacts overflow: a field with no configured overflow slot (email) n
   assert.equal(result.canonicalPatch.email, "a@example.com");
   assert.equal(result.canonicalPatch.lv_email_2, undefined);
   assert.deepEqual(result.provenance.email.overflow_tail, [{ source: "apollo", value: "b@example.com" }]);
+  assert.equal(result.canonicalPatch.hs_additional_emails, undefined);
+  assert.equal(Object.keys(result.canonicalPatch).some((k) => k.startsWith("hs_additional")), false);
 });
 
 // --- (6) No judge call / no material-conflict suppression for phone or email ---------
