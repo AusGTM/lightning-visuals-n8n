@@ -112,6 +112,20 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
 - **D-72-18: Deploy scope = the ingest lane only.** Regenerate every JSON from the one builder, but
   deploy + bounce only `wf_contact_ingest_cloud` at the gate; the others must diff clean.
 
+### Plan-time rulings (operator, 2026-09-12, at /gsd-plan-phase 72 after research)
+- **D-72-19: LinkedIn naming closes INSIDE `merge_enriched` (research Fork 1, Option B).**
+  `preingest.merge_enriched` aliases the provider response's `lv_linkedin_url` onto the row's
+  existing `linkedin_url` key (one-entry alias table checked before the `allowed_keys` filter).
+  No `column_mapping.yaml` change for this field, `required_identity.any_of` untouched, the
+  ingest lane keeps reading `row.linkedin_url` and mapping it to `lv_linkedin_url` (PN-1);
+  `hs_linkedin_url` is added as a second write target in the lane per D-72-04. Rejected: a
+  second canonical column `lv_linkedin_url` (cascades into identity rules and the wrapper).
+- **D-72-20: `source_values` for a CREATE conflict lives in the merge REPORT only (research
+  Fork 2, option b).** The CSV loser is recorded in `MergeResult.conflicts` and the end-of-run
+  report; the persisted held-entry schema (D-71-04/05: `hold_code`, `reason`,
+  `observed_signals`, `resume_fingerprint`, `row`, optional `company_known`) stays literally
+  untouched. D-72-05's "on the held row" wording is superseded by this ruling.
+
 ### Claude's Discretion
 - Exact parity-test shape for the YAML/JS/policy three-way list (extend
   `tests/n8n/columnMapIdentityParity.test.mjs`'s idiom or a new test).
