@@ -1,284 +1,292 @@
 ---
 phase: 72-enrichment-extras-land-in-hubspot
-verified: 2026-09-12T14:34:52Z
-status: gaps_found
-score: 19/22 decisions verified
-covered_files: [".planning/WINDOWS.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-01-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-01-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-02-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-02-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-03-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-03-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-04-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-04-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-05-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-05-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-06-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-06-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-07-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-07-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-08-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-08-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-CONTEXT.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-PORTAL-PROBE.json", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-REVIEW.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md", ".planning/todos/completed/2026-09-12-ingest-lane-drops-paid-for-enrichment-extras-map-them-instead.md", ".planning/todos/pending/2026-09-12-enrichment-lane-and-companies-branch-have-no-property-history-hop.md", "CLAUDE.md", "config/column_mapping.yaml", "config/field_policy.yaml", "config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json", "config/hubspot_properties.yaml", "docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md", "n8n/code/columnMap.js", "n8n/code/mergeCompanies.js", "n8n/code/mergeContacts.js", "n8n/code/normalizeProviders.js", "n8n/wf_contact_ingest_cloud.json", "n8n/wf_contact_ingest_local.json", "n8n/wf_enrichment_cloud.json", "n8n/wf_enrichment_local.json", "n8n/wf_enrichment_local_live.json", "n8n/wf_review_decision_cloud.json", "n8n/wf_scheduled_maintenance_cloud.json", "operator-claude-plugin/.claude-plugin/plugin.json", "operator-claude-plugin/CHANGELOG.md", "operator-claude-plugin/config/column_mapping.yaml", "operator-claude-plugin/config/field_policy.yaml", "operator-claude-plugin/scripts/held_queue.py", "operator-claude-plugin/scripts/preingest.py", "operator-claude-plugin/scripts/suggestion_declines.py", "operator-claude-plugin/skills/contact-upload/extraction.md", "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md", "operator-claude-plugin/skills/review-triage/SKILL.md", "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py", "operator-claude-plugin/tests/test_extraction_handoff.py", "operator-claude-plugin/tests/test_held_queue.py", "operator-claude-plugin/tests/test_preingest_merge.py", "operator-claude-plugin/tests/test_preview_rendering.py", "operator-claude-plugin/tests/test_skill_sequence_coverage.py", "scripts/build_cloud_workflows.py", "scripts/deploy_n8n_workflows.py", "src/merge_policy.py", "tests/fixtures/companies_jscode_frozen.json", "tests/n8n/contactHistoryFlow.test.mjs", "tests/n8n/enrichment.test.mjs", "tests/n8n/fieldProducerMatrix.test.mjs", "tests/n8n/ingestCarryMerge.test.mjs", "tests/n8n/ingestMixedBatch.test.mjs", "tests/n8n/ingestTracerFlow.test.mjs", "tests/n8n/ingestWidenedFieldsFlow.test.mjs", "tests/n8n/mergeCompanies.test.mjs", "tests/n8n/mergeInputContract.test.mjs", "tests/n8n/mergeRecencyGate.test.mjs", "tests/n8n/normalizeProviders.test.mjs", "tests/n8n/overflowSlots.test.mjs", "tests/n8n/parity.test.mjs", "tests/n8n/widenedKeyParity.test.mjs", "tests/n8n/writeGateShape.test.mjs", "tests/test_fetch_by_id_topology.py", "tests/test_merge_helpers.py", "tests/test_merge_policy.py"]
-covered_digest: "v1:sha256:272d73cf90d547ae56ca1a77a1cc34044edb14ea5aa75c885846914c74ee7cc5"
-behavior_unverified: 0
+verified: 2026-09-12T22:38:10Z
+status: human_needed
+score: 21/22 decisions verified
+covered_files: [".planning/WINDOWS.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-01-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-01-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-02-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-02-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-03-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-03-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-04-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-04-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-05-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-05-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-06-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-06-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-07-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-07-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-08-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-08-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-09-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-09-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-10-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-10-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-11-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-11-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-12-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-12-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-CONTEXT.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-PORTAL-PROBE.json", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-REVIEW.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md", ".planning/todos/completed/2026-09-12-ingest-lane-drops-paid-for-enrichment-extras-map-them-instead.md", ".planning/todos/pending/2026-09-12-enrichment-lane-and-companies-branch-have-no-property-history-hop.md", "CLAUDE.md", "config/column_mapping.yaml", "config/field_policy.yaml", "config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json", "config/hubspot_properties.yaml", "docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md", "n8n/code/columnMap.js", "n8n/code/mergeCompanies.js", "n8n/code/mergeContacts.js", "n8n/code/normalizeProviders.js", "n8n/wf_contact_ingest_cloud.json", "n8n/wf_contact_ingest_local.json", "n8n/wf_enrichment_cloud.json", "n8n/wf_enrichment_local.json", "n8n/wf_enrichment_local_live.json", "n8n/wf_review_decision_cloud.json", "n8n/wf_scheduled_maintenance_cloud.json", "operator-claude-plugin/.claude-plugin/plugin.json", "operator-claude-plugin/CHANGELOG.md", "operator-claude-plugin/config/column_mapping.yaml", "operator-claude-plugin/config/field_policy.yaml", "operator-claude-plugin/scripts/held_queue.py", "operator-claude-plugin/scripts/preingest.py", "operator-claude-plugin/scripts/suggestion_declines.py", "operator-claude-plugin/skills/contact-upload/extraction.md", "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md", "operator-claude-plugin/skills/review-triage/SKILL.md", "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py", "operator-claude-plugin/tests/test_extraction_handoff.py", "operator-claude-plugin/tests/test_held_queue.py", "operator-claude-plugin/tests/test_preingest_merge.py", "operator-claude-plugin/tests/test_preview_rendering.py", "operator-claude-plugin/tests/test_skill_sequence_coverage.py", "scripts/build_cloud_workflows.py", "scripts/deploy_n8n_workflows.py", "src/merge_policy.py", "tests/fixtures/companies_jscode_frozen.json", "tests/n8n/contactHistoryFlow.test.mjs", "tests/n8n/enrichment.test.mjs", "tests/n8n/fieldProducerMatrix.test.mjs", "tests/n8n/ingestCarryMerge.test.mjs", "tests/n8n/ingestMixedBatch.test.mjs", "tests/n8n/ingestTracerFlow.test.mjs", "tests/n8n/ingestWidenedFieldsFlow.test.mjs", "tests/n8n/mergeCompanies.test.mjs", "tests/n8n/mergeInputContract.test.mjs", "tests/n8n/mergeRecencyGate.test.mjs", "tests/n8n/normalizeProviders.test.mjs", "tests/n8n/overflowSlots.test.mjs", "tests/n8n/parity.test.mjs", "tests/n8n/widenedKeyParity.test.mjs", "tests/n8n/writeGateShape.test.mjs", "tests/test_fetch_by_id_topology.py", "tests/test_merge_helpers.py", "tests/test_merge_policy.py"]
+covered_digest: "v1:sha256:59daa39892c18690232ca10145f18f849dc2042700aa7807b6e9997d214be2cb"
+behavior_unverified: 1
 overrides_applied: 0
-gaps:
-  - truth: "D-72-04 / D-72-17: a linkedin_url on an ingest CREATE row lands as BOTH lv_linkedin_url (canonical) and native hs_linkedin_url on the created contact."
-    status: failed
-    reason: >
-      Confirmed live at the phase's own D-72-17 gate (72-UAT.md, contact 352455353810,
-      execution 12402), independently confirmed by static trace of the code at HEAD
-      (unfixed), and independently confirmed a third time by the phase's own code review
-      (72-REVIEW.md WR-01, committed b06dfbb9). Root cause: `MERGE_CONTACTS`'s
-      `confidenceByField` map (scripts/build_cloud_workflows.py ~L479-483) is built by
-      iterating `Object.keys(row.source_by_field)`. `source_by_field` is populated by
-      `preingest.provider_sourced_fields()`, which reduces `merge_enriched`'s
-      `answered_fields` — and `merge_enriched` runs every incoming provider-response key
-      through `PROVIDER_KEY_ALIASES = {"lv_linkedin_url": "linkedin_url"}` BEFORE recording
-      it as answered (D-72-19), so a provider-supplied `lv_linkedin_url` value is recorded
-      under the name `linkedin_url`, never under `lv_linkedin_url`. `hs_linkedin_url` has no
-      alias entry, so when the provider response independently carries a `hs_linkedin_url`
-      key (it is its own promotable policy entry per D-72-04, not derived from
-      `lv_linkedin_url`), that key passes straight through unaliased and IS recorded in
-      `answered_fields`/`source_by_field` under its own real name — which is exactly why the
-      live gate shows `hs_linkedin_url` landing correctly on the CREATE row while
-      `lv_linkedin_url` does not: they take different paths through the alias, and only one
-      of the two candidate keys the merge step later reads (`confidenceByField["lv_linkedin_url"]`
-      vs `confidenceByField["hs_linkedin_url"]`) happens to already match a name
-      `source_by_field` used. The `lv_linkedin_url` candidate (built two lines later in
-      `MERGE_CONTACTS` from `row.linkedin_url`, the post-alias row key) therefore never finds
-      a `confidenceByField` entry under `"lv_linkedin_url"` and falls back to the flat
-      `{source:"csv", confidence:80}` default — below `lv_linkedin_url`'s
-      `fill_blank_only@85` threshold, so it is withheld even into a blank field and the row
-      is marked `human_review_required` instead of promoted. This directly falsifies plan
-      08's own must-have truth ("the re-read contact shows ... BOTH hs_linkedin_url and
-      lv_linkedin_url") and D-72-17's live-gate assertion — both plan-08 truths are therefore
-      the SAME single gap, not two. It is also a roadmap-goal miss: LinkedIn is one of the
-      five field categories the phase goal names by name, and the canonical LinkedIn
-      property does not reach a CREATED contact.
-    artifacts:
-      - path: "scripts/build_cloud_workflows.py"
-        issue: "MERGE_CONTACTS's confidenceByField loop (~L479-483) keys on row.source_by_field's own key names (\"linkedin_url\", post-alias) while the lv_linkedin_url candidate two lines later (~L487-494) is looked up under the pre-alias/renamed key \"lv_linkedin_url\" — the two never share a vocabulary for this one field."
-      - path: "n8n/code/mergeContacts.js"
-        issue: "Line ~400's confidence = confidenceByField[field] ?? flatConfidence lookup is by candidateRow key; it can never see a confidenceByField entry recorded under a different (pre-rename) name. Consuming half of the same defect, not a second bug."
-      - path: "tests/n8n/ingestWidenedFieldsFlow.test.mjs"
-        issue: "The regression test asserting this exact truth (line 440) seeds its fixture with source_by_field: { lv_linkedin_url: \"apollo\", hs_linkedin_url: \"apollo\" } — the ALREADY-RENAMED key. Real production source_by_field only ever names this field \"linkedin_url\" for the aliased half. The fixture cannot reproduce the real mismatch, which is why the suite stayed green through the very deploy (Task 1) whose live gate (Task 2) caught the defect the same day."
-    missing:
-      - "In MERGE_CONTACTS, resolve confidenceByField for lv_linkedin_url/hs_linkedin_url through the same alias the candidate builder already applies — e.g. when f === \"linkedin_url\", also set confidenceByField.lv_linkedin_url = 85 (72-REVIEW.md WR-01 gives a worked fix; note hs_linkedin_url does not itself need the alias, since its own key already survives unaliased when a provider independently answers it — adding it anyway per the review's snippet is a safe no-op, not a second defect)."
-      - "Regenerate wf_contact_ingest_cloud.json and wf_contact_ingest_local.json, redeploy + bounce disarmed, and re-run a D-72-17-shape read-back before closing this gap."
-      - "Fix tests/n8n/ingestWidenedFieldsFlow.test.mjs's fixture to seed source_by_field with the pre-alias key (\"linkedin_url\") the way real production populates it, so the regression test can actually catch a recurrence."
-  - truth: "D-72-01/D-72-06 (SAFE-01 non-clobber): every widened field's existing value is fetched into existingRecord before the merge gate runs, on every lane that shares the merge engine — not only the cloud lane."
-    status: failed
-    reason: >
-      72-REVIEW.md CR-01 (Critical): `build_enrichment_local_live()` (emits the real,
-      deployed/credential-bound `wf_enrichment_local_live.json`) fetches existing properties
-      through `HS_SEARCH_BODY_EXPR` (contacts) and `HS_CO_SEARCH_BODY_EXPR` (companies).
-      Confirmed independently by direct read: the cloud siblings
-      (`ENRICH_CONTACT_SEARCH_PROPERTIES_CSV`, `ENRICH_COMPANY_SEARCH_PROPERTIES_CSV`) were
-      widened in Phase 72 to include `lv_phone_2`/`lv_mobilephone_2` (contacts) and
-      `lv_phone_2,state,hs_state_code,phone` (companies) — confirmed present at
-      scripts/build_cloud_workflows.py:6119-6122 and :6356-6362. `HS_SEARCH_BODY_EXPR`
-      (contacts, local-live, ~L2860-2871) and `HS_CO_SEARCH_BODY_EXPR` (companies,
-      local-live, ~L3010-3029) were NOT — confirmed by direct read: the contacts constant's
-      property list ends at `"lv_linkedin_url","lv_persona_group","hs_linkedin_url"` (no
-      overflow slots) and the companies constant's ends at `"lv_sponsorship_reliant"` (no
-      phone/state/hs_state_code/lv_phone_2 at all). Both lanes share the SAME merge engine
-      code (`ENRICH_MERGE`/`ENRICH_MERGE_CO`), which now unconditionally offers these fields
-      as merge candidates — `fill_blank_only` + `protect_if_current_present: true` fields
-      whose `currentValue` reads `undefined` (never blank on purpose) are indistinguishable
-      from actually-blank to the gate, so the local-live lane will silently overwrite a real
-      existing phone/state/overflow value with a new provider guess. This is the exact
-      non-clobber defect class (WR-01/58-05/VETO-01) this codebase's own comments repeatedly
-      warn about, reintroduced for one lane by omission.
-    artifacts:
-      - path: "scripts/build_cloud_workflows.py"
-        issue: "HS_SEARCH_BODY_EXPR (~L2866, contacts) and HS_CO_SEARCH_BODY_EXPR (~L3010, companies) were not widened alongside their cloud-lane siblings — the local-live enrichment workflow's non-clobber gate is unprotected for lv_phone_2, lv_mobilephone_2 (contacts) and lv_phone_2, state, hs_state_code, phone (companies)."
-    missing:
-      - "Widen HS_SEARCH_BODY_EXPR to add \"lv_phone_2\",\"lv_mobilephone_2\"; widen HS_CO_SEARCH_BODY_EXPR to add \"lv_phone_2\",\"state\",\"hs_state_code\",\"phone\" — mirroring the cloud-lane CSV constants exactly (72-REVIEW.md CR-01 gives a worked replacement)."
-      - "Regenerate and add these five field names to tests/n8n/fieldProducerMatrix.test.mjs's fetch-gate assertion so a NEVER_CHASE (write-map-only) field is checked for presence in every lane's fetch list, not only the REQUIRED-driven check."
-  - truth: "D-72-09 (Phase 46 parity): the overflow-slot dedup predicate is identical across mergeContacts.js, mergeCompanies.js and src/merge_policy.py."
-    status: failed
-    reason: >
-      72-REVIEW.md WR-02, confirmed independently by direct read: the JS dedup key
-      (`mergeContacts.js:352` and byte-identical at `mergeCompanies.js:380`) is
-      `String(c.normalizedValue ?? c.value)` (case-sensitive); the Python oracle's
-      equivalent (`src/merge_policy.py:188`, `route_overflow`) is
-      `str(c.normalized_value).lower()` (case-insensitive) — an explicit, deliberate mirror
-      of `has_conflict()`'s own case-insensitive convention in both engines. Two candidates
-      whose normalized values differ only in case would dedupe (no phantom overflow) in the
-      Python oracle but NOT in the two JS engines (a real overflow entry would be
-      manufactured). Neither `tests/n8n/overflowSlots.test.mjs` nor
-      `tests/test_merge_policy.py`'s agreeing-candidates test exercises a same-value-
-      different-case pair, so this divergence is currently invisible to the test suite. Low
-      real-world likelihood for phone/mobilephone specifically (normalization already
-      reduces to digits) but the dedup helper is generic and the repo's own stated Phase 46
-      rule treats the three engines as one contract that must never silently diverge.
-    artifacts:
-      - path: "n8n/code/mergeContacts.js"
-        issue: "Line 352: case-sensitive normalizedValue/value string comparison in the overflow dedup loop."
-      - path: "n8n/code/mergeCompanies.js"
-        issue: "Line 380: byte-identical case-sensitive comparison (same defect, both JS engines)."
-      - path: "src/merge_policy.py"
-        issue: "Line 188 (route_overflow): case-insensitive comparison — the parity mismatch is between the JS pair and this file, not within the JS pair."
-    missing:
-      - "Lower-case both sides of the JS dedup key comparison in both mergeContacts.js and mergeCompanies.js to match the Python oracle and each file's own has_conflict() convention (72-REVIEW.md WR-02 gives the worked fix)."
-      - "Add a mixed-case agreeing-candidates test case to tests/n8n/overflowSlots.test.mjs and the Python test alongside the fix so the parity is pinned, not just restored."
-deferred: []
+re_verification:
+  previous_status: gaps_found
+  previous_score: 19/22
+  gaps_closed:
+    - "D-72-04/D-72-17: LinkedIn dual-write on CREATE (lv_linkedin_url + hs_linkedin_url) — closed by CANDIDATE_ALIASES (plan 72-09, commit 0f7c8c08) and live-proven (contact 352522004980, execution 12414, plan 72-12)."
+    - "D-72-01/D-72-06 (CR-01): local-live enrichment lane's non-clobber fetch gap for lv_phone_2/lv_mobilephone_2/state/hs_state_code/phone — closed by widening HS_SEARCH_BODY_EXPR / HS_CO_SEARCH_BODY_EXPR (plan 72-10, commit 455b0173), proven offline (wf_enrichment_local_live.json is not part of deploy_n8n_workflows.py's cloud glob, so no live redeploy applies to this lane)."
+    - "D-72-09 (WR-02): overflow-dedup case-sensitivity parity drift between the two JS merge engines and the Python oracle — closed by folding case in both JS engines (plan 72-11, commit e2ea2653), confirmed Python oracle already conformant."
+  gaps_remaining: []
+  regressions: []
+behavior_unverified_items:
+  - truth: "D-72-10: a second email found by the waterfall for the same person is recorded in lv_contact_enrichment_provenance only, never written to hs_additional_emails (confirmed enumeration-typed, not string, by the live portal probe)."
+    test: "Run the ingest/enrichment lane against a real (or realistically-shaped) waterfall response that returns two distinct emails for one person."
+    expected: "The second email lands in lv_contact_enrichment_provenance's evidence/history, and no write is attempted against hs_additional_emails."
+    why_human: "No test anywhere in the repo exercises this path — confirmed by direct search: `/usr/bin/grep -rln \"hs_additional_emails\" tests/ operator-claude-plugin/tests/ n8n/ scripts/ src/` returns zero files, and `/usr/bin/grep -rniE \"second.?email|additional.?email\"` across the same tree also returns zero. The enumeration-type guard's existence is confirmed by code read, but the fallback behavior itself has never been exercised by any test, offline or live. This was never scored as a gap (no plan's must-haves asserts specific runtime behavior here) and is unchanged by this gap-closure round — presence-only, correctly excluded from the verified score."
 human_verification:
   - test: "D-72-10: exercise the hs_additional_emails second-email path with a real waterfall response returning two distinct emails for the same person."
     expected: "A second email is recorded in lv_contact_enrichment_provenance only (never written to hs_additional_emails, which the live portal probe found typed enumeration, not string) — confirming the documented fallback actually engages against real dual-email data, not just against the code's own type guard."
-    why_human: "72-UAT.md records this explicitly as NOT OBSERVED — the live gate's two rows (Busteed create, Telfer update) each returned only one email from the waterfall. Code-level trace confirms the enumeration-type guard exists (72-05-SUMMARY.md), but that is a different claim from the fallback actually engaging correctly on real dual-email data."
+    why_human: "72-UAT.md Test 3 records this explicitly as NOT OBSERVED a second time — the gap-closure live gate's one row also returned only one email from the waterfall. Code-level trace confirms the enumeration-type guard exists; that is a different claim from the fallback actually engaging correctly on real dual-email data. Unchanged since the prior verification; no gap-closure plan targeted it (it was never a gap)."
   - test: "F72-3 item 1: is it acceptable that mobilephone can be filled with the exact same number already present in phone on the same contact (observed live on Telfer 1251 — both fields now read +61 409 390 022)?"
     expected: "An explicit operator ruling: either this duplication is acceptable (fill_blank_only correctly filled a blank field; the duplicate value is a data-quality curiosity, not a merge-policy defect) or a cross-field equality check should suppress the fill when the candidate value already equals a sibling field's value."
-    why_human: "72-UAT.md F72-3 flags this as observed live exactly as plan 01 predicted, and states explicitly: \"the operator did not give an explicit ruling this sitting.\" This is an open decision the phase left behind, not a code defect — no plan's must_haves asserts a specific behavior here, so it cannot be scored FAILED, but it should not be silently dropped either."
+    why_human: "Unchanged since the prior verification. 72-12-SUMMARY.md explicitly records F72-3 as 'left exactly as Task 2 recorded them' — this gap-closure round's scope was G1/G2/G3 only. No plan's must_haves asserts a specific behavior here, so it cannot be scored FAILED, but it remains an open decision the phase has not resolved."
   - test: "F72-3 item 2: is it acceptable that a matched UPDATE row's CSV-supplied firstname/lastname/company corrections are never applied, now that the ingest lane merges against real existingRecord values (Plan 01's new prerequisite)?"
     expected: "An explicit operator ruling on whether identity-field corrections on an UPDATE row should ever apply, and if so, through what mechanism (the current merge intentionally treats these as CREATE-only per D-72-05's IDENTITY_FIELDS carve-out)."
-    why_human: "72-UAT.md F72-3 and 72-01-SUMMARY.md (lines 186, 188, 243) record this as plan 01's own flagged, predicted consequence of introducing real existingRecord matching — observed live on Telfer exactly as predicted, with plan 01's two 'Operator confirm:' items left open and no ruling given this sitting."
+    why_human: "Unchanged since the prior verification, for the same reason as F72-3 item 1 — this gap-closure round did not address it, and no plan's must_haves takes a position on it."
 ---
 
-# Phase 72: Enrichment extras land in HubSpot — Verification Report
+# Phase 72: Enrichment extras land in HubSpot — Verification Report (Re-verification)
 
 **Phase Goal:** every field the waterfall finds and the operator paid for reaches the HubSpot
 contact it was found for — mobile, LinkedIn, seniority, persona, city/state/country — instead of
 being dropped.
 
-**Verified:** 2026-09-12T14:34:52Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-09-12T22:38:10Z
+**Status:** human_needed
+**Re-verification:** Yes — after gap closure (plans 72-09, 72-10, 72-11, 72-12; commits `52705d00`
+through `8b6610dd`)
 
 ## Method
 
-No REQUIREMENTS.md rows are mapped to Phase 72 (confirmed: `grep -n "Phase 72" .planning/REQUIREMENTS.md`
-returns nothing, and ROADMAP.md's own phase entry says "Requirements: TBD — no requirement IDs
-are mapped. Coverage is by DECISION ID"). Per the task's explicit instruction, D-72-01 through
-D-72-23 (23 decisions — the original D-72-01..21 plus two execution-time blocking-human rulings,
-D-72-22 and D-72-23) are the traceable must-haves; D-72-18 is superseded in-place by D-72-21 and
-scored as N/A rather than double-counted, leaving 22 scorable decisions. Each is checked against
-the actual codebase at HEAD, not against SUMMARY.md narration, using: static trace of the
-merge/policy/wiring code, the full test suite (both green — 4947 py / 1167 node), a from-scratch
-regeneration of every n8n workflow JSON confirming zero diff against committed (proving
-deployed-live == committed == generated), the phase's own live UAT gate (`72-UAT.md`, run
-2026-09-13, PASS-with-findings), and the phase's own code review (`72-REVIEW.md`, committed
-`b06dfbb9`, `issues_found`) — every review finding was independently re-derived by direct code
-read in this verification, not taken on the review's word alone.
+Re-verified against the prior `72-VERIFICATION.md` (commit `4e3921cc`, `status: gaps_found`,
+score 19/22, 3 gaps). Each of the 3 gaps was re-checked against the current codebase at HEAD by:
+direct code read of the fix (not the SUMMARY's narration), the specific regression test(s) each
+gap-closure plan added, the full node + python suites, a from-scratch regeneration of every n8n
+workflow JSON (zero diff against committed), and — for gap 1 only, since it is the one gap the
+phase's own discipline required a live gate for — `72-UAT.md` Test 3's transcribed live read-back.
+No REQUIREMENTS.md rows map to Phase 72 (confirmed: `/usr/bin/grep -n "Phase 72" .planning/REQUIREMENTS.md`
+returns nothing, exit 1) — traceability is by decision ID D-72-01..23 in `72-CONTEXT.md`, per the
+task's explicit instruction; this is by design, not an omission.
 
-## Goal Achievement — Decision-by-Decision
+## Gap-by-Gap Re-verification
 
-| # | Decision | Status | Evidence |
-|---|---|---|---|
-| D-72-01 | Widen ingest lane; plugin stops stripping enrichment extras | ⚠️ PARTIAL — cloud ingest lane VERIFIED; local-live enrichment lane FAILED (see CR-01 gap) | `config/column_mapping.yaml`/`n8n/code/columnMap.js` carry all 12 promotable keys with parity test; `MERGE_CONTACTS`'s cloud-lane candidate loop reads all widened fields from `row.*`; `preingest.strip_enrichment_extras` proven inert behaviourally (plan 03, `test_preingest_merge.py`); confirmed live on both create and update rows in `72-UAT.md`. But CR-01 (below) shows the SAME merge engine's non-clobber guard is unprotected on `wf_enrichment_local_live.json` because two fetch-list constants were not widened alongside their cloud siblings — a real, deployed lane where "reaches the record" can mean "clobbers the record" instead. |
-| D-72-02 | ONE source of truth = `field_policy.yaml`'s `promotable_contact_props()` | ✓ VERIFIED | `tests/test_field_policy_conformance.py::test_key_sets_are_identical` (in full green suite) pins `field_policy.yaml` contacts keys against `DEFAULT_CONTACT_POLICY`; no hardcoded "12" literal found in scan of the lane assembly. |
-| D-72-03 | `mobile` aliases to `mobilephone`, not `phone` | ✓ VERIFIED | `config/column_mapping.yaml:45-50` and `n8n/code/columnMap.js:42-47` both map mobile/cell/"mobile phone"/"cell phone"/"mobile number" → `mobilephone`, `phone` kept separate; live-confirmed on Busteed create (`phone` `+61 2 9663 8460` vs `mobilephone` `+61 419 212 580`, landed distinctly); CHANGELOG 0.49.0 documents the behavior change. |
-| D-72-04 | LinkedIn lands in BOTH `lv_linkedin_url` and `hs_linkedin_url` | ✗ FAILED (CREATE path only; UPDATE path passes) | See gap #1 above. Live-confirmed failing on CREATE (Busteed, `lv_linkedin_url` null) and passing on UPDATE (Telfer, `lv_linkedin_url` landed) in the same gate session; root cause isolated and confirmed by two independent code reads (this verification and `72-REVIEW.md` WR-01). |
-| D-72-05 | CREATE: provider wins over CSV for non-identity fields; identity fields unaffected | ✓ VERIFIED | `preingest.merge_enriched`'s `IDENTITY_FIELDS` tuple and CREATE-time provider-wins branch (plan 03, green `test_preingest_merge.py`); live-observed correctly NOT applying on Telfer's non-CREATE row (`72-UAT.md` F72-3). |
-| D-72-06 | UPDATE: recency overwrites a stale `stale_refreshable` value only past TTL; `fill_blank_only`/`manual_protected` unchanged (SAFE-01) | ⚠️ PARTIAL — cloud lane VERIFIED; local-live lane FAILED, same CR-01 gap as D-72-01 | `stale_after_days` present for contacts.jobtitle (180d) and companies.industry (365d); byte-identical branch shape in all three engines, exercised by `tests/n8n/mergeRecencyGate.test.mjs`; live-confirmed SAFE-01 holds on the CLOUD lane — Telfer's non-blank `phone` was NOT overwritten. But CR-01 shows the local-live lane's SAME non-clobber guarantee is structurally broken for the newly-widened fields, since `existingRecord` never carries them there. |
-| D-72-07 | Observation times: provider = dispatch clock, existing = `propertiesWithHistory` history timestamp, CSV = no time | ✓ VERIFIED | `mergeContacts.js`'s `_isProviderSource(resolvedSource) ? now : undefined` gating (per-field, from `opts.sourceByField`); ingest lane's history HTTP hop added via `splice_carry_merge_after` (no by-name `$()` read, per D-70-03/04); exercised by `tests/n8n/contactHistoryFlow.test.mjs` (green). |
-| D-72-08 | System-correctable clause (§17.2.1) generalizes to `stale_refreshable` fields under the same 4 conjuncts | ✓ VERIFIED | `system_correctable_sources` present at `config/field_policy.yaml:18,30,277` (contacts.jobtitle, companies.industry, plus pre-existing companies.domain); `_isSystemCorrectable` present in `mergeContacts.js` (~L180), `mergeCompanies.js` (~L227), `src/merge_policy.py`. |
-| D-72-09 | Recency + system-correctable land in all 3 engines (Phase 46 parity) | ✗ FAILED — recency/system-correctable predicates ARE parity-correct; the newer overflow-dedup predicate is NOT | See gap #3 above (WR-02). The specific predicates this decision names (recency, system-correctable) are confirmed byte-identical in shape across all three files. But Phase 72's own new overflow-slot dedup logic — added under the SAME "one merge-policy predicate, three engines" rule this decision states — diverges in case-sensitivity between the JS pair and the Python oracle, untested by either suite. |
-| D-72-10 | Second email → `hs_additional_emails` if string-typed+writable, else provenance-only fallback | ⚠️ Design decision VERIFIED as evidence-based; the live behavior is NOT OBSERVED | Live portal probe (`72-PORTAL-PROBE.json`) found `hs_additional_emails` is `enumeration`-typed — the write path was correctly never built, a deliberate and well-evidenced choice, not a gap. But the live gate's two rows each returned only one email, so the provenance-only fallback itself was never exercised against real dual-email data (`72-UAT.md`: "NOT OBSERVED"). Routed to human verification, not scored as a gap. |
-| D-72-11 | Exactly one `_2` overflow slot per kind, created once at setup, no `_3` ever | ✓ VERIFIED | `config/hubspot_properties.yaml:254,494,500` declares exactly `lv_phone_2` (contacts), `lv_phone_2` (companies), `lv_mobilephone_2` (contacts); `72-UAT.md` Task 1 confirms all three exist live; no `_3` property found anywhere; `tests/n8n/overflowSlots.test.mjs` green. |
-| D-72-12 | Trust-rank winner takes primary slot, runner-up takes `_2`, no judge call for phone/email disagreement | ✓ VERIFIED | `config/source_registry.yaml` trust_rank reused; `tests/test_judge_spec.py::test_ro2_judge_gate_cannot_see_size_conflicts` stays green (RO-2 unbroken). |
-| D-72-13 | Verification stamps = provenance JSON only, no new per-field `_source`/`_verified_at` properties | ✓ VERIFIED | No new `_source`/`_verified_at`/`_evidence_url` property found for any new slot; `lv_contact_enrichment_provenance`/`lv_enrichment_provenance` are the two stamped keys, live-confirmed populated on both Busteed and Telfer. |
-| D-72-14 | Companies gain phone + domain slots; company email stays a non-goal | ✓ VERIFIED | `config/field_policy.yaml:197,324` declares companies `lv_phone_2`; `hs_additional_domains` scoped per plan 06's probe-driven decision; no company email property created anywhere. |
-| D-72-15 | Geo lands as names and codes only when provider supplies a code — nothing derived by guessing | ✓ VERIFIED | Live-confirmed on Busteed: `hs_country_region_code` landed `AU` (a returned code), `hs_state_code` correctly stayed null (none returned) — exactly the "never guess" behavior; `n8n/code/normalizeProviders.js` company branches only push provider-shaped values (`tests/n8n/normalizeProviders.test.mjs` green). |
-| D-72-16 | Contact geo never feeds `lv_country_region_normalized` | ✓ VERIFIED | `MERGE_CONTACTS`'s candidate field list has no `lv_country_region_normalized` entry; every occurrence of that property name in the codebase traces to company-branch code only; plan 06's guard test forced RED via a temporary fake derivation then reverted, confirming the test can catch a violation. |
-| D-72-17 | End-of-phase live gate: create one absent person, confirm mapped fields land; one UPDATE row proves non-clobber | ✗ FAILED (same root cause as D-72-04) | `72-UAT.md`: mobilephone, phone, jobtitle, seniority, city, state, country, hs_country_region_code, hs_linkedin_url, lv_persona_group, provenance all landed correctly on the CREATE row; `lv_linkedin_url` did not — this is precisely what the gate's own must-have required to be BOTH properties, and only one landed. UPDATE row's non-blank `phone` correctly unchanged (that half of D-72-17 is met). Contact hand-deleted after. Scored FAILED as one decision, not double-counted with D-72-04 — it is the same defect observed through the gate that names it explicitly. |
-| D-72-18 | (superseded by D-72-21) | N/A | Not separately scored. |
-| D-72-19 | LinkedIn naming closes inside `merge_enriched` via a one-entry alias table, not a new column | ✓ VERIFIED | `PROVIDER_KEY_ALIASES = {"lv_linkedin_url": "linkedin_url"}` present in `operator-claude-plugin/scripts/preingest.py`; `tests/n8n/columnMapIdentityParity.test.mjs` stays green UNMODIFIED. The alias itself works correctly on the Python side — it is a downstream JS consumer's failure to account for the SAME alias that produces the D-72-04 gap, not a defect in D-72-19's own mechanism. |
-| D-72-20 | CSV-conflict loser recorded in `MergeResult.conflicts`/report only, never in the persisted held-entry schema | ✓ VERIFIED | `MergeResult.answered_fields` and `.conflicts` fields present in `preingest.py`; held-entry schema (`hold_code`, `reason`, `observed_signals`, `resume_fingerprint`, `row`, `company_known`) confirmed unchanged — no `source_values` key in `held_queue.py`. |
-| D-72-21 | Deploy scope widens to every regenerated workflow whose JSON changed, disarmed, node counts + v1 read back | ✓ VERIFIED | `72-UAT.md` Task 1: all 5 cloud workflows deployed+bounced disarmed, node counts 78/287/55/43/30 match committed exactly — independently reconfirmed in this verification by re-running `scripts/build_cloud_workflows.py` from a clean tree with zero git diff; `settings.executionOrder: "v1"` confirmed on all 5; every `ALLOW_*` write flag `false`. |
-| D-72-22 | Provider-sourced ingest fields get 85 confidence, not flat csv/80 | ✓ VERIFIED (mechanism correct; its own key-vocabulary edge case for LinkedIn is D-72-04's gap, not counted twice) | The `confidenceByField[f] = 85` derivation exists exactly as specified and is live-confirmed working for `mobilephone` (Busteed create) and for `lv_linkedin_url` on the UPDATE path (Telfer). |
-| D-72-23 | Three overflow-slot properties created live in plan 05, verified-not-recreated in plan 08 | ✓ VERIFIED | `72-UAT.md` Task 1 Step 1: sync tool reports 0 pending creates for all three properties on both dry-run and armed run, confirming they already existed and plan 08 correctly only verified rather than re-created. |
+### Gap 1 — D-72-04/D-72-17: LinkedIn dual-write incomplete on CREATE
 
-**Score:** 19/22 scorable decisions fully verified. 3 FAILED (D-72-04/D-72-17, one shared root
-cause counted once; D-72-01/D-72-06, one shared root cause counted once; D-72-09, a second,
-unrelated root cause). 1 not-observed-but-well-evidenced (D-72-10, human verification, not a gap).
+**Status: CLOSED (VERIFIED, live-proven).**
+
+- **Code fix confirmed by direct read:** `scripts/build_cloud_workflows.py:480`,
+  `CANDIDATE_ALIASES = { linkedin_url: ["lv_linkedin_url", "hs_linkedin_url"] }`, read by both the
+  `confidenceByField`/`sourceByField` derivation loop (line ~495) and the candidate-builder block
+  (line ~514) inside `MERGE_CONTACTS` — the exact fix `72-REVIEW.md` WR-01 and the prior
+  verification's `missing:` item specified, undoing `preingest.py`'s `PROVIDER_KEY_ALIASES` rename
+  at the one place both consumers read it.
+- **Regression fixture re-seeded with the real pre-alias key:** `tests/n8n/ingestWidenedFieldsFlow.test.mjs`
+  now seeds `source_by_field: { linkedin_url: "apollo" }` (confirmed by direct re-run:
+  `/usr/bin/grep -c 'linkedin_url: "apollo"' tests/n8n/ingestWidenedFieldsFlow.test.mjs` returns
+  `2`) — the exact vocabulary `preingest.provider_sourced_fields()` actually emits, replacing the
+  already-aliased fixture that let the suite stay green through the original live defect. Both
+  named tests pass:
+  `D-72-04: a linkedin_url header value produces a Create body carrying BOTH lv_linkedin_url and
+  hs_linkedin_url` and `D-72-04: hs_linkedin_url is withheld from an update whose contact already
+  holds a different non-blank value`.
+  ```
+  ✔ D-72-04: a linkedin_url header value produces a Create body carrying BOTH lv_linkedin_url and hs_linkedin_url
+  ✔ D-72-04: hs_linkedin_url is withheld from an update whose contact already holds a different non-blank value
+  ```
+- **Regenerated and zero-diffed:** `wf_contact_ingest_cloud.json` / `wf_contact_ingest_local.json`
+  regenerate with zero git diff against committed (confirmed by re-running
+  `scripts/build_cloud_workflows.py` from the current tree).
+- **Live-proven (plan 72-12, `72-UAT.md` Test 3):** contact `352522004980`, n8n execution `12414`
+  (the create). Read-back: `lv_linkedin_url` = `http://www.linkedin.com/in/jimmybusteed`,
+  `hs_linkedin_url` = identical full URL, both non-null, provenance source `waterfall`/confidence
+  85 (not `csv`, the pre-fix fallback). Deploy+bounce table shows all 5 cloud workflows active,
+  node counts unchanged from the prior live gate (78/287/55/43/30), `executionOrder: v1`, all
+  `ALLOW_*` write flags `false` both before and after the armed window. F72-5 value-shape check
+  (CREATE-path URL shape vs the original UPDATE-path URL shape) explicitly compared, no
+  regression. This is the phase's own required live gate for this decision (D-72-17), and it now
+  passes where it previously failed.
+
+### Gap 2 — D-72-01/D-72-06 (CR-01): local-live enrichment lane non-clobber hole
+
+**Status: CLOSED (VERIFIED, offline; lane is not part of the cloud deploy surface).**
+
+- **Code fix confirmed by direct read:** `scripts/build_cloud_workflows.py`'s `HS_SEARCH_BODY_EXPR`
+  (contacts, ~line 2894) now ends its `properties` array with `"lv_phone_2","lv_mobilephone_2"`;
+  `HS_CO_SEARCH_BODY_EXPR` (companies, ~line 3047) now includes
+  `"lv_phone_2","state","hs_state_code","phone"` — mirroring their cloud-lane siblings
+  (`ENRICH_CONTACT_SEARCH_PROPERTIES_CSV`/`ENRICH_COMPANY_SEARCH_PROPERTIES_CSV`) exactly, closing
+  the fetch gap CR-01 identified.
+  ```
+  ✔ non-clobber fetch gate (CR-01): every protect_if_current_present field is fetched, on every overflow-capable shared merge lane
+  ```
+- **A new derived (not hardcoded) regression assertion** in `tests/n8n/fieldProducerMatrix.test.mjs`
+  checks every `protect_if_current_present: true` field is fetched on every overflow-capable merge
+  lane across every generated `n8n/wf_*.json` — this is the CR-01 defect class, not just the two
+  fields CR-01 happened to find. Confirmed RED-then-GREEN in `72-10-SUMMARY.md`; confirmed
+  currently passing.
+- **Regenerated and confirmed scoped:** only `wf_enrichment_local_live.json` changed; node count
+  unchanged (82).
+- **Not deployed live, and this is correctly not counted as a live gap:** confirmed by direct
+  read, `scripts/deploy_n8n_workflows.py:280`, `paths = sorted(N8N_DIR.glob("wf_*_cloud.json"))` —
+  `wf_enrichment_local_live.json` does not match that glob and is never pushed to n8n Cloud by that
+  tool, by design (also stated in `72-10-SUMMARY.md` and `72-12-SUMMARY.md`, now independently
+  confirmed here rather than taken on their word). Note the ORIGINAL (pre-gap-closure) verification
+  described this file as producing "the real, deployed/credential-bound `wf_enrichment_local_live.json`"
+  — that referred to the workflow's runtime *credentials* (a live n8n Docker-replica instance it
+  can run against), not to `deploy_n8n_workflows.py`'s cloud-push surface; the two statements are
+  compatible, not contradictory: this lane is real and can run, but is never touched by the cloud
+  deploy tool this phase's live gates use. There is no live surface this fix needs to be
+  redeployed onto for this phase's purposes; the offline fix plus the derived regression guard is
+  the complete closure for this gap.
+
+### Gap 3 — D-72-09 (WR-02): overflow-dedup case-sensitivity parity drift
+
+**Status: CLOSED (VERIFIED, offline — deployed to all 7 inlining cloud/local workflows per `72-UAT.md` Test 3 Step 1, but not itself exercised by that live gate's one CREATE row, which never produced a mixed-case overflow candidate).**
+
+- **Code fix confirmed by direct read:** `n8n/code/mergeContacts.js:356-357` and
+  `n8n/code/mergeCompanies.js` (byte-identical dedup loop) now fold case:
+  `String(c.normalizedValue != null ? c.normalizedValue : c.value).toLowerCase()` compared against
+  the same transform on each existing deduped entry — matching `src/merge_policy.py`'s
+  `route_overflow` (`str(c.normalized_value).lower()`, confirmed unchanged and already conformant)
+  and each engine's own pre-existing `has_conflict()` convention.
+  ```
+  ✔ mergeContacts overflow: mixed-case agreeing candidates on phone do not manufacture lv_phone_2 (WR-02)
+  ✔ mergeCompanies overflow: mixed-case agreeing candidates on phone do not manufacture lv_phone_2 (WR-02)
+  ```
+- **Mixed-case agreeing-candidates test added to both JS suites and the Python suite**
+  (`tests/n8n/overflowSlots.test.mjs`, `tests/test_merge_policy.py`) — pinning the parity so a
+  recurrence would be caught, not just restored.
+- **Frozen fixture re-baselined as a reviewed act:** `tests/fixtures/companies_jscode_frozen.json`
+  diffed old vs new before acceptance, confirming the only change was the `Merge Company` node's
+  dedup-loop lines and comment (`72-11-SUMMARY.md`).
+- **Seven workflows regenerated** (every workflow inlining either JS merge module), node counts
+  unchanged across all seven; `wf_backend_status_cloud.json` (inlines neither module) correctly
+  untouched.
+
+## Regression Check
+
+- **Full node suite:** `node --test tests/n8n/*.test.mjs` — **1170 passed, 0 failed** (up from the
+  prior verification's 1167 baseline — 3 new tests from the gap-closure plans, consistent with the
+  SUMMARYs' own counts).
+- **Full python suite:** `.venv/bin/python -m pytest -q --tb=short -p no:cacheprovider tests/
+  operator-claude-plugin/tests/` — **4948 passed, 154 skipped, 0 failed** (up from 4947 — 1 new
+  parity-pin test from plan 72-11).
+- **Zero-diff regeneration:** `.venv/bin/python scripts/build_cloud_workflows.py` from the current
+  tree followed by `git status --porcelain n8n/ config/` — empty output. Committed, generated, and
+  (per `72-UAT.md` Test 3's Step 1 deploy table) live are level for all changed cloud workflows.
+- **`scripts/todo_triage.py --check`** exits 0 (2 question, 2 design, 2 minor-defect todos, all
+  pre-existing and correctly triaged — none newly introduced by the gap-closure plans, none
+  untriaged).
+- **No regressions found.** Nothing that passed in the prior verification now fails; no new debt
+  markers (`TBD`/`FIXME`/`XXX`) introduced in any file touched by the gap-closure plans.
+
+## Goal Achievement — Updated Decision Table (deltas only; all other 16 decisions from the prior
+report are unchanged and re-confirmed by the full green suite + zero-diff regen above)
+
+| # | Decision | Prior Status | Current Status | Evidence |
+|---|---|---|---|---|
+| D-72-01 | Widen ingest lane; plugin stops stripping enrichment extras | ⚠️ PARTIAL (CR-01) | ✓ VERIFIED | Gap 2 closed — see above. |
+| D-72-04 | LinkedIn lands in BOTH `lv_linkedin_url` and `hs_linkedin_url` | ✗ FAILED (CREATE) | ✓ VERIFIED | Gap 1 closed, live-proven — see above. |
+| D-72-06 | UPDATE recency/SAFE-01 non-clobber | ⚠️ PARTIAL (CR-01) | ✓ VERIFIED | Gap 2 closed — see above. |
+| D-72-09 | Recency + system-correctable + overflow-dedup parity (Phase 46, 3 engines) | ✗ FAILED (overflow-dedup only) | ✓ VERIFIED | Gap 3 closed — see above. |
+| D-72-17 | End-of-phase live gate: create + update, all mapped fields land | ✗ FAILED (same root cause as D-72-04) | ✓ VERIFIED | Live-proven, `72-UAT.md` Test 3 — see above. |
+| D-72-10 | Second email → `hs_additional_emails` if writable, else provenance-only fallback | ⚠️ human_verification (not a gap) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | Design evidenced (enumeration-type guard confirmed by code read), but no test anywhere — offline or live — exercises the provenance-only fallback itself; `72-UAT.md` Test 3 confirms NOT OBSERVED live a second time, and a repo-wide search finds no offline test either. Excluded from the verified score, routed to human verification, not scored as a gap (no plan's must-haves asserts specific runtime behavior here). |
+
+All other 16 decisions (D-72-02, 03, 05, 07, 08, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23) are
+unaffected by the gap-closure plans and remain ✓ VERIFIED exactly as the prior report found them —
+re-confirmed here by the fact that the full regression suite (which exercises all of them) stays
+green and the zero-diff regeneration shows no unintended drift. D-72-18 remains N/A (superseded by
+D-72-21, not separately scored).
+
+**Score:** 21/22 scorable decisions fully verified (up from 19/22). 0 FAILED (down from 3). 1
+routed to human verification as a genuinely unexercised-but-well-evidenced behavior (D-72-10,
+unchanged — this was never a gap and none of the gap-closure plans targeted it).
 
 ### Roadmap Goal Assessment
 
 The goal names five field categories by name: "mobile, LinkedIn, seniority, persona,
-city/state/country." Four of five are proven landing on a CREATED contact via the cloud ingest
-lane, in the phase's own live gate (mobile, seniority, persona, city/state/country + ISO codes).
-**LinkedIn is the one category that does not fully land**: `hs_linkedin_url` (native) lands, but
-`lv_linkedin_url` (canonical — the property the rest of the system reads for scoring, dedupe, and
-provenance) does not, on the create path specifically. This was one of the four operator rulings
-that chartered the entire phase (`71-UAT.md` F71-5, ruling (1): "fix the LinkedIn naming
-defect"), and the phase's own end-of-phase gate is what caught it as still broken. Separately, the
-phase's own code review surfaced a real non-clobber hole (CR-01) on a second, real deployed lane
-(`wf_enrichment_local_live.json`) that the live gate never exercised (the gate only exercised the
-cloud ingest + cloud enrichment lanes), and a Phase-46-parity divergence (WR-02) in new code this
-phase added. **The phase goal is not fully achieved as shipped at HEAD.** All three gaps are
-narrow, isolated, and precisely diagnosed — not structural or design failures — but they are
-concrete, reproducible, and none is a matter of interpretation.
+city/state/country." All five now land on a CREATED contact via the cloud ingest lane, live-proven
+in the phase's own gate: mobile (`mobilephone`), LinkedIn (both `lv_linkedin_url` and
+`hs_linkedin_url`, closed by this gap-closure round), seniority, persona (`lv_persona_group`), and
+city/state/country (plus ISO codes where a provider supplied one). SAFE-01 non-clobber is proven
+live on the cloud lane's UPDATE row and is now also structurally sound on the local-live lane
+(closed offline, no live surface applies). The overflow-dedup parity contract (Phase 46's "one
+predicate, three engines" rule) is restored. **The phase goal, as stated in ROADMAP.md, is now
+achieved as shipped at HEAD** for every category the goal names. Two matters remain open, but
+neither is a goal-achievement failure: D-72-10's fallback path is well-evidenced but genuinely
+unexercised against real dual-email data (a data-availability limit of the UAT session, not a code
+defect), and two F72-3 findings are open operator-ruling questions the phase deliberately left
+unresolved (no plan's must-haves takes a position on either).
 
 ### Required Artifacts
 
-All artifacts named across the 8 plans' `must_haves.artifacts` blocks exist at HEAD (verified by
-direct file check). No MISSING, no STUB (spot-checked content against plan descriptions;
-substantive implementations found).
+All artifacts named across the 8 original plans' `must_haves.artifacts` blocks, plus the 4
+gap-closure plans' artifacts (`CANDIDATE_ALIASES` in `scripts/build_cloud_workflows.py`, the
+widened `HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR`, the case-folded dedup loops in both JS
+merge engines), exist at HEAD and are substantive (verified by direct file/line read, not SUMMARY
+narration).
 
 ### Key Link Verification
 
 | From | To | Via | Status |
 |---|---|---|---|
-| `config/column_mapping.yaml` | `n8n/code/columnMap.js` | Byte-parity test (green node suite) | ✓ WIRED |
-| `config/field_policy.yaml` | `n8n/code/mergeContacts.js` `DEFAULT_CONTACT_POLICY` | `test_field_policy_conformance.py::test_key_sets_are_identical` (green) | ✓ WIRED |
-| `ADAPT_SEARCH_RESULTS` (cloud) | `MERGE_CONTACTS`'s `existingRecord` | Confirmed `row.existingRecord \|\| {}` at merge call site | ✓ WIRED |
-| `HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR` (local-live) | `ENRICH_MERGE`'s `existingRecord` | Confirmed by direct read: fetch lists NOT widened for lv_phone_2/lv_mobilephone_2/state/hs_state_code/phone | ✗ NOT WIRED — CR-01 |
-| `preingest.merge_enriched`'s `PROVIDER_KEY_ALIASES` | ingest lane's `row.linkedin_url` read | Wired on the Python side; breaks at the JS `confidenceByField` consumer | ⚠️ PARTIAL — D-72-04 |
-| `config/source_registry.yaml` trust_rank | slot routing (`_2` overflow) in all 3 merge engines | Case-sensitivity diverges between JS pair and Python oracle | ⚠️ PARTIAL — WR-02 |
-| `scripts/build_cloud_workflows.py` | all 8 `n8n/wf_*.json` | Re-ran generator from clean tree — zero git diff | ✓ WIRED |
+| `preingest.merge_enriched`'s `PROVIDER_KEY_ALIASES` | `MERGE_CONTACTS`'s `CANDIDATE_ALIASES` | Both sides now share the same rename vocabulary; regression fixture uses the real pre-alias key | ✓ WIRED (was ⚠️ PARTIAL) |
+| `HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR` (local-live) | `ENRICH_MERGE`'s `existingRecord` | Fetch lists now widened to match cloud siblings | ✓ WIRED (was ✗ NOT WIRED) |
+| `config/source_registry.yaml` trust_rank | slot routing (`_2` overflow) in all 3 merge engines | Case-folding now identical across JS pair and Python oracle | ✓ WIRED (was ⚠️ PARTIAL) |
+| `scripts/build_cloud_workflows.py` | all 8 `n8n/wf_*.json` | Re-ran generator from clean tree — zero git diff | ✓ WIRED (unchanged) |
 
 ### Behavioral Spot-Checks
 
-Full pytest suite: **4947 passed, 154 skipped, 0 failed.** Full node suite: **1167 passed, 0
-failed.** Both match the stated baseline exactly — and both stayed green through every gap found
-here, confirming none is caught by the existing regression suite (consistent with `72-REVIEW.md`'s
-own statement). `scripts/build_cloud_workflows.py` re-run from a clean checkout produced zero diff
-against the 5 committed cloud workflow JSONs. `scripts/todo_triage.py --check` exits 0.
+Full pytest suite: **4948 passed, 154 skipped, 0 failed.** Full node suite: **1170 passed, 0
+failed.** Both exceed the prior baseline by exactly the number of new regression tests the
+gap-closure plans added (1 python, 3 node), with zero failures anywhere in either suite. All three
+gap-specific named tests re-run individually above and pass. `scripts/build_cloud_workflows.py`
+re-run from a clean checkout produced zero diff against all 8 committed workflow JSONs.
+`scripts/todo_triage.py --check` exits 0.
 
 ### Probe Execution
 
-No `scripts/*/tests/probe-*.sh` convention used by this phase; the phase's equivalent live-check
-mechanism is the D-72-17/D-72-21 UAT gate (`72-UAT.md`), reviewed above as primary live evidence
-rather than re-run (re-running would require live HubSpot/n8n writes, prohibited here and by the
-phase's own "exactly one record" gate discipline).
+No `scripts/*/tests/probe-*.sh` convention used by this phase. `72-UAT.md` Test 3 is the phase's
+live-check mechanism for gap 1 (the only gap requiring a live proof); reviewed above as primary
+live evidence, not re-run (re-running would require a second live HubSpot/n8n write, which the
+phase's own "exactly one record" gate discipline reserves for the operator, not the verifier).
 
 ### Requirements Coverage
 
-No REQUIREMENTS.md rows map to Phase 72, by design. All 23 D-72-NN decisions (22 scorable,
-D-72-18 superseded) are accounted for in the Decision-by-Decision table above.
+No REQUIREMENTS.md rows map to Phase 72, by design (confirmed by direct grep, exit 1 / no match).
+All 23 D-72-NN decisions (22 scorable, D-72-18 superseded) are accounted for above.
 
 ### Anti-Patterns Found
 
-No unresolved `TBD`/`FIXME`/`XXX` debt markers in any of the 11 core implementation files
-scanned (one false-positive hit in `src/merge_policy.py` for the literal string `\uXXXX`
-describing a JSON escape format). No stub patterns found in the merge engines or ingest lane
-candidate assembly. No `<verify><human-check>` blocks found in any of the 8 plans
-(`grep -l "human-check" .planning/phases/72-*/72-0*-PLAN.md` returns nothing) — no planner-deferred
-human checks to harvest beyond what F72-3 and D-72-10 already surface from the UAT.
+No new `TBD`/`FIXME`/`XXX` debt markers introduced by the gap-closure plans in any modified file.
+No stub patterns in the fixed code (`CANDIDATE_ALIASES`, the widened fetch constants, the
+case-folded dedup loops are all substantive, tested implementations). `scripts/todo_triage.py
+--check` confirms all standing todos (2 question, 2 design, 2 minor-defect) are pre-existing,
+correctly triaged, and none newly introduced by this gap-closure round.
 
 ### Human Verification Required
 
-1. **D-72-10 second-email path** — genuinely unexercised against real dual-email data (see
-   frontmatter).
-2. **F72-3 item 1** — is `mobilephone` duplicating an existing `phone` value acceptable?
-3. **F72-3 item 2** — should a matched UPDATE row's CSV identity corrections ever apply?
+1. **D-72-10 second-email path** — still genuinely unexercised against real dual-email data (see
+   frontmatter). Unchanged since the prior verification; not a gap, not newly introduced.
+2. **F72-3 item 1** — is `mobilephone` duplicating an existing `phone` value acceptable? Unchanged
+   since the prior verification; this gap-closure round's scope did not include it.
+3. **F72-3 item 2** — should a matched UPDATE row's CSV identity corrections ever apply? Unchanged
+   since the prior verification; same reason as item 2 above.
+
+These three items are why this re-verification's status is `human_needed` rather than `passed`:
+per the decision tree, a non-empty human-verification section routes to `human_needed` regardless
+of how many must-haves are cleanly verified. All three items were already present and already
+routed to human verification in the prior `gaps_found` report — none is new, and none blocks the
+roadmap goal's field-landing claim, which is now fully met. They are standing open questions the
+phase has always carried, now the only thing left between this phase and a clean `passed`.
 
 ## Gaps Summary
 
-Three real, precisely-diagnosed gaps, all independently re-derived by direct code read in this
-verification (not taken on any prior report's word alone):
+**Zero gaps remaining.** All three gaps from the prior verification are closed:
 
-1. **D-72-04/D-72-17 (LinkedIn dual-write incomplete on CREATE).** A key-vocabulary mismatch
-   between `source_by_field`'s post-alias name and the merge candidate's own key in
-   `MERGE_CONTACTS` (`scripts/build_cloud_workflows.py`) silently withholds `lv_linkedin_url` on
-   every newly-created contact. Caught by the phase's own live gate, not by the regression suite.
-2. **D-72-01/D-72-06 (CR-01 — non-clobber hole on the local-live enrichment lane).** Two fetch-list
-   constants (`HS_SEARCH_BODY_EXPR`, `HS_CO_SEARCH_BODY_EXPR`) were not widened alongside their
-   cloud-lane siblings, so `wf_enrichment_local_live.json` — a real, deployed workflow — can
-   silently overwrite real phone/state/overflow values it never fetched to check. Caught by the
-   phase's own code review, not by the live gate (which never exercised this lane) or the
-   regression suite.
-3. **D-72-09 (WR-02 — overflow-dedup case-sensitivity parity drift).** The two JS merge engines
-   dedupe overflow candidates case-sensitively; the Python oracle does so case-insensitively,
-   breaking the Phase 46 "one predicate, three engines" contract for this one new predicate. Low
-   real-world likelihood for phone fields specifically, untested by either suite either way.
+1. **D-72-04/D-72-17 (LinkedIn dual-write on CREATE)** — closed by `CANDIDATE_ALIASES`
+   (`scripts/build_cloud_workflows.py`), live-proven on contact `352522004980` / execution `12414`.
+2. **D-72-01/D-72-06 (CR-01 — local-live non-clobber hole)** — closed by widening
+   `HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR`; no live surface applies to this lane.
+3. **D-72-09 (WR-02 — overflow-dedup case parity)** — closed by folding case in both JS merge
+   engines to match the already-conformant Python oracle.
 
-All three are small, localized, and each ships with a worked fix in `72-REVIEW.md` — this is
-gap-closure-plan-sized work, not a phase re-plan. Everything else the phase's five named field
-categories promise (mobile, seniority, persona, city/state/country, and LinkedIn's native-property
-half) is proven landing live on both a CREATE and an UPDATE row via the cloud lane, with SAFE-01
-non-clobber also proven live on that lane's UPDATE row. Two additional items are recorded as open
-operator decisions (F72-3) rather than gaps, since no plan's must-haves asserts a specific
-behavior for either. The phase is close to its goal but did not fully achieve it as shipped.
+No regressions were introduced by the fixes (full suite green, +4 new regression tests, zero-diff
+regeneration). The roadmap goal — every one of the five named field categories reaching a created
+HubSpot contact — is now fully achieved as shipped at HEAD. The only reason this report is not
+`passed` is three pre-existing, unchanged human-verification items (one genuinely-unexercised
+design decision, two open operator-ruling questions) that were already flagged in the prior report
+and that this gap-closure round correctly left untouched, since none was in its scope.
 
 ---
 
-_Verified: 2026-09-12T14:34:52Z_
+_Verified: 2026-09-12T22:38:10Z_
 _Verifier: Claude (gsd-verifier)_
