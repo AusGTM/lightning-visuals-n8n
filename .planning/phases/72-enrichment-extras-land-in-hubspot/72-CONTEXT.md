@@ -136,6 +136,21 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
   A workflow whose regenerated JSON is byte-identical is not redeployed. Rollback bundle = the last
   pre-72 commit. Nothing armed before the gate; the D-72-17 armed send stays one record.
 
+- **D-72-22: Provider-sourced ingest fields carry provider-grade confidence (execution-time
+  ruling, 2026-09-12, raised by plan 01's tracer as a blocking-human decision).** The ingest lane
+  calls `mergeContacts(..., { source: "csv", confidence: 80 })` flat, while `mobilephone` and
+  `lv_linkedin_url` are `fill_blank_only` at `min_confidence: 85` — so a CSV-carried mobile ALWAYS
+  answered `needs_review`, even into a blank field on a `net_new` row, and never reached the
+  `HubSpot Create` body (verified live in-session). Ruling: `MERGE_CONTACTS`
+  (`scripts/build_cloud_workflows.py`) derives `confidenceByField[f] = 85` (the waterfall's own
+  grade) for every field whose `row.source_by_field[f]` names a provider; a field resolving to
+  `csv`, or absent from the map, keeps the flat 80. No `min_confidence` moves (SAFE-01 intact);
+  an operator-typed guess stays as untrusted as before. Plan 03's truthful `source_by_field`
+  population makes this reachable on the enrich-before-ingest path; plan 04's recency gate keys
+  off the same map. Rejected: flat 80→85 (erases the csv<waterfall trust gap), a
+  `mobilephone`-only override (no principle; LinkedIn hits the same wall in plan 02),
+  retargeting the tracer to the merge decision (plan's must-have goes unmet).
+
 ### Claude's Discretion
 - Exact parity-test shape for the YAML/JS/policy three-way list (extend
   `tests/n8n/columnMapIdentityParity.test.mjs`'s idiom or a new test).
