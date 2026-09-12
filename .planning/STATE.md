@@ -830,6 +830,8 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 
 ### Roadmap Evolution
 
+- Phase 72 added (2026-09-12): Enrichment extras land in HubSpot — from the four operator rulings at the D-71-06 gate (F71-5); depends on Phase 71
+
 - **Phase 71 added 2026-09-11: A held new person lands in HubSpot with one reply.** Operator
   ruling after quick batch `260911-w6n` closed 4/4 yet left the F2 headline false end to end
   (`known_company_domains` never seeded; positional `row_id`). Three consecutive quick batches

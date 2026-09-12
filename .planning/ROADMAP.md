@@ -391,3 +391,34 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 71-03-PLAN.md — todo triage, plugin 0.48.0 release, and the single end-of-phase D-71-06 live gate (wave 3)
+
+### Phase 72: Enrichment extras land in HubSpot
+
+**Goal:** every field the waterfall finds and the operator paid for reaches the HubSpot contact it
+was found for — mobile, LinkedIn, seniority, persona, city/state/country — instead of being dropped
+at the ingest dispatch boundary (`preingest.strip_enrichment_extras`, `extraction.canonical_props()`'s
+8-header set). Four operator rulings (2026-09-12, at the D-71-06 gate, recorded in `71-UAT.md` and
+`.planning/todos/pending/2026-09-12-ingest-lane-drops-paid-for-enrichment-extras-map-them-instead.md`):
+(1) fix the `lv_linkedin_url` / `linkedin_url` naming defect (no `linkedin_url` contact property
+exists; `hs_linkedin_url` does); (2) map extras onto HubSpot properties at the boundary, never drop;
+(3) conflicts resolve with a RECENCY bias — newer observation wins — replacing blanket
+fill-not-overwrite; (4) multiple email / phone / mobilephone values are acceptable
+(`hs_additional_emails`, `work_email`, `mobilephone`, `hs_whatsapp_phone_number`). Live evidence:
+Busteed `352422766048` landed with email+phone+title only while his held row carried a mobile and
+a LinkedIn URL (F71-5).
+
+**Touches:** `config/column_mapping.yaml` + `n8n/code/columnMap.js` (YAML/JS parity), the ingest
+lane's contact property assembly in `scripts/build_cloud_workflows.py` (regenerate + deploy + bounce),
+`preingest.merge_enriched`'s conflict rule, `config/field_policy.yaml`, HubSpot custom properties
+(live-only validation). §13.0.1 (server-side association), SAFE-01..05 unchanged.
+
+**Gate:** end-of-phase live UAT re-running one held new person and confirming the mapped fields
+on the created contact; nothing armed before it.
+
+**Requirements**: TBD
+**Depends on:** Phase 71
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 72 to break down)
