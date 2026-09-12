@@ -3418,14 +3418,15 @@ gate.**
    in that gate), and no contradicting live evidence was observed.
 3. **G3 (WR-02, plan 72-11).** The overflow-slot dedup key (deciding whether a runner-up
    `phone`/`mobilephone` candidate duplicates the value already in the `_2` slot) compared raw
-   strings, so `Jane@Example.com` and `jane@example.com`-shaped case differences on an otherwise
-   agreeing candidate would both get a slot instead of deduping to one. Both JS merge engines
+   strings, so a mixed-case agreeing candidate — e.g. `+61 2 9663 8460 EXT 12` vs
+   `+61 2 9663 8460 ext 12`, differing only in the `EXT`/`ext` casing — would manufacture an
+   unwanted `lv_phone_2` slot instead of deduping to one. Both JS merge engines
    (`n8n/code/mergeContacts.js`, `n8n/code/mergeCompanies.js`) now fold case
    (`String(...).toLowerCase()`) before comparing, matching `src/merge_policy.py`'s pre-existing
-   `route_overflow`/`has_conflict()` convention. Proven offline with a mixed-case agreeing-candidates
-   fixture pinned in both JS suites and the Python oracle; not separately re-exercised live by
-   plan 72-12 (the gate's single CREATE returned no runner-up candidate), and no contradicting live
-   evidence was observed.
+   `route_overflow`/`has_conflict()` convention. Proven offline with that exact mixed-case
+   agreeing-candidates fixture pinned in both JS suites (`tests/n8n/overflowSlots.test.mjs`) and
+   the Python oracle; not separately re-exercised live by plan 72-12 (the gate's single CREATE
+   returned no runner-up candidate), and no contradicting live evidence was observed.
 
 ## 17.3 Minimal PATCH example
 

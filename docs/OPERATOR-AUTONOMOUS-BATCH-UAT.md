@@ -552,3 +552,14 @@ Task 2. Three things worth knowing before a repeat run:
   closed.
 - **Step 6 is a no-op if the waterfall finds no second email**, which is what happened for
   both rows in this run — record NOT OBSERVED, not a pass, when that happens again.
+
+### Run outcome, 2026-09-13 (plan 72-12 Task 2/3) — F72-1 closed on a repeat run
+
+The gap-closure fix (plan 72-09) was regenerated, deployed and bounced disarmed across the
+four changed cloud workflows, then step 3 was repeated: one armed CREATE against a fresh
+absent Jimmy Busteed row (contact `352522004980`, n8n execution `12414`). Step 4's assertion
+now **passes**: both `hs_linkedin_url` and `lv_linkedin_url` landed as the identical full URL
+`http://www.linkedin.com/in/jimmybusteed`, provenance source `waterfall`/confidence 85 (not
+`csv`). Full record: `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md` Test 3.
+**F72-1 is closed** — the "gap-closure pending" note above no longer describes the deployed
+behavior on the CREATE path; a future run of this gate should expect the assertion to pass.
