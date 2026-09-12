@@ -17,7 +17,7 @@ affects: ["72-08 (deploy/bounce scope for this phase's ingest lane; these compan
 actuals:
   tokens: 554914
   tasks: 3
-  commits: 6
+  commits: 5
   # measured as chars/4 over `git diff 9091f706..HEAD` (9091f706 = last commit before this
   # plan's Task 1). Same measurement-artifact caveat plan 05's SUMMARY recorded: n8n stores
   # each Code node's jsCode as one JSON string with escaped \n, so a single-character change
