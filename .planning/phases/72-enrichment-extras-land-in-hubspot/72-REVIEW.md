@@ -1,272 +1,126 @@
 ---
 phase: 72-enrichment-extras-land-in-hubspot
-reviewed: 2026-09-13T00:00:00Z
+reviewed: 2026-09-12T22:34:29Z
 depth: standard
-files_reviewed: 33
+files_reviewed: 9
 files_reviewed_list:
-  - CLAUDE.md
-  - config/column_mapping.yaml
-  - config/field_policy.yaml
-  - config/hubspot_properties.yaml
-  - docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md
-  - n8n/code/columnMap.js
-  - n8n/code/mergeCompanies.js
-  - n8n/code/mergeContacts.js
-  - n8n/code/normalizeProviders.js
-  - operator-claude-plugin/.claude-plugin/plugin.json
-  - operator-claude-plugin/CHANGELOG.md
-  - operator-claude-plugin/config/column_mapping.yaml
-  - operator-claude-plugin/config/field_policy.yaml
-  - operator-claude-plugin/scripts/held_queue.py
-  - operator-claude-plugin/scripts/preingest.py
-  - operator-claude-plugin/scripts/suggestion_declines.py
-  - operator-claude-plugin/skills/contact-upload/extraction.md
-  - operator-claude-plugin/skills/enrich-before-ingest/SKILL.md
-  - operator-claude-plugin/skills/review-triage/SKILL.md
-  - operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py
-  - operator-claude-plugin/tests/test_extraction_handoff.py
-  - operator-claude-plugin/tests/test_held_queue.py
-  - operator-claude-plugin/tests/test_preingest_merge.py
-  - operator-claude-plugin/tests/test_preview_rendering.py
-  - operator-claude-plugin/tests/test_skill_sequence_coverage.py
   - scripts/build_cloud_workflows.py
-  - scripts/deploy_n8n_workflows.py
-  - src/merge_policy.py
-  - tests/n8n/*.test.mjs (the Phase 72 additions/changes listed in the task)
-  - tests/test_fetch_by_id_topology.py
-  - tests/test_hubspot_properties_config.py
-  - tests/test_merge_helpers.py
+  - n8n/code/mergeContacts.js
+  - n8n/code/mergeCompanies.js
+  - tests/n8n/ingestWidenedFieldsFlow.test.mjs
+  - tests/n8n/fieldProducerMatrix.test.mjs
+  - tests/n8n/overflowSlots.test.mjs
   - tests/test_merge_policy.py
+  - tests/fixtures/companies_jscode_frozen.json
+  - CLAUDE.md
+  - docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md
 findings:
-  critical: 1
-  warning: 2
+  critical: 0
+  warning: 0
   info: 0
-  total: 3
-status: issues_found
+  total: 0
+status: clean
 ---
 
-# Phase 72: Code Review Report
+# Phase 72: Code Review Report (gap-closure batch — incremental review since `b06dfbb9`)
 
-**Reviewed:** 2026-09-13
+**Reviewed:** 2026-09-12T22:34:29Z
 **Depth:** standard
-**Files Reviewed:** 33 (per `required_reading`; diffs taken against `90252e8873d121bf41ae7fd677cfadc83b87ab88^`)
-**Status:** issues_found
+**Files Reviewed:** 10 (9 diffed source/test files + 2 docs, `companies_jscode_frozen.json` counted once)
+**Status:** clean
 
 ## Summary
 
-Phase 72 widens the contact-ingest lane and the two enrichment merge lanes (contacts,
-companies) to carry several new fields (mobilephone, geo, seniority, persona,
-hs_linkedin_url, and overflow-slot phone/mobilephone runner-ups), and adds a
-recency/TTL gate plus a system-correctable-arm to all three merge engines
-(`n8n/code/mergeContacts.js`, `n8n/code/mergeCompanies.js`, `src/merge_policy.py`).
-The three-engine parity (the "Phase 46 rule") is respected almost everywhere I traced
-it — the recency gate, the `_isSystemCorrectable` four-conjunct test, and the
-`_overflowSlot` closed map are byte-identical in shape across all three files.
+This is an incremental review of the gap-closure batch (plans 72-09/10/11/12) that closed the
+prior review's three findings (CR-01, WR-01, WR-02). I traced each fix independently rather than
+trusting the plan/summary prose — reading the actual diffs, re-deriving the field sets the fixes
+claim to cover from `config/field_policy.yaml` and `config/column_mapping.yaml`, regenerating
+`n8n/wf_*.json` from the committed generator to confirm no hand-edits, and running both the full
+`node --test tests/n8n/*.test.mjs` suite (1170/1170 pass) and the relevant Python suites
+(`test_merge_policy.py` 38/38, `test_preingest_merge.py` 87/87). All three fixes hold up; no new
+defects found in the diff.
 
-Two real gaps survived to this diff, both in the class of defect this very codebase's
-own comments repeatedly warn about ("an existingRecord that never fetches a field
-reads it as blank, and the non-clobber guard silently becomes a permit to
-overwrite"): the CLOUD lane's two existing-record fetch lists were widened correctly
-for every new Phase 72 field, but the LOCAL-LIVE lane's two sibling fetch constants
-were not — see CR-01. A second, already-known defect (F72-1, confirmed independently
-here) leaves the LinkedIn fields' provider-grade confidence override silently inert on
-CREATE in the contact-upload lane — see WR-01. A third finding (WR-02) is a genuine,
-currently-untested Phase-46-parity divergence in the brand-new overflow-slot dedup
-logic. All 1167 `node --test tests/n8n/*.test.mjs` and 4947 `pytest` tests pass; none
-of the three findings below is caught by the existing suite.
+## Prior findings — disposition
 
-## Critical Issues
+### CR-01 (local-live fetch lists missing overflow/protect fields) — FIXED, commit `455b0173`
 
-### CR-01: Phase 72's new merge candidates are un-fetched (and therefore un-protected) on the local-live enrichment workflow
+`HS_SEARCH_BODY_EXPR` and `HS_CO_SEARCH_BODY_EXPR` (used only inside
+`build_enrichment_local_live()` — confirmed by line-range check, not just by comment claim) are
+widened to `lv_phone_2`/`lv_mobilephone_2` (contacts) and `lv_phone_2`/`state`/`hs_state_code`/
+`phone` (companies), matching the cloud lane's already-widened
+`ENRICH_CONTACT_SEARCH_PROPERTIES_CSV`/`ENRICH_COMPANY_SEARCH_PROPERTIES_CSV`. Verified this is
+scoped to the local-live lane only (both constants have exactly one definition site each, and
+that site sits inside the local-live builder function's line range) — no accidental change to a
+cloud lane. The new regression test `fieldProducerMatrix.test.mjs`'s "non-clobber fetch gate
+(CR-01)" assertion structurally checks, across every generated workflow file, that every
+`protect_if_current_present` policy field is present in its lane's live HubSpot search node — and
+passes against the regenerated JSON (`node --test tests/n8n/fieldProducerMatrix.test.mjs`: 9/9).
+This closes the bug by a standing guard, not just a one-off patch.
 
-**File:** `scripts/build_cloud_workflows.py:2866-2871` (`HS_SEARCH_BODY_EXPR`, contacts) and `scripts/build_cloud_workflows.py:3010-3029` (`HS_CO_SEARCH_BODY_EXPR`, companies)
+### WR-01 / F72-1 (LinkedIn PN-1 rename vocabulary mismatch, silently withheld dual-write) — FIXED, commit `0f7c8c08`
 
-**Issue:** `build_enrichment_local_live()` (which emits `wf_enrichment_local_live.json`,
-a real, deployed/credential-bound workflow — see `deploy_n8n_workflows.py`'s
-`NODE_CREDENTIAL_MAP` and the CLAUDE.md §13.0.2 deployment tables that track its node
-count through every phase) fetches the matched record's existing properties for its
-non-clobber gate through two hand-maintained constants, `HS_SEARCH_BODY_EXPR`
-(contacts) and `HS_CO_SEARCH_BODY_EXPR` (companies). Both constants have a sibling
-used by the real cloud lane — `ENRICH_CONTACT_SEARCH_PROPERTIES_CSV` and
-`ENRICH_COMPANY_SEARCH_PROPERTIES_CSV` respectively — and Phase 72 widened *only* the
-cloud siblings:
+`CANDIDATE_ALIASES = { linkedin_url: ["lv_linkedin_url", "hs_linkedin_url"] }` is declared once
+inside `MERGE_CONTACTS` and read by both the `confidenceByField`/`sourceByField` derivation loop
+and the candidate-builder block, closing the vocabulary mismatch between
+`preingest.py`'s `PROVIDER_KEY_ALIASES` (which renames a provider's `lv_linkedin_url` response key
+onto the CSV's bare `linkedin_url` before it lands in `source_by_field`) and the write-side keys
+the merge candidate actually uses. I independently re-derived `promotable_contact_props() -
+canonical_props()` in a live Python shell against the current config files and got exactly
+`{hs_linkedin_url, lv_linkedin_url}` — matching the doc comment's claim that this is the *only*
+pair of candidate keys with this rename problem, i.e. `CANDIDATE_ALIASES` is not missing any other
+entry the review was asked to hunt for. The alias-write guard (`sourceByField[target] == null`)
+correctly never clobbers a caller-supplied entry already present under the target key. This fix
+also has a live observation: contact `352522004980` / execution `12414` landed both keys with
+provenance `waterfall`/confidence 85 (`72-UAT.md` Test 3), matching CLAUDE.md's and
+`OPERATOR-AUTONOMOUS-BATCH-UAT.md`'s claims — no overclaim found in either doc against the UAT
+evidence.
 
-- `ENRICH_COMPANY_SEARCH_PROPERTIES_CSV` (companies, cloud) gained `lv_phone_2` (Plan
-  05) and `state,hs_state_code,phone` (Plan 06), each with an explicit comment citing
-  the exact non-clobber defect class being avoided. `HS_CO_SEARCH_BODY_EXPR`
-  (companies, local-live) gained neither — its property list still ends at
-  `"lv_sponsorship_reliant"` (confirmed by inspecting the generated
-  `n8n/wf_enrichment_local_live.json`'s "HubSpot Company Search" node, which lists
-  23 properties and none of `phone`/`state`/`hs_state_code`/`lv_phone_2`).
-- `ENRICH_CONTACT_SEARCH_PROPERTIES_CSV` (contacts, cloud) gained `lv_phone_2` and
-  `lv_mobilephone_2` (Plan 05). `HS_SEARCH_BODY_EXPR` (contacts, local-live) gained
-  only `hs_linkedin_url` (Plan 02) — it still omits both overflow slots.
+### WR-02 (overflow-slot dedup case sensitivity) — FIXED, commit `e2ea2653`
 
-Both lanes' merge call site (`ENRICH_MERGE` for contacts, `ENRICH_MERGE_CO` for
-companies) is a *single shared constant* used by both `build_enrichment_local_live()`
-and `build_cloud()` (confirmed: `code_node("Merge Winners", ENRICH_MERGE, ...)` at
-lines 4829 and 6969; `code_node("Merge Company", ENRICH_MERGE_CO, ...)` at lines 4929
-and 7250), and that shared code now unconditionally offers `state`/`hs_state_code`/
-`phone` (companies) and `lv_phone_2`/`lv_mobilephone_2` (both objects) as merge
-candidates. Every one of these fields is `fill_blank_only` with
-`protect_if_current_present: true` in `config/field_policy.yaml`. Because
-`mergeCompanies.js`/`mergeContacts.js` read `currentValue = existingProps[field]`, and
-the local-live lane's `existingProps` never carries these keys, `currentValue` is
-always `undefined` — `_isBlank(undefined)` is `true` — so the gate always treats the
-field as blank and promotes the provider candidate, even when the HubSpot record
-already holds a real, human-entered phone number, state, or overflow value. This is
-the exact "WR-01/58-05/VETO-01" defect class the surrounding comments in this same
-file were written to prevent, reintroduced for the local-live lane by omission in this
-phase.
+Both `mergeContacts.js` and `mergeCompanies.js` now `.toLowerCase()` both sides of the
+overflow-dedup comparison. I diffed the two loops byte-for-byte post-fix: identical apart from the
+field-specific `_overflowSlot("companies"/"contacts", field)` call already documented as the only
+intentional divergence — Phase 46 parity holds. `src/merge_policy.py`'s `route_overflow` was
+checked and confirmed already case-insensitive before this change (`key =
+str(c.normalized_value).lower()`), so the new pinning test in `test_merge_policy.py` is
+legitimately a parity-lock, not silently masking a still-open Python-side gap. The frozen fixture
+re-baseline (`companies_jscode_frozen.json`) was diffed at the JSON-value level (not just line
+count): only the `Merge Company` entry changed in both the `cloud` and `local_live` top-level
+sections, and within that entry only the two dedup lines plus their adjoining comment changed —
+no unrelated re-baseline slipped in.
 
-**Fix:** Widen `HS_SEARCH_BODY_EXPR` to add `"lv_phone_2","lv_mobilephone_2"`, and
-widen `HS_CO_SEARCH_BODY_EXPR` to add `"lv_phone_2","state","hs_state_code","phone"`
-— mirroring exactly what Plans 05/06 already did to
-`ENRICH_CONTACT_SEARCH_PROPERTIES_CSV`/`ENRICH_COMPANY_SEARCH_PROPERTIES_CSV`. Example
-for the companies constant:
+## New findings (this diff)
 
-```python
-HS_CO_SEARCH_BODY_EXPR = (
-    '={{ JSON.stringify({ filterGroups: [ { filters: '
-    '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
-    'properties: ["name","domain","industry","annualrevenue","numberofemployees",'
-    '"lv_org_type","lv_produces_content","lv_content_type","lv_is_hardware_vendor",'
-    '"lv_is_gambling_operator","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
-    '"lv_enrichment_provenance",'
-    '"lv_org_type_verified_at","lv_produces_content_verified_at","lusha_company_id",'
-    '"num_associated_contacts",'
-    '"lv_revenue_band","lv_employee_band","lv_country_region_normalized","country","city",'
-    '"lv_sponsorship_reliant","lv_phone_2","state","hs_state_code","phone"], '
-    'limit: 5 }) }}'
-)
-```
+None. Specifically checked and found clean:
 
-After the fix, regenerate the workflows (`scripts/build_cloud_workflows.py`) and add
-these five field names to `tests/n8n/fieldProducerMatrix.test.mjs`'s fetch-gate
-assertion (or a new assertion) so a `NEVER_CHASE` (write-map-only, non-REQUIRED) field
-is still checked for presence in *every* lane's existing-record fetch, not only the
-REQUIRED-driven WR-03 check — this is precisely the kind of drift WR-03 does not catch
-today, since these fields are deliberately excluded from `REQUIRED`.
+- **Other candidate keys renamed away from their `source_by_field` name that `CANDIDATE_ALIASES`
+  does not cover** — none exist. `promotable_contact_props() - canonical_props()` is exactly the
+  two keys the map already handles.
+- **`_isProviderSource`/`sourceByField` aliasing consistency** — `_isProviderSource` tests the
+  *value* of `resolvedSource` (a provider name), which is orthogonal to `CANDIDATE_ALIASES`
+  (which maps *field names*); the alias loop sets `confidenceByField` and `sourceByField` for a
+  target key in the same iteration, so a target field's `_isProviderSource` check sees the same
+  provider name its source field would have. No divergence.
+- **Parity drift between the two JS dedup loops** — none; verified byte-identical apart from the
+  documented, pre-existing `_overflowSlot(objectType, ...)` argument difference.
+- **Frozen fixture re-baseline scope** — confirmed narrow (see WR-02 disposition above).
+- **`HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR` widening leaking into a cloud lane** — confirmed
+  it does not; both constants are defined and used exclusively inside
+  `build_enrichment_local_live()`.
 
-## Warnings
+## Verification performed
 
-### WR-01: LinkedIn candidates never receive their provider-grade confidence on the contact-upload CREATE path (known defect F72-1)
-
-**File:** `scripts/build_cloud_workflows.py:479-494` (`MERGE_CONTACTS`)
-
-**Issue:** The `confidenceByField` map is built by iterating the keys of
-`row.source_by_field`:
-
-```js
-const sourceByField = row.source_by_field || {};
-const confidenceByField = {};
-for (const f of Object.keys(sourceByField)) {
-  if (sourceByField[f] && sourceByField[f] !== "csv") confidenceByField[f] = 85;
-}
-```
-
-`row.source_by_field` is populated upstream by
-`operator-claude-plugin/skills/enrich-before-ingest/SKILL.md`'s
-`source_by_field = {field_name: "waterfall" for field_name in
-preingest.provider_sourced_fields(merge_report)}`. `provider_sourced_fields()` reduces
-`MergeResult.answered_fields`, whose keys pass through
-`preingest.py`'s `PROVIDER_KEY_ALIASES = {"lv_linkedin_url": "linkedin_url"}` — i.e.
-the map is deliberately keyed on the CSV's canonical name `"linkedin_url"`, never on
-`"lv_linkedin_url"`.
-
-But a few lines later, `MERGE_CONTACTS` builds the actual merge candidate under the
-*renamed* keys:
-
-```js
-if (row.linkedin_url != null && String(row.linkedin_url).trim() !== "") {
-  candidate.lv_linkedin_url = row.linkedin_url;
-  candidate.hs_linkedin_url = row.linkedin_url;
-}
-```
-
-`mergeContacts()`'s per-field loop iterates `Object.keys(candidateRow)` and looks up
-`confidenceByField[field]` by that same (renamed) key. `confidenceByField["linkedin_url"]`
-was set to `85`, but `confidenceByField["lv_linkedin_url"]` and
-`confidenceByField["hs_linkedin_url"]` are both `undefined`, so the merge falls back to
-the flat `flatConfidence` of `80`. Both `lv_linkedin_url` and `hs_linkedin_url` are
-`fill_blank_only @ min_confidence: 85` — an 80-confidence candidate can never clear
-that bar, even into a completely blank field. Net effect: a LinkedIn URL the waterfall
-found for a brand-new contact never lands in HubSpot via this lane, silently and
-without any error, review flag, or log line — it is simply never promoted.
-
-**Fix:** Build `confidenceByField` from the *post-alias* candidate keys, not from
-`source_by_field`'s raw keys — e.g. apply the same `linkedin_url -> lv_linkedin_url`/
-`hs_linkedin_url` mapping used two lines below when constructing `candidate`, before
-assigning into `confidenceByField`:
-
-```js
-const sourceByField = row.source_by_field || {};
-const confidenceByField = {};
-for (const f of Object.keys(sourceByField)) {
-  if (!sourceByField[f] || sourceByField[f] === "csv") continue;
-  confidenceByField[f] = 85;
-  if (f === "linkedin_url") {
-    confidenceByField.lv_linkedin_url = 85;
-    confidenceByField.hs_linkedin_url = 85;
-  }
-}
-```
-
-### WR-02: Overflow-slot candidate dedup diverges between the JS engines and the Python oracle (untested Phase-46-parity gap)
-
-**File:** `n8n/code/mergeContacts.js:352` / `n8n/code/mergeCompanies.js:380` vs `src/merge_policy.py:188`
-
-**Issue:** The new (Phase 72 Plan 05) overflow-slot routing dedupes candidates with the
-same normalized value before assigning a primary/overflow/tail split, so two providers
-agreeing never manufactures a phantom overflow. The three engines use different
-case-sensitivity for that comparison:
-
-```js
-// mergeContacts.js:352 and mergeCompanies.js:380 (byte-identical in both files)
-const key = String(c.normalizedValue != null ? c.normalizedValue : c.value);
-if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value) === key)) {
-  deduped.push(c);
-}
-```
-
-```python
-# src/merge_policy.py:188 (route_overflow)
-key = str(c.normalized_value).lower()
-if not any(str(d.normalized_value).lower() == key for d in deduped):
-    deduped.append(c)
-```
-
-The JS comparison is case-sensitive; the Python comparison lower-cases both sides
-(explicitly mirroring `has_conflict()`'s own case-insensitive comparison, per its own
-comment). For two candidates whose normalized values differ only in case (e.g. two
-providers returning the same email/URL/text value with different capitalization — for
-phone/mobilephone specifically this is unlikely to bite in practice, since phone
-normalization already reduces to digits, but the dedup helper itself is generic and
-the codebase explicitly treats "the Python oracle" and "the two JS engines" as one
-contract that must never silently diverge — this is the repo's own stated Phase 46
-rule, restated for this feature by both files' comments ("mergeContacts.js's/
-mergeCompanies.js's identical routing")), the JS engines would treat them as two
-distinct candidates (creating a real overflow entry) while the Python oracle would
-treat them as one agreeing candidate (no overflow). Neither `tests/n8n/overflowSlots.test.mjs`
-nor `tests/test_merge_policy.py`'s `test_route_overflow_agreeing_candidates_do_not_manufacture_an_overflow`
-exercises a same-value-different-case pair, so this divergence is currently invisible
-to the test suite.
-
-**Fix:** Make the JS dedup key case-insensitive to match the Python oracle (and
-`has_conflict()`'s own convention in both engines):
-
-```js
-const key = String(c.normalizedValue != null ? c.normalizedValue : c.value).toLowerCase();
-if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value).toLowerCase() === key)) {
-  deduped.push(c);
-}
-```
-
-Add a mixed-case "agreeing candidates" case to `tests/n8n/overflowSlots.test.mjs` and
-the Python test alongside the fix so the parity is pinned, not just restored.
+- `node --test tests/n8n/*.test.mjs` — 1170 pass, 0 fail.
+- `.venv/bin/python -m pytest tests/test_merge_policy.py` — 38 pass.
+- `.venv/bin/python -m pytest operator-claude-plugin/tests/test_preingest_merge.py` — 87 pass.
+- `.venv/bin/python scripts/build_cloud_workflows.py` (regenerate) followed by `git status`/`git
+  diff --stat` — zero diff against the committed `n8n/wf_*.json`, confirming the generated
+  workflows are faithfully reproduced from the reviewed generator source, not hand-edited.
+- Independent Python re-derivation of `promotable_contact_props()`/`canonical_props()` set
+  difference (see WR-01 disposition).
 
 ---
 
-_Reviewed: 2026-09-13_
+_Reviewed: 2026-09-12T22:34:29Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
