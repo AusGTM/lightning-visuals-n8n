@@ -376,7 +376,7 @@ row live. Nothing armed during the phase; SAFE-01..05 unchanged.
 criterion: Jimmy Busteed reads `new_person` on both surfaces and lands with one `create all 1`
 reply. Decisions D-71-01..06 (`71-CONTEXT.md`) are what the plans are verified against.
 **Depends on:** Phase 70; quick batch 260911-w6n (plugin 0.47.0)
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
