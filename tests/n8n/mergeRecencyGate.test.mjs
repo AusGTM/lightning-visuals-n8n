@@ -218,3 +218,102 @@ test("mergeCompanies recency: manual_protected field (domain) is unaffected by t
   );
   assert.equal(result.decisions.find((d) => d.field === "domain").decision, "stage_only");
 });
+
+// --- Task 2: the pipeline's own provider-written value becomes correctable -----------
+//
+// A stale_refreshable field whose provenance entry names a real provider, still equal
+// to the current value, on a conflict-free row, at/above the field's min_confidence,
+// is replaceable EVEN WHEN NOT PAST ITS TTL — the same four §17.2.1 conjuncts
+// `companies.domain`'s `create_seed` clause already uses, generalized (D-72-08).
+
+function provenanceEntry(overrides) {
+  return { source: "apollo", confidence: 85, verified_at: "2026-01-01T00:00:00.000Z",
+           validation_status: "provider_only", value: "Old Title", ...overrides };
+}
+
+test("mergeContacts system-correctable: provenance names a provider, value still matches, no conflict -> promote even though NOT past TTL", () => {
+  const result = mergeContacts(
+    { jobtitle: "Old Title",
+      lv_contact_enrichment_provenance: JSON.stringify({ jobtitle: provenanceEntry() }) },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "zoominfo", confidence: 90, now: NOW, rowConflicted: false,
+      historyByField: { jobtitle: FRESH_30D } } // deliberately FRESH -- TTL alone would refuse
+  );
+  assert.equal(result.decisions.find((d) => d.field === "jobtitle").decision, "promote");
+});
+
+test("mergeContacts system-correctable: provenance value no longer matches current (human retyped) -> does NOT promote", () => {
+  const result = mergeContacts(
+    { jobtitle: "Old Title",
+      lv_contact_enrichment_provenance: JSON.stringify({ jobtitle: provenanceEntry({ value: "Someone Else Retyped This" }) }) },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "zoominfo", confidence: 90, now: NOW, rowConflicted: false,
+      historyByField: { jobtitle: FRESH_30D } }
+  );
+  assert.equal(result.decisions.find((d) => d.field === "jobtitle").decision, "needs_review");
+});
+
+test("mergeContacts system-correctable: rowConflicted true -> does NOT promote", () => {
+  const result = mergeContacts(
+    { jobtitle: "Old Title",
+      lv_contact_enrichment_provenance: JSON.stringify({ jobtitle: provenanceEntry() }) },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "zoominfo", confidence: 90, now: NOW, rowConflicted: true,
+      historyByField: { jobtitle: FRESH_30D } }
+  );
+  assert.equal(result.decisions.find((d) => d.field === "jobtitle").decision, "needs_review");
+});
+
+test("mergeContacts system-correctable: rowConflicted omitted entirely -> does NOT promote (strict === false only)", () => {
+  const result = mergeContacts(
+    { jobtitle: "Old Title",
+      lv_contact_enrichment_provenance: JSON.stringify({ jobtitle: provenanceEntry() }) },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "zoominfo", confidence: 90, now: NOW,
+      historyByField: { jobtitle: FRESH_30D } } // no rowConflicted key at all
+  );
+  assert.equal(result.decisions.find((d) => d.field === "jobtitle").decision, "needs_review");
+});
+
+test("mergeContacts system-correctable: provenance source is human -> does NOT promote", () => {
+  const result = mergeContacts(
+    { jobtitle: "Old Title",
+      lv_contact_enrichment_provenance: JSON.stringify({ jobtitle: provenanceEntry({ source: "human" }) }) },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "zoominfo", confidence: 90, now: NOW, rowConflicted: false,
+      historyByField: { jobtitle: FRESH_30D } }
+  );
+  assert.equal(result.decisions.find((d) => d.field === "jobtitle").decision, "needs_review");
+});
+
+test("mergeCompanies system-correctable: industry provenance names a provider, still matches, no conflict -> promote even though NOT past TTL", () => {
+  const result = mergeCompanies(
+    { industry: "Sports",
+      lv_enrichment_provenance: JSON.stringify({
+        industry: { source: "apollo", confidence: 85, verified_at: "2026-01-01T00:00:00.000Z",
+                    validation_status: "provider_only", value: "Sports" } }) },
+    { industry: "Media Production" },
+    undefined,
+    { source: "zoominfo", confidence: 90, now: NOW, rowConflicted: false,
+      historyByField: { industry: FRESH_100D } }
+  );
+  assert.equal(result.decisions.find((d) => d.field === "industry").decision, "promote");
+});
+
+test("mergeCompanies: domain's create_seed correction under manual_protected is unaffected by this plan (regression)", () => {
+  const result = mergeCompanies(
+    { domain: "seeded.example",
+      lv_enrichment_provenance: JSON.stringify({
+        domain: { source: "create_seed", confidence: 0, verified_at: "2026-01-01T00:00:00.000Z",
+                  validation_status: "request_echo", value: "seeded.example" } }) },
+    { domain: "corrected.example" },
+    undefined,
+    { source: "zoominfo", confidence: 95, now: NOW, rowConflicted: false }
+  );
+  assert.equal(result.decisions.find((d) => d.field === "domain").decision, "promote");
+});

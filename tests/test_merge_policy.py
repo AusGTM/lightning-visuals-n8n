@@ -394,3 +394,75 @@ def test_recency_manual_protected_field_unaffected():
                             {"class": "manual_protected", "min_confidence": 95}, PRIORITY,
                             now=NOW, history_by_field={"domain": STALE_400D})
     assert g["decision"] == "stage_only"
+
+
+# --- Task 2: the pipeline's own provider-written value becomes correctable -----------
+
+CONTACT_JOBTITLE_POLICY = {"class": "stale_refreshable", "min_confidence": 75,
+                            "stale_after_days": 180,
+                            "system_correctable_sources": ["apollo", "lusha", "zoominfo", "claude_web"]}
+INDUSTRY_CORRECTABLE_POLICY = {**INDUSTRY_POLICY,
+                                "system_correctable_sources": ["apollo", "lusha", "zoominfo", "claude_web"]}
+
+
+def sc_provenance_entry(**overrides):
+    entry = {"source": "apollo", "confidence": 85, "verified_at": "2026-01-01T00:00:00+00:00",
+             "validation_status": "provider_only", "value": "Old Title"}
+    entry.update(overrides)
+    return entry
+
+
+def contact_record(blob):
+    props = {"jobtitle": "Old Title"}
+    if blob is not None:
+        props["lv_contact_enrichment_provenance"] = blob
+    return HubSpotRecord(object_type="contacts", id="123", properties=props)
+
+
+def test_sc_contact_provenance_names_provider_value_matches_no_conflict_promotes_even_when_not_past_ttl():
+    # Deliberately FRESH history -- the TTL branch alone would refuse.
+    g = deterministic_gate(
+        contact_record(json.dumps({"jobtitle": sc_provenance_entry()})), "jobtitle", "Old Title",
+        [make_candidate("jobtitle", "zoominfo", "New Title", 90)], CONTACT_JOBTITLE_POLICY, PRIORITY,
+        now=NOW, history_by_field={"jobtitle": FRESH_100D})
+    assert g["decision"] == "promote"
+
+
+def test_sc_contact_provenance_value_no_longer_matches_current_does_not_promote():
+    g = deterministic_gate(
+        contact_record(json.dumps({"jobtitle": sc_provenance_entry(value="Someone Else Retyped This")})),
+        "jobtitle", "Old Title",
+        [make_candidate("jobtitle", "zoominfo", "New Title", 90)], CONTACT_JOBTITLE_POLICY, PRIORITY,
+        now=NOW, history_by_field={"jobtitle": FRESH_100D})
+    assert g["decision"] == "needs_review"
+
+
+def test_sc_contact_provenance_source_human_does_not_promote():
+    g = deterministic_gate(
+        contact_record(json.dumps({"jobtitle": sc_provenance_entry(source="human")})),
+        "jobtitle", "Old Title",
+        [make_candidate("jobtitle", "zoominfo", "New Title", 90)], CONTACT_JOBTITLE_POLICY, PRIORITY,
+        now=NOW, history_by_field={"jobtitle": FRESH_100D})
+    assert g["decision"] == "needs_review"
+
+
+def test_sc_industry_provenance_names_provider_value_matches_no_conflict_promotes_even_when_not_past_ttl():
+    record = HubSpotRecord(object_type="companies", id="789", properties={
+        "industry": "Sports",
+        "lv_enrichment_provenance": json.dumps({
+            "industry": {"source": "apollo", "confidence": 85,
+                         "verified_at": "2026-01-01T00:00:00+00:00",
+                         "validation_status": "provider_only", "value": "Sports"}}),
+    })
+    g = deterministic_gate(record, "industry", "Sports",
+                            [make_candidate("industry", "zoominfo", "Media Production", 90)],
+                            INDUSTRY_CORRECTABLE_POLICY, PRIORITY,
+                            now=NOW, history_by_field={"industry": FRESH_100D})
+    assert g["decision"] == "promote"
+
+
+def test_sc_domain_create_seed_correction_under_manual_protected_is_unaffected_regression():
+    # Regression: the pre-existing companies.domain / manual_protected correction path
+    # (260904-pav) must keep working unchanged after object_type-aware provenance-key
+    # selection lands.
+    assert pav_gate(json.dumps({"domain": pav_entry()}))["decision"] == "promote"
