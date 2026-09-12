@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 71
 status: completed
-stopped_at: Phase 71 complete — all phases complete
-last_updated: "2026-09-12T01:46:23.676Z"
+stopped_at: Phase 72 context gathered — 18 decisions (mapping lane, recency scoped to stale_refreshable TTL, fixed _2 slots, company parity); next /gsd-plan-phase 72
+last_updated: "2026-09-12T02:32:11.066Z"
 last_activity: 2026-09-12
 last_activity_desc: Phase 71 complete
-state_head: cb6ca45c75cf7036052abc5581bd42be97a822b1
+state_head: 665a1499fd8d13187dc32026bf7cde503484059f
 progress:
-  total_phases: 8
-  completed_phases: 3
+  total_phases: 9
+  completed_phases: 2
   total_plans: 37
   completed_plans: 37
-  percent: 38
+  percent: 22
 ---
 
 # Project State
@@ -491,7 +491,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [████░░░░░░] 38% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [██░░░░░░░░] 22% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -500,8 +500,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-12T01:30:45.393Z
-**Stopped at:** Phase 71 complete — all phases complete
+**Last session:** 2026-09-12T02:32:10.762Z
+**Stopped at:** Phase 72 context gathered — 18 decisions (mapping lane, recency scoped to stale_refreshable TTL, fixed _2 slots, company parity); next /gsd-plan-phase 72
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -511,7 +511,7 @@ pre-gate anyWrite check needs to account for gate refusal once the ingest preche
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
 `blocked` (operator could not run a live test) on an earlier phase's UAT; Phase 62 verified
 13/13 but awaiting live UAT.
-**Resume file:** None
+**Resume file:** .planning/phases/72-enrichment-extras-land-in-hubspot/72-CONTEXT.md
 
 ## Performance Metrics
 
