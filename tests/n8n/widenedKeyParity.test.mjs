@@ -55,8 +55,15 @@ function yamlAliasValues() {
 // (lv_linkedin_url -- D-72-19, the naming fork closed inside merge_enriched, not the
 // column map) or exists only as a native-property write mirror with no CSV header of
 // its own (hs_linkedin_url -- D-72-04, always populated from the linkedin_url header
-// alongside lv_linkedin_url, never dispatched under its own name).
-const LANE_SIDE_ONLY_EXEMPTION = new Set(["lv_linkedin_url", "hs_linkedin_url"]);
+// alongside lv_linkedin_url, never dispatched under its own name). lv_phone_2 /
+// lv_mobilephone_2 (Phase 72 Plan 05, D-72-11/D-72-12) join the same exemption for a
+// third reason: they are WRITE-ONLY overflow slots the merge engine's own
+// opts.rankedByField routing populates from a live waterfall disagreement -- no CSV
+// column has ever named a "second phone", and none ever will (D-72-11 forbids a `_3`
+// the same way it forbids a CSV route for these two).
+const LANE_SIDE_ONLY_EXEMPTION = new Set([
+  "lv_linkedin_url", "hs_linkedin_url", "lv_phone_2", "lv_mobilephone_2",
+]);
 
 test("every field_policy.yaml contacts key reachable from a CSV column has a canonical alias target, except the named lane-side-only exemption", () => {
   const policyKeys = new Set(policyContactsKeys());

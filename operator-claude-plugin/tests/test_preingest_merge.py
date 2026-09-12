@@ -359,6 +359,12 @@ def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
         "seniority": 75, "lv_persona_group": 75,
         # Phase 72 Plan 02 (D-72-04): write-only mirror of lv_linkedin_url.
         "hs_linkedin_url": 85,
+        # Phase 72 Plan 05 (D-72-11/D-72-12): the single overflow slots for a second
+        # phone/mobile a live waterfall disagreement supplies, promote_to_canonical:
+        # false (decorative -- see field_policy.yaml's own comment), so
+        # test_promotable_contact_props_... below correctly excludes them without
+        # code changes; only their min_confidence is pinned here.
+        "lv_phone_2": 80, "lv_mobilephone_2": 85,
     }
     assert set(contacts) == set(expected_min_confidence), (
         "the contacts: key set drifted from this plan's own Findings -- update both "

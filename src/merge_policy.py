@@ -123,6 +123,33 @@ def group_candidates(candidates: List[CandidateValue]) -> Dict[str, List[Candida
     return grouped
 
 
+def _overflow_slot(object_type: str, field: str):
+    """Phase 72 Plan 05 (D-72-11/D-72-12): closed map from a primary field to its
+    single overflow slot. JS twin: mergeContacts.js's/mergeCompanies.js's shared
+    _overflowSlot(objectType, field) -- same map, same absence-means-no-overflow rule.
+    A field absent from its object type's map here has no route to ANY overflow
+    property, ever -- this is the STRUCTURAL guarantee that no `_3` slot can exist."""
+    slots = {
+        "contacts": {"phone": "lv_phone_2", "mobilephone": "lv_mobilephone_2"},
+        "companies": {"phone": "lv_phone_2"},
+    }.get(object_type, {})
+    return slots.get(field)
+
+
+def rank_candidates(candidates: List[CandidateValue], priority_order: list) -> List[CandidateValue]:
+    """The FULL sort choose_best() already performs, factored out so a second caller
+    (route_overflow, Phase 72 Plan 05, D-72-12) can reach the runner-up without a
+    second ranking mechanism. Sort key unchanged: provider_priority index ascending,
+    confidence descending."""
+    return sorted(
+        candidates,
+        key=lambda c: (
+            priority_order.index(c.provider) if c.provider in priority_order else 999,
+            -c.confidence
+        )
+    )
+
+
 def choose_best(candidates: List[CandidateValue], priority_order: list):
     # DOCUMENTED DEVIATION from CLAUDE.md §12.8: the spec returned the whole sorted
     # LIST, but every caller treats the result as a single candidate — deterministic_gate
@@ -131,13 +158,43 @@ def choose_best(candidates: List[CandidateValue], priority_order: list):
     # first field with candidates and build_merge_result cannot run. Fix: return the top
     # element (`[0]`). Sort key is unchanged (provider_priority index asc, confidence desc).
     # Mirrors the Phase 2 precedent of one minimal, flagged fix to a transcription defect.
-    return sorted(
-        candidates,
-        key=lambda c: (
-            priority_order.index(c.provider) if c.provider in priority_order else 999,
-            -c.confidence
-        )
-    )[0] if candidates else None
+    ranked = rank_candidates(candidates, priority_order)
+    return ranked[0] if ranked else None
+
+
+def route_overflow(object_type: str, grouped: Dict[str, List[CandidateValue]],
+                    object_priority: dict) -> dict:
+    """Phase 72 Plan 05 (D-72-11/D-72-12): for each field with a configured overflow
+    slot (`_overflow_slot`), route the SECOND distinct-valued candidate from the SAME
+    trust-rank sort choose_best() already uses (no new ranking) into its own
+    single-candidate group, keyed by the slot name. build_merge_result's decision loop
+    then gates that group through `deterministic_gate` exactly like any other field --
+    no bypass, no second threshold. A 3rd+ distinct candidate is returned in
+    `overflow_tails[field]`, recorded on the PRIMARY field's own provenance entry only
+    -- never a canonical/property key. Two sources agreeing (same normalized_value,
+    case-insensitively, mirroring has_conflict()'s comparison) collapse to ONE
+    candidate, so an agreement never manufactures a phantom overflow. Mutates `grouped`
+    in place. JS twin: mergeContacts.js's/mergeCompanies.js's identical routing inside
+    mergeContacts()/mergeCompanies() (opts.rankedByField)."""
+    overflow_tails = {}
+    for field, field_candidates in list(grouped.items()):
+        slot = _overflow_slot(object_type, field)
+        if not slot:
+            continue
+        priority = object_priority.get(field, ["zoominfo", "apollo", "lusha", "claude_web"])
+        ranked = rank_candidates(field_candidates, priority)
+        deduped = []
+        for c in ranked:
+            key = str(c.normalized_value).lower()
+            if not any(str(d.normalized_value).lower() == key for d in deduped):
+                deduped.append(c)
+        if len(deduped) > 1:
+            grouped[slot] = [deduped[1]]
+        if len(deduped) > 2:
+            overflow_tails[field] = [
+                {"source": c.provider, "value": c.normalized_value} for c in deduped[2:]
+            ]
+    return overflow_tails
 
 
 def has_conflict(candidates: List[CandidateValue]) -> bool:
@@ -383,6 +440,10 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
     object_priority = provider_priority.get(record.object_type, {})
 
     grouped = group_candidates(candidates)
+    # Phase 72 Plan 05 (D-72-11/D-72-12): route a second, DISTINCT-valued candidate for
+    # an overflow-eligible field into its own single overflow slot, offered through the
+    # SAME deterministic_gate call below as an ordinary one-candidate group -- no bypass.
+    overflow_tails = route_overflow(record.object_type, grouped, object_priority)
     decisions = []
 
     # staging_patch stays EMPTY (Phase 15): staging folds into the provenance blob below,
@@ -459,14 +520,17 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
             final_decision = gate["decision"]
 
         if chosen:
-            provenance.update(
-                source_metadata(
-                    field=field,
-                    candidate=chosen,
-                    status=validation_status,
-                    verified_at=verified_at,
-                )
+            entry = source_metadata(
+                field=field,
+                candidate=chosen,
+                status=validation_status,
+                verified_at=verified_at,
             )
+            # Phase 72 Plan 05 (D-72-11/D-72-12): a 3rd+ distinct candidate rides on the
+            # PRIMARY field's own provenance entry, never a canonical/property key.
+            if field in overflow_tails:
+                entry[field]["overflow_tail"] = overflow_tails[field]
+            provenance.update(entry)
 
         field_decision = FieldDecision(
             field=field,

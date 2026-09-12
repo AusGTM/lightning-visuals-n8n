@@ -72,6 +72,12 @@ const DEFAULT_CONTACT_POLICY = {
   country:                 { class: "fill_blank_only",   min_confidence: 80 },
   hs_state_code:           { class: "fill_blank_only",   min_confidence: 80 },
   hs_country_region_code:  { class: "fill_blank_only",   min_confidence: 80 },
+  // lv_phone_2 / lv_mobilephone_2 (Phase 72 Plan 05, D-72-11/D-72-12): the single
+  // overflow slot per kind, mirroring its primary field's own class/threshold. Routed
+  // by mergeContacts()'s opts.rankedByField handling below -- never written directly by
+  // any caller's candidateRow the way every other field here is.
+  lv_phone_2:              { class: "fill_blank_only",   min_confidence: 80 },
+  lv_mobilephone_2:        { class: "fill_blank_only",   min_confidence: 85 },
 };
 
 function _isBlank(v) {
@@ -90,6 +96,23 @@ function _nowIso() {
 // the backdated-CSV-column injection vector (T-72-02) by construction, not by policy.
 function _isProviderSource(name) {
   return name === "apollo" || name === "lusha" || name === "zoominfo" || name === "claude_web";
+}
+
+// Phase 72 Plan 05 (D-72-11/D-72-12): closed map from a primary field to its single
+// overflow slot, keyed by object type. mergeContacts.js and mergeCompanies.js BOTH
+// declare this EXACT function text -- both files inline together into ONE Code node
+// (the review decision endpoint, REVIEW_BUILD_DECISION), and a `const` redeclaration
+// there throws SyntaxError even when byte-identical (Plan 04's _isProviderSource fix
+// hit the identical trap); a `function` declaration safely redeclares. A field absent
+// from its object type's map has no overflow -- its runner-up, if any, is
+// provenance-only, never a canonical/property key. This map is the STRUCTURAL
+// guarantee that no `_3` slot can ever exist.
+function _overflowSlot(objectType, field) {
+  var slots = {
+    contacts: { phone: "lv_phone_2", mobilephone: "lv_mobilephone_2" },
+    companies: { phone: "lv_phone_2" },
+  }[objectType];
+  return (slots && slots[field]) || null;
 }
 
 // True only when `historyTimestamp` is a parseable instant strictly more than
@@ -282,12 +305,16 @@ function _statusFor(decision) {
 //                  byte-identical to today's flat-source behaviour.
 function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   existingProps = existingProps || {};
-  candidateRow = candidateRow || {};
+  // Copied (Phase 72 Plan 05): the overflow-routing pass below may add keys, and must
+  // never mutate a caller's own object.
+  candidateRow = Object.assign({}, candidateRow || {});
   const policy = fieldPolicy || DEFAULT_CONTACT_POLICY;
   const source = (opts && opts.source) || "csv";
   const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
   const confidenceByField = (opts && opts.confidenceByField) || {};
-  const sourceByField = (opts && opts.sourceByField) || {};
+  // Copied for the same reason as candidateRow above -- the overflow pass may add a
+  // source for the primary/overflow key it resolves.
+  const sourceByField = Object.assign({}, (opts && opts.sourceByField) || {});
   const evidence = (opts && opts.evidence) || {};
   // Phase 72 Plan 04: resolved ONCE per call and used EVERYWHERE the wall clock used to
   // be read directly -- the TTL comparison and the provenance verified_at stamp share
@@ -305,6 +332,55 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   // `undefined` is "caller did not say", never "no conflict".
   const provenanceEntries = _parseProvenanceEntries(existingProps.lv_contact_enrichment_provenance);
   const rowConflicted = opts && opts.rowConflicted;
+
+  // Phase 72 Plan 05 (D-72-11/D-72-12): route a pre-sorted, pre-scored candidate list
+  // per field into its primary slot + (if `_overflowSlot` configures one) a single
+  // overflow slot, offering BOTH as ordinary candidateRow entries through the SAME
+  // gate below -- no second ranking, no second threshold, no bypass. `rankedByField
+  // [field]` is the CALLER's own existing sort (n8n wrapper: scoreCandidates().ranked)
+  // -- this function does not re-sort, only dedupes on normalizedValue (two sources
+  // agreeing on the SAME normalized value produce ONE candidate, never a phantom
+  // overflow) and splits winner / single overflow / provenance-only tail. Absent for
+  // every caller before this plan, so every existing call site stays byte-identical.
+  const rankedByField = (opts && opts.rankedByField) || {};
+  const overflowTailByField = {};
+  for (const field of Object.keys(rankedByField)) {
+    const list = rankedByField[field] || [];
+    const deduped = [];
+    for (const c of list) {
+      if (!c || _isBlank(c.value)) continue;
+      const key = String(c.normalizedValue != null ? c.normalizedValue : c.value);
+      if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value) === key)) {
+        deduped.push(c);
+      }
+    }
+    if (deduped.length === 0) continue;
+    // Element 0: the field's own ordinary candidate -- only offered when the caller has
+    // not already populated candidateRow[field] itself (every existing production
+    // caller already has, via its own winners/candidate map; this is the fallback for a
+    // caller -- or a test -- that supplies rankedByField alone).
+    if (candidateRow[field] == null) {
+      candidateRow[field] = deduped[0].value;
+      if (sourceByField[field] == null) sourceByField[field] = deduped[0].source;
+    }
+    const slot = _overflowSlot("contacts", field);
+    let tailStart = 1;
+    if (slot) {
+      tailStart = 2;
+      if (deduped.length > 1 && candidateRow[slot] == null) {
+        candidateRow[slot] = deduped[1].value;
+        if (sourceByField[slot] == null) sourceByField[slot] = deduped[1].source;
+      }
+    }
+    // Every candidate beyond the primary (no slot configured) or beyond the overflow
+    // slot (a slot IS configured) is recorded on the PRIMARY field's own provenance
+    // entry only -- never a canonicalPatch/property key of its own. This is what makes
+    // "no `_3` ever" a structural fact rather than a convention: there is no code path
+    // that can turn a third candidate into a write target.
+    if (deduped.length > tailStart) {
+      overflowTailByField[field] = deduped.slice(tailStart).map((c) => ({ source: c.source, value: c.value }));
+    }
+  }
 
   const canonicalPatch = {};
   const provenance = {};
@@ -351,6 +427,9 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     const entry = { source: resolvedSource, confidence, verified_at: verifiedAt,
                     validation_status: validationStatus, value };
     if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
+    // Phase 72 Plan 05 (D-72-11/D-72-12): a 3rd+ distinct candidate rides on the
+    // PRIMARY field's own provenance entry, never a canonical/property key of its own.
+    if (overflowTailByField[field]) entry.overflow_tail = overflowTailByField[field];
     provenance[field] = entry;
 
     if (decision === "promote") {

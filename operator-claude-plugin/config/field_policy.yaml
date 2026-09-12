@@ -150,6 +150,22 @@ companies:
     promote_to_canonical: true
     recompute_always: true
 
+  # D-72-11/D-72-12 (Phase 72 Plan 05): the single overflow slot for a second company
+  # phone number a live provider disagreement supplies -- the trust-rank winner (once a
+  # producer exists, D-72-14) takes canonical `phone`, the runner-up lands here. Same
+  # class/threshold as its primary slot would carry (fill_blank_only @ 80, the engines'
+  # own default for an undeclared field, restated explicitly here rather than left
+  # implicit). promote_to_canonical: false is DECORATIVE ONLY (never read by the merge
+  # engines) -- kept false so this key never enters fieldProducerMatrix.test.mjs's
+  # producer gate, whose heuristic does not recognise the merge engine's own
+  # opts.rankedByField overflow routing as a producer. D-72-11 caps overflow at exactly
+  # this ONE slot; a `_3` is forbidden.
+  lv_phone_2:
+    class: fill_blank_only
+    promote_to_canonical: false
+    min_confidence: 80
+    protect_if_current_present: true
+
 contacts:
   # EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01, operator ruling): was
   # manual_protected/95, which no real candidate ever cleared (the three real ingest
@@ -259,3 +275,26 @@ contacts:
     class: system_owned
     promote_to_canonical: true
     min_confidence: 75
+
+  # D-72-11/D-72-12 (Phase 72 Plan 05): the single overflow slots for a second phone and
+  # a second mobile a live waterfall disagreement supplies -- the trust-rank winner
+  # (scoreCandidates().ranked, already sorted) takes the primary field, the runner-up
+  # lands here; a third value is recorded in lv_contact_enrichment_provenance only,
+  # never a property. Same class/threshold as each primary slot. promote_to_canonical:
+  # false is DECORATIVE ONLY (never read by the merge engines) -- kept false so these
+  # never widen preingest.promotable_contact_props()'s ingest-lane allowlist (a CSV
+  # column can never carry them anyway) or fieldProducerMatrix.test.mjs's producer gate,
+  # whose heuristic does not recognise the merge engine's own opts.rankedByField
+  # overflow routing as a producer. D-72-11 caps overflow at exactly one slot per kind;
+  # a `_3` is forbidden anywhere in this repo.
+  lv_phone_2:
+    class: fill_blank_only
+    promote_to_canonical: false
+    min_confidence: 80
+    protect_if_current_present: true
+
+  lv_mobilephone_2:
+    class: fill_blank_only
+    promote_to_canonical: false
+    min_confidence: 85
+    protect_if_current_present: true

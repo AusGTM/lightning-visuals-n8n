@@ -2110,7 +2110,12 @@ return $input.all().map((it) => {
     ...toCandidates("zoominfo", p.zoominfo, ot),
   ];
   const gap_flag = cands.length === 0;  // ALL sources returned nothing -> flag manual
-  const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
+  // Phase 72 Plan 05 (D-72-11/D-72-12): `ranked` is scoreCandidates()'s pre-existing,
+  // additive output (Phase 15.5 D4) -- every scored candidate per field, sorted with
+  // the SAME tie-break `winners` already uses. Threaded through so "Merge Winners"
+  // (ENRICH_MERGE) can reach a genuine runner-up for phone/mobilephone/email without a
+  // second ranking mechanism.
+  const { best, winners, ranked } = scoreCandidates(cands, { now: new Date().toISOString() });
   // Plan 04: the matched Lusha record id rides as its OWN row field (never a candidate --
   // it must never enter scoreCandidates/the merge policy). Omitted entirely when null, so
   // an absent id can never become an empty-string write over a previously stored id.
@@ -2118,7 +2123,7 @@ return $input.all().map((it) => {
   const lusha_ids = lushaId
     ? (ot === "companies" ? { lusha_company_id: lushaId } : { lusha_contact_id: lushaId })
     : null;
-  return { json: { ...row, scored: { best, winners }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
+  return { json: { ...row, scored: { best, winners, ranked }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
 
@@ -2164,8 +2169,19 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   if (winners.persona_group != null && String(winners.persona_group).trim() !== "") {
     candidate.lv_persona_group = winners.persona_group;
   }
+  // Phase 72 Plan 05 (D-72-11/D-72-12): restricted to the three fields the operator
+  // ruling names -- phone/mobilephone (each has a configured `_2` overflow slot) and
+  // email (no slot; D-72-10's enumeration fallback records a second value in
+  // provenance only, via mergeContacts' own tailStart=1 path for a slot-less field).
+  // Never the whole `ranked` object, which would grow every field's provenance blob
+  // with a runner-up nobody asked to see.
+  const rankedAll = (row.scored && row.scored.ranked) || {};
+  const rankedByField = {};
+  for (const f of ["phone", "mobilephone", "email"]) {
+    if (rankedAll[f]) rankedByField[f] = rankedAll[f];
+  }
   const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
-                               { source: "waterfall", confidence: 85 });
+                               { source: "waterfall", confidence: 85, rankedByField });
 
   // Phase 16.2 (SC-3 honest mirror, D6 analog): fold the Claude web-research candidate
   // (jobtitle/seniority ONLY) in as a SECOND mergeContacts() call, then reconcile any
@@ -2572,12 +2588,14 @@ return $input.all().map((it) => {
     ...toCandidates("zoominfo", p.zoominfo, ot),
   ];
   const gap_flag = cands.length === 0;
-  const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
+  // Phase 72 Plan 05 (D-72-11/D-72-12): see the LOCAL variant's identical comment above
+  // ENRICH_NORMALIZE_SCORE -- `ranked` threaded through for the same reason.
+  const { best, winners, ranked } = scoreCandidates(cands, { now: new Date().toISOString() });
   // Plan 04: sibling row field, never a candidate — see the LOCAL variant's identical comment.
   const lushaId = lushaRecordId(p.lusha, ot);
   const lusha_ids = lushaId ? { lusha_contact_id: lushaId } : null;
   const { lusha_result, apollo_result, zoominfo_result, ...cleanRow } = row;
-  return { json: { ...cleanRow, providers: p, scored: { best, winners }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
+  return { json: { ...cleanRow, providers: p, scored: { best, winners, ranked }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
 
@@ -6071,7 +6089,15 @@ ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
     "lv_mobilephone_verified_at,seniority,"
     "lv_contact_enrichment_provenance,lusha_contact_id,"
     "city,state,country,hs_state_code,hs_country_region_code,"
-    "lv_linkedin_url,lv_persona_group,hs_linkedin_url"
+    "lv_linkedin_url,lv_persona_group,hs_linkedin_url,"
+    # Phase 72 Plan 05 (D-72-11/D-72-12): the two overflow slots MUST be fetched, same
+    # class of defect WR-01/58-05 already fixed twice above -- an existing non-blank
+    # lv_phone_2/lv_mobilephone_2 would otherwise read as absent on existingRecord,
+    # silently turning mergeContacts' fill_blank_only non-clobber guarantee into a
+    # permit to overwrite it every run. Deliberately NOT added to ENRICH_GATE's
+    # REQUIRED (stays 12 keys) -- a blank overflow slot must never mark a contact
+    # incomplete.
+    "lv_phone_2,lv_mobilephone_2"
 )
 # The fetch-by-id list adds `company` — HubSpot's default contact freetext-company
 # property, feeding identity_keys.companyName on the backfill. `lv_linkedin_url` moved
@@ -6300,7 +6326,12 @@ ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "lv_revenue_band,lv_employee_band,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
     "lv_produces_content_verified_at,lusha_company_id,"
-    "num_associated_contacts"
+    "num_associated_contacts,"
+    # Phase 72 Plan 05 (D-72-11/D-72-12): fetched now, ahead of D-72-14's producer, for
+    # the same non-clobber correctness reason as the contacts search CSV's identical
+    # addition -- an unfetched lv_phone_2 would read as blank forever and defeat
+    # fill_blank_only the moment a producer exists.
+    "lv_phone_2"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""

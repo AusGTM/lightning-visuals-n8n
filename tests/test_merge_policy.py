@@ -519,13 +519,18 @@ def test_route_overflow_agreeing_candidates_do_not_manufacture_an_overflow():
 
 
 def test_route_overflow_field_with_no_configured_slot_is_a_noop():
+    # Unlike the JS wrapper (which opts "email" into opts.rankedByField for D-72-10's
+    # provenance-only fallback), the Python oracle's route_overflow touches ONLY fields
+    # with a configured slot (_overflow_slot) -- a slot-less field is left entirely to
+    # the pre-existing group_candidates/choose_best flow, unaffected by this plan.
     grouped = group_candidates([
         make_candidate("email", "zoominfo", "a@example.com", 90),
         make_candidate("email", "apollo", "b@example.com", 80),
     ])
     tails = route_overflow("contacts", grouped, {})
     assert "lv_email_2" not in grouped
-    assert tails == {"email": [{"source": "apollo", "value": "b@example.com"}]}
+    assert tails == {}
+    assert len(grouped["email"]) == 2  # untouched -- route_overflow is a no-op here
 
 
 def test_route_overflow_no_material_conflict_groups_touched_ro2():

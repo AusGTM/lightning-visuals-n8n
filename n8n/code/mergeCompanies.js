@@ -97,6 +97,12 @@ const DEFAULT_COMPANY_POLICY = {
   // lv_country_region_normalized at its own threshold above).
   lv_anti_icp_flag:        { class: "veto_output",       min_confidence: 80 },
   lv_anti_icp_reason:      { class: "veto_output",       min_confidence: 80 },
+  // lv_phone_2 (Phase 72 Plan 05, D-72-11/D-72-12): the single overflow slot for a
+  // second company phone number, mirroring the class/threshold `phone` would carry
+  // once D-72-14 gives it a producer. Routed by mergeCompanies()'s
+  // opts.rankedByField handling below -- never written directly by any caller's
+  // candidateRow the way every other field here is.
+  lv_phone_2:              { class: "fill_blank_only",   min_confidence: 80 },
 };
 
 function _isBlank(v) {
@@ -113,6 +119,23 @@ function _nowIso() {
 // existing self-contained-per-Code-node pattern (_isBlank/_nowIso/stableStringify).
 function _isProviderSource(name) {
   return name === "apollo" || name === "lusha" || name === "zoominfo" || name === "claude_web";
+}
+
+// Phase 72 Plan 05 (D-72-11/D-72-12): closed map from a primary field to its single
+// overflow slot, keyed by object type. mergeContacts.js and mergeCompanies.js BOTH
+// declare this EXACT function text -- both files inline together into ONE Code node
+// (the review decision endpoint, REVIEW_BUILD_DECISION), and a `const` redeclaration
+// there throws SyntaxError even when byte-identical (Plan 04's _isProviderSource fix
+// hit the identical trap); a `function` declaration safely redeclares. A field absent
+// from its object type's map has no overflow -- its runner-up, if any, is
+// provenance-only, never a canonical/property key. This map is the STRUCTURAL
+// guarantee that no `_3` slot can ever exist.
+function _overflowSlot(objectType, field) {
+  var slots = {
+    contacts: { phone: "lv_phone_2", mobilephone: "lv_mobilephone_2" },
+    companies: { phone: "lv_phone_2" },
+  }[objectType];
+  return (slots && slots[field]) || null;
 }
 
 function _isStale(historyTimestamp, staleAfterDays, now) {
@@ -307,7 +330,9 @@ function _statusFor(decision) {
 //                  (the judge verdict's per-field confidence), never the composite.
 function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   existingProps = existingProps || {};
-  candidateRow = candidateRow || {};
+  // Copied (Phase 72 Plan 05): the overflow-routing pass below may add keys, and must
+  // never mutate a caller's own object.
+  candidateRow = Object.assign({}, candidateRow || {});
   const policy = fieldPolicy || DEFAULT_COMPANY_POLICY;
   const source = (opts && opts.source) || "provider";
   const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
@@ -316,7 +341,9 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   // opts.sourceByField exactly. No production caller passes this today (the company
   // waterfall/research/June folds all pass a flat opts.source), so this is additive —
   // every existing call site keeps its flat-source behaviour byte-identical.
-  const sourceByField = (opts && opts.sourceByField) || {};
+  // Copied for the same reason as candidateRow above (Phase 72 Plan 05) -- the overflow
+  // pass may add a source for the primary/overflow key it resolves.
+  const sourceByField = Object.assign({}, (opts && opts.sourceByField) || {});
   const evidence = (opts && opts.evidence) || {};
   // 260904-pav: parsed ONCE per call, not per field, and read strictly (see
   // _isSystemCorrectable) — `undefined` is not "no conflict", it is "caller did not say".
@@ -327,6 +354,40 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   const now = (opts && opts.now) || _nowIso();
   const historyByField = (opts && opts.historyByField) || {};
   const verifiedAt = now;
+
+  // Phase 72 Plan 05 (D-72-11/D-72-12): mirrors mergeContacts.js's identical routing --
+  // see that file's comment for the full rationale. `_overflowSlot("companies", field)`
+  // is the only difference from the contacts twin.
+  const rankedByField = (opts && opts.rankedByField) || {};
+  const overflowTailByField = {};
+  for (const field of Object.keys(rankedByField)) {
+    const list = rankedByField[field] || [];
+    const deduped = [];
+    for (const c of list) {
+      if (!c || _isBlank(c.value)) continue;
+      const key = String(c.normalizedValue != null ? c.normalizedValue : c.value);
+      if (!deduped.some((d) => String(d.normalizedValue != null ? d.normalizedValue : d.value) === key)) {
+        deduped.push(c);
+      }
+    }
+    if (deduped.length === 0) continue;
+    if (candidateRow[field] == null) {
+      candidateRow[field] = deduped[0].value;
+      if (sourceByField[field] == null) sourceByField[field] = deduped[0].source;
+    }
+    const slot = _overflowSlot("companies", field);
+    let tailStart = 1;
+    if (slot) {
+      tailStart = 2;
+      if (deduped.length > 1 && candidateRow[slot] == null) {
+        candidateRow[slot] = deduped[1].value;
+        if (sourceByField[slot] == null) sourceByField[slot] = deduped[1].source;
+      }
+    }
+    if (deduped.length > tailStart) {
+      overflowTailByField[field] = deduped.slice(tailStart).map((c) => ({ source: c.source, value: c.value }));
+    }
+  }
 
   const canonicalPatch = {};
   const provenance = {};
@@ -389,6 +450,9 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     const entry = { source: resolvedSource, confidence, verified_at: verifiedAt,
                     validation_status: validationStatus, value };
     if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
+    // Phase 72 Plan 05 (D-72-11/D-72-12): a 3rd+ distinct candidate rides on the
+    // PRIMARY field's own provenance entry, never a canonical/property key of its own.
+    if (overflowTailByField[field]) entry.overflow_tail = overflowTailByField[field];
     provenance[field] = entry;
 
     if (decision === "promote") {
