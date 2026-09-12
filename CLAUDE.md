@@ -3262,6 +3262,71 @@ company `domain` candidate, and the company providers are looked up BY the recor
 so none can contradict it — see
 `.planning/todos/pending/2026-09-04-company-domain-has-no-candidate-source.md`.
 
+### 17.2.2 As-built delta — Phase 72: a real recency arm, overflow slots, and a widened
+### ingest lane (2026-09-12)
+
+Three things §17.2's PROMOTE list and §29's MVP scope cut no longer describe correctly, all
+landed in Phase 72 (plans 01–06). §4.0's own discipline applies here too: the lists below are
+the roadmap this section already described, not a live inventory of every write path — this
+delta names where the code now goes further.
+
+**1. §17.2's "stale_refreshable and stale threshold has passed" PROMOTE line is now
+implemented, not aspirational (D-72-06/07/08/09).** Before this phase, ANY conflict on a
+`stale_refreshable` field (contacts `jobtitle`, 180-day TTL; companies `industry`, 365-day
+TTL) fell through to a blanket "Refresh candidate requires review in MVP." refusal, regardless
+of the existing value's actual age. All three merge engines
+(`n8n/code/mergeContacts.js`, `n8n/code/mergeCompanies.js`, `src/merge_policy.py`) now compare
+the existing value's own observed timestamp against a newer provider observation and promote
+when the existing value is past its TTL and the provider's value is newer — never when
+freshness is unknown, which still resolves conservatively to `needs_review` exactly as before.
+§17.2.1's four-conjunct system-correctable clause (previously scoped to `companies.domain`/
+`create_seed` only) is extended, unchanged in its four conjuncts, to provider sources on
+exactly two fields: `contacts.jobtitle` and `companies.industry` — a value the pipeline itself
+wrote from a provider can be corrected by a newer provider observation even before its TTL
+expires.
+
+**The clock this arm compares against is real on ONE lane only.** The contact ingest lane
+(`wf_contact_ingest_cloud`/`wf_contact_ingest_local`) fetches HubSpot's own
+`propertiesWithHistory` for every matched row's refreshable contact fields (a new
+`HubSpot Contact History` node, its own carry Merge and sentinel gate) and feeds it in as
+`opts.historyByField` — the existing value's own clock, never a value read off the CSV row
+itself. **The enrichment lane's contacts branch and the companies branch get no equivalent
+hop** — `opts.historyByField` is never populated there, so `jobtitle` recency on the
+enrichment lane and `industry` recency on companies stay exactly as unobservable as before
+this phase: unknown freshness always resolves to `needs_review`. Tracked as
+`.planning/todos/pending/2026-09-12-enrichment-lane-and-companies-branch-have-no-property-history-hop.md`
+(WINDOWS.md ledger id 29) — a design decision, not a defect, since the absence is
+behaviour-preserving.
+
+**2. Overflow slots exist for a second phone/mobile value (D-72-11).** `lv_phone_2` and
+`lv_mobilephone_2` (contacts) and `lv_phone_2` (companies) are real, live HubSpot properties
+(created by `scripts/sync_hubspot_properties.py`, undo manifest
+`config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json`). A
+trust-rank runner-up on `phone`/`mobilephone` lands in its object's single `_2` slot; a
+third-or-later candidate is never given a slot — it rides on the primary field's own
+provenance entry only. No `_3` slot exists anywhere in the code, by construction
+(`_overflowSlot()`/`_overflow_slot()`). `hs_additional_emails` was probed live and found to be
+an `enumeration`, not the assumed string, so the equivalent second-email write was never
+built — a second email lands in provenance only.
+
+**3. The ingest lane's CSV boundary now carries the full promotable contact set, not eight
+headers (D-72-01/02/03/04).** `preingest.strip_enrichment_extras` is unchanged in code but is
+now structurally inert — the ingest lane's candidate loop (`MERGE_CONTACTS` in
+`scripts/build_cloud_workflows.py`) admits every one of `config/field_policy.yaml`'s
+promotable contact keys, the same set the enrichment lane's own candidate loop already
+admitted. A `mobile`/`cell`/`mobile phone` CSV header now maps to canonical `mobilephone`, not
+`phone` (D-72-03) — a behaviour change for any existing operator spreadsheet template with a
+"Mobile" column, called out in the `0.49.0` plugin CHANGELOG entry. A `linkedin_url` header
+value now writes both `lv_linkedin_url` (canonical) and native `hs_linkedin_url` (D-72-04).
+The ingest lane's `Merge Contacts` node now gates every candidate against the matched
+contact's REAL current HubSpot properties (`row.existingRecord`, stamped by
+`ADAPT_SEARCH_RESULTS`) instead of always merging against `{}` — this is a correctness fix,
+not new leniency, but it has one operator-visible consequence: `firstname`/`lastname`/
+`company` have no `field_policy.yaml` entry of their own, so they now take the engines'
+`fill_blank_only`/80 default for the first time on this lane, meaning a CSV correcting a
+misspelled name or company on an existing contact no longer applies through the ingest lane
+(it did before, only because the lane always merged against an empty object).
+
 ## 17.3 Minimal PATCH example
 
 ```json

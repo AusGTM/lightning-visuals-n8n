@@ -409,3 +409,126 @@ id if it happens.
 
 Hand-delete the UAT contacts in HubSpot (and the company, if the second round created one).
 Note their ids in the UAT file first. Nothing in the client deletes records.
+
+---
+
+## 6. Phase 72 gate (D-72-17) — enrichment extras land on a real created contact
+
+**Written 2026-09-12, plan 72-07.** This is the phase's one end-of-phase live gate (operator
+ruling 2026-09-09, backloaded per `backload-human-gates-to-end-of-phase`): everything through
+plan 06 is code, tests and a walker proof. Nothing has been deployed, bounced, or armed for
+this phase yet. Run the seven steps below in order. Nothing may be armed before step 3, and
+nothing may be left armed after it.
+
+### Step 1 — verify the three overflow-slot properties exist (NOT create — D-72-23 amendment)
+
+`lv_phone_2` (contacts), `lv_mobilephone_2` (contacts) and `lv_phone_2` (companies) were
+**already created live** in plan 05 (`config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json`),
+under an execution-time operator ruling (D-72-23) that moved property creation out of this
+gate. This step is therefore a **verify-exists** step, not a creation step — run the sync tool
+in its default dry-run mode and confirm it reports **zero pending creations** for these three:
+
+```
+! set -a; . ./.env; set +a; .venv/bin/python scripts/sync_hubspot_properties.py
+```
+
+If it reports any of the three as pending, do NOT proceed — that means the live portal has
+drifted from the undo manifest. Only then, to actually create whatever is missing, run it
+armed under its existing two-key gate:
+
+```
+! set -a; . ./.env; set +a; DRY_RUN=false ALLOW_HUBSPOT_PROPERTY_WRITES=true .venv/bin/python scripts/sync_hubspot_properties.py
+```
+
+Read all three properties back (a plain GET, no write) and confirm `lv_phone_2` exists on both
+contacts and companies, and `lv_mobilephone_2` exists on contacts.
+
+### Step 2 — regenerate, deploy, bounce every changed workflow, DISARMED
+
+D-72-21 supersedes D-72-18's ingest-only deploy scope: `mergeContacts.js` and
+`mergeCompanies.js` are inlined by `scripts/build_cloud_workflows.py` into
+`wf_enrichment_cloud`, `wf_review_decision_cloud`, `wf_scheduled_maintenance_cloud` and
+`wf_contact_ingest_cloud` alike, so this phase's recency/overflow/geo changes cannot leave any
+of those four diff-clean. The shared engines make a diff-clean non-ingest body impossible.
+
+```
+! .venv/bin/python scripts/build_cloud_workflows.py
+! set -a; . ./.env; set +a; DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python scripts/deploy_n8n_workflows.py
+```
+
+Then bounce (deactivate → activate) every cloud workflow the deploy touched. Read back, for
+each: the node count matches the committed JSON, `settings.executionOrder` reads `"v1"`, and
+both write-safety flags (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`) read `"false"`.
+A workflow whose regenerated JSON is byte-identical to what is already live is not
+redeployed — confirm which ones actually changed from the deploy script's own dry-run diff
+before running the armed form.
+
+### Step 3 — one armed, single-record window: an absent person at a company HubSpot holds
+
+Reference record (the same one this phase's charter todo names, `72-CONTEXT.md`'s
+`<specifics>`): **Jimmy Busteed, Australian Turf Club (`9605284724`,
+`australianturfclub.com.au`)** — his held row from the D-71-06 gate carried `mobilephone
++61 419 212 580` and `lv_linkedin_url http://www.linkedin.com/in/jimmybusteed`, both of which
+F71-5 recorded as paid-for and dropped. If Busteed already exists in HubSpot from an earlier
+gate, substitute a different absent person at a company HubSpot already holds, following
+§1d's row-2/row-3 pattern above.
+
+Run `/operator-claude-plugin:enrich-before-ingest` against a one-row CSV naming that person
+(blank email — let the waterfall reveal it). At the numbered match table, answer
+`create all 1`. This opens exactly ONE armed, record-scoped write window for exactly one send.
+`ALLOW_N8N_ARM` must read `true` only for the duration of that window — the arming is
+per-record and operator-directed, never unattended or scheduled (see `n8n-legacy-execution-order-empty-item-push`
+project memory: the bounce script itself exits 1 while any workflow is armed, which is the
+mechanical backstop against leaving one open).
+
+After the send completes, disarm and confirm — read back `ALLOW_HUBSPOT_RECORD_WRITES` and
+`ALLOW_HUBSPOT_CREATE` on every workflow touched: **both must read `"false"` again.** Do not
+proceed to step 4 until this reads clean.
+
+### Step 4 — re-read the created contact
+
+Read the new contact back from HubSpot (a plain GET) and assert:
+
+- `mobilephone` is populated with the revealed/researched number.
+- `hs_linkedin_url` AND `lv_linkedin_url` are both populated with the same LinkedIn URL
+  (D-72-04's dual write).
+- The geo fields the waterfall found (`city`/`state`/`country`, and `hs_state_code` if the
+  provider supplied a code) are populated.
+- The contact is associated with `9605284724` (or the substitute company's id).
+
+### Step 5 — one UPDATE row proving non-clobber
+
+Run one more row through the same lane against a contact that already holds a non-blank
+`phone` value, with a CSV row supplying a *different* phone number. Confirm the existing
+`phone` value was **NOT** overwritten (fill_blank_only, `protect_if_current_present`). Also
+check the `firstname`/`lastname`/`company` consequence plan 01 recorded: a CSV correcting a
+misspelled name or company on this same UPDATE row should **not** apply, now that the lane
+gates every candidate against the contact's real existing properties instead of merging
+against `{}`.
+
+### Step 6 — record how `hs_additional_emails` behaved, if at all
+
+Plan 05's live probe found `hs_additional_emails` is a writable `enumeration`, not the
+assumed string, so the second-email write was never built — a second email should land in
+`lv_enrichment_provenance` only, never on `hs_additional_emails` itself. Confirm this directly
+against the created/updated contact: `hs_additional_emails` should be unchanged from
+whatever it held before this gate (if anything), and the second email (if the waterfall found
+one) should be visible only inside the provenance JSON blob.
+
+### Step 7 — clean up
+
+Hand-delete the contact created in step 3 from HubSpot — **HubSpot has no rollback.** Note its
+id in the UAT record before deleting it. Do not hand-delete the UPDATE-path contact from
+step 5 (it pre-existed this gate). Delete any scratch script written to drive this gate, per
+the operator scripts ruling in §2 above.
+
+### Arm/disarm summary (read before running step 3)
+
+| Flag | Purpose | Rule |
+| --- | --- | --- |
+| `ALLOW_HUBSPOT_PROPERTY_WRITES` | schema-level property creation (step 1 only) | two-key gate with `DRY_RUN=false`; never used for step 3's record write |
+| `ALLOW_N8N_DEPLOY` | deploy regenerated workflow JSON (step 2) | disarmed deploy only in this gate — no record write happens at deploy time |
+| `ALLOW_N8N_ARM` | arms exactly one record-scoped send window (step 3) | operator-directed only, per-send, bounded to the one row being sent; the bounce script exits 1 while any workflow is armed, which is the mechanical proof nothing was left open |
+
+Nothing may be armed before step 3. Nothing may be left armed after it — step 3's own
+disarm-and-confirm is the gate, not an afterthought.
