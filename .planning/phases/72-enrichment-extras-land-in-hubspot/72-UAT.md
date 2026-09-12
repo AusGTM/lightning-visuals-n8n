@@ -320,7 +320,7 @@ itself triggered (empty provider list, no HubSpot write path), fired while both 
   is not surfaced in that field.
 - (d) n8n execution ids `12411`/`12413`/`12414`/`12415`, burst-watch list above, zero new
   executions after the final disarm, every `ALLOW_*` flag `false` — met.
-- (e) Created contact `352522004980` hand-deleted by the operator (restorable archive) — met.
+- (e) Created contact `352522004980`: restorable-delete command handed to the operator 2026-09-13; no `204` was reported back in this session (the operator's Test 3 report states "No deletes"). Deletion REQUESTED, not confirmed — the operator confirms or re-runs the DELETE before this row is counted met.
 
 ### Findings
 

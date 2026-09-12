@@ -491,6 +491,8 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
+Progress: [██████████] 100% — every phase on disk complete (49/49 plans across the roadmap's tracked phases; Phase 72 closed 2026-09-13 with 8 plans + 4 gap-closure plans, verification `passed` 22/22). `roadmap_complete` true; no next phase exists — the next step is `/gsd-complete-milestone` or a new phase. (Superseded: the `33% — v1.1 (phases 53–63)` bar below, retained as history.)
+
 Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
@@ -1018,7 +1020,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 - lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
 - Open UAT item: 70-02 Task 2's disarmed Merge-semantics probe (Gate 1, deferred per operator ruling 2026-09-09) must be exercised in the end-of-phase UAT — see .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md.
-- F72-1: lv_linkedin_url does not land on the ingest CREATE path (D-72-04's dual write incomplete on create) -- WINDOWS.md id 30, gap-closure plan pending.
+- ~~F72-1~~ CLOSED 2026-09-13 by gap plan 72-09 (`CANDIDATE_ALIASES`), proven live on contact `352522004980` / execution `12414`. Residual (operator-owned): confirm the restorable DELETE of `352522004980` returned `204` — no confirmation reached this session; 72-UAT.md Test 3 row (e) records it as requested, not confirmed.
 
 ### Quick Tasks Completed
 
@@ -1098,7 +1100,9 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Confirm the restorable DELETE of UAT contact `352522004980` (Phase 72 Test 3) returned `204`, or re-run it.
+- `master` is 30 commits ahead of `origin/master` (all of Phase 72's gap-closure round); push is the operator's call.
+- Phase 72 was the last roadmap phase: run `/gsd-complete-milestone`, or add a new phase with `/gsd-add-phase`.
 
 ## Deferred Items
 
