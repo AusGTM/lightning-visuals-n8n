@@ -393,6 +393,9 @@ def test_a_policy_promotable_key_fills_a_blank_row_field_instead_of_being_droppe
     rows = _rows(1)
     responses = [_response(rows[0]["row_id"], {
         "email": "amy@example.com", "seniority": "Director",
+        # Phase 72 Plan 03 (D-72-19): `lv_linkedin_url` is now aliased onto the
+        # row's own `linkedin_url` key before the allowlist test -- this fills the
+        # CSV canonical field, never a survivng `lv_linkedin_url` key.
         "lv_linkedin_url": "https://li/amy",
     })]
 
@@ -400,7 +403,8 @@ def test_a_policy_promotable_key_fills_a_blank_row_field_instead_of_being_droppe
 
     merged = result.rows[0]
     assert merged["seniority"] == "Director"
-    assert merged["lv_linkedin_url"] == "https://li/amy"
+    assert merged["linkedin_url"] == "https://li/amy"
+    assert "lv_linkedin_url" not in merged
     dropped_keys = {entry["key"] for entry in result.dropped_property_keys}
     assert "seniority" not in dropped_keys
     assert "lv_linkedin_url" not in dropped_keys
@@ -419,6 +423,85 @@ def test_a_key_in_neither_set_is_still_dropped_and_reported():
     assert "lastmodifieddate" not in merged
     assert {"row_id": rows[0]["row_id"], "key": "lastmodifieddate"} in \
         result.dropped_property_keys
+
+
+# =====================================================================================
+# Phase 72 Plan 03 (D-72-19): `PROVIDER_KEY_ALIASES` -- the waterfall's promotable
+# name for LinkedIn and the CSV's canonical name are one logical field under two
+# vocabularies.
+# =====================================================================================
+
+def test_provider_key_aliases_maps_lv_linkedin_url_onto_the_rows_own_linkedin_url_key():
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {"lv_linkedin_url": "https://li/amy"})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    merged = result.rows[0]
+    assert merged["linkedin_url"] == "https://li/amy"
+    assert "lv_linkedin_url" not in merged
+    assert preingest.PROVIDER_KEY_ALIASES == {"lv_linkedin_url": "linkedin_url"}
+
+
+def test_a_response_carrying_both_linkedin_names_resolves_to_one_key_with_a_conflict_recorded():
+    rows = _rows(1)
+    responses = [_response(rows[0]["row_id"], {
+        "lv_linkedin_url": "https://li/aliased", "linkedin_url": "https://li/direct",
+    })]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    merged = result.rows[0]
+    assert "lv_linkedin_url" not in merged
+    linkedin_keys = [k for k in merged if k == "linkedin_url"]
+    assert len(linkedin_keys) == 1, "never two keys for one aliased field"
+    conflict_fields = {c["field"] for c in result.conflicts}
+    assert "linkedin_url" in conflict_fields
+
+
+def test_strip_enrichment_extras_is_inert_for_a_real_merged_row_carrying_every_promotable_key():
+    # Build the row from the DERIVED lists, never a hardcoded key list. `hs_linkedin_
+    # url` is excluded from the SIMULATED response on purpose (D-72-04): it is a
+    # lane-side-only write target produced inside the n8n merge wrapper from the SAME
+    # canonicalized linkedin value, never a key a real provider `properties` response
+    # carries -- so a real merged row never has it to strip in the first place.
+    # `lv_linkedin_url` IS a real response key; `PROVIDER_KEY_ALIASES` aliases it onto
+    # `linkedin_url` before it ever reaches the merged row.
+    promotable = set(preingest.promotable_contact_props())
+    lane_only_write_targets = {"hs_linkedin_url"}
+    assert promotable - set(extraction.canonical_props()) - lane_only_write_targets == {
+        "lv_linkedin_url",
+    }, "PROVIDER_KEY_ALIASES only names lv_linkedin_url -- update this test if that changes"
+
+    rows = _rows(1)
+    properties = {key: f"value-for-{key}" for key in promotable - lane_only_write_targets}
+    responses = [_response(rows[0]["row_id"], properties)]
+
+    result = preingest.merge_enriched(rows, responses)
+    merged = result.rows[0]
+
+    assert "lv_linkedin_url" not in merged
+    assert "hs_linkedin_url" not in merged
+    assert set(merged) <= set(extraction.canonical_props()) | {"row_id"}
+
+    stripped = preingest.strip_enrichment_extras([merged])
+    assert stripped == [merged]
+
+
+def test_write_dispatch_csv_accepts_a_merged_row_with_every_promotable_key(tmp_path):
+    rows = _rows(1)
+    rows[0]["email"] = "amy@example.com"
+    promotable = set(preingest.promotable_contact_props())
+    properties = {
+        key: f"value-for-{key}"
+        for key in promotable - {"hs_linkedin_url", "email"}
+    }
+    responses = [_response(rows[0]["row_id"], properties)]
+
+    result = preingest.merge_enriched(rows, responses)
+    sendable = extraction.strip_row_id(preingest.strip_enrichment_extras(result.rows))
+
+    extraction.write_dispatch_csv(sendable, tmp_path / "dispatch.csv")  # must not raise
 
 
 def test_strip_enrichment_extras_drops_exactly_the_policy_only_keys():
@@ -527,11 +610,15 @@ def test_without_the_new_strip_the_step_7_chain_raises_non_canonical_key_in_row(
     # The negative half of the extended step-7 sequence test above -- proves
     # `strip_enrichment_extras` is load-bearing, not decorative: the SAME chain with
     # only `strip_row_id` (no `strip_enrichment_extras`) must still raise.
-    # Phase 72 Plan 02 (D-72-01): `seniority` is now canonical too -- `lv_linkedin_url`
-    # is the key that still demonstrates this (D-72-19's naming fork).
+    # Phase 72 Plan 03 (D-72-19): `lv_linkedin_url` is now ALIASED onto `linkedin_url`
+    # (canonical) before the allowlist test, so it no longer demonstrates this --
+    # `hs_linkedin_url` is the one remaining promotable-but-not-canonical key
+    # (D-72-04: a lane-side-only write target no real provider response carries, but
+    # still admitted by `allowed_keys` if a response ever named it, exactly like
+    # `lv_linkedin_url` before this plan).
     rows = _rows(1)
     responses = [_response(rows[0]["row_id"],
-                            {"email": "amy@example.com", "lv_linkedin_url": "https://li/amy"})]
+                            {"email": "amy@example.com", "hs_linkedin_url": "https://li/amy"})]
 
     merge_report = preingest.merge_enriched(rows, responses)
     sendable, held = extraction.hold_emailless(merge_report.rows)
@@ -547,8 +634,8 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
     # dispatch -> extraction.validate -- a widened key must be ACCEPTED (never
     # rejected), reported in dropped_keys, because that path reaches no CSV of its own
     # (SKILL.md step 7's dispatch block is the one strip site both callers share).
-    # Phase 72 Plan 02 (D-72-01): `seniority` is now canonical too -- `lv_linkedin_url`
-    # is the key that still demonstrates this (D-72-19's naming fork).
+    # Phase 72 Plan 03 (D-72-19): `hs_linkedin_url` is the key that still demonstrates
+    # this -- `lv_linkedin_url` is now aliased onto canonical `linkedin_url`.
     rows = preingest.build_rows_spec(
         [{"firstname": "Amy", "lastname": "Smith", "company": "Acme"}]
     )["rows"]
@@ -556,7 +643,7 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
 
     merge_report = preingest.merge_enriched(
         rows, [_response(rows[0]["row_id"], {
-            "email": "amy@acme.com", "lv_linkedin_url": "https://li/amy",
+            "email": "amy@acme.com", "hs_linkedin_url": "https://li/amy",
         })],
     )
     records = suggest_contacts.rejoin_enriched(records, merge_report.rows)
@@ -569,9 +656,9 @@ def test_the_suggest_contacts_path_tolerates_a_widened_key_through_validate():
     result = extraction.validate(suggest_contacts.round_artifact(records))
 
     assert len(result.accepted) == 1
-    assert {"index": 0, "key": "lv_linkedin_url"} in result.dropped_keys
+    assert {"index": 0, "key": "hs_linkedin_url"} in result.dropped_keys
     assert result.accepted[0]["row"]["email"] == "amy@acme.com"
-    assert "lv_linkedin_url" not in result.accepted[0]["row"]
+    assert "hs_linkedin_url" not in result.accepted[0]["row"]
 
 
 def test_a_rerequest_response_carrying_a_widened_key_keeps_it_on_the_row(
@@ -621,13 +708,15 @@ def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unread
         "replace-everything -- the opposite direction from promotable_contact_props()"
     )
 
-    # Phase 72 Plan 02 (D-72-01): `seniority` is now canonical too, so an unresolvable
-    # policy no longer drops it -- `lv_linkedin_url` is the key that still demonstrates
-    # the fallback (D-72-19's naming fork).
+    # Phase 72 Plan 03 (D-72-19): `lv_linkedin_url` no longer demonstrates this --
+    # PROVIDER_KEY_ALIASES fires BEFORE the allowlist test, so it lands as canonical
+    # `linkedin_url` even with the policy unresolvable. `hs_linkedin_url` is the key
+    # that still demonstrates the fallback: it is promotable-only, never aliased, so
+    # it is dropped exactly when `promotable_contact_props()` degrades to `[]`.
     rows = _rows(1)
     rows[0]["jobtitle"] = "Director"
     responses = [_response(rows[0]["row_id"], {
-        "email": "a@x.com", "phone": "555", "lv_linkedin_url": "https://li/x",
+        "email": "a@x.com", "phone": "555", "hs_linkedin_url": "https://li/x",
         "jobtitle": "Analyst",
     })]
     result = preingest.merge_enriched(rows, responses)
@@ -635,7 +724,7 @@ def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unread
     allowed = set(extraction.canonical_props()) | {"row_id"}
     for row in result.rows:
         assert set(row) <= allowed
-    assert {"row_id": rows[0]["row_id"], "key": "lv_linkedin_url"} in result.dropped_property_keys
+    assert {"row_id": rows[0]["row_id"], "key": "hs_linkedin_url"} in result.dropped_property_keys
     assert result.rows[0]["jobtitle"] == "Director", (
         "with the policy unresolvable, even jobtitle -- normally refreshable -- "
         "must NOT be replaced"
