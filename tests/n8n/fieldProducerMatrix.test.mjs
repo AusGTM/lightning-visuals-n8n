@@ -66,6 +66,7 @@ function yamlFieldBlock(sectionText, fieldName) {
     class: (text.match(/class:\s*(\S+)/) || [])[1] || null,
     promote_to_canonical: /promote_to_canonical:\s*true/.test(text),
     allow_web_research: /allow_web_research:\s*true/.test(text),
+    protect_if_current_present: /protect_if_current_present:\s*true/.test(text),
   };
 }
 
@@ -462,6 +463,103 @@ test("D-66-03 PN-1 seam: the policy/search-property spelling is the PREFIXED key
   for (const prefixed of Object.keys(PN1_RENAMES)) {
     assert.ok(policy[prefixed], `config/field_policy.yaml contacts.${prefixed} entry not found`);
   }
+});
+
+// --- Assertion 5 (CR-01, Phase 72 Plan 10, D-72-01/D-72-06 gap G2) --------------------------
+// Assertions 2/2b are REQUIRED-driven, so they never cover the two field classes CR-01 found
+// un-fetched: the NEVER_CHASE write-map-only fields (companies.state/hs_state_code/phone,
+// contacts.hs_linkedin_url) and the promote_to_canonical:false overflow slots
+// (lv_phone_2/lv_mobilephone_2) -- neither ever enters a REQUIRED list by design (see
+// NEVER_CHASE's comment above and lv_phone_2/lv_mobilephone_2's own field_policy.yaml
+// comments). `protect_if_current_present: true` is the correct derived candidate set instead:
+// it means exactly "the merge gate must see this field's current value", and both excluded
+// classes carry it.
+//
+// Scope is the shared ENRICH_MERGE/ENRICH_MERGE_CO wrapper call sites, discovered by their
+// call-site shorthand (`rankedByField }` / `rankedByField,` — see scripts/
+// build_cloud_workflows.py's ENRICH_MERGE / ENRICH_MERGE_CO). The shorthand alone is not
+// selective enough: a comment elsewhere ("...opts.rankedByField, exactly like...", Phase 72
+// Plan 06) contains the same literal text without being a merge call site at all, so a node is
+// only in scope when it ALSO inlines one of the two merge modules verbatim
+// (`function mergeContacts` / `function mergeCompanies` — always true for a genuine wrapper
+// call site, since `inline()` concatenates the whole module into the node that calls it).
+// This combined predicate is what makes "exactly one of the two modules present" a fact about
+// every selected node, rather than a check that can spuriously fail on an unrelated node whose
+// jsCode merely mentions the ranked-list option in prose.
+
+const MERGE_MODULE_MARKER = {
+  contacts: "function mergeContacts",
+  companies: "function mergeCompanies",
+};
+const RANKED_BY_FIELD_SHORTHAND = ["rankedByField }", "rankedByField,"];
+
+function findOverflowMergeNodes(wf) {
+  return wf.nodes.filter((n) => {
+    const code = n.parameters && n.parameters.jsCode;
+    if (typeof code !== "string") return false;
+    if (!RANKED_BY_FIELD_SHORTHAND.some((lit) => code.includes(lit))) return false;
+    return Object.values(MERGE_MODULE_MARKER).some((marker) => code.includes(marker));
+  });
+}
+
+function laneOfMergeNode(node) {
+  const code = node.parameters.jsCode;
+  const lanes = Object.keys(MERGE_MODULE_MARKER).filter((lane) => code.includes(MERGE_MODULE_MARKER[lane]));
+  assert.equal(lanes.length, 1,
+    `${node.name}: expected exactly one merge module inlined (mergeContacts XOR mergeCompanies), found [${lanes.join(", ")}]`);
+  return lanes[0];
+}
+
+// Scoped by URL, not a file-wide union: the contacts search node's "phone"/"state" text
+// must never satisfy the companies assertion (or vice versa), which a file-wide join would
+// silently allow.
+function searchNodesForLane(wf, lane) {
+  return wf.nodes.filter((n) =>
+    typeof n.type === "string" && n.type.toLowerCase().includes("httprequest") &&
+    typeof n.parameters.url === "string" &&
+    n.parameters.url.includes(`crm/v3/objects/${lane}/search`));
+}
+
+function protectedFieldsByLane() {
+  const out = {};
+  for (const lane of ["contacts", "companies"]) {
+    const policy = loadPolicy(lane);
+    out[lane] = Object.entries(policy)
+      .filter(([, entry]) => entry && entry.protect_if_current_present)
+      .map(([field]) => field);
+  }
+  return out;
+}
+
+test("non-clobber fetch gate (CR-01): every protect_if_current_present field is fetched, on every overflow-capable shared merge lane", () => {
+  const protectedFields = protectedFieldsByLane();
+  const failures = [];
+  const noFetchNode = [];
+
+  for (const file of WF_FILES) {
+    const wf = JSON.parse(fs.readFileSync(path.join(WF_DIR, file), "utf8"));
+    for (const node of findOverflowMergeNodes(wf)) {
+      const lane = laneOfMergeNode(node);
+      const searchNodes = searchNodesForLane(wf, lane);
+      if (searchNodes.length === 0) {
+        noFetchNode.push(`${file}:${node.name}`);
+        continue;
+      }
+      const searchText = searchNodes.map((n) => JSON.stringify(n.parameters)).join(" ");
+      const missing = protectedFields[lane].filter((f) => !new RegExp(`\\b${f}\\b`).test(searchText));
+      if (missing.length) {
+        failures.push(`${file}:${node.name} (${lane}): protected but not fetched: ${missing.join(", ")}`);
+      }
+    }
+  }
+
+  assert.deepEqual(failures, [], `non-clobber fetch-gate violations (CR-01):\n${failures.join("\n")}`);
+  // Known, mock-fed exception: wf_enrichment_local.json's "Merge Winners" is fed by a
+  // hardcoded "HubSpot Search (MOCK)" Code node (see Assertion 2b's identical exception for
+  // "Enrichment Gate" in the same file) — nothing to fetch-check there. Any OTHER entry here
+  // is new and needs eyes, not a silent pass.
+  assert.deepEqual(noFetchNode, ["wf_enrichment_local.json:Merge Winners"],
+    `mock-fed (no live search node) overflow merge nodes changed — investigate: ${noFetchNode.join(", ")}`);
 });
 
 export { loadPolicy, PUSHED, PN1_RENAMES, KNOWN_GAPS, laneRequired, producerFor, recomputedOutput };
