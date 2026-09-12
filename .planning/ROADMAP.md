@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 9/12 plans executed (8 executed; 09-12 are gap closure)
+**Plans:** 10/12 plans executed (8 executed; 09-12 are gap closure)
 
 Plans:
 **Wave 1**
@@ -460,7 +460,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 72-10-PLAN.md — G2: the local-live lane's two fetch lists widened to its merge engine's non-clobber-critical set, pinned by a derived fetch-gate assertion (D-72-01, D-72-06)
+- [x] 72-10-PLAN.md — G2: the local-live lane's two fetch lists widened to its merge engine's non-clobber-critical set, pinned by a derived fetch-gate assertion (D-72-01, D-72-06)
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
