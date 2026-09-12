@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 5/8 plans executed
+**Plans:** 6/8 plans executed
 
 Plans:
 **Wave 1**
@@ -444,7 +444,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 72-06-PLAN.md — Company geo/phone producers where a provider really supplies them; contact geo can never reach the company region signal (D-72-14..16)
+- [x] 72-06-PLAN.md — Company geo/phone producers where a provider really supplies them; contact geo can never reach the company region signal (D-72-14..16)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
