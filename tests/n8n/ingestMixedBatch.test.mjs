@@ -102,6 +102,8 @@ function stubs(emails) {
       const id = resolvesContact[it.email];
       return id ? { results: [{ id, properties: { email: it.email } }] } : { results: [] };
     }),
+    // Only rows that resolve a contact_id above reach the history hop.
+    "HubSpot Contact History": (items) => items.map(() => ({ propertiesWithHistory: {} })),
     "HubSpot Company Search by Domain": (items) => items.map((it) => (
       resolvesByDomain.has(it.email)
         ? { results: [{ id: COMPANY_BY_DOMAIN, properties: { domain: "acme-domain.example" } }] }
@@ -297,6 +299,7 @@ test("ingest, ARMED with a permitted update that resolves NO company: the associ
     httpStubs: {
       "Verify Emails (batch)": [{ results: [{ email: NOCO_EMAIL, status: "VALID" }] }],
       "HubSpot Search by Email": [{ results: [{ id: NOCO_CONTACT_ID, properties: { email: NOCO_EMAIL } }] }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [{ results: [] }],
       "HubSpot Company Search by Name": [{ results: [] }],
       "HubSpot Update": [{ id: NOCO_CONTACT_ID, properties: { email: NOCO_EMAIL } }],

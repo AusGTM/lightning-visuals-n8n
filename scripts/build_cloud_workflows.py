@@ -16,6 +16,7 @@
 
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -24,6 +25,17 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 CODE = ROOT / "n8n" / "code"
+
+# Phase 72 Plan 04 (D-72-07): the ingest lane's HubSpot-history fetch derives its
+# propertiesWithHistory query from the SAME function operator-claude-plugin's
+# enrich-before-ingest path already trusts (preingest.refreshable_contact_props()) —
+# never a re-derivation, so a stale_refreshable contact field added later widens both
+# call sites for free. operator-claude-plugin/scripts is not otherwise on this
+# builder's import path; added narrowly, imported narrowly (one function only).
+sys.path.insert(0, str(ROOT / "operator-claude-plugin" / "scripts"))
+from preingest import refreshable_contact_props  # noqa: E402
+
+_REFRESHABLE_CONTACT_PROPS = tuple(refreshable_contact_props())
 
 # Regenerate the taxonomy data module FIRST — before any inline() call below reads
 # n8n/code/taxonomy.generated.js — so this builder can never emit a workflow carrying
@@ -396,14 +408,18 @@ function normalizeEmailBasicSafe(raw) {
 RESOLVE_IDENTITY = inline("normalizeEmail.js", "normalizePhone.js", "resolveIdentity.js") + r"""
 
 // --- n8n wrapper: strong-key auto-match, weak keys -> review, no-email never net_new ---
-return $input.all().map((it) => {
+// _ingest_seq (Phase 72 Plan 04): stamped here, the single node that sees every row in
+// one run before the Contact History split. Append-mode Merge concatenates lane 0 then
+// lane 1, reordering rows; MERGE_CONTACTS sorts on this ordinal to restore original order
+// before anything downstream (company search, associations) that assumes row order.
+return $input.all().map((it, i) => {
   const row = it.json;
   if (row.reject) {
-    return { json: { ...row, identity: { outcome: "rejected", contact_id: null,
+    return { json: { ...row, _ingest_seq: i, identity: { outcome: "rejected", contact_id: null,
       match_key: null, candidate_ids: [], reason: row.reject_reason || "missing identity" } } };
   }
   const identity = resolveIdentity(row, row.searchResultsByKey || {});
-  return { json: { ...row, identity } };
+  return { json: { ...row, _ingest_seq: i, identity } };
 });
 """
 
@@ -448,8 +464,18 @@ MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 // columnMap.js already maps a CSV header straight to the PN-1-renamed canonical key
 // (lv_persona_group) — so this loop reads row.lv_persona_group directly, no separate
 // rename block is needed the way ENRICH_MERGE needs one for winners.persona_group.
-return $input.all().map((it) => {
-  const row = it.json;
+//
+// Phase 72 Plan 04 (D-72-07): "Contact History Sentinel"'s gated marker can now share
+// this node's input on an all-net_new batch (the matched lane's own real producer
+// never runs at all) — drop an identity-less marker before it reaches Decide Action,
+// mirroring "Merge Company"'s identical guard.
+return $input.all().filter((it) => Object.keys(it.json || {}).length > 0)
+  // Restore original row order after the Contact History split's append-mode
+  // Merge concatenated its two lanes out of order (Phase 72 Plan 04). `?? 0` is a
+  // no-op on build_local()'s workflow, which never splits and never stamps this key.
+  .sort((a, b) => (a.json._ingest_seq ?? 0) - (b.json._ingest_seq ?? 0))
+  .map((it) => {
+  const { _ingest_seq, ...row } = it.json;
   const sourceByField = row.source_by_field || {};
   const confidenceByField = {};
   for (const f of Object.keys(sourceByField)) {
@@ -468,8 +494,12 @@ return $input.all().map((it) => {
     candidate.hs_linkedin_url = row.linkedin_url;
   }
   if (row.phone_normalized) candidate.phone = row.phone_normalized;
+  // Phase 72 Plan 04 (D-72-07): stamped by "Adapt Contact History" on a matched row
+  // only -- a net_new/unmatched row degrades to {}, which is the pre-72 "unknown
+  // freshness" outcome for every stale_refreshable field, exactly as designed.
   const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
-    { source: "csv", confidence: 80, confidenceByField, sourceByField });
+    { source: "csv", confidence: 80, confidenceByField, sourceByField,
+      historyByField: row.historyByField || {} });
   return { json: { ...row, merge: merged } };
 });
 """
@@ -1263,12 +1293,77 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     # own return object stamps `write_request` on every row it emits.
     decide_action_js = (_write_safety_const("ALLOW_HUBSPOT_CREATE") + "\n"
                         + WRITE_REQUEST_JS + DECIDE_CLOUD)
+    resolve_identity_pos = None
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),
                      ("Build Company Link", BUILD_COMPANY_LINK)]:
         x += 220
         nodes.append(code_node(name, js, x, y))
+        if name == "Resolve Identity":
+            resolve_identity_pos = (x, y)
+
+    # Phase 72 Plan 04 (D-72-06/07): the recency gate needs the existing value's OWN
+    # HubSpot property-history timestamp, which the search endpoint every OTHER lookup
+    # in this file uses does not carry. One targeted GET, matched rows only, joined
+    # back to its row by a carry Merge (splice_carry_merge_after, the same helper the
+    # lane already uses for "HubSpot Search by Email"), with a D-70-23 sentinel gate on
+    # the no-contact-id lane so the 2-input Merge feeding "Merge Contacts" can never
+    # starve. Route: "Resolve Identity" -> "IF Has Contact Id" -> true: history hop,
+    # false: straight to "Merge Contacts" -- reconverging via splice_merge_before once
+    # both edges exist.
+    rix, riy = resolve_identity_pos
+    hx, hy = rix + 220, riy + 220
+    nodes.append(_if_bool_expr_node(
+        "IF Has Contact Id", "!!($json.identity && $json.identity.contact_id)", hx, hy))
+    hx += 220
+    # propertiesWithHistory query value DERIVED at build time from
+    # preingest.refreshable_contact_props() (today: jobtitle) -- never a literal in the
+    # node body, so a future stale_refreshable contact field widens this fetch for free.
+    _history_props_csv = ",".join(_REFRESHABLE_CONTACT_PROPS)
+    nodes.append(_http_node(
+        "HubSpot Contact History",
+        "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $json.identity.contact_id }}"
+        f"?properties={_history_props_csv}&propertiesWithHistory={_history_props_csv}",
+        hx, hy, auth="hubspot", method="GET",
+    ))
+    hx += 220
+    nodes.append(code_node("Adapt Contact History", r"""// Adapt Contact History -- Phase 72 Plan 04 (D-72-07).
+// splice_carry_merge_after's combineByPosition pairs the raw HubSpot GET response
+// (input 0) with this row (input 1) into ONE flat object, row-fields-last -- exactly
+// the shape ADAPT_SEARCH_RESULTS's own carry merge produces. Turns the response's
+// propertiesWithHistory into a flat historyByField map (field name -> newest
+// versions[].timestamp), tolerating an absent/error response by emitting NO key at
+// all -- a row that never reaches this node (net_new/unmatched) never carries
+// historyByField either, which is the pre-72 "unknown freshness" degrade by
+// construction. HubSpot's own contract: propertiesWithHistory[field] is an ARRAY of
+// version objects ({value, timestamp, ...}); this reads the MAX timestamp across the
+// array rather than assuming any particular order.
+return $input.all().map((it) => {
+  const row = it.json;
+  const historyByField = {};
+  if (!row.error && row.status !== "error" && row.propertiesWithHistory &&
+      typeof row.propertiesWithHistory === "object") {
+    for (const [field, versions] of Object.entries(row.propertiesWithHistory)) {
+      if (!Array.isArray(versions) || versions.length === 0) continue;
+      let newest = null;
+      for (const v of versions) {
+        const ts = v && v.timestamp;
+        if (!ts) continue;
+        const parsed = Date.parse(ts);
+        if (Number.isNaN(parsed)) continue;
+        if (newest === null || parsed > Date.parse(newest)) newest = ts;
+      }
+      if (newest) historyByField[field] = newest;
+    }
+  }
+  const rest = { ...row };
+  delete rest.id; delete rest.properties; delete rest.propertiesWithHistory;
+  delete rest.archived; delete rest.createdAt; delete rest.updatedAt;
+  delete rest.error; delete rest.status;
+  return { json: { ...rest, historyByField } };
+});
+""", hx, hy))
 
     # Contact -> company resolution (2026-08-25). Both searches fire for every row —
     # ponytail: two reads per row instead of a branch that would break index alignment;
@@ -1414,12 +1509,23 @@ return anyNonWrite ? [] : [{}];
         "Webhook Trigger", "Set Config", "Extract From File", "Map Columns",
         "Normalize Phone", "Build Verify Batch", "Verify Emails (batch)", "Apply Email",
         "HubSpot Search by Email", "Adapt Search Results", "Resolve Identity",
+    ])
+    # Phase 72 Plan 04 (D-72-06/07): "Resolve Identity" no longer feeds "Merge Contacts"
+    # directly — it fans through "IF Has Contact Id" first, so a matched row's history
+    # hop can run before the two lanes reconverge (splice_merge_before, below).
+    conns.update(chain([
         "Merge Contacts", "Build Company Link", "HubSpot Company Search by Domain",
         # Phase 70 Plan 02 (D-70-04): "Stash Domain Search" sits between the two company
         # searches now — see its own call-site comment above.
         "Stash Domain Search", "HubSpot Company Search by Name", "Adapt Company Link",
         "Decide Action", "IF Update",
-    ])
+    ]))
+    conns["Resolve Identity"] = {"main": [[{"node": "IF Has Contact Id", "type": "main", "index": 0}]]}
+    conns["IF Has Contact Id"] = {"main": [
+        [{"node": "HubSpot Contact History", "type": "main", "index": 0}],  # true: matched
+        [{"node": "Merge Contacts", "type": "main", "index": 0}],           # false: net_new/unmatched
+    ]}
+    conns.update(chain(["HubSpot Contact History", "Adapt Contact History", "Merge Contacts"]))
     # D-70-07: "Set Config" fans to "Extract From File" (the existing pipeline,
     # unchanged), "Build Ingest Ack" (the immediate response), AND "Set Config Fields"
     # (D-70-04's source_by_field parse) — all three receive the SAME items; neither
@@ -1532,6 +1638,32 @@ return anyNonWrite ? [] : [{}];
     # relationship, not a per-item HTTP hop.
     splice_carry_merge_after(nodes, conns, "Extract From File", "Set Config Fields",
                              merge_name="Source By Field Broadcast", combine_by="combineAll")
+
+    # Phase 72 Plan 04 (D-72-06/07): join the HubSpot Contact History response back to
+    # its row (same helper the lane already uses for "HubSpot Search by Email"),
+    # retarget the routing IF's TRUE-branch fan through a pass-through (D-70-23 audit —
+    # no routing IF may have a direct edge to a Merge input), converge the matched
+    # (with history) and net_new (no history) lanes into one real Merge feeding
+    # "Merge Contacts", retarget that Merge's own net_new-lane IF edge the same way,
+    # and add a sentinel on the no-contact-id lane so the merge can never starve on an
+    # all-net_new batch (the matched lane's own real producer never runs at all when
+    # nothing has a contact_id, per CLAUDE.md §13.0.3 — "a node fed zero items never
+    # runs").
+    splice_carry_merge_after(nodes, conns, "HubSpot Contact History", "IF Has Contact Id",
+                             merge_name="HubSpot Contact History Carry Merge")
+    _retarget_merge_edge_through_passthrough(
+        nodes, conns, "IF Has Contact Id", 0, "HubSpot Contact History Carry Merge",
+        "IF Has Contact Id True Pass-Through", hx, hy - 200)
+    contact_history_merge = splice_merge_before(
+        nodes, conns, "Merge Contacts", merge_name="Contact History Merge")
+    _retarget_merge_edge_through_passthrough(
+        nodes, conns, "IF Has Contact Id", 1, contact_history_merge,
+        "IF Has Contact Id False Pass-Through", hx, hy + 200)
+    contact_history_idx = _merge_input_index(conns, "Adapt Contact History", contact_history_merge)
+    _add_starved_lane_sentinel(
+        nodes, conns, "Contact History Sentinel", "Resolve Identity",
+        "return rows.some((r) => r && r.identity && r.identity.contact_id) ? [] : [{}];",
+        [(contact_history_merge, contact_history_idx)], hx, hy + 400)
 
     # D-70-01/D-70-23 (Phase 70 Plan 10): "Build Association Request" is fed by BOTH
     # "Update Carry Merge" and "Create Carry Merge" — a genuine two-lane convergence
@@ -11374,6 +11506,20 @@ _MERGE_MULTI_PRODUCER_TOLERANT = {
         "admitted by the 2026-09-11 census, not a proof of safety. v1 recordings "
         "exist for this lane at exec_1235{7,8}.runData.json — none shows this "
         "Merge multi-firing."
+    ),
+    # Phase 72 Plan 04 (D-72-07): new merge, added by this plan — NOT covered by the
+    # 2026-09-11 census (it postdates it). Same D-70-23 mechanism as the entries above:
+    # "Contact History Sentinel Gate" is fed ONLY by its own condition node
+    # ("Contact History Sentinel"), mutually exclusive with "Adapt Contact History"'s
+    # real delivery by construction (the sentinel fires [{}] only when NO row in the
+    # batch has a resolved contact_id, which is exactly when "Adapt Contact History"'s
+    # own upstream branch never runs at all). No v1 recording exists for this merge yet
+    # -- admitted on the mechanism's own established safety property, not a v1 replay.
+    ("LV Contact Ingest (Cloud template)", "Contact History Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer, mutually "
+        "exclusive by construction (the sentinel fires only when no row has a "
+        "resolved contact_id, exactly when the real producer's own branch never "
+        "runs). Added by Phase 72 Plan 04; no v1 recording exists for this merge yet."
     ),
 
     # Local-LIVE and review-decision entries — no v1 recording exists for these

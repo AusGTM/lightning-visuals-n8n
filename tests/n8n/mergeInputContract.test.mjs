@@ -127,6 +127,12 @@ const MULTI_PRODUCER_TOLERANT = new Map([
     "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
     "2026-09-11 census, not a proof of safety. v1 recordings exist for this lane at " +
     "exec_1235{7,8}.runData.json — none shows this Merge multi-firing."],
+  // Phase 72 Plan 04 (D-72-07): new merge, added by this plan — not covered by the
+  // 2026-09-11 census. Mirrors scripts/build_cloud_workflows.py's identical entry.
+  [["LV Contact Ingest (Cloud template)", "Contact History Merge"].join(" "),
+    "D-70-23 gated sentinel shares this input with its real producer, mutually " +
+    "exclusive by construction. Added by Phase 72 Plan 04; no v1 recording exists " +
+    "for this merge yet."],
   [["LV Enrichment (local LIVE)", "Merge Company Fan-In"].join(" "),
     "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
     "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +

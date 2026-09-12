@@ -160,12 +160,17 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     Merge for, found while making this lane's carry Merges never-stall-safe — see
     `wire_gate_refusal_lane`'s own `carry_merge` docstring for why a marker must land
     THERE (an APPEND input, safely filtered) rather than on either `combineByPosition`
-    carry Merge's own input (which would fabricate a paired row, Rule 1)."""
+    carry Merge's own input (which would fabricate a paired row, Rule 1).
+
+    Phase 72 Plan 04 (D-72-06/07) adds a SECOND such exception: "Contact History Merge",
+    the genuine two-lane (matched-with-history / no-contact-id) convergence in front of
+    "Merge Contacts" that `splice_merge_before` builds for the same reason as
+    "Build Association Request Merge" above -- a real fan-in, not an HTTP-hop carry."""
     wf = b.build_cloud()
     merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
     append_merges = [n for n in merges if n["parameters"]["mode"] == "append"]
     assert sorted(n["name"] for n in append_merges) == sorted(
-        ["Ingest Merge Response", "Build Association Request Merge"])
+        ["Ingest Merge Response", "Build Association Request Merge", "Contact History Merge"])
 
     ingest_merge = next(n for n in append_merges if n["name"] == "Ingest Merge Response")
     # Task 3: a THIRD input — "Decide Action Snapshot" — alongside "Associate Carry
@@ -178,12 +183,15 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     assert ingest_merge["parameters"]["numberInputs"] == 5
 
     combine_merges = {n["name"]: n for n in merges if n["parameters"]["mode"] == "combine"}
-    # Every per-item HTTP hop this lane carries a row across — Task 3's full inventory.
+    # Every per-item HTTP hop this lane carries a row across — Phase 70 Plan 02 Task 3's
+    # full inventory, plus Phase 72 Plan 04's "HubSpot Contact History Carry Merge"
+    # (the same splice_carry_merge_after idiom, joining the new history GET back to its
+    # row ahead of "Contact History Merge"'s two-lane convergence above).
     assert set(combine_merges) == {
         "Update Carry Merge", "Create Carry Merge", "Associate Carry Merge",
         "Verify Email Carry Merge", "Search By Email Carry Merge",
         "Company Domain Carry Merge", "Company Name Carry Merge",
-        "Source By Field Broadcast",
+        "Source By Field Broadcast", "HubSpot Contact History Carry Merge",
     }
     for name, node in combine_merges.items():
         if name == "Source By Field Broadcast":

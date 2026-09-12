@@ -74,6 +74,8 @@ function twoRowFixture() {
         { results: [{ id: ROW1_CONTACT_ID, properties: { email: ROW1_EMAIL } }] },
         { results: [] },
       ],
+      // Only Row 1 resolves a contact_id.
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [
         { results: [{ id: ROW1_COMPANY_ID, properties: { domain: "example.com" } }] },
         { results: [] },

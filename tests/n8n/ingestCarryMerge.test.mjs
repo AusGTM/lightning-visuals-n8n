@@ -92,6 +92,11 @@ function fourRowFixture() {
         { results: [] },
         { results: [{ id: ROW4_CONTACT_ID, properties: { email: ROW4_EMAIL } }] },
       ],
+      // Only Row 1 and Row 4 resolve a contact_id, so only they reach the history hop.
+      "HubSpot Contact History": [
+        { propertiesWithHistory: {} },
+        { propertiesWithHistory: {} },
+      ],
       // Row 1 and Row 2 resolve by DOMAIN; Row 3 and Row 4 miss on domain (their
       // company_domain derives from an email whose domain no company owns) and fall
       // through to the NAME search below.

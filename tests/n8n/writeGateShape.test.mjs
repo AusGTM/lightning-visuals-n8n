@@ -479,6 +479,7 @@ test("ingest: a batch of nothing but REFUSED updates still reaches Build Ingest 
     httpStubs: {
       "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
       "HubSpot Search by Email": [{ results: [{ id: "35551", properties: { email: INGEST_EMAIL } }] }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [
         { results: [{ id: "9600000001", properties: { domain: "wyongraceclub.com.au" } }] }],
       "HubSpot Company Search by Name": [{ results: [] }],
@@ -506,6 +507,7 @@ test("ingest: a batch of updates that resolve NO company does not stall — an u
     httpStubs: {
       "Verify Emails (batch)": [{ results: [{ email: INGEST_EMAIL, status: "VALID" }] }],
       "HubSpot Search by Email": [{ results: [{ id: "35551", properties: { email: INGEST_EMAIL } }] }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [{ results: [] }],
       "HubSpot Company Search by Name": [{ results: [] }],
     },
@@ -555,6 +557,8 @@ test("ingest, ARMED with a mixed verdict: the permitted row keeps its associatio
         { results: [{ id: "111", properties: { email: MIX_A } }] },
         { results: [{ id: "222", properties: { email: MIX_B } }] },
       ],
+      "HubSpot Contact History": [
+        { propertiesWithHistory: {} }, { propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [
         { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
         { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
@@ -609,6 +613,8 @@ test("ingest, ARMED, both rows permitted, HubSpot Associate Company returns noth
         { results: [{ id: "111", properties: { email: MIX_A } }] },
         { results: [{ id: "444", properties: { email: MIX_B } }] },
       ],
+      "HubSpot Contact History": [
+        { propertiesWithHistory: {} }, { propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [
         { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },
         { results: [{ id: "900", properties: { domain: "acme-domain.example" } }] },

@@ -142,6 +142,8 @@ function tracerFixture() {
         }
         return { results: [] }; // row A: net_new
       }),
+      // Rows B and C resolve a contact_id above; row A is net_new.
+      "HubSpot Contact History": (items) => items.map(() => ({ propertiesWithHistory: {} })),
       "HubSpot Company Search by Domain": (items) => items.map((it) =>
         it.company_search_domain === DOMAIN
           ? { results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }
@@ -268,6 +270,7 @@ function existingFieldsFixture() {
           jobtitle: "HS Title", phone: "+61400999888",
         } }],
       }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
       "HubSpot Company Search by Name": [{ results: [] }],
       "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),
@@ -392,6 +395,7 @@ test("D-72-01: the five location keys are withheld from an update that already h
       "HubSpot Search by Email": [{
         results: [{ id: ROW_G_CONTACT_ID, properties: { email: ROW_G_EMAIL, ...ROW_G_EXISTING } }],
       }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
       "HubSpot Company Search by Name": [{ results: [] }],
       "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),
@@ -486,6 +490,7 @@ test("D-72-04: hs_linkedin_url is withheld from an update whose contact already 
           email: ROW_I_EMAIL, hs_linkedin_url: ROW_I_EXISTING_LINKEDIN,
         } }],
       }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
       "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
       "HubSpot Company Search by Name": [{ results: [] }],
       "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),

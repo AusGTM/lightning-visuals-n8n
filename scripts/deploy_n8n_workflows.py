@@ -125,6 +125,11 @@ NODE_CREDENTIAL_MAP = {
     # error, 401-ing only at runtime. Confirmed live against the built wf_*_cloud.json.
     # wf_contact_ingest_cloud.json (1 node):
     "HubSpot Search by Email": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 72 Plan 04 (D-72-07): the recency gate's property-history fetch. Registered
+    # in the SAME commit as the node's creation in scripts/build_cloud_workflows.py, per
+    # this map's own convention — an unmapped HubSpot node deploys UNBOUND and 401s only
+    # at runtime.
+    "HubSpot Contact History": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # wf_scheduled_maintenance_cloud.json (9 nodes):
     "SJ-3 Search (requested poller)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "SJ-1 Search (input-gap scan)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
