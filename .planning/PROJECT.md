@@ -9,7 +9,19 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
-## Current State (as of 2026-09-04)
+## Current State (as of 2026-09-13)
+
+**Phase 72 — Enrichment extras land in HubSpot: COMPLETE 2026-09-13** (8 plans + 4 gap-closure
+plans, 23+3 operator decisions, verification 22/22). Every field the waterfall pays for now reaches
+the contact it was found for: `mobilephone`, both `lv_linkedin_url` and `hs_linkedin_url`,
+seniority, persona, city/state/country and ISO codes on the ingest CREATE path (live-proven twice,
+contacts `352455353810` and `352522004980`); a recency/TTL gate replaces blanket
+fill-not-overwrite for `stale_refreshable` fields in all three merge engines; one overflow slot per
+phone kind (`lv_phone_2`, `lv_mobilephone_2`, created live under D-72-23) with the tail in
+provenance; company geo/phone producers where a provider actually supplies them. The one live
+defect the gate found (F72-1, `lv_linkedin_url` withheld on CREATE) was root-caused, fixed
+(`CANDIDATE_ALIASES` in `MERGE_CONTACTS`) and re-proven live. All five cloud workflows are
+deployed level with the committed JSON, disarmed. Plugin 0.49.0.
 
 **v1.1 — Unattended Session Runs: SHIPPED 2026-09-04.** 10 phases, 62 plans, 162 tasks
 (`.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-phases/`; tag `v1.1`).
@@ -363,6 +375,9 @@ Requirements are defined by `/gsd-new-milestone`. The candidate scope carried ou
 | **(v0.8)** `ALLOW_SJ3_DRAIN_WRITES` defaults `true` — the first write authority enabled at rest | A drain that needs arming cannot drain a queue that only accumulates while disarmed. Bounded by a key+value patch allowlist to the single flag, and excluded from the overlay/arm system per the `ALLOW_JUDGE_ESCALATION` precedent | ✅ Shipped 2026-08-10 |
 | **(2026-08-11)** No `lv_icp_scoring_version` property — the no-new-properties constraint holds | Operator decision at the v0.8 close. Consequence accepted: HubSpot cannot filter on JSON inside a text property, so identifying records scored under a superseded rubric requires re-scoring the population rather than segmenting a list | ⚠️ Revisit if rubric churn becomes frequent |
 | **(2026-08-11)** Two property-naming lanes coexist deliberately: live/n8n uses `lv_`-prefixed, the local Python oracle uses bare | The bare names are pinned by the oracle's fixtures and its JS-parity relationship; renaming them breaks the oracle. Translation happens at the live-write boundary instead (`src/live_patch.py`) | ✅ Decided 2026-08-11 |
+| **(Phase 72, 2026-09-12)** Provider-named `source_by_field` fields get provider-grade confidence (85) on the ingest lane; CSV-typed stay 80 (D-72-22) | The flat csv/80 could never clear `fill_blank_only@85` for mobile or LinkedIn even into a blank; no `min_confidence` moved (SAFE-01) | Shipped 72-01; the key-rename miss it left (F72-1) closed by `CANDIDATE_ALIASES` in 72-09 |
+| **(Phase 72, 2026-09-12)** Overflow-slot properties created live in plan 05, not the end-of-phase gate (D-72-23) | The BUG-14 schema-coverage guard correctly refuses JSON that references a property the portal does not hold; declare-now/create-later was novel and broke plan 06 | Shipped; undo-manifest `481a5c99` |
+| **(Phase 72, 2026-09-13)** Identity fields on a matched UPDATE row are CRM-owned; a mobile duplicating `phone` is acceptable; the second-email fallback is pinned offline (D-72-24..26) | No live dual-email case exists to spend credits on; a spreadsheet must not rename an existing person; `fill_blank_only` behaved | Recorded; phase verification passed 22/22 |
 
 ## Risks & Open Items
 
