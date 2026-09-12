@@ -465,3 +465,83 @@ test("mergeCompanies: a manual_protected field with NO system_correctable_source
   assert.equal(d.decision, "stage_only");
   assert.equal(d.reason, "Field is manual_protected.");
 });
+
+// =========================================================================================
+// Phase 72 Plan 06 (D-72-14/D-72-15) — explicit companies policy for state/hs_state_code/
+// phone. DEFAULT_COMPANY_POLICY's default-for-undeclared-field fallback ({class:
+// "fill_blank_only", min_confidence: 80}) already gives these three the same runtime
+// behaviour, so this section exists to make the policy EXPLICIT (SAFE-01), pinned by
+// tests/test_field_policy_conformance.py against config/field_policy.yaml -- these tests
+// characterize the resulting behaviour, not a change to what the engine does.
+// =========================================================================================
+
+test("mergeCompanies: state candidate against a BLANK existing value promotes", () => {
+  const { canonicalPatch, decisions } = mergeCompanies(
+    { state: "" }, { state: "New South Wales" }, undefined,
+    { source: "waterfall", confidence: 85 },
+  );
+  assert.equal(canonicalPatch.state, "New South Wales");
+  assert.equal(decisions.find((x) => x.field === "state").decision, "promote");
+});
+
+test("mergeCompanies: state candidate against a DIFFERENT non-blank existing value does not promote (fill_blank_only)", () => {
+  const { canonicalPatch, decisions } = mergeCompanies(
+    { state: "Victoria" }, { state: "New South Wales" }, undefined,
+    { source: "waterfall", confidence: 85 },
+  );
+  assert.ok(!("state" in canonicalPatch), "existing state must never be overwritten");
+  assert.equal(decisions.find((x) => x.field === "state").decision, "stage_only");
+});
+
+test("mergeCompanies: phone candidate against a BLANK existing value promotes", () => {
+  const { canonicalPatch, decisions } = mergeCompanies(
+    { phone: "" }, { phone: "+61212340001" }, undefined,
+    { source: "waterfall", confidence: 85 },
+  );
+  assert.equal(canonicalPatch.phone, "+61212340001");
+  assert.equal(decisions.find((x) => x.field === "phone").decision, "promote");
+});
+
+test("mergeCompanies: phone candidate against a non-blank existing value does not promote (fill_blank_only)", () => {
+  const { canonicalPatch, decisions } = mergeCompanies(
+    { phone: "+61200000000" }, { phone: "+61212340001" }, undefined,
+    { source: "waterfall", confidence: 85 },
+  );
+  assert.ok(!("phone" in canonicalPatch), "existing phone must never be overwritten");
+  assert.equal(decisions.find((x) => x.field === "phone").decision, "stage_only");
+});
+
+test("mergeCompanies: a code-shaped hs_state_code candidate against a blank existing value promotes", () => {
+  const { canonicalPatch, decisions } = mergeCompanies(
+    { hs_state_code: "" }, { hs_state_code: "NSW" }, undefined,
+    { source: "waterfall", confidence: 85 },
+  );
+  assert.equal(canonicalPatch.hs_state_code, "NSW");
+  assert.equal(decisions.find((x) => x.field === "hs_state_code").decision, "promote");
+});
+
+test("mergeCompanies: phone runner-up routes to lv_phone_2 through the plan 05 overflow map (D-72-11/D-72-12)", () => {
+  const ranked = { phone: [
+    { field: "phone", source: "apollo", value: "+61212340001", normalizedValue: "+61212340001" },
+    { field: "phone", source: "zoominfo", value: "+61212340002", normalizedValue: "+61212340002" },
+  ] };
+  const { canonicalPatch, provenance } = mergeCompanies({}, {}, undefined,
+    { source: "waterfall", confidence: 90, rankedByField: ranked });
+  assert.equal(canonicalPatch.phone, "+61212340001");
+  assert.equal(canonicalPatch.lv_phone_2, "+61212340002");
+  assert.equal(provenance.phone.source, "apollo");
+  assert.equal(provenance.lv_phone_2.source, "zoominfo");
+});
+
+test("mergeCompanies: DEFAULT_COMPANY_POLICY carries explicit state/hs_state_code/phone entries (SAFE-01)", () => {
+  for (const field of ["state", "hs_state_code", "phone"]) {
+    const pol = DEFAULT_COMPANY_POLICY[field];
+    assert.ok(pol, `DEFAULT_COMPANY_POLICY.${field} must be explicitly declared`);
+    assert.equal(pol.class, "fill_blank_only");
+    assert.equal(pol.min_confidence, 80);
+  }
+  // hs_country_region_code stays undeclared -- the property does not exist on companies
+  // (72-PORTAL-PROBE.json, 404) -- an explicit policy for it would be permanently
+  // unreachable configuration.
+  assert.ok(!("hs_country_region_code" in DEFAULT_COMPANY_POLICY));
+});

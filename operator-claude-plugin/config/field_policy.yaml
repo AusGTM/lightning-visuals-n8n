@@ -89,6 +89,40 @@ companies:
     min_confidence: 75
     protect_if_current_present: true
 
+  # Phase 72 Plan 06 (D-72-15): native `state` -- the full state/region NAME, mirroring
+  # country/city's shape. Producer: Lusha co.location.state, Apollo org.state (both raw
+  # names, live evidence -- see n8n/code/normalizeProviders.js comments). 80, not 75:
+  # this plan's own instruction for its three new entries, matching the contacts-side
+  # phone/state thresholds rather than reusing country/city's 75.
+  state:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  # Phase 72 Plan 06 (D-72-15): native `hs_state_code` -- a code-shaped-only guarded
+  # producer (Lusha/Apollo), never derived from a name. Property confirmed live/writable
+  # (72-RESEARCH.md's company.csv export). hs_country_region_code has NO equivalent entry
+  # here -- 72-PORTAL-PROBE.json confirmed that property does not exist on companies
+  # (404), so the company half of D-72-15's code pair is scoped to this field only.
+  hs_state_code:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  # Phase 72 Plan 06 (D-72-14): native `phone` -- a genuine existing HubSpot company
+  # property (72-RESEARCH.md's company.csv export: "Phone Number","phone","string",
+  # writable). Producer: Apollo org.primary_phone.sanitized_number / org.phone. The
+  # trust-rank runner-up routes to `lv_phone_2` (already declared below, Phase 72 Plan
+  # 05) via mergeCompanies()'s opts.rankedByField -- no separate overflow entry needed
+  # here.
+  phone:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
   lv_org_type:
     class: system_owned
     promote_to_canonical: true
