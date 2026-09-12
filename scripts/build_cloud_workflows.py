@@ -469,6 +469,15 @@ MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 // this node's input on an all-net_new batch (the matched lane's own real producer
 // never runs at all) — drop an identity-less marker before it reaches Decide Action,
 // mirroring "Merge Company"'s identical guard.
+//
+// Gap closure G1 (D-72-09, review WR-01, live finding F72-1): preingest.py's
+// PROVIDER_KEY_ALIASES (D-72-19) renames a provider-supplied lv_linkedin_url to the
+// bare CSV column name BEFORE it is recorded in source_by_field/answered_fields — so
+// source_by_field can only ever name this field by that bare name, never the write-side
+// candidate keys below. CANDIDATE_ALIASES undoes that rename at the ONE place both
+// halves of this node read it, so the confidenceByField/sourceByField derivation and
+// the candidate builder can never again disagree about what this field is called.
+const CANDIDATE_ALIASES = { linkedin_url: ["lv_linkedin_url", "hs_linkedin_url"] };
 return $input.all().filter((it) => Object.keys(it.json || {}).length > 0)
   // Restore original row order after the Contact History split's append-mode
   // Merge concatenated its two lanes out of order (Phase 72 Plan 04). `?? 0` is a
@@ -476,10 +485,22 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0)
   .sort((a, b) => (a.json._ingest_seq ?? 0) - (b.json._ingest_seq ?? 0))
   .map((it) => {
   const { _ingest_seq, ...row } = it.json;
-  const sourceByField = row.source_by_field || {};
+  // Local copy — never mutate row.source_by_field, which this node echoes downstream
+  // via { ...row, merge: merged } (request-level object; never grow it here).
+  const sourceByField = { ...(row.source_by_field || {}) };
   const confidenceByField = {};
   for (const f of Object.keys(sourceByField)) {
-    if (sourceByField[f] && sourceByField[f] !== "csv") confidenceByField[f] = 85;
+    if (!sourceByField[f] || sourceByField[f] === "csv") continue;
+    confidenceByField[f] = 85;
+    for (const target of CANDIDATE_ALIASES[f] || []) {
+      // Guarded: a caller-supplied entry already present under the target key (e.g. a
+      // provider independently answering hs_linkedin_url directly, or an explicit
+      // "csv" for it) is never overwritten by the alias.
+      if (sourceByField[target] == null) {
+        confidenceByField[target] = 85;
+        sourceByField[target] = sourceByField[f];
+      }
+    }
   }
   const candidate = {};
   for (const f of ["email", "firstname", "lastname", "jobtitle", "company", "mobilephone",
@@ -489,9 +510,8 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0)
   }
   if (row.linkedin_url != null && String(row.linkedin_url).trim() !== "") {
     // D-72-04: land BOTH the canonical field (PN-1) and the native portal property
-    // from the same value — one canonicalization, two write targets.
-    candidate.lv_linkedin_url = row.linkedin_url;
-    candidate.hs_linkedin_url = row.linkedin_url;
+    // from the same value — one canonicalization, two write targets, one map.
+    for (const target of CANDIDATE_ALIASES.linkedin_url) candidate[target] = row.linkedin_url;
   }
   if (row.phone_normalized) candidate.phone = row.phone_normalized;
   // Phase 72 Plan 04 (D-72-07): stamped by "Adapt Contact History" on a matched row
