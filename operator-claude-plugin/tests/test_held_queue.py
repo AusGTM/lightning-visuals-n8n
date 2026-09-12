@@ -285,8 +285,13 @@ def test_an_enriched_held_row_survives_the_write_to_disk_end_to_end(tmp_path):
     while execution 12372's Lusha reveal returned his email, phone, mobile and
     LinkedIn -- a 7-credit reveal thrown away at the persist boundary. Katie
     Poggioli's thin enrichment returned only her jobtitle. Feed the MERGED rows
-    (never the source rows) through build_entry/save/load and assert they survive,
-    and that the still-closed allowlist drops `city`."""
+    (never the source rows) through build_entry/save/load and assert they survive.
+
+    Phase 72 Plan 03 (D-72-01/D-72-15): `city` moved from excluded to included by
+    this plan's own widening (a create resumed from this queue now needs geo), so
+    it no longer demonstrates a closed allowlist -- `hs_linkedin_url` (D-72-04, a
+    lane-side-only write target no real provider response ever carries) is the
+    still-excluded demonstration key here."""
     row_3 = {"row_id": "row-3", "firstname": "Jimmy", "lastname": "Busteed",
              "company": "Australian Turf Club", "email": ""}
     row_2 = {"row_id": "row-2", "firstname": "Katie", "lastname": "Poggioli",
@@ -300,6 +305,7 @@ def test_an_enriched_held_row_survives_the_write_to_disk_end_to_end(tmp_path):
             "mobilephone": "0412345678",
             "lv_linkedin_url": "https://www.linkedin.com/in/jbusteed",
             "city": "Sydney",
+            "hs_linkedin_url": "https://www.linkedin.com/in/jbusteed",
         }),
         _f2_1_response("row-2", {"jobtitle": "Club Contact"}),
     ])
@@ -326,7 +332,8 @@ def test_an_enriched_held_row_survives_the_write_to_disk_end_to_end(tmp_path):
     # enrichment.MATCH_LOOKUP_KEYS, so it survives unchanged.
     assert jimmy["linkedin_url"] == "https://www.linkedin.com/in/jbusteed"
     assert "lv_linkedin_url" not in jimmy
-    assert "city" not in jimmy  # the allowlist is still closed
+    assert jimmy["city"] == "Sydney"  # Phase 72 Plan 03: now admitted
+    assert "hs_linkedin_url" not in jimmy  # the allowlist is still closed
 
     katie_key = held_queue.stable_key(merged_by_id["row-2"])
     katie = loaded[katie_key]["row"]

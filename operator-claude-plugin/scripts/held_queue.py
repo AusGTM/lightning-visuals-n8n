@@ -92,6 +92,10 @@ an arbitrary spreadsheet column off disk. As of 260911-w6o that scan targets KEY
 NAMES only for `row` (see `save()`'s call site) — `observed_signals`, `reason`, and
 `row_id` keep full key-and-value scanning, unchanged.
 
+Phase 72 Plan 03 (D-72-01/D-72-15) widened it again, to 18 names, admitting
+`seniority`, `lv_persona_group`, and the five location keys — see the tuple's own
+comment for why the exclusion rationale flipped rather than being overridden.
+
 Carries `run_manifest.py`'s Phase 23 D-11 forbidden-name refusal verbatim in substance
 (reimplemented, not imported — the same discipline `written_records.py` already
 applies to this same list, so a future change to one cannot silently weaken another):
@@ -177,11 +181,24 @@ _LEGACY_KEY = re.compile(r"^row-\d+$")
 # which would turn an importable module into an unimportable one. `jobtitle`,
 # `phone`, `company_id` mirror `suggestion_declines.ROW_FIELD_ALLOWLIST` verbatim;
 # `mobilephone` and `lv_linkedin_url` are the waterfall's own promoted keys for a
-# mobile and a LinkedIn. Deliberately NOT admitted: `seniority`, `lv_persona_group`,
-# and the five location keys -- none is named in F2-1, none is needed by a create,
-# and each is PII this store would then hold with no consumer.
+# mobile and a LinkedIn.
+#
+# Widened again by Phase 72 Plan 03 (D-72-01/D-72-15): `seniority`, `lv_persona_
+# group`, and the five location keys were previously excluded on the stated
+# rationale "none is named in F2-1, none is needed by a create, and each is PII
+# this store would then hold with no consumer." D-72-01/D-72-15 FLIPPED the second
+# and third clauses -- a create resumed from this queue (review-triage's own step
+# 4a) is exactly the D-72-17 read-back route, so these seven now have a consumer
+# and are needed by a create. The PII observation still stands and is still
+# bounded by the same two controls: this remains a closed, enumerated tuple (an
+# arbitrary spreadsheet column still never lands), and D-71-05's wipe is the
+# retention control. `hs_linkedin_url` (D-72-04) is deliberately NOT admitted: it
+# is a lane-side-only write target no real provider response ever carries as a
+# key, so admitting it would add a name with no reachable producer.
 ROW_FIELD_ALLOWLIST = ("row_id",) + enrichment.MATCH_LOOKUP_KEYS + (
     "jobtitle", "phone", "company_id", "mobilephone", "lv_linkedin_url",
+    "seniority", "lv_persona_group",
+    "city", "state", "country", "hs_state_code", "hs_country_region_code",
 )
 
 # Phase 23 D-11, reimplemented (not imported) per `run_manifest.py`'s own precedent.
