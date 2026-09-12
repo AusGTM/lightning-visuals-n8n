@@ -17,8 +17,10 @@ import extraction  # noqa: E402
 # `company_id` (2026-08-25) is the manual contact->company association override — a routing
 # field the ingest lane reads, not a HubSpot contact property. It lives in the same alias map
 # because Map Columns drops any column that is not in it.
+# Phase 72 Plan 01 (D-72-03): `mobilephone` split off the `phone` alias group into its
+# own canonical target.
 CANONICAL_PROPS = ["company", "company_id", "email", "firstname", "jobtitle", "lastname",
-                   "linkedin_url", "phone"]
+                   "linkedin_url", "mobilephone", "phone"]
 
 
 def test_canonical_props_returns_exactly_the_alias_targets():

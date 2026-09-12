@@ -239,3 +239,78 @@ test("D-72-22 negative: without source_by_field naming mobilephone, a CSV mobile
     "a needs_review field must never reach the HubSpot Create body"
   );
 });
+
+// --- Task 2: pin what existingProps now changes for the seven keys that predate this
+// plan --------------------------------------------------------------------------------
+//
+// Task 1 turned a lane that never gated into one that does. This pins the resulting
+// behavior for every pre-existing candidate key, so a later plan cannot regress it
+// silently and so the operator sees exactly what changed. F71-5's "provider jobtitle
+// replaced the CSV jobtitle" happened in the PLUGIN's merge_enriched, not on this lane —
+// the lane promoted jobtitle only because it merged against an empty existing-props
+// object (71-UAT.md). With real existing props, a differing non-blank jobtitle now
+// routes to review instead of applying, until plan 04's TTL branch lands.
+
+const ROW_D_EMAIL = "differing@" + DOMAIN;
+const ROW_D_CONTACT_ID = "444";
+
+function existingFieldsFixture() {
+  return {
+    triggerItems: [
+      { email: ROW_D_EMAIL, firstname: "CsvFirst", lastname: "CsvLast",
+        company: "Widened Fields Co", jobtitle: "CSV Title", phone: "0400111222" },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: ROW_D_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{
+        results: [{ id: ROW_D_CONTACT_ID, properties: {
+          email: ROW_D_EMAIL, firstname: "HsFirst", lastname: "HsLast",
+          jobtitle: "HS Title", phone: "+61400999888",
+        } }],
+      }],
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  };
+}
+
+test("existingProps gate: phone/firstname/lastname/jobtitle/email all stay off an update body once HubSpot holds different non-blank values", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const fixture = existingFieldsFixture();
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: fixture.triggerItems,
+    httpStubs: fixture.httpStubs,
+  });
+
+  assert.deepEqual(starvedWithData(trace), []);
+
+  const merged = nodeItems(runData, "Merge Contacts");
+  assert.equal(merged.length, 1);
+  const decisions = merged[0].merge.decisions || [];
+  const decisionFor = (field) => decisions.find((d) => d.field === field);
+
+  assert.equal(decisionFor("phone").decision, "stage_only",
+    "phone: fill_blank_only @ 80, protect_if_current_present true -- a differing non-blank existing value must not be overwritten");
+  assert.equal(decisionFor("firstname").decision, "stage_only",
+    "firstname: no config/field_policy.yaml entry -- the engines' fill_blank_only/80 default now protects a non-blank existing value too");
+  assert.equal(decisionFor("lastname").decision, "stage_only",
+    "lastname: same fill_blank_only/80 default as firstname");
+  assert.equal(decisionFor("jobtitle").decision, "needs_review",
+    "jobtitle: stale_refreshable pre-TTL -- blank existing -> promote, else -> needs_review (not the plugin's own refreshable_keys rule, which never reaches this lane)");
+  assert.equal(decisionFor("email").decision, "stage_only",
+    "email: fill_blank_only @ 80 -- the row's own match key, already non-blank on every matched row");
+
+  const updateRows = nodeItems(runData, "HubSpot Update");
+  assert.equal(updateRows.length, 1);
+  const properties = updateRows[0].properties;
+  for (const field of ["phone", "firstname", "lastname", "jobtitle", "email"]) {
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(properties, field),
+      false,
+      `${field} must not appear in the update body once existingProps protects it`
+    );
+  }
+});
