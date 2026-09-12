@@ -43,7 +43,10 @@ const DEFAULT_COMPANY_POLICY = {
   // every other field (and the unreachable contacts branch) keeps.
   domain:                  { class: "manual_protected",  min_confidence: 95,
                              system_correctable_sources: ["create_seed"] },
-  industry:                { class: "stale_refreshable", min_confidence: 75 },
+  // stale_after_days (Phase 72 Plan 04, D-72-06/07/09): mirrors
+  // config/field_policy.yaml companies.industry exactly -- every production call site
+  // passes fieldPolicy=undefined, so this default IS what the recency gate reads.
+  industry:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 365 },
   // 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
   // 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
   // Scope: THIS lane only, blank-fill, provider-sourced values -- a non-blank existing
@@ -98,6 +101,21 @@ function _isBlank(v) {
 
 function _nowIso() {
   return new Date().toISOString();
+}
+
+// Phase 72 Plan 04 (D-72-07): mirrors mergeContacts.js's identical constant/helper --
+// see that file's comment for the full T-72-02 rationale. Duplicated per this repo's
+// existing self-contained-per-Code-node pattern (_isBlank/_nowIso/stableStringify).
+function _isProviderSource(name) {
+  return name === "apollo" || name === "lusha" || name === "zoominfo" || name === "claude_web";
+}
+
+function _isStale(historyTimestamp, staleAfterDays, now) {
+  if (_isBlank(historyTimestamp) || staleAfterDays == null) return false;
+  const t = Date.parse(historyTimestamp);
+  const n = Date.parse(now);
+  if (Number.isNaN(t) || Number.isNaN(n)) return false;
+  return (n - t) > staleAfterDays * 86400000;
 }
 
 // Recursively sort object keys before JSON.stringify — the JS half of the shared
@@ -179,7 +197,7 @@ function _isSystemCorrectable(policy, entry, currentValue, rowConflicted) {
 // Deterministic gate — single candidate, mirrors merge_policy.deterministic_gate.
 // has_conflict is always false with one candidate, so the conflict branch is dropped.
 function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
-               provenanceEntry, rowConflicted) {
+               provenanceEntry, rowConflicted, historyTimestamp, candidateObservedAt, now) {
   const fieldClass = (policy && policy.class) || "fill_blank_only";
   const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;
 
@@ -218,7 +236,30 @@ function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
     if (_isBlank(currentValue)) {
       return { decision: "promote", reason: "Current value blank and candidate passed threshold." };
     }
-    return { decision: "needs_review", reason: "Refresh candidate requires review in MVP." };
+    // Phase 72 Plan 04 (D-72-06/07): the real TTL branch -- Phase 46 parity twin of
+    // mergeContacts.js's identical branch. `historyTimestamp` is the existing value's
+    // own HubSpot property-history timestamp; absent on every caller in this file today
+    // (no company lane fetches history), which degrades to the pre-72 needs_review
+    // outcome by construction, exactly as the plan requires.
+    if (_isBlank(historyTimestamp)) {
+      return { decision: "needs_review",
+               reason: `Unknown freshness for the existing ${field} value (no history ` +
+                       `timestamp available); needs review.` };
+    }
+    const staleAfterDays = policy && policy.stale_after_days;
+    if (!_isStale(historyTimestamp, staleAfterDays, now)) {
+      return { decision: "needs_review", reason: "Refresh candidate requires review in MVP." };
+    }
+    if (_isBlank(candidateObservedAt) || Date.parse(candidateObservedAt) <= Date.parse(historyTimestamp)) {
+      return { decision: "needs_review",
+               reason: `Existing ${field} value is stale (older than ${staleAfterDays} days) ` +
+                       `but the candidate carries no observation newer than ${historyTimestamp}; ` +
+                       `needs review.` };
+    }
+    return { decision: "promote",
+             reason: `Existing ${field} value is stale (older than ${staleAfterDays} days: ` +
+                     `history ${historyTimestamp}, now ${now}) and the candidate's own ` +
+                     `observation ${candidateObservedAt} is newer.` };
   }
   return { decision: "stage_only", reason: "Default conservative behavior." };
 }
@@ -256,12 +297,21 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   const source = (opts && opts.source) || "provider";
   const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
   const confidenceByField = (opts && opts.confidenceByField) || {};
+  // Phase 72 Plan 04 (D-72-07): per-field source override, mirroring mergeContacts.js's
+  // opts.sourceByField exactly. No production caller passes this today (the company
+  // waterfall/research/June folds all pass a flat opts.source), so this is additive —
+  // every existing call site keeps its flat-source behaviour byte-identical.
+  const sourceByField = (opts && opts.sourceByField) || {};
   const evidence = (opts && opts.evidence) || {};
   // 260904-pav: parsed ONCE per call, not per field, and read strictly (see
   // _isSystemCorrectable) — `undefined` is not "no conflict", it is "caller did not say".
   const provenanceEntries = _parseProvenanceEntries(existingProps.lv_enrichment_provenance);
   const rowConflicted = opts && opts.rowConflicted;
-  const verifiedAt = _nowIso();
+  // Phase 72 Plan 04: resolved ONCE per call, mirroring mergeContacts.js — the TTL
+  // comparison and the provenance verified_at stamp share the same instant.
+  const now = (opts && opts.now) || _nowIso();
+  const historyByField = (opts && opts.historyByField) || {};
+  const verifiedAt = now;
 
   const canonicalPatch = {};
   const provenance = {};
@@ -279,6 +329,13 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     // threshold, the provenance entry, and the decision record — so the recorded
     // confidence and the confidence that made the decision can never disagree.
     const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;
+    // Phase 72 Plan 04 (D-72-07): resolved per field, mirroring mergeContacts.js's
+    // identical resolution — the recorded source and the source that decided recency
+    // can never disagree. Every existing caller omits sourceByField, so resolvedSource
+    // is byte-identical to the flat `source` for them.
+    const resolvedSource = sourceByField[field] != null ? sourceByField[field] : source;
+    const historyTimestamp = historyByField[field];
+    const candidateObservedAt = _isProviderSource(resolvedSource) ? now : undefined;
 
     // ENUM GUARD (Phase 31, BUG 28): run BEFORE the gate, so the gate's evidence check,
     // canonicalPatch, the provenance entry and the decision record all see whichever value
@@ -290,7 +347,8 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     if (enumCheck.ok) value = enumCheck.value;
 
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value,
-                       provenanceEntries[field], rowConflicted);
+                       provenanceEntries[field], rowConflicted,
+                       historyTimestamp, candidateObservedAt, now);
     let decision = gate.decision;
 
     // HARD GUARD: domain never promotes to canonical on the enrich path (belt-and-braces —
@@ -313,7 +371,7 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     if (!enumCheck.ok) validationStatus = "rejected";
 
     // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
-    const entry = { source, confidence, verified_at: verifiedAt,
+    const entry = { source: resolvedSource, confidence, verified_at: verifiedAt,
                     validation_status: validationStatus, value };
     if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
     provenance[field] = entry;
@@ -342,7 +400,7 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
       field,
       current_value: currentValue === undefined ? null : currentValue,
       chosen_value: value,
-      source_provider: source,
+      source_provider: resolvedSource,
       decision,
       confidence,
       reason: enumCheck.ok ? gate.reason : enumCheck.reason,

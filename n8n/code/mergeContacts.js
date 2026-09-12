@@ -48,7 +48,11 @@ const DEFAULT_CONTACT_POLICY = {
   email:                   { class: "fill_blank_only", min_confidence: 80 },
   phone:                   { class: "fill_blank_only",   min_confidence: 80 },
   mobilephone:             { class: "fill_blank_only",   min_confidence: 85 },
-  jobtitle:                { class: "stale_refreshable", min_confidence: 75 },
+  // stale_after_days (Phase 72 Plan 04, D-72-06/07): mirrors config/field_policy.yaml
+  // contacts.jobtitle exactly. Every production call site passes fieldPolicy=undefined,
+  // so this default IS what the recency gate reads -- omitting it would leave the TTL
+  // branch permanently dead (_isStale sees undefined -> false -> always needs_review).
+  jobtitle:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 180 },
   lv_linkedin_url:         { class: "fill_blank_only",   min_confidence: 85 },
   // hs_linkedin_url: fill_blank_only @ 85 (Phase 72 Plan 02, D-72-04) — a write-only
   // mirror of lv_linkedin_url for the native portal property. Deliberately NOT chased
@@ -70,6 +74,26 @@ function _isBlank(v) {
 
 function _nowIso() {
   return new Date().toISOString();
+}
+
+// Phase 72 Plan 04 (D-72-07): the ONLY two legitimate observation-time sources are the
+// run's own resolved `now` and HubSpot's own property-history timestamp. A candidate
+// whose resolved source is not one of these four live providers carries NO observation
+// time at all and can therefore never win a recency comparison -- this is what closes
+// the backdated-CSV-column injection vector (T-72-02) by construction, not by policy.
+function _isProviderSource(name) {
+  return name === "apollo" || name === "lusha" || name === "zoominfo" || name === "claude_web";
+}
+
+// True only when `historyTimestamp` is a parseable instant strictly more than
+// `staleAfterDays` before `now`. Missing/unparseable input is NEVER stale -- unknown
+// freshness is not staleness, it is its own (more conservative) refusal branch.
+function _isStale(historyTimestamp, staleAfterDays, now) {
+  if (_isBlank(historyTimestamp) || staleAfterDays == null) return false;
+  const t = Date.parse(historyTimestamp);
+  const n = Date.parse(now);
+  if (Number.isNaN(t) || Number.isNaN(n)) return false;
+  return (n - t) > staleAfterDays * 86400000;
 }
 
 // Recursively sort object keys before JSON.stringify — see mergeCompanies.js's
@@ -114,7 +138,8 @@ function _needsEvidence(policy, value) {
 // Phase 16.2 Task 2 (additive): evidenceUrl/value are new trailing params, mirroring
 // mergeCompanies.js's _gate — every existing call site below still passes only the
 // first 4 args, so evidenceUrl/value are undefined and _needsEvidence(...) is false.
-function _gate(field, currentValue, confidence, policy, evidenceUrl, value) {
+function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
+               historyTimestamp, candidateObservedAt, now) {
   const fieldClass = (policy && policy.class) || "fill_blank_only";
   const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;
 
@@ -148,7 +173,33 @@ function _gate(field, currentValue, confidence, policy, evidenceUrl, value) {
     if (_isBlank(currentValue)) {
       return { decision: "promote", reason: "Current value blank and candidate passed threshold." };
     }
-    return { decision: "needs_review", reason: "Refresh candidate requires review in MVP." };
+    // Phase 72 Plan 04 (D-72-06/07): the real TTL branch. `historyTimestamp` is the
+    // EXISTING value's own HubSpot property-history timestamp (opts.historyByField,
+    // Task 3's fetch) -- unknown freshness (no timestamp reached the gate at all) is
+    // its own, more conservative refusal, never treated as staleness.
+    if (_isBlank(historyTimestamp)) {
+      return { decision: "needs_review",
+               reason: `Unknown freshness for the existing ${field} value (no history ` +
+                       `timestamp available); needs review.` };
+    }
+    const staleAfterDays = policy && policy.stale_after_days;
+    if (!_isStale(historyTimestamp, staleAfterDays, now)) {
+      return { decision: "needs_review", reason: "Refresh candidate requires review in MVP." };
+    }
+    // The existing value IS stale -- but only a candidate with its OWN observation
+    // time strictly newer than that history timestamp may replace it. A clockless
+    // candidate (candidateObservedAt absent -- csv/human/hubspot/unlisted sources)
+    // can never win this comparison, by construction (T-72-02).
+    if (_isBlank(candidateObservedAt) || Date.parse(candidateObservedAt) <= Date.parse(historyTimestamp)) {
+      return { decision: "needs_review",
+               reason: `Existing ${field} value is stale (older than ${staleAfterDays} days) ` +
+                       `but the candidate carries no observation newer than ${historyTimestamp}; ` +
+                       `needs review.` };
+    }
+    return { decision: "promote",
+             reason: `Existing ${field} value is stale (older than ${staleAfterDays} days: ` +
+                     `history ${historyTimestamp}, now ${now}) and the candidate's own ` +
+                     `observation ${candidateObservedAt} is newer.` };
   }
   return { decision: "stage_only", reason: "Default conservative behavior." };
 }
@@ -186,7 +237,17 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   const confidenceByField = (opts && opts.confidenceByField) || {};
   const sourceByField = (opts && opts.sourceByField) || {};
   const evidence = (opts && opts.evidence) || {};
-  const verifiedAt = _nowIso();
+  // Phase 72 Plan 04: resolved ONCE per call and used EVERYWHERE the wall clock used to
+  // be read directly -- the TTL comparison and the provenance verified_at stamp share
+  // the SAME instant, so a test supplying opts.now gets a deterministic provenance
+  // stamp without post-hoc stripping. Absent -> real wall clock, byte-identical to
+  // every caller before this plan.
+  const now = (opts && opts.now) || _nowIso();
+  // Phase 72 Plan 04 (D-72-07): the existing value's OWN HubSpot property-history
+  // timestamp, per field -- absent for every caller before Plan 04's ingest-lane fetch
+  // (Task 3) exists, which is exactly the pre-72 "unknown freshness" degrade.
+  const historyByField = (opts && opts.historyByField) || {};
+  const verifiedAt = now;
 
   const canonicalPatch = {};
   const provenance = {};
@@ -207,8 +268,16 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     // Same resolution, mirrored for source (Phase 62 Plan 04, D-62-17): the recorded
     // source and the source that was chosen can never disagree.
     const resolvedSource = sourceByField[field] != null ? sourceByField[field] : source;
+    // Phase 72 Plan 04 (D-72-07): resolved PER FIELD from the SAME resolvedSource the
+    // provenance entry already records -- never a second, independent lookup. Only a
+    // field whose resolved source is one of the four live providers carries the
+    // resolved `now` as its own observation time; csv/human/hubspot/unlisted sources
+    // carry none and can therefore never win a recency comparison.
+    const historyTimestamp = historyByField[field];
+    const candidateObservedAt = _isProviderSource(resolvedSource) ? now : undefined;
 
-    const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
+    const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value,
+                       historyTimestamp, candidateObservedAt, now);
     const decision = gate.decision;
 
     // EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01): a promoted email keeps its

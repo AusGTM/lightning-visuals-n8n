@@ -31,6 +31,42 @@ def is_blank(value):
     return value is None or value == "" or value == []
 
 
+# Phase 72 Plan 04 (D-72-07): the ONLY two legitimate observation-time sources are the
+# run's own resolved `now` and HubSpot's own property-history timestamp. A candidate
+# whose provider is not one of these four live providers carries NO observation time
+# and can therefore never win a recency comparison (T-72-02, by construction).
+PROVIDER_SOURCES = {"apollo", "lusha", "zoominfo", "claude_web"}
+
+
+def _parse_iso_or_none(ts):
+    """Best-effort ISO-8601 parse, tolerating a trailing 'Z' (Python's
+    datetime.fromisoformat only accepts '+00:00' before 3.11). Returns None for
+    anything blank or unparseable -- never raises."""
+    if is_blank(ts):
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _is_stale(history_timestamp, stale_after_days, now):
+    """True only when `history_timestamp` is a parseable instant strictly more than
+    `stale_after_days` before `now`. JS twin: mergeContacts.js's / mergeCompanies.js's
+    identical `_isStale`. Missing/unparseable input is NEVER stale -- unknown freshness
+    is its own, more conservative refusal, never conflated with staleness."""
+    if stale_after_days is None:
+        return False
+    t = _parse_iso_or_none(history_timestamp)
+    n = _parse_iso_or_none(now)
+    if t is None or n is None:
+        return False
+    return (n - t).total_seconds() > stale_after_days * 86400
+
+
 # Phase 15 (provenance model): per-field metadata rides in ONE JSON blob per object
 # (lv_enrichment_provenance / lv_contact_enrichment_provenance) instead of ~7 flat
 # `{field}_*` suffix properties, plus 4 carve-out `_verified_at` cache-key datetimes that
@@ -153,7 +189,8 @@ def is_system_correctable(policy, entry, current_value, row_conflicted) -> bool:
     return row_conflicted is False
 
 
-def deterministic_gate(record, field, current_value, candidates, policy, provider_priority):
+def deterministic_gate(record, field, current_value, candidates, policy, provider_priority,
+                        *, now=None, history_by_field=None):
     if not candidates:
         return {
             "decision": "reject",
@@ -248,11 +285,58 @@ def deterministic_gate(record, field, current_value, candidates, policy, provide
                 "confidence": best.confidence,
                 "reason": "Current value blank and candidate passed threshold."
             }
+        # Phase 72 Plan 04 (D-72-06/07): the real TTL branch — Phase 46 parity twin of
+        # mergeContacts.js's / mergeCompanies.js's identical branch. `history_by_field`
+        # is the existing value's own HubSpot property-history timestamp map; absent for
+        # every caller today (no live wiring reaches this oracle yet), which degrades to
+        # the pre-72 needs_review outcome by construction.
+        resolved_now = now or now_iso()
+        history_timestamp = (history_by_field or {}).get(field)
+        history_dt = _parse_iso_or_none(history_timestamp)
+        if history_dt is None:
+            return {
+                "decision": "needs_review",
+                "chosen": best,
+                "confidence": best.confidence,
+                "reason": (
+                    f"Unknown freshness for the existing {field} value (no history "
+                    f"timestamp available); needs review."
+                )
+            }
+        if not _is_stale(history_timestamp, policy.get("stale_after_days"), resolved_now):
+            return {
+                "decision": "needs_review",
+                "chosen": best,
+                "confidence": best.confidence,
+                "reason": "Refresh candidate requires review in MVP."
+            }
+        # The existing value IS stale — but only a candidate whose own provider
+        # carries an observation time strictly newer than that history timestamp may
+        # replace it. A clockless candidate (best.provider not one of the four live
+        # providers) can never win this comparison, by construction (T-72-02).
+        candidate_observed_at = resolved_now if best.provider in PROVIDER_SOURCES else None
+        candidate_dt = _parse_iso_or_none(candidate_observed_at)
+        if candidate_dt is None or candidate_dt <= history_dt:
+            return {
+                "decision": "needs_review",
+                "chosen": best,
+                "confidence": best.confidence,
+                "reason": (
+                    f"Existing {field} value is stale (older than "
+                    f"{policy.get('stale_after_days')} days) but the candidate carries "
+                    f"no observation newer than {history_timestamp}; needs review."
+                )
+            }
         return {
-            "decision": "needs_review",
+            "decision": "promote",
             "chosen": best,
             "confidence": best.confidence,
-            "reason": "Refresh candidate requires review in MVP."
+            "reason": (
+                f"Existing {field} value is stale (older than "
+                f"{policy.get('stale_after_days')} days: history {history_timestamp}, "
+                f"now {resolved_now}) and the candidate's own observation "
+                f"{candidate_observed_at} is newer."
+            )
         }
 
     return {
