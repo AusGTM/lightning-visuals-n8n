@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 4/8 plans executed
+**Plans:** 5/8 plans executed
 
 Plans:
 **Wave 1**
@@ -440,7 +440,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 72-05-PLAN.md — Portal probe, the three `_2` slot declarations, and winner/loser slot routing stamped in provenance (D-72-10..13)
+- [x] 72-05-PLAN.md — Portal probe, the three `_2` slot declarations, and winner/loser slot routing stamped in provenance (D-72-10..13)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
