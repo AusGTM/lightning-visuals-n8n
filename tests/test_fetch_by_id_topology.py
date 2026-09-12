@@ -211,17 +211,24 @@ def test_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id(bra
 def test_contact_fetch_by_id_properties_csv_adds_company_and_linkedin_to_the_search_csv():
     # Phase 66 Plan 01 Task 2: lv_linkedin_url moved INTO ENRICH_CONTACT_SEARCH_PROPERTIES_CSV
     # (T-66-02 non-clobber fix) and is deliberately NOT repeated in this suffix anymore —
-    # a name present in both halves would be requested twice. hs_linkedin_url (HubSpot's own
-    # native property, distinct from the PN-1-renamed lv_ one) stays a by-id-only addition.
+    # a name present in both halves would be requested twice.
+    # Phase 72 Plan 02 (D-72-04): hs_linkedin_url (HubSpot's own native property, distinct
+    # from the PN-1-renamed lv_ one) is now a merge candidate too, so it moved INTO the
+    # search CSV alongside lv_linkedin_url for the same non-clobber reason — no longer a
+    # by-id-only addition.
     assert ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV.startswith(ENRICH_CONTACT_SEARCH_PROPERTIES_CSV)
     added = ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV[len(ENRICH_CONTACT_SEARCH_PROPERTIES_CSV):]
     assert "company" in added.split(",")
-    assert "hs_linkedin_url" in added.split(",")
+    assert "hs_linkedin_url" not in added.split(","), (
+        "hs_linkedin_url now lives in the search CSV; repeating it in the suffix would "
+        "request the same property twice"
+    )
     assert "lv_linkedin_url" not in added.split(","), (
         "lv_linkedin_url now lives in the search CSV; repeating it in the suffix would "
         "request the same property twice"
     )
     assert "lv_linkedin_url" in ENRICH_CONTACT_SEARCH_PROPERTIES_CSV.split(",")
+    assert "hs_linkedin_url" in ENRICH_CONTACT_SEARCH_PROPERTIES_CSV.split(",")
     assert "lv_persona_group" in ENRICH_CONTACT_SEARCH_PROPERTIES_CSV.split(",")
 
 

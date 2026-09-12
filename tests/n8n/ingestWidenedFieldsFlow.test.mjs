@@ -427,3 +427,86 @@ test("D-72-01: the five location keys are withheld from an update that already h
       `${key} must land with the CSV's new value even though HubSpot already held a different one`);
   }
 });
+
+// --- Plan 02 Task 2: hs_linkedin_url lands as a SECOND write target (D-72-04) ------------
+
+const LINKEDIN_URL = "https://www.linkedin.com/in/widenedfields";
+const ROW_H_EMAIL = "linkedinboth@" + DOMAIN; // net_new -> both targets must reach Create
+
+test("D-72-04: a linkedin_url header value produces a Create body carrying BOTH lv_linkedin_url and hs_linkedin_url", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      {
+        body: { source_by_field: { lv_linkedin_url: "apollo", hs_linkedin_url: "apollo" } },
+        email: ROW_H_EMAIL, firstname: "Linked", lastname: "InBoth", company: "Widened Fields Co",
+        linkedin_url: LINKEDIN_URL,
+      },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: ROW_H_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [] }], // net_new
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Create": (items) => items.map((it) => ({ id: "888888", properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), []);
+
+  const createRows = nodeItems(runData, "HubSpot Create");
+  assert.equal(createRows.length, 1);
+  assert.equal(createRows[0].properties.lv_linkedin_url, LINKEDIN_URL,
+    "the canonical PN-1 target must still land (D-72-04 is additive, not a replacement)");
+  assert.equal(createRows[0].properties.hs_linkedin_url, LINKEDIN_URL,
+    "the native portal property must now land from the same value");
+});
+
+const ROW_I_EMAIL = "linkedinupdate@" + DOMAIN;
+const ROW_I_CONTACT_ID = "999";
+const ROW_I_EXISTING_LINKEDIN = "https://www.linkedin.com/in/someone-else";
+
+test("D-72-04: hs_linkedin_url is withheld from an update whose contact already holds a different non-blank value", () => {
+  const wf = loadArmedWorkflow({ testRecordDomains: DOMAIN });
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [
+      {
+        body: { source_by_field: { lv_linkedin_url: "apollo", hs_linkedin_url: "apollo" } },
+        email: ROW_I_EMAIL, firstname: "Linked", lastname: "InUpdate", company: "Widened Fields Co",
+        linkedin_url: LINKEDIN_URL,
+      },
+    ],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: ROW_I_EMAIL, status: "VALID" }] }],
+      "HubSpot Search by Email": [{
+        results: [{ id: ROW_I_CONTACT_ID, properties: {
+          email: ROW_I_EMAIL, hs_linkedin_url: ROW_I_EXISTING_LINKEDIN,
+        } }],
+      }],
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_ID, properties: { domain: DOMAIN } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      "HubSpot Update": (items) => items.map((it) => ({ id: it.hs_object_id, properties: it.properties })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), []);
+
+  const merged = nodeItems(runData, "Merge Contacts");
+  assert.equal(merged.length, 1);
+  const decisions = merged[0].merge.decisions || [];
+  const decisionFor = (field) => decisions.find((d) => d.field === field);
+  assert.equal(decisionFor("hs_linkedin_url").decision, "stage_only",
+    "fill_blank_only with a differing non-blank existing value must not clobber");
+
+  const updateRows = nodeItems(runData, "HubSpot Update");
+  assert.equal(updateRows.length, 1);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(updateRows[0].properties, "hs_linkedin_url"),
+    false,
+    "hs_linkedin_url must not appear in the update body once existingProps protects it"
+  );
+});

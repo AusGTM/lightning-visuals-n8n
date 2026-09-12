@@ -220,6 +220,17 @@ contacts:
     min_confidence: 85
     protect_if_current_present: true
 
+  # D-72-04: a write-only mirror of lv_linkedin_url for the native portal property
+  # `hs_linkedin_url` (present on this portal — see 72-CONTEXT.md's Portal facts).
+  # Deliberately NOT added to ENRICH_GATE's REQUIRED chase list (scripts/
+  # build_cloud_workflows.py) — a blank native mirror must not mark a contact
+  # incomplete and trigger provider spend (the D-66-01/T-66-04 economics).
+  hs_linkedin_url:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 85
+    protect_if_current_present: true
+
   seniority:
     class: system_owned
     promote_to_canonical: true

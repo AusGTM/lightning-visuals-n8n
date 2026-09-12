@@ -139,10 +139,16 @@ function pushedFieldsByLane() {
 const PUSHED = pushedFieldsByLane();
 
 // --- scripts/build_cloud_workflows.py: PN-1 rename mappings (contacts only) ---------------
-// Finds every `winners.X` read site in the builder and keeps it as a rename only when the
-// prefixed sibling (`.lv_X` or `"lv_X"`) also appears in the source — that is the same
+// Finds every `winners.X` read site in the builder and keeps it as a rename only when a
+// prefixed sibling (`.lv_X`/`"lv_X"` — the PN-1 rename — or `.hs_X`/`"hs_X"` — a second,
+// native-property write target, D-72-04) also appears in the source — that is the same
 // evidence D-66-03 asks a human reader to find by hand (candidate.lv_linkedin_url /
-// candidate.lv_persona_group), done mechanically instead.
+// candidate.lv_persona_group / candidate.hs_linkedin_url), done mechanically instead.
+// Phase 72 Plan 02: hs_linkedin_url mirrors lv_linkedin_url's producer (Apollo's
+// unprefixed `linkedin_url` push) rather than getting one of its own — extending the
+// prefix list here is what lets `producerFor` see that mirror, instead of reporting a
+// genuinely-produced field as producer-less.
+const PN1_PREFIXES = ["lv_", "hs_"];
 
 const BUILDER_SRC = fs.readFileSync(
   path.join(ROOT, "scripts/build_cloud_workflows.py"), "utf8");
@@ -153,15 +159,17 @@ function pn1Renames(src) {
   let m;
   while ((m = re.exec(src))) {
     const unprefixed = m[1];
-    const prefixed = "lv_" + unprefixed;
-    if (src.includes(`.${prefixed}`) || src.includes(`"${prefixed}"`)) {
-      renames[prefixed] = unprefixed;
+    for (const prefix of PN1_PREFIXES) {
+      const prefixed = prefix + unprefixed;
+      if (src.includes(`.${prefixed}`) || src.includes(`"${prefixed}"`)) {
+        renames[prefixed] = unprefixed;
+      }
     }
   }
   return renames;
 }
 
-const PN1_RENAMES = pn1Renames(BUILDER_SRC); // { lv_linkedin_url: "linkedin_url", lv_persona_group: "persona_group" }
+const PN1_RENAMES = pn1Renames(BUILDER_SRC); // { lv_linkedin_url: "linkedin_url", lv_persona_group: "persona_group", hs_linkedin_url: "linkedin_url", ... }
 
 // --- n8n/wf_enrichment_cloud.json: the REGENERATED gate REQUIRED list + search property list
 
@@ -399,6 +407,13 @@ test("fetch gate (WR-03): every REQUIRED member is requested, in EVERY generated
 // (appear in REQUIRED). This is what makes the companies REQUIRED list DERIVED rather than
 // chosen by intuition (RICH-02) — at the end of Task 1 (before Task 2 widens ENRICH_CO_GATE)
 // this is EXPECTED to fail for the companies lane; that is the audit result Task 2 acts on.
+//
+// NEVER_CHASE (Phase 72 Plan 02, D-72-04) is a DIFFERENT thing from KNOWN_GAPS above: this
+// field HAS a producer (it mirrors lv_linkedin_url's) but is deliberately excluded from
+// REQUIRED anyway — a blank native mirror must not mark a contact incomplete and trigger
+// provider spend (the D-66-01/T-66-04 economics this whole gate exists to protect). Pinned
+// by name, not silently swallowed, so a second such field needs the same explicit call-out.
+const NEVER_CHASE = new Set(["contacts.hs_linkedin_url"]);
 
 test("chase gate: every producer-having, promotable, non-recomputed policy key is REQUIRED", () => {
   for (const lane of ["contacts", "companies"]) {
@@ -409,6 +424,7 @@ test("chase gate: every producer-having, promotable, non-recomputed policy key i
       if (!entry || !entry.promote_to_canonical) continue;
       if (recomputedOutput(entry)) continue;
       if (!producerFor(lane, field, entry)) continue; // assertion 1's job, not this one's
+      if (NEVER_CHASE.has(`${lane}.${field}`)) continue;
       if (!required.has(field)) failures.push(`${lane}.${field}`);
     }
     assert.deepEqual(failures, [], `producer-having, promotable fields NOT chased: ${failures.join(", ")}`);

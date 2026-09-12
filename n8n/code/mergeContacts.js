@@ -50,6 +50,10 @@ const DEFAULT_CONTACT_POLICY = {
   mobilephone:             { class: "fill_blank_only",   min_confidence: 85 },
   jobtitle:                { class: "stale_refreshable", min_confidence: 75 },
   lv_linkedin_url:         { class: "fill_blank_only",   min_confidence: 85 },
+  // hs_linkedin_url: fill_blank_only @ 85 (Phase 72 Plan 02, D-72-04) — a write-only
+  // mirror of lv_linkedin_url for the native portal property. Deliberately NOT chased
+  // by ENRICH_GATE's REQUIRED list — see config/field_policy.yaml's comment.
+  hs_linkedin_url:         { class: "fill_blank_only",   min_confidence: 85 },
   seniority:               { class: "system_owned",      min_confidence: 75 },
   lv_persona_group:        { class: "system_owned",      min_confidence: 75 },
   city:                    { class: "fill_blank_only",   min_confidence: 80 },

@@ -357,6 +357,8 @@ def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
         "hs_state_code": 80, "hs_country_region_code": 80, "phone": 80,
         "mobilephone": 85, "jobtitle": 75, "lv_linkedin_url": 85,
         "seniority": 75, "lv_persona_group": 75,
+        # Phase 72 Plan 02 (D-72-04): write-only mirror of lv_linkedin_url.
+        "hs_linkedin_url": 85,
     }
     assert set(contacts) == set(expected_min_confidence), (
         "the contacts: key set drifted from this plan's own Findings -- update both "
@@ -369,14 +371,22 @@ def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
         )
 
 
-def test_promotable_contact_props_names_the_twelve_promotable_contact_keys():
-    result = sorted(preingest.promotable_contact_props())
+def test_promotable_contact_props_names_exactly_the_policys_promotable_contact_keys():
+    # Phase 72 Plan 02 (D-72-02): renamed off "the twelve" (now thirteen, with
+    # hs_linkedin_url) -- the job this test pins is "the function returns exactly the
+    # policy's contacts: keys carrying promote_to_canonical: true", derived fresh from
+    # the YAML via PyYAML, never a restated literal count or list.
+    import yaml as _yaml
 
-    assert result == [
-        "city", "country", "email", "hs_country_region_code", "hs_state_code",
-        "jobtitle", "lv_linkedin_url", "lv_persona_group", "mobilephone", "phone",
-        "seniority", "state",
-    ]
+    policy_path = preingest.resolve_policy_path()
+    data = _yaml.safe_load(Path(policy_path).read_text(encoding="utf-8"))
+    contacts = data["contacts"]
+    expected = sorted(
+        key for key, entry in contacts.items()
+        if isinstance(entry, dict) and entry.get("promote_to_canonical") is True
+    )
+
+    assert sorted(preingest.promotable_contact_props()) == expected
 
 
 def test_a_policy_promotable_key_fills_a_blank_row_field_instead_of_being_dropped():

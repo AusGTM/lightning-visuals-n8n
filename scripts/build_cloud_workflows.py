@@ -462,7 +462,10 @@ return $input.all().map((it) => {
     if (row[f] != null && String(row[f]).trim() !== "") candidate[f] = row[f];
   }
   if (row.linkedin_url != null && String(row.linkedin_url).trim() !== "") {
+    // D-72-04: land BOTH the canonical field (PN-1) and the native portal property
+    // from the same value — one canonicalization, two write targets.
     candidate.lv_linkedin_url = row.linkedin_url;
+    candidate.hs_linkedin_url = row.linkedin_url;
   }
   if (row.phone_normalized) candidate.phone = row.phone_normalized;
   const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
@@ -1241,7 +1244,7 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
                    "properties: [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"phone\", "
                    "\"mobilephone\", \"city\", \"state\", \"country\", \"hs_state_code\", "
                    "\"hs_country_region_code\", \"seniority\", \"lv_persona_group\", "
-                   "\"lv_linkedin_url\", \"hs_object_id\"], limit: 10 }) }}"),
+                   "\"lv_linkedin_url\", \"hs_linkedin_url\", \"hs_object_id\"], limit: 10 }) }}"),
     )
     nodes.append(hs_search)
 
@@ -2018,7 +2021,10 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   // than dropping to a plain EQ on the canonical form.
   const canonicalWinnerLinkedin = canonicalizeLinkedin(winners.linkedin_url);
   if (canonicalWinnerLinkedin) {
+    // D-72-04: land BOTH the canonical field (PN-1) and the native portal property
+    // from the same canonicalized value — one canonicalization, two write targets.
     candidate.lv_linkedin_url = canonicalWinnerLinkedin;
+    candidate.hs_linkedin_url = canonicalWinnerLinkedin;
   }
   // COPY-02: persona_group is NOT HubSpot-native (PN-1) -> the merge candidate/canonical
   // key is lv_persona_group. Dot-property access only, never a bare quoted array entry
@@ -2700,6 +2706,13 @@ return $input.all().map((it) => {
 # tests/n8n/fieldProducerMatrix.test.mjs's generic fetch-gate assertion (WR-03) is the
 # drift guard in lieu of derivation — it fails loudly if this list and ENRICH_GATE's
 # REQUIRED are ever hand-edited out of sync again.
+#
+# Phase 72 Plan 02 (D-72-04): `hs_linkedin_url` added — same defect class as the
+# lv_linkedin_url/lv_persona_group fix above (66-01 Task 2): it is now a merge
+# candidate (ENRICH_MERGE) and fill_blank_only/protect_if_current_present, so an
+# existingRecord that never fetches it would always read blank and silently overwrite
+# a real value on a second enrichment pass. Deliberately NOT added to REQUIRED itself
+# (unchanged, stays 12 keys) — this is a fetch-list widening only, not a chase-list one.
 HS_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '($json.identity_keys.email ? [ { propertyName: "email", operator: "EQ", value: $json.identity_keys.email } ] '
@@ -2709,7 +2722,7 @@ HS_SEARCH_BODY_EXPR = (
     '"lv_jobtitle_verified_at","lv_mobilephone_verified_at","seniority",'
     '"lv_contact_enrichment_provenance","lusha_contact_id",'
     '"city","state","country","hs_state_code","hs_country_region_code",'
-    '"lv_linkedin_url","lv_persona_group"], limit: 5 }) }}'
+    '"lv_linkedin_url","lv_persona_group","hs_linkedin_url"], limit: 5 }) }}'
 )
 
 # ---- COMPANIES branch -------------------------------------------------------
@@ -5915,13 +5928,18 @@ def _credit_http_node(name, url, method, x, y, auth=None, extra_headers=None):
 # class the location-properties comment above already names. Lands BEFORE Task 3's
 # LinkedIn producer and REQUIRED widening so a produced candidate can never reach a merge
 # with nothing real to compare against.
+#
+# Phase 72 Plan 02 (D-72-04): `hs_linkedin_url` added directly to this CSV — same
+# defect class as the lv_linkedin_url/lv_persona_group fix above, and it is now a
+# merge candidate (ENRICH_MERGE) that is fill_blank_only/protect_if_current_present.
+# Deliberately NOT added to ENRICH_GATE's REQUIRED (stays 12 keys).
 ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
     "email,firstname,lastname,jobtitle,phone,"
     "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
     "lv_mobilephone_verified_at,seniority,"
     "lv_contact_enrichment_provenance,lusha_contact_id,"
     "city,state,country,hs_state_code,hs_country_region_code,"
-    "lv_linkedin_url,lv_persona_group"
+    "lv_linkedin_url,lv_persona_group,hs_linkedin_url"
 )
 # The fetch-by-id list adds `company` — HubSpot's default contact freetext-company
 # property, feeding identity_keys.companyName on the backfill. `lv_linkedin_url` moved
@@ -5931,16 +5949,15 @@ ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
 # deliberately NOT the broader CLAUDE.md §18.4 list (several of those properties do not
 # exist in portal 22617666 and HubSpot silently drops unknown names).
 #
-# Phase 61 Plan 02 Task 1 (REVIEW-02): `hs_linkedin_url` added — HubSpot's own native
-# LinkedIn property, confirmed present (hubspotDefined: true) in the committed live
-# snapshot config/hubspot_migration/baseline/portal-schema-contacts-54-03-contacts-check.json.
-# The linkedin search filters on BOTH properties; a hit returned on a property this list
-# does not request is a hit the adapter's re-verification cannot read back — searching a
-# property without requesting it reproduces the exact silent-zero-result shape this whole
-# plan exists to remove. Additive to the fetch-by-id lane this CSV already feeds (HubSpot
-# returns one more property; nothing there reads it).
+# Phase 61 Plan 02 Task 1 (REVIEW-02): `hs_linkedin_url` was added HERE first — HubSpot's
+# own native LinkedIn property, confirmed present (hubspotDefined: true) in the committed
+# live snapshot config/hubspot_migration/baseline/portal-schema-contacts-54-03-contacts-
+# check.json. Phase 72 Plan 02 then moved it into the search CSV above too (it is no
+# longer only a by-id-lane identity-match field, it is now a merge candidate); it stays
+# named in this suffix as well so a reader diffing the two lists is not misled into
+# thinking it dropped out of the by-id fetch.
 ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = (
-    ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,hs_linkedin_url"
+    ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js", "matchProposal.js") + r"""
