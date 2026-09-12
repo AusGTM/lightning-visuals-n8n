@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 
 Plans:
 **Wave 1**
@@ -448,7 +448,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 72-07-PLAN.md — Closing: charter todo retired, history gap filed, plugin 0.49.0, CLAUDE.md as-built delta, D-72-17 gate spec
+- [x] 72-07-PLAN.md — Closing: charter todo retired, history gap filed, plugin 0.49.0, CLAUDE.md as-built delta, D-72-17 gate spec
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
