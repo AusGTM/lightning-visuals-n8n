@@ -23,6 +23,15 @@ companies:
     promote_to_canonical: true
     min_confidence: 75
     stale_after_days: 365
+    # D-72-08 (Phase 72 Plan 04): §17.2.1's "previously written by the enrichment
+    # system" PROMOTE clause, extended from domain's manual_protected-only use to
+    # this stale_refreshable field -- same four conjuncts. Adding this key to a
+    # fill_blank_only field would weaken that class and is forbidden by SAFE-01.
+    system_correctable_sources:
+      - apollo
+      - lusha
+      - zoominfo
+      - claude_web
 
   # 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
   # 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
@@ -211,6 +220,15 @@ contacts:
     stale_after_days: 180
     protect_if_current_present: false
     allow_sonnet_escalation: true
+    # D-72-08 (Phase 72 Plan 04): §17.2.1's "previously written by the enrichment
+    # system" PROMOTE clause, extended from domain's manual_protected-only use to
+    # this stale_refreshable field -- same four conjuncts. Adding this key to a
+    # fill_blank_only field would weaken that class and is forbidden by SAFE-01.
+    system_correctable_sources:
+      - apollo
+      - lusha
+      - zoominfo
+      - claude_web
 
   # PN-1: linkedin_url is NOT HubSpot-native (absent from the verified-native list) —
   # renamed lv_linkedin_url.

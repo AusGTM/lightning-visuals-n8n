@@ -46,7 +46,12 @@ const DEFAULT_COMPANY_POLICY = {
   // stale_after_days (Phase 72 Plan 04, D-72-06/07/09): mirrors
   // config/field_policy.yaml companies.industry exactly -- every production call site
   // passes fieldPolicy=undefined, so this default IS what the recency gate reads.
-  industry:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 365 },
+  // system_correctable_sources (Phase 72 Plan 04, D-72-08): §17.2.1's clause,
+  // generalized from domain's manual_protected-only use to a stale_refreshable field —
+  // same four conjuncts. Adding this key to a fill_blank_only field would weaken that
+  // class and is forbidden by SAFE-01.
+  industry:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 365,
+                             system_correctable_sources: ["apollo", "lusha", "zoominfo", "claude_web"] },
   // 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
   // 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
   // Scope: THIS lane only, blank-fill, provider-sourced values -- a non-blank existing
@@ -235,6 +240,16 @@ function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
   if (fieldClass === "stale_refreshable") {
     if (_isBlank(currentValue)) {
       return { decision: "promote", reason: "Current value blank and candidate passed threshold." };
+    }
+    // Phase 72 Plan 04 (D-72-08): system-correctable is an ADDITIONAL promote arm,
+    // ahead of the TTL check — Phase 46 parity twin of mergeContacts.js's identical
+    // branch, reusing the SAME _isSystemCorrectable already backing domain's
+    // manual_protected correction above.
+    if (_isSystemCorrectable(policy, provenanceEntry, currentValue, rowConflicted)) {
+      return { decision: "promote", correction: true,
+               reason: `Existing ${field} value was written by the enrichment system ` +
+                       `(provenance source ${provenanceEntry.source}) and still matches; ` +
+                       `candidate passed the ${minConfidence} threshold on a conflict-free row.` };
     }
     // Phase 72 Plan 04 (D-72-06/07): the real TTL branch -- Phase 46 parity twin of
     // mergeContacts.js's identical branch. `historyTimestamp` is the existing value's

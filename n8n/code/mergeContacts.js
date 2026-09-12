@@ -52,7 +52,14 @@ const DEFAULT_CONTACT_POLICY = {
   // contacts.jobtitle exactly. Every production call site passes fieldPolicy=undefined,
   // so this default IS what the recency gate reads -- omitting it would leave the TTL
   // branch permanently dead (_isStale sees undefined -> false -> always needs_review).
-  jobtitle:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 180 },
+  // system_correctable_sources (Phase 72 Plan 04, D-72-08): the §17.2.1 "existing
+  // value was previously written by the enrichment system" PROMOTE clause, extended
+  // from companies.domain's manual_protected-only use to a stale_refreshable field —
+  // the same four conjuncts (provenance entry still matches current value; no
+  // material conflict; source on this list; min_confidence met). Adding this key to a
+  // fill_blank_only field would weaken that class and is forbidden by SAFE-01.
+  jobtitle:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 180,
+                             system_correctable_sources: ["apollo", "lusha", "zoominfo", "claude_web"] },
   lv_linkedin_url:         { class: "fill_blank_only",   min_confidence: 85 },
   // hs_linkedin_url: fill_blank_only @ 85 (Phase 72 Plan 02, D-72-04) — a write-only
   // mirror of lv_linkedin_url for the native portal property. Deliberately NOT chased
@@ -121,6 +128,42 @@ const CONTACT_CACHE_KEY_FIELDS = {
   mobilephone: "lv_mobilephone_verified_at",
 };
 
+// Parse the record's `lv_contact_enrichment_provenance` blob. Fails CLOSED: anything
+// that is not a readable plain object degrades to {} and therefore to today's refusal.
+// JS twin: mergeCompanies.js's identical _parseProvenanceEntries.
+function _parseProvenanceEntries(raw) {
+  if (raw === null || raw === undefined || raw === "") return {};
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try { parsed = JSON.parse(raw); } catch (e) { return {}; }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  return parsed;
+}
+
+// May this stale_refreshable field's EXISTING value be corrected by the candidate
+// despite not being past its own TTL? (Phase 72 Plan 04, D-72-08 — generalizing
+// mergeCompanies.js's manual_protected-only _isSystemCorrectable, ported verbatim in
+// shape.) FOUR conjuncts, each of which refuses on its own:
+//   1. the field's policy opts in via a non-empty system_correctable_sources list;
+//   2. the record carries a provenance entry for this field whose `source` is on it;
+//   3. the entry's recorded `value` is STILL the record's current value — otherwise a
+//      human has since retyped it, or a previously refused candidate left the entry
+//      behind, and neither may authorise a write;
+//   4. rowConflicted === false STRICTLY. No permissive default: `undefined` refuses.
+// The confidence bar is not restated here — _gate only reaches this branch after its
+// own `confidence < minConfidence` check, so a correction is automatically held to
+// the field's own threshold.
+function _isSystemCorrectable(policy, entry, currentValue, rowConflicted) {
+  const sources = policy && policy.system_correctable_sources;
+  if (!Array.isArray(sources) || sources.length === 0) return false;
+  if (!entry || typeof entry !== "object") return false;
+  if (sources.indexOf(entry.source) === -1) return false;
+  if (_isBlank(entry.value) || _isBlank(currentValue)) return false;
+  if (String(entry.value) !== String(currentValue)) return false;
+  return rowConflicted === false;
+}
+
 // Does this field+value need an evidence URL before it may promote? (Phase 16.2 Task 2
 // additive port of mergeCompanies.js's _needsEvidence — inert for every contact field
 // today: DEFAULT_CONTACT_POLICY declares no require_evidence_url/require_evidence_url_for
@@ -139,7 +182,7 @@ function _needsEvidence(policy, value) {
 // mergeCompanies.js's _gate — every existing call site below still passes only the
 // first 4 args, so evidenceUrl/value are undefined and _needsEvidence(...) is false.
 function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
-               historyTimestamp, candidateObservedAt, now) {
+               historyTimestamp, candidateObservedAt, now, provenanceEntry, rowConflicted) {
   const fieldClass = (policy && policy.class) || "fill_blank_only";
   const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;
 
@@ -172,6 +215,15 @@ function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
   if (fieldClass === "stale_refreshable") {
     if (_isBlank(currentValue)) {
       return { decision: "promote", reason: "Current value blank and candidate passed threshold." };
+    }
+    // Phase 72 Plan 04 (D-72-08): system-correctable is an ADDITIONAL promote arm,
+    // checked AHEAD of the TTL check — a value the pipeline itself last wrote, still
+    // unedited, on a conflict-free row, may be corrected regardless of TTL.
+    if (_isSystemCorrectable(policy, provenanceEntry, currentValue, rowConflicted)) {
+      return { decision: "promote", correction: true,
+               reason: `Existing ${field} value was written by the enrichment system ` +
+                       `(provenance source ${provenanceEntry.source}) and still matches; ` +
+                       `candidate passed the ${minConfidence} threshold on a conflict-free row.` };
     }
     // Phase 72 Plan 04 (D-72-06/07): the real TTL branch. `historyTimestamp` is the
     // EXISTING value's own HubSpot property-history timestamp (opts.historyByField,
@@ -248,6 +300,11 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   // (Task 3) exists, which is exactly the pre-72 "unknown freshness" degrade.
   const historyByField = (opts && opts.historyByField) || {};
   const verifiedAt = now;
+  // Phase 72 Plan 04 (D-72-08): parsed ONCE per call, mirroring mergeCompanies.js's
+  // 260904-pav pattern exactly. `rowConflicted` is read strictly (=== false only) —
+  // `undefined` is "caller did not say", never "no conflict".
+  const provenanceEntries = _parseProvenanceEntries(existingProps.lv_contact_enrichment_provenance);
+  const rowConflicted = opts && opts.rowConflicted;
 
   const canonicalPatch = {};
   const provenance = {};
@@ -277,7 +334,8 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     const candidateObservedAt = _isProviderSource(resolvedSource) ? now : undefined;
 
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value,
-                       historyTimestamp, candidateObservedAt, now);
+                       historyTimestamp, candidateObservedAt, now,
+                       provenanceEntries[field], rowConflicted);
     const decision = gate.decision;
 
     // EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01): a promoted email keeps its

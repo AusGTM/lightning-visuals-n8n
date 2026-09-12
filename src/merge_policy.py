@@ -162,6 +162,16 @@ def parse_provenance_entries(raw) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _provenance_key_for(record) -> str:
+    """Which provenance property a record's object_type reads from -- companies and
+    contacts stamp DIFFERENT properties (CLAUDE.md §6.1). `record` may be None (several
+    callers pass it that way); defaults to the company key, matching this function's
+    only caller before Phase 72 Plan 04 (the manual_protected branch, companies-only
+    until this plan's contacts stale_refreshable arm)."""
+    object_type = getattr(record, "object_type", None)
+    return CONTACT_PROVENANCE_KEY if object_type == "contacts" else COMPANY_PROVENANCE_KEY
+
+
 def is_system_correctable(policy, entry, current_value, row_conflicted) -> bool:
     """May this manual_protected field's EXISTING value be corrected by the candidate?
     (quick task 260904-pav; CLAUDE.md §17.2's "existing value was previously written by
@@ -227,7 +237,7 @@ def deterministic_gate(record, field, current_value, candidates, policy, provide
         # new threshold key). `record` may be None on this path (several callers pass it),
         # so read the blob defensively.
         props = getattr(record, "properties", None) or {}
-        entry = parse_provenance_entries(props.get(COMPANY_PROVENANCE_KEY)).get(field)
+        entry = parse_provenance_entries(props.get(_provenance_key_for(record))).get(field)
         if is_system_correctable(policy, entry, current_value, has_conflict(candidates)):
             return {
                 "decision": "promote",
@@ -284,6 +294,23 @@ def deterministic_gate(record, field, current_value, candidates, policy, provide
                 "chosen": best,
                 "confidence": best.confidence,
                 "reason": "Current value blank and candidate passed threshold."
+            }
+        # Phase 72 Plan 04 (D-72-08): system-correctable is an ADDITIONAL promote arm,
+        # checked AHEAD of the TTL check — Phase 46 parity twin of the two JS engines'
+        # identical branch, reusing the SAME is_system_correctable already backing
+        # domain's manual_protected correction above.
+        props = getattr(record, "properties", None) or {}
+        sc_entry = parse_provenance_entries(props.get(_provenance_key_for(record))).get(field)
+        if is_system_correctable(policy, sc_entry, current_value, has_conflict(candidates)):
+            return {
+                "decision": "promote",
+                "chosen": best,
+                "confidence": best.confidence,
+                "reason": (
+                    f"Existing {field} value was written by the enrichment system "
+                    f"(provenance source {sc_entry.get('source')}) and still matches; "
+                    f"candidate passed the {min_confidence} threshold on a conflict-free row."
+                )
             }
         # Phase 72 Plan 04 (D-72-06/07): the real TTL branch — Phase 46 parity twin of
         # mergeContacts.js's / mergeCompanies.js's identical branch. `history_by_field`
