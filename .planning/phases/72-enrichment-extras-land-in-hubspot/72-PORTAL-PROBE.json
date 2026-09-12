@@ -1,0 +1,33 @@
+{
+  "probed_at": "2026-09-12T11:40:14.703055+00:00",
+  "properties": [
+    {
+      "exists": true,
+      "fieldType": "select",
+      "http_status": 200,
+      "name": "hs_additional_emails",
+      "object_type": "contacts",
+      "readOnlyValue": false,
+      "type": "enumeration"
+    },
+    {
+      "exists": true,
+      "fieldType": "checkbox",
+      "http_status": 200,
+      "name": "hs_additional_domains",
+      "object_type": "companies",
+      "readOnlyValue": false,
+      "type": "enumeration"
+    },
+    {
+      "exists": false,
+      "fieldType": null,
+      "http_status": 404,
+      "name": "hs_country_region_code",
+      "object_type": "companies",
+      "readOnlyValue": null,
+      "type": null
+    }
+  ],
+  "status": "ok"
+}
