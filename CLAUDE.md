@@ -2684,6 +2684,29 @@ start) and AFTER-03 (full end-of-run report).
 > now: all FIVE workflows on the committed v1 bodies, active, disarmed.** The pre-Phase-70
 > `59812be` bundle is no longer live anywhere. Nothing is armed.
 
+> **Extended 2026-09-12/13 (Phase 72 gate, plan 72-08) — `[observed live]`.** Task 1
+> regenerated (`build_cloud_workflows.py`, no diff — committed and generated already level)
+> and deployed+bounced all five cloud workflows disarmed. Live node counts read back:
+> `LV Contact Ingest (Cloud template)` `AwbBeShdPgV48eiY` **69 → 78** (Phase 72's widened
+> ingest candidate set); `LV Enrichment (Cloud template)` `950HPb7a1GgSAIyZ` 287 (unchanged);
+> `LV Review Decision (Cloud)` `WBJwoZOo63wzeP69` 55 (unchanged); `LV Scheduled Maintenance
+> (Cloud)` `1fXPuIabz3RsAHgn` 43 (unchanged); `LV Backend Status (Cloud template)`
+> `Cj83mOgrIm59oxcX` 30 (unchanged). All five: `active: true`, `settings.executionOrder:
+> "v1"`, every write-safety constant `"false"`. The three overflow-slot properties
+> (`lv_phone_2`/`lv_mobilephone_2` contacts, `lv_phone_2` companies) read back 0-pending on
+> both objects via `sync_hubspot_properties.py` — confirmed live-existing (created in plan 05
+> per D-72-23), type/`readOnlyValue` not re-GET'd fresh in this task (still resting on plan
+> 05's direct GET). Task 2 then ran the phase's one armed window 2026-09-13: one CREATE
+> (contact `352455353810`, n8n execution `12402`) and one UPDATE (contact `1251`, execution
+> `12406`), with executions `12398`-`12406` bracketing the window and zero executions after
+> the final disarm at 13:57:30Z. **D-72-04's dual write is `[observed live]` split by path:**
+> the UPDATE path lands `lv_linkedin_url` correctly (waterfall/85, contact `1251`); the CREATE
+> path does NOT (contact `352455353810` — F72-1, `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md`
+> Task 2, still open, gap-closure pending). SAFE-01 (existing non-blank `phone` surviving an
+> update) is `[observed live]`, confirmed unchanged on contact `1251`. `hs_additional_emails`'s
+> provenance-only path (D-72-10) was NOT exercised live — the waterfall returned no second
+> email for either row in this gate.
+
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
 Established during Phase 61's premise spike. **Tags are load-bearing: `[documented]` means
@@ -3309,6 +3332,14 @@ provenance entry only. No `_3` slot exists anywhere in the code, by construction
 an `enumeration`, not the assumed string, so the equivalent second-email write was never
 built — a second email lands in provenance only.
 
+**`[observed live]` (Phase 72 gate, plan 72-08, 2026-09-13):** the three overflow-slot
+properties' live existence was re-confirmed via `sync_hubspot_properties.py`'s 0-pending
+read-back on both objects (type/`readOnlyValue` still resting on plan 05's direct GET, not
+re-checked in this gate). Neither created contact returned a runner-up phone/mobile candidate
+in the gate, so the `_2` slot itself was not exercised. `hs_additional_emails`'s
+provenance-only path was NOT exercised live either — the waterfall returned no second email
+for either row in the gate.
+
 **3. The ingest lane's CSV boundary now carries the full promotable contact set, not eight
 headers (D-72-01/02/03/04).** `preingest.strip_enrichment_extras` is unchanged in code but is
 now structurally inert — the ingest lane's candidate loop (`MERGE_CONTACTS` in
@@ -3326,6 +3357,24 @@ not new leniency, but it has one operator-visible consequence: `firstname`/`last
 `fill_blank_only`/80 default for the first time on this lane, meaning a CSV correcting a
 misspelled name or company on an existing contact no longer applies through the ingest lane
 (it did before, only because the lane always merged against an empty object).
+
+**`[observed live]` (Phase 72 gate, plan 72-08, 2026-09-13) — D-72-04's dual write is
+confirmed live on the UPDATE path only, not the CREATE path.** One armed CREATE (contact
+`352455353810`, execution `12402`) and one armed UPDATE (contact `1251`, execution `12406`)
+were run. On the UPDATE/enrich-records path, `lv_linkedin_url` landed correctly
+(waterfall/85). On the ingest CREATE path, `hs_linkedin_url` landed but `lv_linkedin_url` did
+NOT — a real code defect (F72-1, `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md`),
+root-caused to `MERGE_CONTACTS` in `scripts/build_cloud_workflows.py`: the D-72-22
+`confidenceByField` map (lines 479-483) is keyed on whatever `row.source_by_field` names —
+the pre-PN-1-rename CSV canonical key `linkedin_url` — but the candidate object (lines
+487-494) writes the value under the renamed `lv_linkedin_url`/`hs_linkedin_url` keys.
+`mergeContacts.js`'s promotion gate (line 400) looks up `confidenceByField["lv_linkedin_url"]`,
+which was never set, and falls back to the flat `csv`/80 confidence — below
+`lv_linkedin_url`'s `fill_blank_only`@85 threshold, so it is withheld even into a blank field.
+**D-72-04's dual write is therefore NOT complete** on the create path; a gap-closure plan is
+required before this claim can be upgraded further. The mobile-header consequence and the
+`firstname`/`lastname`/`company` non-application were both `[observed live]` on the same
+UPDATE row exactly as predicted above.
 
 ## 17.3 Minimal PATCH example
 

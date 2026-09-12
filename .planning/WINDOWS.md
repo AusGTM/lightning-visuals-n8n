@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 18
+open_count: 19
 waived_count: 3
 fixed_count: 8
-total_count: 29
-last_updated: 2026-09-12T11:04:05.336Z
+total_count: 30
+last_updated: 2026-09-12T14:17:06.368Z
 ---
 
 # Broken Windows Ledger
@@ -44,6 +44,7 @@ last_updated: 2026-09-12T11:04:05.336Z
 | 27 | 54 | deviation | operator-claude-plugin/scripts/scheduled_arm.py |  | The SJ-3 scheduled-poller companion's double pass, recorded per OP-54-02: scheduled_arm.py's companion cannot straddle SJ-3's own in-n8n Execute-Workflow dispatch (that dispatch runs unarmed, always returns write_blocked, inside SJ-3's own single n8n execution with no external hook point), so every record SJ-3 matches costs one unarmed full waterfall that is always refused, plus one armed re-run through this companion's own external webhook path -- two full passes per flagged record, daily (the SJ-3 cadence), bounded by the flagged-record count, arming admin-only via ALLOW_N8N_ARM (the headless/cron authority, unchanged, D-1.1-01). This is architecturally the same full-pass-refused-then-full-pass-again shape G-3 names for the interactive lanes, and it is NOT fixed by F2 (F2 only touches the interactive lane skills' arm-before-dispatch ordering) or by this phase's measurement task. DELIBERATELY LEFT UNFIXED BY OPERATOR RULING OP-54-02, not overlooked -- the v1.1 milestone's D-1.1-01 explicitly carves headless/cron paths out of the grant redesign, and this phase's scope is measuring and naming the interactive case honestly, not rebuilding the scheduled companion's architecture. | open |  | 2026-08-27T00:00:00.000Z |  |
 | 28 | 49 | deviation | scripts/rescore_population.py |  | Phase 49's W1 armed window made one undeclared batch_update_companies() call directly against 4 company ids, OUTSIDE the driver's own two-key (DRY_RUN=false + ALLOW_SCORE_BACKFILL=true) arming ceremony -- a plain Python call in a diagnostic shell with no arm keys set. Genuinely disclosed at the time in 49-W1-ARM-RECORD.md:200-210 and 49-RUN-REPORT.md:23, and the declared-vs-actual accounting tables correctly recorded HubSpot batch calls Declared 2 / Actual 3, but it was never registered in this cross-phase ledger -- the register /gsd-ship actually gates on. Same shape as id 16, whose closing sentence is the precedent: a per-phase disclosure is not a ledger entry. Recorded retrospectively 2026-09-03 by the cross-phase secure-phase sweep (49-SECURITY.md Divergence 2), 21 days late. NO RECORD WAS HARMED: the bypass call mutated nothing (byte-identical values, confirmed by an unchanged hs_lastmodifieddate before and after) and the values sent were the five legitimate component properties. The gate was not defeated -- it was bypassed by not using the driver. MECHANISM NOW CLOSED (2026-09-03, commit a4de6f4, threat T-49-43): src/hubspot_client.py::batch_update_companies gained the generalized two-key arm gate (DRY_RUN=false AND one of four registered arm keys, BATCH_WRITE_ARM_KEYS) plus a FORBIDDEN_PROPS disjointness floor, both unconditional ValueError raises on the live-POST path, so the gate now travels with the write and this exact call would be refused today. Five refusal tests, all perturbation-proved RED-then-GREEN. The historical call itself is not undone -- it cannot be; what is fixed is the reachable path. NOT registered here and left to operator judgement: the same run report's W2 arm-cycle excess (2) and Anthropic call excess (2 vs 1). | open |  | 2026-09-03T07:16:45.755Z |  |
 | 29 | 72 | deviation | scripts/build_cloud_workflows.py |  | Enrichment-lane contacts branch and companies branch have no HubSpot property-history hop (only contact ingest does) -- industry/enrichment-lane jobtitle recency stay unobservable, needs_review always. Decision needed: add the hop there too, or accept lv_<field>_verified_at cache keys as a narrower substitute. | open |  | 2026-09-12T11:04:05.336Z |  |
+| 30 | 72 | unmet-truth | scripts/build_cloud_workflows.py |  | F72-1: lv_linkedin_url does not land on the ingest CREATE path (confidenceByField keyed pre-PN1-rename); D-72-04's dual write incomplete on create, gap-closure pending | open |  | 2026-09-12T14:17:06.368Z |  |
 
 ````json
 [
@@ -393,6 +394,18 @@ last_updated: 2026-09-12T11:04:05.336Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-12T11:04:05.336Z",
+    "resolved_at": null
+  },
+  {
+    "id": 30,
+    "kind": "unmet-truth",
+    "phase": "72",
+    "file": "scripts/build_cloud_workflows.py",
+    "line": null,
+    "description": "F72-1: lv_linkedin_url does not land on the ingest CREATE path (confidenceByField keyed pre-PN1-rename); D-72-04's dual write incomplete on create, gap-closure pending",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-12T14:17:06.368Z",
     "resolved_at": null
   }
 ]

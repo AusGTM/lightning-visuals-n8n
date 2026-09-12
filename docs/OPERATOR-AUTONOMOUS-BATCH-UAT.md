@@ -510,7 +510,7 @@ against `{}`.
 
 Plan 05's live probe found `hs_additional_emails` is a writable `enumeration`, not the
 assumed string, so the second-email write was never built — a second email should land in
-`lv_enrichment_provenance` only, never on `hs_additional_emails` itself. Confirm this directly
+`lv_contact_enrichment_provenance` only, never on `hs_additional_emails` itself. Confirm this directly
 against the created/updated contact: `hs_additional_emails` should be unchanged from
 whatever it held before this gate (if anything), and the second email (if the waterfall found
 one) should be visible only inside the provenance JSON blob.
@@ -532,3 +532,23 @@ the operator scripts ruling in §2 above.
 
 Nothing may be armed before step 3. Nothing may be left armed after it — step 3's own
 disarm-and-confirm is the gate, not an afterthought.
+
+### Run outcome, 2026-09-13 (plan 72-08 Task 2) — read before running this gate again
+
+The gate ran live. Full record: `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md`
+Task 2. Three things worth knowing before a repeat run:
+
+- **Confirm the plugin's portal before any MCP pre-check.** This session's HubSpot MCP
+  connector pointed at a different portal (`443043042`) than the plugin's own target
+  (`22617666`); the MCP pre-check had to be discarded and every read/write redone through the
+  plugin. Check which portal the MCP connector is pointed at before trusting its output.
+- **A phone-value comparison must tolerate bidi wrapping.** HubSpot rendered an existing
+  `phone` value wrapped in U+202D…U+202C bidi marks; a byte-for-byte string comparison across
+  a copy/paste will report a false mismatch unless those marks are stripped first.
+- **Step 4's "both `hs_linkedin_url` and `lv_linkedin_url`" assertion currently fails on
+  create** — `lv_linkedin_url` does not land on the ingest CREATE path (F72-1, a real code
+  defect, gap-closure pending). It DOES land on the UPDATE/enrich-records path. Do not read a
+  repeat failure of this specific assertion on a fresh CREATE as a new finding until F72-1 is
+  closed.
+- **Step 6 is a no-op if the waterfall finds no second email**, which is what happened for
+  both rows in this run — record NOT OBSERVED, not a pass, when that happens again.
