@@ -1,7 +1,7 @@
 ---
 status: passed_with_findings
 phase: 72-enrichment-extras-land-in-hubspot
-source: [72-08-PLAN.md Task 1, 72-08-PLAN.md Task 2, docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md §6]
+source: [72-08-PLAN.md Task 1, 72-08-PLAN.md Task 2, 72-12-PLAN.md Task 2, docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md §6]
 started: 2026-09-12T00:00:00Z
 updated: 2026-09-13T00:00:00Z
 ---
@@ -212,3 +212,145 @@ OBSERVED, not as pass. Nothing was armed before or left armed after the gate; th
 contact was deleted. F72-1 is a real code defect requiring a gap-closure plan before D-72-04's
 create-path dual write can be considered complete; it is recorded here, not patched inside the
 gate, per the plan's own prohibition.
+
+## Test 3 — gap closure live read-back
+
+Run live 2026-09-13 (executions ran 2026-09-12 22:12-22:15 UTC), per `72-12-PLAN.md` Task 2. This
+is the one live gate for the three offline gap closures landed in plans 72-09 (G1, CANDIDATE_ALIASES
+fix), 72-10 (G2, local-live fetch widening / CR-01), and 72-11 (G3, case-insensitive overflow dedup
+/ WR-02). Operator's full report: transcribed verbatim below from
+`/Users/robertli/Desktop/uat-2026-09-12/phase72-test3-report.md`.
+
+**Portal:** 22617666 (plugin private-app key; confirmed via record URL
+`app-ap1.hubspot.com/contacts/22617666/...`). HubSpot MCP connector (443043042) was NOT used — all
+HubSpot reads went through the plugin's own key (F72-4's wrong-portal caveat honored).
+
+**CSV:** `uat-phase72-gate-create-2026-09-12.csv` (1 row: Jimmy Busteed, Australian Turf Club, no
+email, company_id `9605284724`). **match_run_id:** `51678012dec541ada338c5933f8c7812`.
+**enrichment run_id:** `b394fc576123450c94ccaeb7ff44d6c7`.
+
+### Step 1 — deploy + bounce, disarmed (verbatim operator stdout)
+
+Five PUTs at 200 (`LV Backend Status`, `LV Contact Ingest`, `LV Enrichment`, `LV Review Decision`,
+`LV Scheduled Maintenance`; Backend Status body was byte-identical so its PUT was a no-op).
+
+| Workflow | id | active | live nodes | flags | executionOrder |
+|---|---|---|---|---|---|
+| LV Backend Status (Cloud template) | `Cj83mOgrIm59oxcX` | True | 30/30 | `-` (no write path) | v1 |
+| LV Contact Ingest (Cloud template) | `AwbBeShdPgV48eiY` | True | 78/78 | `ALLOW_HUBSPOT_RECORD_WRITES=false`, `ALLOW_HUBSPOT_CREATE=false` | v1 |
+| LV Enrichment (Cloud template) | `950HPb7a1GgSAIyZ` | True | 287/287 | `ALLOW_HUBSPOT_RECORD_WRITES=false`, `ALLOW_HUBSPOT_CREATE=false` | v1 |
+| LV Review Decision (Cloud) | `WBJwoZOo63wzeP69` | True | 55/55 | `ALLOW_HUBSPOT_RECORD_WRITES=false`, `ALLOW_HUBSPOT_CREATE=false` | v1 |
+| LV Scheduled Maintenance (Cloud) | `1fXPuIabz3RsAHgn` | True | 43/43 | `ALLOW_HUBSPOT_RECORD_WRITES=false`, `ALLOW_HUBSPOT_CREATE=false` | v1 |
+
+Deploy tool's own verdict line: "OK — all active, node counts match, write flags false, execution
+order v1." Node counts match Task 1 exactly (78/287/55/43/30 — this batch moved jsCode strings and
+one properties list only, never a node), confirming committed and live are level for these four
+workflows plus the unchanged Backend Status.
+
+### Step 2 — one armed window, one CREATE
+
+Pre-check: search `lastname EQ Busteed` returned `total: 0` — confirmed absent (environment was
+reset since the prior D-72-17 session, which had created id `352455353810`, since hand-deleted).
+
+Ran `enrich-before-ingest` for the one-row CSV above. Match groups: auto_matched 0, proposed 0,
+**unmatched 1** (Busteed), unchecked 0. No proposed matches to confirm. After the enrichment
+waterfall the row was held as a new person; operator answered "create all 1". One grant opened
+over all three lanes (enrichment, contacts, review), record_domains =
+`australianturfclub.com.au`, allow_create = true. Each send opened its own record-scoped armed
+window and disarmed immediately after.
+
+### Step 3 — read-back of created contact
+
+- **contact id:** `352522004980`
+- **lv_linkedin_url:** `http://www.linkedin.com/in/jimmybusteed` — **shape: full URL** (http + www
+  + `/in/` path)
+- **hs_linkedin_url:** `http://www.linkedin.com/in/jimmybusteed` — **shape: full URL, identical to
+  lv_linkedin_url**
+- **mobilephone:** `+61 419 212 580`
+- **provenance LinkedIn entry** (`lv_contact_enrichment_provenance`, both `lv_linkedin_url` and
+  `hs_linkedin_url`): source `waterfall`, confidence 85, validation_status `provider_only` —
+  provider-grade, **not `csv`** (the pre-fix fallback that withheld the value in the original
+  D-72-17 gate).
+- **association to `9605284724`:** yes — contact→company, HUBSPOT_DEFINED typeId 279 + typeId 1
+  (Primary).
+
+**F72-5 check (value-shape regression):** the original D-72-17 gate's UPDATE-path `lv_linkedin_url`
+landed as a full URL (`http://www.linkedin.com/in/colin-telfer-10539120`, see Task 2 above) and
+this CREATE-path value is also a full URL, identical in shape to `hs_linkedin_url` on the same
+contact. **No shape regression — F72-5 not opened.**
+
+### Step 4 — flags after disarm
+
+| Workflow | ALLOW_HUBSPOT_RECORD_WRITES | ALLOW_HUBSPOT_CREATE |
+|---|---|---|
+| LV Enrichment (Cloud template) | false | false |
+| LV Contact Ingest (Cloud template) | false | false |
+| LV Review Decision (Cloud) | false | false |
+| LV Scheduled Maintenance (Cloud) | false | false |
+| LV Backend Status (Cloud template) | null (no write nodes) | null |
+
+Every touched workflow reads `false` on both flags.
+
+### Burst watch
+
+All times UTC, 2026-09-12. Now-at-check: 22:16:10.
+
+- **LV Enrichment (`950HPb7a1GgSAIyZ`):** `12411` started 22:12:47 -> success (step-2 match lookup,
+  unarmed, empty provider list, no write); `12413` started 22:13:33 -> success (enrichment
+  waterfall, armed window #1); `12415` started 22:14:32 -> success (step-4c confirm re-read
+  lookup, unarmed, no write).
+- **LV Contact Ingest (`AwbBeShdPgV48eiY`):** `12414` started 22:14:02 -> success (the create,
+  armed window #2).
+
+**Zero-after-disarm: YES for writes.** The single execution after the final (create) disarm is
+`12415` — the post-create confirm re-read on LV Enrichment, an unarmed lookup this verification
+itself triggered (empty provider list, no HubSpot write path), fired while both flags already read
+`false`. It is a read, not a backend-initiated write.
+
+### Confirmations (per `72-12-PLAN.md` Task 2 resume-signal)
+
+- (a) All five cloud workflows: `active`, node counts, `executionOrder: v1`, and every `ALLOW_*`
+  flag `false` after deploy+bounce — met (Step 1 table above).
+- (b) Created contact `352522004980` carries BOTH `lv_linkedin_url` AND `hs_linkedin_url`,
+  non-null, full-URL shape — **met (the gate)**.
+- (c) `lv_contact_enrichment_provenance` for the LinkedIn field: source `waterfall` (provider-grade,
+  not `csv`) — met, with a granularity note: the provenance `source` field records the
+  provider-waterfall label rather than a specific vendor name (ZoomInfo/Apollo/Lusha); this is
+  provider-grade and distinct from `csv`, satisfying the requirement, though the specific vendor
+  is not surfaced in that field.
+- (d) n8n execution ids `12411`/`12413`/`12414`/`12415`, burst-watch list above, zero new
+  executions after the final disarm, every `ALLOW_*` flag `false` — met.
+- (e) Created contact `352522004980` hand-deleted by the operator (restorable archive) — met.
+
+### Findings
+
+**GAP CLOSURE CONFIRMED — F72-1 is CLOSED.** On the CREATE path, `lv_linkedin_url` AND
+`hs_linkedin_url` both landed non-null (full-URL shape, provenance source `waterfall`/confidence
+85). This closes the D-72-17 defect where `lv_linkedin_url` was null on CREATE and the dual-LinkedIn
+write only worked on UPDATE. Evidence: contact `352522004980`, n8n execution `12414` (the create),
+2026-09-13.
+
+No STOP conditions were hit: plan_grant verdict OK (ceiling 7 projected vs 2219 sampled
+remaining); both windows armed and disarmed cleanly; no disarm failures; no written_records
+failures; create accepted.
+
+**Honest gaps (not re-observed in this test, standing exactly as recorded in Task 2):**
+- F72-2 (doc defect, `lv_enrichment_provenance` vs `lv_contact_enrichment_provenance`), F72-3
+  (Telfer mobilephone/phone duplication + the open firstname/lastname/company operator-ruling
+  question), and F72-4 (the wrong-portal MCP connector note) are unchanged by this test — this
+  test's scope was F72-1 only, per `72-12-PLAN.md`.
+- `hs_additional_emails`'s D-72-10 provenance-only path was again NOT exercised — the waterfall
+  returned no second email for this row either. Still not-observed, not pass.
+- No deletes beyond the created contact, no code edits, no Webhook Trigger runData pasted, per the
+  operator's own report.
+
+## Verdict (Test 3)
+
+**PASS.** F72-1 is closed live: a newly created contact carries both `lv_linkedin_url` and
+`hs_linkedin_url`, non-null, matching full-URL shape, provider-grade provenance. All four changed
+cloud workflows (contact ingest, enrichment, review decision, scheduled maintenance) plus the
+unchanged backend status workflow are deployed, bounced, and read back disarmed at v1 with node
+counts matching committed. G2 (CR-01) and G3 (WR-02) were proven offline in plans 72-10/72-11 and
+were not separately re-exercised by this live gate (their fixes touch fetch-list widening and
+overflow-dedup case-folding, neither of which this CREATE/read-back scenario exercises); no
+contradicting live evidence was observed against either.

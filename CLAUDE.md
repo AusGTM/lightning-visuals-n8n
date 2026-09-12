@@ -2702,10 +2702,22 @@ start) and AFTER-03 (full end-of-run report).
 > the final disarm at 13:57:30Z. **D-72-04's dual write is `[observed live]` split by path:**
 > the UPDATE path lands `lv_linkedin_url` correctly (waterfall/85, contact `1251`); the CREATE
 > path does NOT (contact `352455353810` — F72-1, `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md`
-> Task 2, still open, gap-closure pending). SAFE-01 (existing non-blank `phone` surviving an
+> Task 2). SAFE-01 (existing non-blank `phone` surviving an
 > update) is `[observed live]`, confirmed unchanged on contact `1251`. `hs_additional_emails`'s
 > provenance-only path (D-72-10) was NOT exercised live — the waterfall returned no second
 > email for either row in this gate.
+>
+> **Closed 2026-09-13 (gap-closure plan 72-12, `[observed live]`).** F72-1 is CLOSED: after
+> plan 72-09's `CANDIDATE_ALIASES` fix (see §17.2.2's amendment below) was regenerated, deployed
+> and bounced disarmed across all four changed cloud workflows (`LV Contact Ingest`, `LV
+> Enrichment`, `LV Review Decision`, `LV Scheduled Maintenance` — node counts unchanged at
+> 78/287/55/43, `LV Backend Status` unchanged at 30, all five `active`, `executionOrder: v1`,
+> every `ALLOW_*` flag `false`), one armed CREATE (contact `352522004980`, n8n execution
+> `12414`) landed BOTH `lv_linkedin_url` and `hs_linkedin_url` as the identical full URL
+> `http://www.linkedin.com/in/jimmybusteed`, provenance source `waterfall`/confidence 85 (not
+> `csv`). D-72-04's dual write is now `[observed live]` on BOTH the UPDATE path (contact `1251`,
+> execution `12406`) and the CREATE path (contact `352522004980`, execution `12414`). Full
+> read-back: `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md` Test 3.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
@@ -3371,10 +3383,49 @@ the pre-PN-1-rename CSV canonical key `linkedin_url` — but the candidate objec
 `mergeContacts.js`'s promotion gate (line 400) looks up `confidenceByField["lv_linkedin_url"]`,
 which was never set, and falls back to the flat `csv`/80 confidence — below
 `lv_linkedin_url`'s `fill_blank_only`@85 threshold, so it is withheld even into a blank field.
-**D-72-04's dual write is therefore NOT complete** on the create path; a gap-closure plan is
-required before this claim can be upgraded further. The mobile-header consequence and the
+The mobile-header consequence and the
 `firstname`/`lastname`/`company` non-application were both `[observed live]` on the same
 UPDATE row exactly as predicted above.
+
+**Closed 2026-09-12/13 (gap-closure plans 72-09/72-10/72-11/72-12) — three fixes, one live
+gate.**
+
+1. **G1 (F72-1, plan 72-09).** The fix is one `CANDIDATE_ALIASES = { linkedin_url:
+   ["lv_linkedin_url", "hs_linkedin_url"] }` map declared once inside `MERGE_CONTACTS`
+   (`scripts/build_cloud_workflows.py`), read by BOTH the `confidenceByField`/`sourceByField`
+   derivation loop and the candidate-builder block — the two places that previously computed the
+   PN-1 key rename independently and silently disagreed. Aliasing `sourceByField` (not just
+   confidence) matters because `mergeContacts()`'s `_isProviderSource(resolvedSource)`
+   observation-time gate (D-72-07) reads `sourceByField` by the same candidate key and has the
+   identical vocabulary mismatch. Alias writes are guarded on the target key not already being
+   present in the source's own `source_by_field`, so a caller-supplied entry is never overwritten.
+   Proven offline first with a regression fixture reseeded to production's real pre-alias
+   `source_by_field: { linkedin_url: "apollo" }` shape (`tests/n8n/ingestWidenedFieldsFlow.test.mjs`),
+   then **`[observed live]`** 2026-09-13 (plan 72-12): one armed CREATE, contact `352522004980`,
+   n8n execution `12414`, landed BOTH `lv_linkedin_url` and `hs_linkedin_url` as the identical
+   full URL `http://www.linkedin.com/in/jimmybusteed`, provenance source `waterfall`/confidence
+   85 (not `csv`). **D-72-04's dual write is now complete and observed live on both the CREATE and
+   UPDATE paths.** Full read-back: `72-UAT.md` Test 3.
+2. **G2 (CR-01, plan 72-10).** The local-live lane's own HubSpot fetch lists
+   (`HS_SEARCH_BODY_EXPR`/`HS_CO_SEARCH_BODY_EXPR`) were narrower than the shared merge engine's
+   candidate set, so `existingRecord` could read a real value as blank purely because that lane
+   never fetched it. Both constants are now widened to every `protect_if_current_present` field
+   in `field_policy.yaml` — covering the `_2` overflow slots and every `NEVER_CHASE` write-map-only
+   field the cloud lane already fetched — not `REQUIRED`, so a scheduled tick still never marks a
+   record incomplete over a field no provider is asked to return. Proven offline
+   (`tests/n8n/fieldProducerMatrix.test.mjs`'s derived fetch-gate assertion); not separately
+   re-exercised by plan 72-12's live gate (no overflow-slot candidate was returned for either row
+   in that gate), and no contradicting live evidence was observed.
+3. **G3 (WR-02, plan 72-11).** The overflow-slot dedup key (deciding whether a runner-up
+   `phone`/`mobilephone` candidate duplicates the value already in the `_2` slot) compared raw
+   strings, so `Jane@Example.com` and `jane@example.com`-shaped case differences on an otherwise
+   agreeing candidate would both get a slot instead of deduping to one. Both JS merge engines
+   (`n8n/code/mergeContacts.js`, `n8n/code/mergeCompanies.js`) now fold case
+   (`String(...).toLowerCase()`) before comparing, matching `src/merge_policy.py`'s pre-existing
+   `route_overflow`/`has_conflict()` convention. Proven offline with a mixed-case agreeing-candidates
+   fixture pinned in both JS suites and the Python oracle; not separately re-exercised live by
+   plan 72-12 (the gate's single CREATE returned no runner-up candidate), and no contradicting live
+   evidence was observed.
 
 ## 17.3 Minimal PATCH example
 
