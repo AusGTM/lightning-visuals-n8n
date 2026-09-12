@@ -5,11 +5,11 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 72
 current_phase_name: Enrichment extras land in HubSpot
 status: executing
-stopped_at: Completed 72-01-PLAN.md
-last_updated: "2026-09-12T08:47:33.439Z"
+stopped_at: Completed 72-02-PLAN.md
+last_updated: "2026-09-12T09:15:31.036Z"
 last_activity: 2026-09-12
 last_activity_desc: Phase 72 execution started
-state_head: e9d489e5332a9ef1a89ca4146180e37fd8994e17
+state_head: 0fecbb002da4c22801d099cce8438ad3be3acec1
 progress:
   total_phases: 9
   completed_phases: 2
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 72 (Enrichment extras land in HubSpot) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-09-12 — Phase 72 execution started
 
@@ -501,8 +501,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-12T08:47:33.267Z
-**Stopped at:** Completed 72-01-PLAN.md
+**Last session:** 2026-09-12T09:15:30.737Z
+**Stopped at:** Completed 72-02-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -663,6 +663,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 71 P02 | 55min | 3 tasks | 14 files |
 | Phase 71 P03 | 35min (Tasks 1-2) + operator gate session | 3 tasks | 12 files |
 | Phase 72 P01 | 55min | 3 tasks | 12 files |
+| Phase 72 P02 | N/A | 3 tasks | 21 files |
 
 ## Decisions
 
@@ -830,6 +831,11 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 - [Phase 71]: 71-03: Task 3 (D-71-06's live gate) is not performed by this executor -- gate=blocking-human is never auto-approved in any mode. SUMMARY written with status: halted; Tasks 1-2 complete and committed, Task 3 returned as a checkpoint for the operator.
 - [Phase 71]: 71-03 Task 3 (D-71-06 live gate) ran by the operator 2026-09-12, PASS on both surfaces -- Jimmy Busteed read new_person on the batch surface (create all 2, landed associated to 9605284724), Louise White read new_person and was created from a fresh review-triage cold start, neither re-offered on a third open, Grant Dewsbury persisted. Findings F71-1 (shared run_manifest positional pollution) and F71-5 (ingest lane drops paid-for enrichment extras) triaged to follow-up-phase todos (commit 341a9190). Clean-up (3 HubSpot contacts, held_queue.json, run_manifest.json, driver scripts) still owed to the operator, not performed by any executor session.
 - [Phase 72]: D-72-22 (operator ruling): provider-sourced ingest fields carry provider-grade confidence (85) via a per-field confidenceByField map keyed off source_by_field, instead of the flat csv 80. — Discovered mid-task via the tracer's own dry run; ruling recorded in 72-CONTEXT.md D-72-22.
+- [Phase 72]: hs_linkedin_url's producer-having-but-never-chased status generalized the fetch-gate
+
+producer test (fieldProducerMatrix.test.mjs) to recognize an hs_ mirror of an already
+PN-1-renamed lv_ field, plus a named NEVER_CHASE exclusion documenting the D-66-01/
+T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having one.
 
 ### Roadmap Evolution
 

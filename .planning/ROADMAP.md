@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 1/8 plans executed
+**Plans:** 2/8 plans executed
 
 Plans:
 **Wave 1**
@@ -428,7 +428,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 72-02-PLAN.md — The remaining seven widened keys reach the ingest candidate; `hs_linkedin_url` as a second write target; derived three-way parity test (D-72-01, D-72-02, D-72-04)
+- [x] 72-02-PLAN.md — The remaining seven widened keys reach the ingest candidate; `hs_linkedin_url` as a second write target; derived three-way parity test (D-72-01, D-72-02, D-72-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
