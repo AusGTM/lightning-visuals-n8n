@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 12/12 plans executed (8 executed; 09-12 are gap closure)
+**Plans:** 12/12 plans complete
 
 Plans:
 **Wave 1**
