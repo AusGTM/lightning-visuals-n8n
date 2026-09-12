@@ -518,6 +518,21 @@ def test_route_overflow_agreeing_candidates_do_not_manufacture_an_overflow():
     assert "lv_mobilephone_2" not in grouped
 
 
+def test_route_overflow_mixed_case_agreeing_candidates_do_not_manufacture_an_overflow():
+    # Phase 72 Plan 11 (D-72-09, review WR-02) parity pin -- NOT a RED test. The Python
+    # oracle already lower-cases both sides of this comparison (see route_overflow's
+    # `key = str(c.normalized_value).lower()`), so this case is expected green BEFORE
+    # and AFTER the JS fix in Task 2. It exists so a future change moving this oracle
+    # to case-sensitive comparison goes red here rather than silently diverging from
+    # mergeContacts.js/mergeCompanies.js again.
+    grouped = group_candidates([
+        make_candidate("phone", "zoominfo", "+61 2 9663 8460 EXT 12", 90),
+        make_candidate("phone", "apollo", "+61 2 9663 8460 ext 12", 80),
+    ])
+    route_overflow("contacts", grouped, {})
+    assert "lv_phone_2" not in grouped
+
+
 def test_route_overflow_field_with_no_configured_slot_is_a_noop():
     # Unlike the JS wrapper (which opts "email" into opts.rankedByField for D-72-10's
     # provenance-only fallback), the Python oracle's route_overflow touches ONLY fields

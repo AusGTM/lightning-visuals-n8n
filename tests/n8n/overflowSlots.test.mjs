@@ -86,6 +86,30 @@ test("mergeContacts overflow: two candidates with equal normalizedValue fill the
   assert.equal(result.provenance.lv_mobilephone_2, undefined);
 });
 
+// --- (3b) Two candidates agreeing only under case folding is not an overflow (WR-02) -
+
+test("mergeContacts overflow: mixed-case agreeing candidates on phone do not manufacture lv_phone_2 (WR-02)", () => {
+  const ranked = { phone: [
+    rc("phone", "zoominfo", "+61 2 9663 8460 EXT 12"),
+    rc("phone", "apollo", "+61 2 9663 8460 ext 12"),
+  ] };
+  const result = mergeContacts({}, {}, undefined,
+    { source: "waterfall", confidence: 90, now: NOW, rankedByField: ranked });
+  assert.equal(result.canonicalPatch.lv_phone_2, undefined);
+  assert.equal(result.provenance.lv_phone_2, undefined);
+});
+
+test("mergeCompanies overflow: mixed-case agreeing candidates on phone do not manufacture lv_phone_2 (WR-02)", () => {
+  const ranked = { phone: [
+    rc("phone", "zoominfo", "+61 2 9663 8460 EXT 12"),
+    rc("phone", "apollo", "+61 2 9663 8460 ext 12"),
+  ] };
+  const result = mergeCompanies({}, {}, undefined,
+    { source: "waterfall", confidence: 90, now: NOW, rankedByField: ranked });
+  assert.equal(result.canonicalPatch.lv_phone_2, undefined);
+  assert.equal(result.provenance.lv_phone_2, undefined);
+});
+
 // --- (4) The `_2` slot obeys its own fill_blank_only policy --------------------------
 
 test("mergeContacts overflow: existing non-blank lv_mobilephone_2 is not overwritten (fill_blank_only)", () => {
