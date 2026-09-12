@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 11/12 plans executed (8 executed; 09-12 are gap closure)
+**Plans:** 12/12 plans executed (8 executed; 09-12 are gap closure)
 
 Plans:
 **Wave 1**
@@ -468,4 +468,4 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 72-12-PLAN.md — Gap-closure seal: idempotent regeneration, both suites, the live deploy + one armed CREATE read-back, CLAUDE.md updated to observed-closed (D-72-04, D-72-17, D-72-21)
+- [x] 72-12-PLAN.md — Gap-closure seal: idempotent regeneration, both suites, the live deploy + one armed CREATE read-back, CLAUDE.md updated to observed-closed (D-72-04, D-72-17, D-72-21)
