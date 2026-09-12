@@ -419,12 +419,12 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 8 plans
+**Plans:** 1/8 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 72-01-PLAN.md — Tracer: `mobilephone` lands on create and is protected on update; the ingest lane starts merging against real existing HubSpot props instead of `{}` (D-72-01, D-72-03)
+- [x] 72-01-PLAN.md — Tracer: `mobilephone` lands on create and is protected on update; the ingest lane starts merging against real existing HubSpot props instead of `{}` (D-72-01, D-72-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
