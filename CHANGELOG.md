@@ -207,6 +207,56 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (12203: both rows `not_confirmed`) is fixed on the real engine. **Still not done: the first
   live UNATTENDED, credit-spending batch.** Nothing is armed.
 
+### Added
+- **Overflow-slot HubSpot properties created live (D-72-23, Phase 72 plan 05, commit
+  `71102b0a`).** `lv_phone_2`/`lv_mobilephone_2` (contacts) and `lv_phone_2` (companies) are
+  real portal properties; a trust-rank runner-up phone/mobile candidate routes to the `_2`
+  slot via `opts.rankedByField`/`route_overflow()` in all three merge engines. No `_3` slot
+  exists by construction. Undo manifest:
+  `config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json`.
+- **A real recency/TTL promotion arm for `stale_refreshable` fields** (contacts `jobtitle`,
+  companies `industry`) in all three merge engines — `n8n/code/mergeContacts.js`,
+  `n8n/code/mergeCompanies.js`, `src/merge_policy.py` (D-72-06..09, Phase 72 plan 04). Before
+  this, any conflict on a stale field fell through to a blanket "requires review" refusal
+  regardless of the existing value's age. The contact ingest lane gets a real clock via a new
+  `HubSpot Contact History` node (`propertiesWithHistory`); the enrichment lane's contacts
+  branch and the companies branch have no equivalent hop, so unknown freshness there still
+  resolves conservatively to `needs_review` (tracked as a design todo, not a defect —
+  `.planning/todos/pending/2026-09-12-enrichment-lane-and-companies-branch-have-no-property-history-hop.md`).
+- **Ingest lane candidate set widened from 8 headers to the full `field_policy.yaml`
+  promotable-contact set** (D-72-01/02/03/04, Phase 72 plans 01/02). `wf_contact_ingest_cloud`
+  node count moved 69 → 78.
+- **`linkedin_url` CSV header now writes both `lv_linkedin_url` and native `hs_linkedin_url`**
+  (D-72-04). Provider-sourced ingest fields carry their provider's real confidence via
+  `source_by_field` instead of a flat csv/80 (D-72-22, Phase 72 plan 01).
+
+### Changed
+- **CSV header `mobile`/`cell`/`mobile phone` now maps to canonical `mobilephone`, not
+  `phone`** (D-72-03, Phase 72 plan 01) — an operator-visible behaviour change for any
+  spreadsheet template with a "Mobile" column.
+- **Overflow-slot dedupe case-folds before comparing** phone/mobile candidates in
+  `mergeContacts.js`/`mergeCompanies.js`, matching the Python oracle's pre-existing convention
+  (WR-02, Phase 72 gap-closure plan 11, commit `e2ea2653`).
+- **`wf_enrichment_local_live`'s HubSpot fetch lists widened** to match the cloud lane's
+  non-clobber-critical field set (CR-01, Phase 72 gap-closure plan 10, commit `455b0173`).
+
+### Fixed
+- **F72-1: `lv_linkedin_url` missing on an ingest CREATE.** A `CANDIDATE_ALIASES` map in
+  `MERGE_CONTACTS` (`scripts/build_cloud_workflows.py`) closes the gap where a CREATE landed
+  `hs_linkedin_url` but not `lv_linkedin_url`, because the D-72-22 `confidenceByField`/
+  `sourceByField` derivation and the candidate builder computed the PN-1 key rename
+  independently and disagreed (D-72-09/D-72-04, Phase 72 gap-closure plan 09, commit
+  `0f7c8c08`). Proven live on contact `352522004980` / n8n execution `12414` (Phase 72
+  gap-closure plan 12).
+
+### Verified live (2026-09-12/13, Phase 72 gate + gap closure)
+- **Plan 72-08's live gate** (executions `12402` CREATE, `12406` UPDATE) confirmed the three
+  overflow-slot properties exist and all five cloud workflows are deployed/bounced disarmed
+  (node counts 30/78/287/55/43, `settings.executionOrder: "v1"` on all five, every `ALLOW_*`
+  write flag `"false"`) — and surfaced F72-1.
+- **Plan 72-12 closed F72-1 live** (execution `12414`): both `lv_linkedin_url` and
+  `hs_linkedin_url` land on a CREATE, confidence 85 via `waterfall` provenance (not `csv`).
+
 ## [0.21.0] - 2026-09-07
 
 ### Added

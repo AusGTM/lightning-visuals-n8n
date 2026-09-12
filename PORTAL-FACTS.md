@@ -114,3 +114,31 @@ defect that did not exist. Sources: `.planning/phases/62-suggest-the-contacts-no
 that node's inbound edges. More than one means you must fold the runs before the item count
 means anything.
 
+---
+
+## 2026-09-12 (Phase 72 plan 05, D-72-23) — three overflow-slot properties created live; `hs_additional_emails`/`hs_additional_domains` are enumerations, `hs_country_region_code` does not exist on companies
+
+**Overflow-slot properties, created live, not merely declared:** contacts `lv_phone_2` and
+`lv_mobilephone_2`; companies `lv_phone_2`. Declared in `config/hubspot_properties.yaml` lines
+254 (companies `lv_phone_2`), 494 (contacts `lv_phone_2`) and 500 (contacts
+`lv_mobilephone_2`) — each carrying a D-72-11 comment capping overflow at exactly ONE slot per
+kind (no `_3` slot exists or is planned). Undo manifest:
+`config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json`. A
+trust-rank runner-up phone/mobile candidate routes to the `_2` slot; a third-or-later
+candidate rides on the primary field's own provenance entry only.
+
+**Property-type probe verdict** (`.planning/phases/72-enrichment-extras-land-in-hubspot/72-PORTAL-PROBE.json`,
+probed 2026-09-12T11:40:14Z):
+
+| Property | Object | Exists | Type | fieldType |
+| --- | --- | --- | --- | --- |
+| `hs_additional_emails` | contacts | yes | **enumeration** (not string, as originally assumed) | select |
+| `hs_additional_domains` | companies | yes | enumeration | checkbox |
+| `hs_country_region_code` | companies | **no** (404) | — | — |
+
+Because `hs_additional_emails` is an enumeration, no second-email write was built — a second
+email lands in `lv_contact_enrichment_provenance` only (provenance-only path, D-72-10/D-72-24,
+pinned by `tests/n8n/overflowSlots.test.mjs`). `hs_country_region_code` not existing on
+companies is why the companies branch's geo producers stop at `state`/`hs_state_code` and
+never attempt a company-side region code.
+

@@ -60,7 +60,7 @@ flowchart LR
 | Company enrichment branch (waterfall + web research + judge + merge) | ✅ |
 | Contact enrichment branch (waterfall + web research + judge + merge — mirrors companies) | ✅ built (Phase 16.2) |
 | Per-request provider selection + credit reporting (`providers` payload, `remaining_credits`) | ✅ built (Phase 16.1) |
-| n8n Cloud workflows (contact ingest, enrichment, scheduled maintenance, backend status, review decision) | ✅ **5 deployed on n8n Cloud** (4 active; `LV Review Decision` inactive at rest, activated only inside review windows), write gates disarmed at rest |
+| n8n Cloud workflows (contact ingest, enrichment, scheduled maintenance, backend status, review decision) | ✅ **5 deployed on n8n Cloud, all five active** (node counts as of Phase 72, 2026-09-13: backend status 30, contact ingest 78, enrichment 287, review decision 55, scheduled maintenance 43 — CLAUDE.md §13.0.2), write gates disarmed at rest |
 | Review decision endpoints (`hubspot/review/queue` read-only + `hubspot/review/decision`) | ✅ v0.6 Phase 30 — human approve proven live 2026-08-04 (RB-9 close: human provenance stamped, `manual_protected` withheld) |
 | HubSpot enum validate-and-refuse (staging + both review paths) | ✅ v0.6 Phase 31 — BUGS 28/29/30 closed on live evidence |
 | HubSpot `lv_*` properties (33 + SJ-3 control props) | ✅ migrated live (Phase 15) |
@@ -87,14 +87,14 @@ flowchart LR
 | Rich enrichment (full policy-promotable set chased, landline end to end, `lv_linkedin_url` producer, per-row `contactability` marker) | ✅ **v1.2 Phase 66, 2026-09-04** — both gates widened from a two-field minimum (D-66-01); every gate `REQUIRED` fetched by every feeding search node, pinned by a generic gate/fetch test; thresholds untouched (D-66-08). Backend `0.21.0`, regenerated JSON committed **without deploying** |
 | Autonomy defaults ON with an interrupt window (round re-entry keyed on the cause · implicit approval · seven-second pre-spend pause · unknown bounds disclosed, not refused · end-of-run report from all four batch skills) | ✅ **v1.2 Phases 65, 67, 68, 2026-09-05..07** — client `0.41.0` (committed, marketplace clone not yet refreshed). `allow_write_grants` and `ALLOW_N8N_ARM` unchanged; `read_only` level declared but reserved. **The first live unattended, credit-spending batch still has NOT run** |
 | One Merge, one result channel — native `Merge` at every convergence point and HTTP hop, IF-shaped write gates that emit refusals as rows, ack-only responders, every row outcome read from the settled execution's runData; `settings.executionOrder: "v1"` on every generated body | ✅ **v1.3 Phase 70, complete 2026-09-11** — 12/12 UAT; three live rounds found and closed six gaps (G-70-1..6), the last by flipping the engine's execution order to v1 after Gate 8 reproduced n8n's legacy empty-item push. Gate 12 (`12363`) is the first armed write on the v1 graph — one supervised contact, not an unattended batch. Engine facts recorded per execution id in CLAUDE.md §13.0.3; Gate 11's five v1 recordings frozen under `tests/n8n/fixtures/frozen/` |
-| Committed `n8n/*.json` vs the running n8n Cloud instance | ✅ **level as of 2026-09-10 (Phase 70 Gate 10)** — the Phase 70 v1 bodies deployed disarmed and bounced (`scripts/bounce_n8n_workflows.py`; live nodes 30/69/287/55/43, `settings.executionOrder: "v1"` on all five, write flags `false`), then Gate 11 (disarmed proof, executions `12354`-`12358`) and Gate 12 (one armed contact write, `12363`, window closed after) passed on them. Nothing armed. Do not read an in-repo node as proof of what n8n is running — only a live read is |
+| Committed `n8n/*.json` vs the running n8n Cloud instance | ✅ **level as of 2026-09-13 (Phase 72 plan 08 gate)** — redeployed and bounced disarmed after Phase 72 widened the ingest lane; live nodes 30/78/287/55/43, `settings.executionOrder: "v1"` on all five, write flags `false` (CLAUDE.md §13.0.2 "Phase 72 gate" addendum). Nothing armed. Do not read an in-repo node as proof of what n8n is running — only a live read is |
 
 **"Operator" means two different people in this repo.** Everything above is administered from this
 repository by a technical operator/admin (scripts, deploys, armed windows, runbooks in `docs/`). The
 v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
 terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
-Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current (2026-09-07): **4508 pytest / 940 node**, plus **2750** in `operator-claude-plugin/tests/` (root pytest collection includes those).
+Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current (2026-09-13, Phase 72 plan 12): **4948 pytest passed / 154 skipped** (root `tests/` + `operator-claude-plugin/tests/` combined) / **1170 node** — `.planning/phases/72-enrichment-extras-land-in-hubspot/72-12-SUMMARY.md`.
 
 ## Repository layout
 

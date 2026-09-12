@@ -110,7 +110,7 @@ else:
 
 - **No terminal instructions during everyday use, ever.** Loading contacts, previewing, approving,
   and arming all happen by talking to the skill — never by running a script. The one exception is
-  the one-time setup below: the operator copies a tracked example file and fills in two values
+  the one-time setup below: the operator copies a tracked example file and fills in three values
   obtained from an admin. That is a one-time file edit, not an ongoing terminal workflow, and nothing
   about it repeats once the plugin is configured.
 - **No secrets typed into the conversation.** The client holds only the n8n base URL, an n8n API
@@ -206,49 +206,26 @@ reading as fact. **`unknown` is never rendered as zero and never as healthy**, o
 
 ## One-time setup
 
-Do this once, before the first upload:
+Do this once, before the first upload. The full walkthrough — the settings file, every
+required and optional key, and what survives a plugin update — now lives in the
+[Usage Guide](USAGE.md#installation-and-settings), so it is written down in one place
+instead of two that can drift apart. In short:
 
-1. **Say `/operator-claude-plugin:initialize`.** It tells you the full path to your
-   settings file — the exact location depends on which of three resolution paths applies
-   on your machine, so this is the only reliable way to know it — offers to put the
-   template there, and lists exactly which values are still needed. Run it again any time
-   to check — it changes nothing when you are already set up, and it never asks you for a
-   secret.
-
-   *(Doing it by hand instead: the template lives at
-   `operator-claude-plugin/config/operator.local.example.json`; copy it to the path
-   `/operator-claude-plugin:initialize` reports. That filename is deliberately not a
-   dotfile — dotfiles are unreadable to this environment's tooling.)*
-2. Fill in its two values, both obtained from your n8n admin:
-   - `n8n_url` — the `https://` address of your n8n Cloud instance.
-   - `webhook_secret` — sent as the `X-Enrichment-Secret` header on every request; never
-     shown back to you by the skill, and never typed into the conversation.
-3. Install this plugin's own dependencies once: `pip install -r
-   operator-claude-plugin/requirements.txt` (`openpyxl`, `requests`, `PyYAML`). If you're
-   running in the same Claude Desktop Code-tab environment this plugin was verified
-   against, these already import with no install step.
-4. `operator.local.json` is gitignored — it is never committed, and the plugin never
-   displays its contents back to you.
-
-Your settings file survives a plugin update — it lives outside this plugin's versioned
-install folder entirely, at
-`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`. An update
-moves it there for you automatically the first time you use the plugin afterward; there
-is nothing to copy by hand.
-
-Two optional keys, both safe to leave as they ship:
-
-- `hubspot_portal_id` — your HubSpot portal id. Used for one thing only: turning each
-  flagged record in the review queue into a clickable HubSpot link. Leave it out and the
-  queue shows the raw record id and says the link is missing, rather than guessing a URL.
-- `field_policy_path` — `null` uses the repo's own `config/field_policy.yaml`. The review
-  queue reads that file to *label* a field as protected before you decide anything about
-  it. It is a display lookup: the plugin never refuses a decision on its own, because the
-  backend is the one authority on what may be written.
+- **Say `/operator-claude-plugin:initialize`.** It names the exact settings-file path for
+  your machine, offers to put the template there, and lists exactly which values are still
+  needed. Safe to re-run any time — it changes nothing once you're set up, and it never
+  asks you for a secret.
+- **Three keys are required**, all obtained from your n8n admin: `n8n_url`,
+  `webhook_secret`, and `n8n_api_key`. None is ever shown back to you or typed into the
+  conversation.
+- Install this plugin's own dependencies once: `pip install -r
+  operator-claude-plugin/requirements.txt` (`openpyxl`, `requests`, `PyYAML`).
+- Your settings survive a plugin update — they live outside this plugin's versioned
+  install folder entirely, at the durable path `/operator-claude-plugin:initialize`
+  reports.
 
 If something is missing or malformed, the skill refuses before making any network call
-and says in plain language what to fix — run the skill (or `/operator-claude-plugin:contact-upload`)
-and its first message names the exact problem and points back to step 1 above.
+and says in plain language what to fix.
 
 ## Giving it a file
 
@@ -742,6 +719,7 @@ operator-claude-plugin/
     backend-status/        # plain-language read of what the backend is doing, text or dashboard artifact
     backend-control/       # run-now / on-off / cadence over the allowlisted mutations, confirmed and read-back verified
     review-triage/         # the review queue: render conflicts, adjudicate one record, gated writeback
+    loss-reason-report/    # closed-lost deals cross-tabulated against ICP tier/score — shells out to the BACKEND repo's own scripts/, not this plugin's
     suggestion-declines/   # the backlog of people a suggestion round declined to send: send / defer / delete / export, any time
     suggest-contacts/      # after a company batch: find and propose people at companies with nobody named, crawling each company's OWN site first and falling back to web search only when that ladder ends cleanly
     backend-sweep/
@@ -754,23 +732,33 @@ operator-claude-plugin/
     init_check.py          # what initialize verifies and reports
     # ingestion lane
     tabular.py extraction.py preview.py dispatch.py report.py error_table.py
+    header_suggest.py      # client-suggested canonical prop for a header the backend's mapping doesn't recognize
+    name_split.py          # proposes a first/last split for a full-name column, per row, for review
+    company_domain.py      # confirm/decline lane for a company row with no domain
+    preingest.py           # proposes match/company candidates ahead of ingest; the operator decides
+    resolution_sources.py  # closed vocabulary of legitimate sources for a resolved value
+    match_state.py         # tracks a row's match state across a batch
+    match_handoff.py       # hands a held/matched row's state between skills
     # enrichment lane
     preview_enrichment.py enrichment.py chunking.py cost_guard.py report_enrichment.py
+    measure_dispatch.py    # read-only measurement of how many n8n executions a record will cost
     # status surface
     status.py backend_status.py n8n_read.py executions_client.py execution_errors.py
     render_text.py render_dashboard.py artifact_store.py
     # control actions
     control_actions.py n8n_control.py n8n_arming.py n8n_cadence.py probe_n8n_semantics.py
+    scheduled_arm.py       # the SJ-3 scheduled-poller arm/disarm companion
     # notices + sweep
-    watch.py sweep_entry.py sweep_read.py sweep_conditions.py sweep_notify.py
+    watch.py sweep_entry.py sweep_read.py sweep_conditions.py sweep_notify.py sweep_shim.py
     # review triage
     review_queue.py review_decision.py
     # write authorization + the post-run account of what was written
     write_grant.py written_records.py
     # autonomous batch runs: confidence verdicts, held rows, run scope and resume
-    confidence.py held_queue.py run_manifest.py run_state.py
+    confidence.py held_queue.py run_manifest.py run_state.py remainder_queue.py run_report.py
     # suggesting people at companies with nobody named
     suggest_contacts.py role_classify.py url_fallback.py search_fallback.py
+    suggestion_declines.py # the backlog of people a suggestion round declined to send
   config/
     operator.local.example.json  # tracked template — copy to operator.local.json (gitignored) per setup above
     cost_rates.json        # dated cost-rate table the previews price from

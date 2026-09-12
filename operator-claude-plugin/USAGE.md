@@ -2,8 +2,9 @@
 
 A task-oriented guide to running the Lightning Visuals enrichment backend from Claude.
 During everyday use you never open a terminal, n8n, or a config file — you talk to Claude,
-and this plugin does the rest. (One-time setup is the exception: you fill two values into a
-settings file yourself, so no secret ever passes through the chat.)
+and this plugin does the rest. (One-time setup is the exception: you fill three values into a
+settings file yourself, so no secret ever passes through the chat — see
+[Installation and settings](#installation-and-settings) below.)
 
 For how the plugin works underneath, see [README.md](README.md); this guide is about *what to say* and *what to expect*.
 
@@ -14,14 +15,178 @@ HubSpot" works just as well.
 
 ---
 
+## Installation and settings
+
+Everything in this section is done once per machine. After it, the operator never opens a
+terminal or a config file again. Steps 1–3 need a terminal; step 4 is the last time you touch
+a file by hand. Nothing here asks you to type a secret into the conversation — secrets go into
+the settings file directly.
+
+### Who does what
+
+| Task | Who |
+| --- | --- |
+| Deploy the n8n Cloud workflows and hold the credentials | n8n admin — the backend is the engine, this plugin is the steering wheel |
+| Install the plugin, create and fill the settings file | operator (values supplied by the admin) |
+| Turn on `allow_write_grants`, set `ALLOW_N8N_ARM`, install the unattended sweep | admin only |
+
+### 1. Prerequisites
+
+- **Claude Code** (terminal CLI or the desktop app's Code tab) with plugins enabled. All
+  commands below are typed in a terminal; the plugin itself is then used from the chat.
+- **`git`** on your PATH — the marketplace is fetched from a public GitHub repository.
+- **Python 3** with three packages: `openpyxl`, `requests`, `PyYAML`. In the Claude Desktop
+  Code-tab environment this plugin was verified against they already import; anywhere else,
+  install them once from the plugin directory: `pip install -r requirements.txt`.
+- **Three values from your n8n admin**, which you will type into the settings file in step 4
+  (never into the chat): the `https://` address of the n8n Cloud instance, the webhook
+  shared secret, and an n8n API key.
+
+### 2. Install the plugin
+
+```
+claude plugin marketplace add https://github.com/AusGTM/lightning-visuals-n8n.git
+claude plugin install operator-claude-plugin@lightning-visuals-operator
+```
+
+The first command registers the marketplace under the name `lightning-visuals-operator`
+(it clones the repository to `~/.claude/plugins/marketplaces/lightning-visuals-operator`);
+the second installs the plugin from it into a versioned folder under
+`~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/<version>/`.
+
+Then **restart Claude Code.** Skills bind to the installed plugin version when a session
+starts; a session that was already open keeps running the old (or no) plugin until it is
+restarted. `claude plugin list` shows the installed version.
+
+### 3. Create the settings file
+
+In a fresh session say **"Set up the enrichment plugin"** (or
+`/operator-claude-plugin:initialize`). Claude runs a read-only check, tells you the **full
+path** of the settings file, offers to put the template there, and lists which values are
+still needed. It never asks you for a value and never shows the file back to you.
+
+The file is `operator.local.json`. On a normal install its path is:
+
+```
+~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/operator.local.json
+```
+
+That folder is outside the versioned install, so the file survives every plugin update
+untouched. (Resolution order, first hit wins: the `LV_OPERATOR_CONFIG` environment variable
+if an admin set one; then the durable folder above; then a legacy copy at
+`config/operator.local.json` inside the plugin folder; then, once, a copy left by an older
+installed version, which is migrated into the durable folder for you.)
+
+Doing it by hand instead: from the installed plugin folder (the directory holding `scripts/`
+and `skills/`), run `python3 scripts/init_check.py --create`. It copies
+`config/operator.local.example.json` into place and refuses to overwrite an existing file.
+The file is never committed and is gitignored in the source repository.
+
+### 4. Fill in the required keys
+
+Open the file in any text editor and replace the three placeholders. Every value comes from
+your n8n admin.
+
+| Key | What it is | Needed for |
+| --- | --- | --- |
+| `n8n_url` | `https://` address of the n8n Cloud instance | everything |
+| `webhook_secret` | shared secret sent as the `X-Enrichment-Secret` header on every dispatch | uploads, enrichment, matching, review decisions, the sweep |
+| `n8n_api_key` | n8n API key (n8n → Settings → n8n API), sent as `X-N8N-API-KEY` on read-only calls to the executions and workflows API. A **different** secret from `webhook_secret`. | uploads, enrichment, matching, backend status, start/stop controls, the sweep — every lane that sends a batch needs it, because a batch's per-record outcome is read back from n8n's execution record |
+
+A file with a placeholder still in it "looks filled in" at a glance and is the most common
+miss; the check in step 5 names the exact key.
+
+### 5. Verify
+
+Say **"Is the plugin configured?"** (or run `/operator-claude-plugin:initialize` again). The
+expected answer is *already set up*, plus the settings-file location. Then ask **"What's the
+backend doing?"** — a read-only status call that proves `n8n_url` and `n8n_api_key` work
+without changing anything. An upload preview (any small CSV) proves `webhook_secret`; the
+preview sends nothing.
+
+### Optional settings
+
+All ship with safe defaults in the template. Change them only when you have a reason; each
+`_..._note` entry in the template explains its key in full.
+
+| Key | Default | Does |
+| --- | --- | --- |
+| `hubspot_portal_id` | unset | turns each review-queue record into a clickable HubSpot link; without it the raw record id is shown |
+| `enrichment_providers` | `["zoominfo", "apollo", "lusha"]` | which providers an enrichment batch calls; a named subset or `[]` (spend nothing) are the other two legal values; can be overridden per batch in conversation |
+| `stuck_execution_minutes` | `15` | how long an n8n execution may run before the status check and the sweep call it stuck |
+| `n8n_monthly_execution_allowance` | `2500` | the n8n plan's monthly execution budget; must equal `monthly_execution_allowance` in the backend's `config/execution_budget.yaml` (a test fails when they disagree); missing or `0` means the burn-rate alarm is **off** |
+| `n8n_schedule_floor_max_share` | `0.25` | share of that allowance the whole scheduled cadence may consume before a cadence change is refused; must equal the backend's `idle_floor_max_share` |
+| `burn_rate_alarm_threshold` | `1.0` | the sweep alarms when the sampled execution rate, projected over 30 days, exceeds the allowance times this |
+| `dashboard_artifact_ttl_days` | `30` | how long the status dashboard artifact is kept before being rebuilt |
+| `watch_bound_seconds` | `600` | how long the in-session watch waits on a dispatched run before saying "still running" |
+| `max_records_per_chunk` | `2` | records per enrichment POST; derived from a live timing probe against the ~100 s webhook response ceiling — do not raise without re-measuring |
+| `max_rows_per_match_request` | `20` | rows per match POST; mirrors the backend constant `ENRICH_MAX_PROPOSE_RECORDS` — raise the backend first, this second |
+| `column_mapping_path` | `null` | `null` uses the plugin's shipped `config/column_mapping.yaml` for spreadsheet header mapping |
+| `field_policy_path` | `null` | `null` uses the shipped `config/field_policy.yaml`, read only to *label* a field as protected in the review queue |
+
+### Admin-only switches
+
+These change what the plugin is *allowed* to do. An operator does not set them.
+
+- **`allow_write_grants`** (in the same settings file, default `false`). Set to the JSON
+  boolean `true` to let an operator open a write grant in conversation — name a batch, see the
+  worst-case spend, say yes once, and each send in that batch may arm live HubSpot writes for
+  exactly the records in the grant. Absent, `false`, the string `"true"`, `1` and `"yes"` all
+  read as **off**. It turns on the interactive path only; it never enables unattended writing.
+- **`autonomy`** object (`read_only`, `spend_no_write`, `write`; all default **on**, including
+  when the object is absent). Setting a level to the JSON boolean `false` makes rounds at that
+  level ask before proceeding instead of stating the price and pausing seven seconds. It is a
+  default-setter, never an authority: it cannot arm anything that `allow_write_grants` (or
+  `ALLOW_N8N_ARM` for headless runs) has not already authorised.
+- **`ALLOW_N8N_ARM=true`** — an environment variable, not a settings key. The sole authority
+  for the headless and cron paths (`scripts/scheduled_arm.py`), which have no operator to
+  confirm anything. The one-shot armed send from a conversation also only works in a shell
+  where an admin has set it.
+- **`LV_OPERATOR_CONFIG`** — an environment variable that points the plugin at a settings file
+  somewhere other than the durable folder. An escape hatch; leave it unset unless you need it.
+- **The unattended sweep** is not installed by installing the plugin. An admin installs its
+  `cron`/`launchd` schedule following `skills/backend-sweep/SWEEP-CRON-TEMPLATE.md`; the sweep
+  needs all three required keys and refuses loudly, not silently, when one is missing.
+
+### Fewer permission prompts (optional)
+
+Every task runs `python3 scripts/<name>.py` from the plugin folder through Bash, and in
+Claude Code's default permission mode each run is a prompt. To allowlist exactly those, and
+nothing else, add to `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(python3 scripts/*)"]
+  }
+}
+```
+
+Confirm with `/permissions`. This does not loosen anything about HubSpot writes — see
+[Why it keeps asking permission](#why-it-keeps-asking-permission).
+
+### Updating the plugin
+
+```
+claude plugin marketplace update lightning-visuals-operator
+claude plugin update operator-claude-plugin@lightning-visuals-operator
+```
+
+Then restart Claude Code. The marketplace clone never refreshes on its own, which is why the
+first command exists; the second installs the newest version into a new versioned folder.
+Your settings file is not touched — it lives in the durable folder, not the install folder.
+`/operator-claude-plugin:initialize` after an update should answer *already set up*.
+
+---
+
 ## First-time setup
 
 > "Set up the enrichment plugin" · "Is the plugin configured?"
 
-Run once after installing, or whenever something says a setting is missing. Claude checks
-the configuration, tells you exactly which keys are present or absent, and walks you through
-anything that needs filling in. If another task ever refuses with a message about a missing
-key, this is the skill it is pointing you at.
+Run once after installing (step 3 above), or whenever something says a setting is missing.
+Claude checks the configuration, tells you exactly which keys are present or absent, and
+walks you through anything that needs filling in. If another task ever refuses with a
+message about a missing key, this is the skill it is pointing you at.
 
 **Needs an admin first:** the backend itself (n8n Cloud workflows, credentials) must already
 be deployed. This plugin is the steering wheel, not the engine.

@@ -60,10 +60,13 @@ Give them, in this order:
    exists is that they cannot be expected to know where the plugin was installed. That
    path is now version-independent — the same reason the instruction insists on relaying
    it verbatim in the first place hasn't changed, it just now also survives an update.
-2. **Which values are still needed**, by name, and that both come from **their n8n admin**:
+2. **Which values are still needed**, by name, and that all three come from **their n8n admin**:
    - `n8n_url` — the `https://` address of the n8n instance.
    - `webhook_secret` — the shared secret the backend checks on every request.
-   - `n8n_api_key` — only needed for reading backend status and turning jobs on and off.
+   - `n8n_api_key` — the n8n API key (a different secret from `webhook_secret`). Needed by
+     every lane that sends a batch — uploads, enrichment, matching — as well as backend
+     status and turning jobs on and off, because a batch's per-record outcome is read back
+     from n8n's execution record (`config_gate.CAPABILITY_KEYS`, D-70-10).
 3. **That they type these into the file, not to you.**
 
 Then say what each missing value costs them, using the capability lines the command
@@ -73,8 +76,9 @@ Relay the **optional settings** block too, exactly as `init_check.py` printed it
 separate block from the capability lines on purpose: those say which keys are present,
 while a setting says an admin *authorized* something. A setting that is off is not a fault
 and must never be reported as one — it is a switch nobody has needed yet. Do not say the plugin is "broken" when one capability is unconfigured — a config
-with no `n8n_api_key` still uploads contacts perfectly well, and over-refusing is exactly
-what PLUGIN-03 forbids.
+with no `webhook_secret` still answers the backend status check, and over-refusing is exactly
+what PLUGIN-03 forbids. (Since D-70-10 a config with no `n8n_api_key` cannot upload
+contacts either — every send-capable lane needs it — so name that consequence plainly.)
 
 ## Step 3 — confirm
 

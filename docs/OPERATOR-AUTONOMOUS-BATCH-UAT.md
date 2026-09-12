@@ -237,6 +237,13 @@ find and hand-delete them in HubSpot afterwards — **HubSpot has no rollback.**
 Expected spend for the whole batch: ~2–4 provider credits (Lusha 1/contact, 2/company),
 one Anthropic call per unmatched company, roughly 8–15 n8n executions.
 
+**Corrected 2026-09-13:** Lusha 1/contact was this section's planning estimate at the time it
+was written (2026-09-09); it is not the measured rate. A rich first-time reveal was observed on
+2026-09-11 billing up to 7 credits per contact (execution `12372`), not a flat 1 — see
+`docs/LUSHA-V3-CONTRACT.md` §7.1 and the `_enrichment_providers_cost_note` in
+`operator-claude-plugin/config/operator.local.example.json`. Treat any "~2–4 provider credits"
+total in this section as a floor, not a ceiling.
+
 ### 1e. The D-71-06 gate's CSV — a row that actually gets HELD and reads `new_person`
 
 **Why a THIRD CSV is needed at all.** §1d's second round sends Jimmy Busteed through

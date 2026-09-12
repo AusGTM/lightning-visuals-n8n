@@ -20,6 +20,12 @@ The backend is already deployed and bounced (Contact Ingest 29 nodes, Enrichment
 nodes as of the 2026-08-30 Phase 61 deploy — was 113 when this walk was written; both
 active, **all write flags false and both allowlists empty**). What remains is the client:
 
+**Corrected 2026-09-13:** those node counts are Phase 61's, not current. Phase 70's Merge
+refactor and Phase 72's ingest widening moved them to Contact Ingest 78 nodes, Enrichment
+287 nodes (all five cloud workflows active, `settings.executionOrder: "v1"`, every `ALLOW_*`
+write flag still `"false"` — CLAUDE.md §13.0.2 "Phase 72 gate" addendum). Re-verify live node
+counts before trusting this precondition rather than relying on any number in this file.
+
 ```bash
 git push origin master
 git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master

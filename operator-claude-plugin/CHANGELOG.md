@@ -2549,9 +2549,17 @@ greyed out through ten phases of shipped work).
    only this string; equal strings mean no update is offered, whatever the content says.
 2. **Cut the CHANGELOG section**: the Unreleased heading stays on top and empty, the
    shipped work moves under `## [<version>] - <date>`.
-3. **Push to the branch the marketplace clone tracks** (`master`).
-4. **Refresh the marketplace clone** — it never fetches on its own, and a reinstall re-copies
-   from whatever it already holds:
+3. **Push to the branch the marketplace clone tracks** (`master`). The clone fetches from
+   GitHub `origin`, never from the working tree — an unpushed bump is invisible to step 4
+   (re-learned 2026-09-13: `0.49.0` was committed, the clone stayed at `0.48.0` until the push).
+4. **Refresh the marketplace clone, then update the install** — the clone never fetches on
+   its own, and a reinstall re-copies from whatever it already holds:
+   ```
+   claude plugin marketplace update lightning-visuals-operator
+   claude plugin update operator-claude-plugin@lightning-visuals-operator
+   ```
+   then restart Claude Code (skills bind to the installed version at session start). The
+   raw-git equivalent of the first command still works when the CLI is unavailable:
    ```
    git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master
    git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
