@@ -81,7 +81,9 @@ def test_build_preview_reports_dropped_headers_and_unmapped_canonical_props(samp
     assert labels_by_header["Notes"]["dropped"] is True
     assert labels_by_header["Notes"]["canonical"] is None
     assert labels_by_header["Email Address"]["canonical"] == "email"
-    assert labels_by_header["Mobile"]["canonical"] == "phone"
+    # Phase 72 Plan 01 (D-72-03): "mobile" now maps to its own canonical target,
+    # `mobilephone`, not `phone` — the alias flip lands here as a live consumer.
+    assert labels_by_header["Mobile"]["canonical"] == "mobilephone"
 
     # no header in the fixture maps to these canonical props
     assert set(preview["unmapped_canonical_props"]) >= {

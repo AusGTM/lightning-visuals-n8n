@@ -60,7 +60,9 @@ NAME_SEPARATOR = "|"
 # Deliberately NOT `held_queue.ROW_FIELD_ALLOWLIST` and deliberately excluding
 # `row_id` (D-69-04; `preingest.build_rows_spec` also refuses a row that already
 # carries one). Equals `extraction.canonical_props()` exactly -- pinned by test.
-ROW_FIELD_ALLOWLIST = enrichment.MATCH_LOOKUP_KEYS + ("jobtitle", "phone", "company_id")
+# Phase 72 Plan 01 (D-72-03): `mobilephone` split off the `phone` alias group into its
+# own canonical target -- added here to keep this literal equal to canonical_props().
+ROW_FIELD_ALLOWLIST = enrichment.MATCH_LOOKUP_KEYS + ("jobtitle", "phone", "mobilephone", "company_id")
 
 # Reimplemented (not imported) per `held_queue.py:101-144`'s own precedent.
 _FORBIDDEN_NAME_MARKERS = (

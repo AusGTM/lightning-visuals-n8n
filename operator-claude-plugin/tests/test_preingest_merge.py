@@ -625,8 +625,12 @@ def test_the_allowlist_is_a_union_and_a_shared_key_behaves_as_before():
     # about whether a present value is overwritten" -- `jobtitle`, the third shared
     # key, deliberately no longer behaves this way (ruling 2026-09-11, see
     # test_a_present_jobtitle_is_replaced_by_a_differing_response_value above).
+    # Phase 72 Plan 01 (D-72-03): `mobilephone` split off the `phone` alias group into
+    # its own canonical target, and it is ALSO a `field_policy.yaml` promotable-contact
+    # key (fill_blank_only @ 85) -- a fourth shared key, added by widening the alias
+    # table, not a regression of the three above.
     shared = set(extraction.canonical_props()) & set(preingest.promotable_contact_props())
-    assert shared == {"email", "phone", "jobtitle"}
+    assert shared == {"email", "phone", "jobtitle", "mobilephone"}
 
     rows = _rows(1)
     rows[0]["email"] = "amy@x.com"

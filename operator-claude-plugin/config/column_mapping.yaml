@@ -39,8 +39,15 @@ aliases:
   "linkedin profile": linkedin_url
   # phone
   phone: phone
-  mobile: phone
   tel: phone
+  # mobilephone (D-72-03: split off the phone group — phone stays the landline/office
+  # slot, mobile is its own canonical target)
+  mobilephone: mobilephone
+  mobile: mobilephone
+  "mobile phone": mobilephone
+  cell: mobilephone
+  "cell phone": mobilephone
+  "mobile number": mobilephone
   # company
   company: company
   organization: company

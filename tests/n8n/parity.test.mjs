@@ -196,9 +196,11 @@ test("columnMap: aliased/mixed-case headers -> canonical, unmapped dropped", () 
     "Job Title": "Engineer", "LinkedIn URL": "https://li/x", "Mobile": "0412 345 678",
     "Account": "Example", "unmapped col": "drop me",
   });
+  // Phase 72 Plan 01 (D-72-03): "Mobile" now maps to its own canonical target,
+  // `mobilephone`, not `phone`.
   assert.deepEqual(row, {
     firstname: "Alice", lastname: "Baker", email: "a@b.com", jobtitle: "Engineer",
-    linkedin_url: "https://li/x", phone: "0412 345 678", company: "Example",
+    linkedin_url: "https://li/x", mobilephone: "0412 345 678", company: "Example",
   });
   assert.ok(!("unmapped col" in row));
 });

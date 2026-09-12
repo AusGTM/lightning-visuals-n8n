@@ -368,7 +368,22 @@ return merged.map((m) => {
   }
   const srk = {};
   if (rowEmail && hits.length) srk.email = hits;
-  return { json: { ...row, searchResultsByKey: srk, lookup_failed } };
+  // Phase 72 Plan 01: the matched contact's CURRENT HubSpot properties, so
+  // MERGE_CONTACTS' non-clobber gate has something real to gate against on an UPDATE
+  // row (D-72-06/D-72-17, and SAFE-01's shared prerequisite — widening the candidate
+  // set without this would turn every update into an unconditional clobber). Taken
+  // ONLY from the first candidate whose value-matched email equals THIS row's own
+  // normalized email (the existing BUG-22b match, never by index) — a row with zero
+  // hits, or caught by the batch-wide lookup_failed flag, gets {} exactly as before
+  // (mirrors ENRICH_ADAPT_SEARCH's search-envelope branch).
+  let existingRecord = {};
+  if (!lookup_failed && rowEmail && hits.length) {
+    const matched = candidates.find((c) => candidateEmail(c) === rowEmail);
+    if (matched) {
+      existingRecord = { ...(matched.properties || {}), hs_object_id: String(matched.id) };
+    }
+  }
+  return { json: { ...row, searchResultsByKey: srk, lookup_failed, existingRecord } };
 });
 
 function normalizeEmailBasicSafe(raw) {
@@ -410,20 +425,38 @@ MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 // here is therefore just $json, never a by-name lookup — and degrades to {} exactly as
 // before on any row that never carries the key at all (build_local()'s workflow has no
 // "Set Config" node and no caller has ever sent this field on a plain CSV upload).
+//
+// Phase 72 Plan 01: `row.existingRecord` (stamped by ADAPT_SEARCH_RESULTS) is now the
+// matched HubSpot contact's real current properties for a matched row — a net_new row
+// still degrades to {} (blanks promote per policy, unchanged), but a matched row now
+// gates every candidate field against real values for the first time on this lane. See
+// 72-01-SUMMARY.md's "Operator confirm:" items for the two consequences that follow.
+//
+// D-72-22 (operator ruling, 2026-09-12): a field whose `source_by_field` names a real
+// provider (anything but "csv"/absent) carries that provider's own confidence grade —
+// 85, matching ENRICH_MERGE's own `{ source: "waterfall", confidence: 85 }` call —
+// instead of the flat csv 80. Without this, a provider-sourced `mobilephone` or
+// `lv_linkedin_url` (both fill_blank_only @ 85) could never promote even into a blank
+// field, because the flat csv confidence never clears their threshold. A field
+// resolving to "csv", or absent from the map, is unaffected: an operator-typed guess
+// stays exactly as untrusted as before (SAFE-01 — no min_confidence moved).
 return $input.all().map((it) => {
   const row = it.json;
   const sourceByField = row.source_by_field || {};
+  const confidenceByField = {};
+  for (const f of Object.keys(sourceByField)) {
+    if (sourceByField[f] && sourceByField[f] !== "csv") confidenceByField[f] = 85;
+  }
   const candidate = {};
-  for (const f of ["email", "firstname", "lastname", "jobtitle", "company"]) {
+  for (const f of ["email", "firstname", "lastname", "jobtitle", "company", "mobilephone"]) {
     if (row[f] != null && String(row[f]).trim() !== "") candidate[f] = row[f];
   }
   if (row.linkedin_url != null && String(row.linkedin_url).trim() !== "") {
     candidate.lv_linkedin_url = row.linkedin_url;
   }
   if (row.phone_normalized) candidate.phone = row.phone_normalized;
-  // LOCAL/template: no existing HubSpot props fetched here => {} (blanks promote per policy).
-  const merged = mergeContacts({}, candidate, undefined,
-    { source: "csv", confidence: 80, sourceByField });
+  const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
+    { source: "csv", confidence: 80, confidenceByField, sourceByField });
   return { json: { ...row, merge: merged } };
 });
 """
