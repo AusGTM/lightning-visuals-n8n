@@ -16,6 +16,37 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.49.1] - 2026-09-13
+
+Documentation-only release. No script, skill-flow, config or backend behaviour changed.
+
+### Changed
+- **USAGE.md now carries the full installation and settings guide** ("Installation and
+  settings"): registering the marketplace and installing the plugin with the `claude plugin`
+  CLI, restarting so skills bind, where `operator.local.json` lives and how that path is
+  resolved, the three required keys and every optional key, the admin-only switches
+  (`allow_write_grants`, `autonomy`, `ALLOW_N8N_ARM`, `LV_OPERATOR_CONFIG`, the unattended
+  sweep), the permission allowlist, and the update procedure. README.md's "One-time setup"
+  is now a short pointer to it, so the two cannot drift apart.
+- **Required settings are three, not two.** Every place that said "two values" (README,
+  UAT test 0.3, the initialize skill's own prose) now names `n8n_url`, `webhook_secret` AND
+  `n8n_api_key` — the API key has been required by every send-capable lane since 0.44
+  (D-70-10: a batch's per-record outcome is read back from n8n's execution record, so a
+  config that cannot read the executions API is refused before any send). The initialize
+  skill no longer tells an operator that a config without `n8n_api_key` "still uploads
+  contacts perfectly well".
+- README.md Layout tree lists `loss-reason-report/` and the thirteen scripts it had fallen
+  behind on (`header_suggest`, `name_split`, `company_domain`, `preingest`,
+  `resolution_sources`, `match_state`, `match_handoff`, `measure_dispatch`, `scheduled_arm`,
+  `sweep_shim`, `remainder_queue`, `run_report`, `suggestion_declines`).
+- Release checklist (bottom of this file): push `master` BEFORE refreshing the marketplace
+  clone (the clone fetches from GitHub, never the working tree), and the refresh + install
+  update are now given as `claude plugin marketplace update` / `claude plugin update`.
+
+### Notes
+- Pairs with a repository-wide documentation sweep after Phase 72 (root README, CLAUDE.md
+  as-built deltas, PORTAL-FACTS, operator docs). Nothing was deployed, armed or bounced.
+
 ## [0.49.0] - 2026-09-12
 
 Phase 72 (`72-01`..`72-06`) — the ingest lane stops dropping what the waterfall already paid
