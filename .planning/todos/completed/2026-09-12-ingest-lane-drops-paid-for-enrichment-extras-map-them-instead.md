@@ -65,3 +65,41 @@ Follow-up phase (touches `column_mapping.yaml` + `columnMap.js` parity, `strip_e
 → a mapping step, `merge_enriched`'s conflict rule, `field_policy.yaml`, the ingest lane's contact
 property assembly in `build_cloud_workflows.py` → regenerate + deploy + bounce, plus HubSpot custom
 properties). Not Phase 71.
+
+## Resolution
+
+Resolved by **Phase 72 (enrichment extras land in HubSpot)**, plans 01–06. The shipped answer
+follows this todo's four operator rulings and its proposed mapping table with three differences
+from what the table above proposed:
+
+1. **Overflow is capped at ONE `_2` slot per kind, not an open set.** The table above left the
+   second-phone/mobile destination open-ended ("a new custom `lv_phone_2`"). D-72-11 fixed it at
+   exactly one `_2` slot per kind — `lv_phone_2` and `lv_mobilephone_2` on contacts, `lv_phone_2`
+   on companies — created live in plan 05. A third-or-later candidate never gets a slot; it rides
+   on the primary field's provenance entry only. No `_3` slot exists or can exist by construction
+   (`_overflowSlot()`/`_overflow_slot()` in `n8n/code/mergeContacts.js`, `mergeCompanies.js`,
+   `src/merge_policy.py`).
+2. **Verification stamps are provenance JSON only, not new per-field `_source`/`_verified_at`
+   properties.** The table's own "Notes" column implied per-property verifier stamps in the §6.1
+   pattern; D-72-13 kept every landed slot's source/confidence/timestamp inside the object's
+   existing `lv_enrichment_provenance`/`lv_contact_enrichment_provenance` blob instead. No new
+   HubSpot property was declared for this purpose. `hs_additional_emails` also turned out to be
+   an `enumeration` type (not the assumed string), so the second-email write in the table's row 2
+   was never built — the second email lands in provenance only (plan 05's live probe,
+   `72-PORTAL-PROBE.json`).
+3. **Companies are in scope, not contacts alone.** The table above only mapped contact
+   properties. Plan 06 gave companies the equivalent geo/phone shape (`state`, `hs_state_code`,
+   `phone` + its own `lv_phone_2` overflow) wherever a real provider (Lusha, Apollo) actually
+   supplies the value — `hs_country_region_code` stayed out of scope because the live probe found
+   the property does not exist on companies, and `hs_additional_domains` stayed an accepted
+   no-producer gap because no provider branch pushes a company `domain` candidate at all.
+
+Plan-by-plan: 01 split `mobilephone` off `phone` and wired `existingRecord` into the ingest
+merge; 02 widened the remaining seven candidate keys and added `hs_linkedin_url` as a second
+native write target; 03 closed the LinkedIn naming fork inside `merge_enriched` and made
+create-time provider-wins/`source_by_field` real; 04 added the recency/TTL promotion arm and the
+ingest lane's own property-history fetch; 05 created the three overflow-slot properties live and
+built the winner/runner-up routing; 06 gave companies their own geo/phone producers. See each
+plan's own `*-SUMMARY.md` for verification detail. One gap this phase deliberately leaves open is
+tracked in a new pending todo:
+`.planning/todos/pending/2026-09-12-enrichment-lane-and-companies-branch-have-no-property-history-hop.md`.
