@@ -765,6 +765,22 @@ def _present(value) -> bool:
     return value is not None and str(value).strip() != ""
 
 
+# D-72-19 (Phase 72 Plan 03): the waterfall's promotable name for LinkedIn
+# (`lv_linkedin_url`, field_policy.yaml's PN-1 rename) and the CSV's canonical name
+# (`linkedin_url`, column_mapping.yaml) are ONE logical field under two vocabularies —
+# alias the provider's name onto the row's own name BEFORE the `allowed_keys` test
+# below, so a waterfall-sourced LinkedIn value survives the merge under the name the
+# ingest lane already reads (`row.linkedin_url`). A CLOSED, one-entry dict — see
+# T-72-11 in 72-03-PLAN.md's threat model: a key admitted only by aliasing cannot be
+# an arbitrary attacker-chosen name, because a response key that is not literally
+# `lv_linkedin_url` is unaffected and still faces the unchanged `allowed_keys` test.
+# Rejected: a second canonical column `lv_linkedin_url` in column_mapping.yaml
+# (Option A) — it cascades into `required_identity.any_of`,
+# `n8n/code/columnMap.js::requiredIdentity`, and every existing `row.linkedin_url`
+# read in the ingest lane.
+PROVIDER_KEY_ALIASES = {"lv_linkedin_url": "linkedin_url"}
+
+
 def merge_enriched(rows, responses):
     """Join `responses` onto `rows` by `row_id` — the ONLY join key, never position.
     Not pure in the I/O sense any more (Phase 65 Plan 02, RICH-04): building the
@@ -801,16 +817,23 @@ def merge_enriched(rows, responses):
     `extraction.canonical_props()` and `promotable_contact_props()` before anything is
     written — a key outside that union is dropped and reported by row and name
     (`dropped_property_keys`), never widened onto the row. The union exists because the
-    waterfall's promotable output IS the field policy's twelve `contacts:` keys, while
-    `extraction.canonical_props()` is only the 8 CSV-header keys `column_mapping.yaml`
-    ships — filtering the waterfall's own output through the CSV-header alias set
-    dropped nine of those twelve keys (`seniority`, `lv_linkedin_url`, `mobilephone`,
-    the five location fields, `lv_persona_group`) before the fill-versus-conflict rule
-    below was ever consulted (RICH-04). A key admitted only by the widened half of the
-    union never reaches HubSpot through the dispatch CSV — its own column map has no
-    header for it — so it is stripped back off at the dispatch boundary by
-    `strip_enrichment_extras`, defined below, rather than reaching `write_dispatch_csv`
-    and raising there with a message about canonical keys instead of about enrichment.
+    waterfall's promotable output IS the field policy's thirteen `contacts:` keys, while
+    `extraction.canonical_props()` is the CSV-header keys `column_mapping.yaml` ships.
+
+    As of D-72-01/D-72-19 (Phase 72 Plan 03), the two halves have CONVERGED except for
+    two lane-side-only write targets, and a key is translated through
+    `PROVIDER_KEY_ALIASES` (below) BEFORE this allowlist test runs: `lv_linkedin_url`
+    is aliased onto the row's own `linkedin_url` key (D-72-19 — the waterfall's
+    promotable name and the CSV's canonical name are one logical field under two
+    vocabularies), and `hs_linkedin_url` is produced INSIDE the ingest lane itself,
+    from the same canonicalized value, and never rides a row as a response key at all
+    (D-72-04). `strip_enrichment_extras`, defined below, is therefore INERT for a real
+    merged row — its drop-set (`promotable_contact_props() - canonical_props()`) is
+    still exactly `{lv_linkedin_url, hs_linkedin_url}`, but neither name can survive
+    onto a row a real waterfall response produces. It is retained, deliberately not
+    removed: it is a boundary assertion the STRUCT-01 contract at
+    `write_dispatch_csv` still depends on sitting at this boundary, not an active
+    filter that is expected to do anything on the happy path.
 
     Fill-not-overwrite, PER FIELD (operator ruling, 2026-09-11): a `properties` value
     always fills a key the row currently holds empty or absent. A DIFFERING value for
@@ -871,22 +894,27 @@ def merge_enriched(rows, responses):
             continue
 
         for key, value in (item.get("properties") or {}).items():
-            if key not in allowed_keys:
+            # D-72-19: translate BEFORE the allowlist test, so the aliased name is
+            # what is checked, compared, recorded, and written — `dropped_property_
+            # keys` below still reports the ORIGINAL key a caller sent, so a
+            # genuinely unknown key still names itself in the report.
+            aliased_key = PROVIDER_KEY_ALIASES.get(key, key)
+            if aliased_key not in allowed_keys:
                 dropped_property_keys.append({"row_id": row_id, "key": key})
                 continue
-            current = merged.get(key)
+            current = merged.get(aliased_key)
             if _present(current):
                 if str(value).strip() != str(current).strip():
-                    replaced = key in refreshable_keys
+                    replaced = aliased_key in refreshable_keys
                     conflicts.append({
-                        "row_id": row_id, "field": key,
+                        "row_id": row_id, "field": aliased_key,
                         "source_value": current, "provider_value": value,
                         "replaced": replaced,
                     })
                     if replaced:
-                        merged[key] = value
+                        merged[aliased_key] = value
                 continue
-            merged[key] = value
+            merged[aliased_key] = value
 
         merged_rows.append(merged)
 
