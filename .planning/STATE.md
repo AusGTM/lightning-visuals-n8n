@@ -503,7 +503,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-12T22:24:17.083Z
-**Stopped at:** Phase 72 complete — all phases complete
+**Stopped at:** Phase 72 complete — all phases complete. 2026-09-13 follow-through: repo-wide docs staleness sweep (`6bacd3a1`), plugin **0.49.1** released (`94f7356b`), pushed, marketplace refreshed and installed (restart Claude Code to load it); `72-SECURITY.md` verified (`1463c9fd`, 41 threats, 40 closed, T-72-30 medium open below threshold — DELETE of UAT contact `352522004980` unconfirmed). `master` level with `origin/master`.
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -1101,7 +1101,6 @@ across the next plugin update — it fails silently, which is the dangerous dire
 ## Operator Next Steps
 
 - Confirm the restorable DELETE of UAT contact `352522004980` (Phase 72 Test 3) returned `204`, or re-run it.
-- `master` is 30 commits ahead of `origin/master` (all of Phase 72's gap-closure round); push is the operator's call.
 - Phase 72 was the last roadmap phase: run `/gsd-complete-milestone`, or add a new phase with `/gsd-add-phase`.
 
 ## Deferred Items
