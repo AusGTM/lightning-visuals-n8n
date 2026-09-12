@@ -128,15 +128,77 @@ def test_build_entry_carries_observed_signals_and_fingerprint_as_separate_fields
 
 def test_build_entry_only_persists_allowlisted_row_fields():
     # `phone` moved from excluded to included by quick 260911-w6o's widening (see
-    # test_an_enriched_held_row_survives_the_write_to_disk_end_to_end below) --
-    # `seniority` is the still-excluded example here: a real waterfall-promotable
-    # key that stays OUT of ROW_FIELD_ALLOWLIST because no consumer needs it.
+    # test_an_enriched_held_row_survives_the_write_to_disk_end_to_end below).
+    # Phase 72 Plan 03 (D-72-01/D-72-15) widened `seniority` and six other keys IN --
+    # `hs_linkedin_url` is the still-excluded example here: a lane-side-only write
+    # target (D-72-04) no real provider response ever carries as a key, so it stays
+    # OUT of ROW_FIELD_ALLOWLIST.
     row = {"row_id": "row-1", "email": "a@example.com", "seniority": "Director",
+           "hs_linkedin_url": "https://li/x",
            "some_random_spreadsheet_column": "should not be persisted"}
     entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
-    assert entry["row"] == {"row_id": "row-1", "email": "a@example.com"}
-    assert "seniority" not in entry["row"]
+    assert entry["row"] == {
+        "row_id": "row-1", "email": "a@example.com", "seniority": "Director",
+    }
+    assert "hs_linkedin_url" not in entry["row"]
     assert "some_random_spreadsheet_column" not in entry["row"]
+
+
+# =====================================================================================
+# Phase 72 Plan 03 (D-72-01/D-72-15): `ROW_FIELD_ALLOWLIST` widened by seven keys --
+# the seven now have a consumer (a create resumed from this queue is exactly the
+# D-72-17 read-back route).
+# =====================================================================================
+
+_WIDENED_GEO_AND_PERSONA_KEYS = (
+    "seniority", "lv_persona_group",
+    "city", "state", "country", "hs_state_code", "hs_country_region_code",
+)
+
+
+def test_the_seven_widened_keys_all_persist_and_survive_a_save_load_round_trip(tmp_path):
+    target = tmp_path / "held_queue.json"
+    row = {"row_id": "row-1", "email": "a@example.com"}
+    row.update({key: f"value-for-{key}" for key in _WIDENED_GEO_AND_PERSONA_KEYS})
+
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    for key in _WIDENED_GEO_AND_PERSONA_KEYS:
+        assert entry["row"][key] == f"value-for-{key}"
+
+    held_queue.save("run-1", {held_queue.stable_key(row): entry}, path=target)
+    loaded = held_queue.load(path=target)
+    loaded_row = loaded[held_queue.stable_key(row)]["row"]
+    for key in _WIDENED_GEO_AND_PERSONA_KEYS:
+        assert loaded_row[key] == f"value-for-{key}"
+
+
+def test_the_entrys_top_level_key_set_is_unchanged_by_the_widening():
+    row = {"row_id": "row-1", "email": "a@example.com", "seniority": "Director"}
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    assert set(entry) == {
+        "hold_code", "reason", "observed_signals", "resume_fingerprint", "row",
+    }
+
+
+def test_a_forbidden_shaped_row_key_outside_the_allowlist_is_dropped_not_refused():
+    # A forbidden-shaped key that never reaches ROW_FIELD_ALLOWLIST in the first
+    # place is simply dropped by the allowlist projection -- it never gets a chance
+    # to trip the second-line forbidden-name scan, and the widening does not change
+    # that a non-identity, non-allowlisted key is refused (dropped) rather than
+    # persisted.
+    row = {"row_id": "row-1", "email": "a@example.com", "api_key": "should-be-dropped"}
+    entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "no match", _outcome())
+    assert "api_key" not in entry["row"]
+
+
+def test_suggestion_declines_row_field_allowlist_is_unchanged_by_this_plan():
+    import suggestion_declines
+
+    assert suggestion_declines.ROW_FIELD_ALLOWLIST == held_queue.enrichment.MATCH_LOOKUP_KEYS + (
+        "jobtitle", "phone", "mobilephone", "company_id",
+        "city", "state", "country", "hs_state_code", "hs_country_region_code",
+        "seniority", "lv_persona_group",
+    )
 
 
 def test_save_then_load_round_trips_entries(tmp_path):

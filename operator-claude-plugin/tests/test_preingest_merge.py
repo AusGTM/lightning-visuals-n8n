@@ -952,16 +952,20 @@ def test_a_merged_row_with_a_widened_key_builds_a_held_queue_entry_without_raisi
     # through untouched. `held_queue.ROW_FIELD_ALLOWLIST` is a DELIBERATE, closed,
     # enumerated allowlist (module docstring, REVIEW-A7: "only the identity keys and
     # the columns the envelope projects, never whatever else happened to be in the
-    # operator's spreadsheet"). Quick 260911-w6o (F2-1) widened it from `row_id` +
-    # `enrichment.MATCH_LOOKUP_KEYS` to 11 names -- `jobtitle`, `phone`, `company_id`,
-    # `mobilephone`, `lv_linkedin_url` -- so a held entry carries what the waterfall
-    # actually found, not just the source spreadsheet line; `seniority` was
-    # deliberately left out of that widening (no consumer needs it), which is exactly
-    # what this test still pins. The call must not raise; the widened key used here
-    # is correctly absent from the stored row.
+    # operator's spreadsheet").
+    #
+    # Phase 72 Plan 03 (D-72-01/D-72-15): the rationale FLIPPED for `seniority` and
+    # the six other keys widened here -- a create resumed from this queue (review-
+    # triage 4a) is exactly the D-72-17 read-back route, so these now have a
+    # consumer and are needed by a create. `hs_linkedin_url` is the one remaining
+    # promotable-but-not-canonical key that still demonstrates a widened-but-
+    # excluded name -- it is a lane-side-only write target no provider response
+    # ever carries (D-72-04), so it is not part of this widening either.
     rows = _rows(1)
     merge_report = preingest.merge_enriched(
-        rows, [_response(rows[0]["row_id"], {"email": "a@x.com", "seniority": "Director"})],
+        rows, [_response(rows[0]["row_id"], {
+            "email": "a@x.com", "seniority": "Director", "hs_linkedin_url": "https://li/x",
+        })],
     )
     row = merge_report.rows[0]
     outcome = SimpleNamespace(match_tier=None, candidate_count=None)
@@ -969,9 +973,13 @@ def test_a_merged_row_with_a_widened_key_builds_a_held_queue_entry_without_raisi
     entry = held_queue.build_entry(row, confidence.HOLD_NO_MATCH, "test reason", outcome)
 
     assert entry["row"].get("email") == "a@x.com"
-    assert "seniority" not in entry["row"], (
-        "held_queue's ROW_FIELD_ALLOWLIST is a pre-existing, deliberate allowlist -- "
-        "not something this phase widens or is in scope to change"
+    assert entry["row"].get("seniority") == "Director", (
+        "Phase 72 Plan 03 flipped seniority's exclusion -- a create resumed from "
+        "this queue now needs it"
+    )
+    assert "hs_linkedin_url" not in entry["row"], (
+        "hs_linkedin_url is a lane-side-only write target, never a real response "
+        "key -- it stays outside held_queue.ROW_FIELD_ALLOWLIST"
     )
 
 
