@@ -305,8 +305,9 @@ def _normalize_company(value) -> str:
 
 def identity_keys(row) -> tuple[str, ...]:
     """Every satisfied `config/column_mapping.yaml` `required_identity.any_of` group,
-    normalised and serialised, in that file's own priority order: email, then
-    firstname+lastname+company, then linkedin_url. `stable_key(row)` is this tuple's
+    normalised and serialised, in THAT FILE'S OWN PRIORITY ORDER -- read at call time
+    via `extraction.identity_groups()` (the same loader `extraction.py` itself uses),
+    never a restated literal (WR-02, 71-REVIEW.md). `stable_key(row)` is this tuple's
     first member. `save()`'s entries-map key check exempts EXACTLY these strings from
     the forbidden-marker scan -- a key that IS one of `identity_keys(entry["row"])` is
     a projection of `ROW_FIELD_ALLOWLIST`-filtered fields, already closed by
@@ -320,49 +321,70 @@ def identity_keys(row) -> tuple[str, ...]:
     `stable_key()`'s own docstring explains why the WRITE site must still compute from
     the source row specifically.
 
-    Email group: `row["email"]` stripped and case-folded, admitted only when it strips
-    to a non-empty string containing exactly one `@` with both halves non-empty (the
-    same usability test `classify_facet()` step 1 already applies -- mirrored here,
-    not imported, since that logic lives inline in `classify_facet()` under a private
-    name). Name group: `suggest_contacts.name_key(row)` (PUBLIC, D-69-04) joined with
-    `NAME_SEPARATOR` to a `company` normalised by `_normalize_company()` above --
-    admitted only when both the name and the company are present. Linkedin group:
+    Each YAML group is matched against a closed set of KNOWN shapes -- a group this
+    function does not recognise raises loudly (rather than being silently skipped),
+    since a shape-mismatch here means the YAML changed underneath a hand-written
+    builder and the drift must fail the run, not the review queue.
+
+    Email group (`[email]`): `row["email"]` stripped and case-folded, admitted only
+    when it strips to a non-empty string containing exactly one `@` with both halves
+    non-empty (the same usability test `classify_facet()` step 1 already applies --
+    mirrored here, not imported, since that logic lives inline in `classify_facet()`
+    under a private name). Name group (`[firstname, lastname, company]`):
+    `suggest_contacts.name_key(row)` (PUBLIC, D-69-04) joined with `NAME_SEPARATOR` to
+    a `company` normalised by `_normalize_company()` above -- admitted only when both
+    the name and the company are present. Linkedin group (`[linkedin_url]`):
     `row["linkedin_url"]` stripped and case-folded, admitted only when non-empty.
     """
     if not isinstance(row, dict):
         return ()
 
-    # Deliberately a FUNCTION-scoped import, not a module-level one: `run_manifest.py`
-    # imports `held_queue` at module level, and `suggest_contacts` imports
-    # `preingest`, which reads `preview.PLUGIN_ROOT` at ITS OWN module level -- a
-    # module-level `import suggest_contacts` here creates a real import cycle
-    # (`extraction` -> `preview` -> `preview_enrichment` -> `chunking` ->
-    # `run_manifest` -> `held_queue` -> `suggest_contacts` -> `preingest` ->
-    # `preview.PLUGIN_ROOT`, undefined mid-import) that breaks `import extraction`
-    # itself. Deferring to call time avoids it while still calling the PUBLIC
-    # `name_key` contract (D-69-04), never re-normalising a name independently.
+    # Deliberately FUNCTION-scoped imports, not module-level ones: `run_manifest.py`
+    # imports `held_queue` at module level, and both `suggest_contacts` (which imports
+    # `preingest`, which reads `preview.PLUGIN_ROOT` at ITS OWN module level) and
+    # `extraction` (which imports `preview` at ITS OWN module level, before
+    # `identity_groups` is defined) sit on the SAME cycle -- a module-level import of
+    # either here breaks `import extraction` itself (`extraction` -> `preview` ->
+    # `preview_enrichment` -> `chunking` -> `run_manifest` -> `held_queue` -> back to
+    # `extraction`/`suggest_contacts` -> `preview`, undefined mid-import). Deferring to
+    # call time avoids it while still calling the PUBLIC `name_key` (D-69-04) and
+    # `identity_groups` contracts, never re-deriving either independently.
+    import extraction
     import suggest_contacts
 
     keys = []
 
-    email = row.get("email")
-    if isinstance(email, str):
-        cleaned = email.strip().casefold()
-        parts = cleaned.split("@")
-        if len(parts) == 2 and parts[0] and parts[1]:
-            keys.append(f"email{KEY_SEPARATOR}{cleaned}")
+    for group in extraction.identity_groups():
+        fields = tuple(group)
 
-    name = suggest_contacts.name_key(row)
-    company = _normalize_company(row.get("company"))
-    if name is not None and company:
-        first, last = name
-        keys.append(
-            f"name{KEY_SEPARATOR}{first}{NAME_SEPARATOR}{last}{NAME_SEPARATOR}{company}"
-        )
+        if fields == ("email",):
+            email = row.get("email")
+            if isinstance(email, str):
+                cleaned = email.strip().casefold()
+                parts = cleaned.split("@")
+                if len(parts) == 2 and parts[0] and parts[1]:
+                    keys.append(f"email{KEY_SEPARATOR}{cleaned}")
 
-    linkedin = row.get("linkedin_url")
-    if isinstance(linkedin, str) and linkedin.strip():
-        keys.append(f"linkedin{KEY_SEPARATOR}{linkedin.strip().casefold()}")
+        elif fields == ("firstname", "lastname", "company"):
+            name = suggest_contacts.name_key(row)
+            company = _normalize_company(row.get("company"))
+            if name is not None and company:
+                first, last = name
+                keys.append(
+                    f"name{KEY_SEPARATOR}{first}{NAME_SEPARATOR}{last}{NAME_SEPARATOR}{company}"
+                )
+
+        elif fields == ("linkedin_url",):
+            linkedin = row.get("linkedin_url")
+            if isinstance(linkedin, str) and linkedin.strip():
+                keys.append(f"linkedin{KEY_SEPARATOR}{linkedin.strip().casefold()}")
+
+        else:
+            raise ValueError(
+                f"held_queue.identity_keys: config/column_mapping.yaml's "
+                f"required_identity.any_of has an unrecognised group {fields!r} -- "
+                "add a matching builder here before relying on it for held-row identity."
+            )
 
     return tuple(keys)
 
