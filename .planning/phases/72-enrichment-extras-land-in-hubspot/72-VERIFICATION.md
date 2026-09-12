@@ -1,11 +1,11 @@
 ---
 phase: 72-enrichment-extras-land-in-hubspot
 verified: 2026-09-12T22:38:10Z
-status: human_needed
-score: 21/22 decisions verified
+status: passed
+score: 22/22 decisions verified (3 human items resolved by operator ruling D-72-24..26, 2026-09-13)
 covered_files: [".planning/WINDOWS.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-01-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-01-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-02-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-02-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-03-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-03-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-04-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-04-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-05-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-05-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-06-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-06-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-07-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-07-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-08-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-08-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-09-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-09-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-10-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-10-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-11-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-11-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-12-PLAN.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-12-SUMMARY.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-CONTEXT.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-PORTAL-PROBE.json", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-REVIEW.md", ".planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md", ".planning/todos/completed/2026-09-12-ingest-lane-drops-paid-for-enrichment-extras-map-them-instead.md", ".planning/todos/pending/2026-09-12-enrichment-lane-and-companies-branch-have-no-property-history-hop.md", "CLAUDE.md", "config/column_mapping.yaml", "config/field_policy.yaml", "config/hubspot_migration/undo-manifest-481a5c99-ec62-4f59-940a-7387f5e2a7ad.json", "config/hubspot_properties.yaml", "docs/OPERATOR-AUTONOMOUS-BATCH-UAT.md", "n8n/code/columnMap.js", "n8n/code/mergeCompanies.js", "n8n/code/mergeContacts.js", "n8n/code/normalizeProviders.js", "n8n/wf_contact_ingest_cloud.json", "n8n/wf_contact_ingest_local.json", "n8n/wf_enrichment_cloud.json", "n8n/wf_enrichment_local.json", "n8n/wf_enrichment_local_live.json", "n8n/wf_review_decision_cloud.json", "n8n/wf_scheduled_maintenance_cloud.json", "operator-claude-plugin/.claude-plugin/plugin.json", "operator-claude-plugin/CHANGELOG.md", "operator-claude-plugin/config/column_mapping.yaml", "operator-claude-plugin/config/field_policy.yaml", "operator-claude-plugin/scripts/held_queue.py", "operator-claude-plugin/scripts/preingest.py", "operator-claude-plugin/scripts/suggestion_declines.py", "operator-claude-plugin/skills/contact-upload/extraction.md", "operator-claude-plugin/skills/enrich-before-ingest/SKILL.md", "operator-claude-plugin/skills/review-triage/SKILL.md", "operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py", "operator-claude-plugin/tests/test_extraction_handoff.py", "operator-claude-plugin/tests/test_held_queue.py", "operator-claude-plugin/tests/test_preingest_merge.py", "operator-claude-plugin/tests/test_preview_rendering.py", "operator-claude-plugin/tests/test_skill_sequence_coverage.py", "scripts/build_cloud_workflows.py", "scripts/deploy_n8n_workflows.py", "src/merge_policy.py", "tests/fixtures/companies_jscode_frozen.json", "tests/n8n/contactHistoryFlow.test.mjs", "tests/n8n/enrichment.test.mjs", "tests/n8n/fieldProducerMatrix.test.mjs", "tests/n8n/ingestCarryMerge.test.mjs", "tests/n8n/ingestMixedBatch.test.mjs", "tests/n8n/ingestTracerFlow.test.mjs", "tests/n8n/ingestWidenedFieldsFlow.test.mjs", "tests/n8n/mergeCompanies.test.mjs", "tests/n8n/mergeInputContract.test.mjs", "tests/n8n/mergeRecencyGate.test.mjs", "tests/n8n/normalizeProviders.test.mjs", "tests/n8n/overflowSlots.test.mjs", "tests/n8n/parity.test.mjs", "tests/n8n/widenedKeyParity.test.mjs", "tests/n8n/writeGateShape.test.mjs", "tests/test_fetch_by_id_topology.py", "tests/test_merge_helpers.py", "tests/test_merge_policy.py"]
-covered_digest: "v1:sha256:3fc49c0eba9e09af6133d70aa8d7224f55dbf3abaf2f58e7c0bc1c10a91da8fc"
-behavior_unverified: 1
+covered_digest: "v1:sha256:3d98d8486297b56ed9fcae4d8224ab8756b7989bd5471dbcadd8c9bce646321a"
+behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
@@ -16,12 +16,12 @@ re_verification:
     - "D-72-09 (WR-02): overflow-dedup case-sensitivity parity drift between the two JS merge engines and the Python oracle — closed by folding case in both JS engines (plan 72-11, commit e2ea2653), confirmed Python oracle already conformant."
   gaps_remaining: []
   regressions: []
-behavior_unverified_items:
+behavior_unverified_items_resolved:  # D-72-24: closed offline by tests/n8n/overflowSlots.test.mjs (commit 0a15398e)
   - truth: "D-72-10: a second email found by the waterfall for the same person is recorded in lv_contact_enrichment_provenance only, never written to hs_additional_emails (confirmed enumeration-typed, not string, by the live portal probe)."
     test: "Run the ingest/enrichment lane against a real (or realistically-shaped) waterfall response that returns two distinct emails for one person."
     expected: "The second email lands in lv_contact_enrichment_provenance's evidence/history, and no write is attempted against hs_additional_emails."
     why_human: "No test anywhere in the repo exercises this path — confirmed by direct search: `/usr/bin/grep -rln \"hs_additional_emails\" tests/ operator-claude-plugin/tests/ n8n/ scripts/ src/` returns zero files, and `/usr/bin/grep -rniE \"second.?email|additional.?email\"` across the same tree also returns zero. The enumeration-type guard's existence is confirmed by code read, but the fallback behavior itself has never been exercised by any test, offline or live. This was never scored as a gap (no plan's must-haves asserts specific runtime behavior here) and is unchanged by this gap-closure round — presence-only, correctly excluded from the verified score."
-human_verification:
+human_verification_resolved:  # all three resolved by operator ruling 2026-09-13 — see body §Post-verification rulings
   - test: "D-72-10: exercise the hs_additional_emails second-email path with a real waterfall response returning two distinct emails for the same person."
     expected: "A second email is recorded in lv_contact_enrichment_provenance only (never written to hs_additional_emails, which the live portal probe found typed enumeration, not string) — confirming the documented fallback actually engages against real dual-email data, not just against the code's own type guard."
     why_human: "72-UAT.md Test 3 records this explicitly as NOT OBSERVED a second time — the gap-closure live gate's one row also returned only one email from the waterfall. Code-level trace confirms the enumeration-type guard exists; that is a different claim from the fallback actually engaging correctly on real dual-email data. Unchanged since the prior verification; no gap-closure plan targeted it (it was never a gap)."
@@ -40,7 +40,7 @@ contact it was found for — mobile, LinkedIn, seniority, persona, city/state/co
 being dropped.
 
 **Verified:** 2026-09-12T22:38:10Z
-**Status:** human_needed
+**Status:** passed (after operator rulings D-72-24..26, 2026-09-13)
 **Re-verification:** Yes — after gap closure (plans 72-09, 72-10, 72-11, 72-12; commits `52705d00`
 through `8b6610dd`)
 
@@ -290,3 +290,17 @@ and that this gap-closure round correctly left untouched, since none was in its 
 
 _Verified: 2026-09-12T22:38:10Z_
 _Verifier: Claude (gsd-verifier)_
+
+
+## Post-verification operator rulings (2026-09-13)
+
+The three items routed to human verification above were resolved by the operator in the
+execute-phase session, recorded as D-72-24..26 in `72-CONTEXT.md` (commit `ba3cdeff`):
+
+| Item | Ruling | Evidence |
+| --- | --- | --- |
+| D-72-10 second-email fallback (behavior_unverified) | **D-72-24** — closed by an OFFLINE test, no live dual-email run | `tests/n8n/overflowSlots.test.mjs` "hs_additional_emails is never written (D-72-10)": two distinct emails → winner to `email`, runner-up in `provenance.email.overflow_tail` only, `canonicalPatch.hs_additional_emails === undefined`; commit `0a15398e`, 9/9 pass |
+| F72-3 item 1 — mobile duplicating `phone` (Telfer `1251`) | **D-72-25** — acceptable; `fill_blank_only` behaved; data-quality note, not a merge defect | no code change |
+| F72-3 item 2 — identity corrections never apply on UPDATE | **D-72-26** — acceptable; identity fields are CRM-owned, D-72-05's CREATE-only carve-out stands | no code change |
+
+With these resolved the human-verification section is empty and the status is `passed`.
