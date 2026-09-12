@@ -419,7 +419,7 @@ on the created contact; nothing armed before it.
 verified against D-72-01..D-72-21 (`72-CONTEXT.md`), every one of which is cited in at least one
 plan's `must_haves`.
 **Depends on:** Phase 71
-**Plans:** 12 plans (8 executed; 09-12 are gap closure)
+**Plans:** 9/12 plans executed (8 executed; 09-12 are gap closure)
 
 Plans:
 **Wave 1**
@@ -456,7 +456,7 @@ Plans:
 
 **Wave 9** *(gap closure — blocked on 72-VERIFICATION.md)*
 
-- [ ] 72-09-PLAN.md — G1: one candidate-alias map in `MERGE_CONTACTS` so a CREATE row's LinkedIn lands in BOTH properties; fixture reseeded with production's pre-alias key (D-72-04, D-72-17, D-72-19, D-72-22)
+- [x] 72-09-PLAN.md — G1: one candidate-alias map in `MERGE_CONTACTS` so a CREATE row's LinkedIn lands in BOTH properties; fixture reseeded with production's pre-alias key (D-72-04, D-72-17, D-72-19, D-72-22)
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
