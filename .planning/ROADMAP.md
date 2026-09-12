@@ -425,7 +425,7 @@ Plans:
 
 - [ ] 72-01-PLAN.md — Tracer: `mobilephone` lands on create and is protected on update; the ingest lane starts merging against real existing HubSpot props instead of `{}` (D-72-01, D-72-03)
 - [ ] 72-02-PLAN.md — The remaining seven widened keys reach the ingest candidate; `hs_linkedin_url` as a second write target; derived three-way parity test (D-72-01, D-72-02, D-72-04)
-- [ ] 72-03-PLAN.md — `merge_enriched`: LinkedIn name reconciliation, CREATE-time provider-wins, held-row carry; the strip goes inert (D-72-19, D-72-05, D-72-20)
+- [ ] 72-03-PLAN.md — `merge_enriched`: LinkedIn name reconciliation, CREATE-time provider-wins, held-row carry, a truthful round-level `source_by_field`; the strip goes inert (D-72-19, D-72-05, D-72-20)
 - [ ] 72-04-PLAN.md — Recency: a real TTL gate + generalized system-correctable clause in all three engines, plus the ingest lane's `propertiesWithHistory` hop (D-72-06..09)
 - [ ] 72-05-PLAN.md — Portal probe, the three `_2` slot declarations, and winner/loser slot routing stamped in provenance (D-72-10..13)
 - [ ] 72-06-PLAN.md — Company geo/phone producers where a provider really supplies them; contact geo can never reach the company region signal (D-72-14..16)
