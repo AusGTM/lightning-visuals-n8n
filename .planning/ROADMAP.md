@@ -422,12 +422,34 @@ plan's `must_haves`.
 **Plans:** 8 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 72-01-PLAN.md — Tracer: `mobilephone` lands on create and is protected on update; the ingest lane starts merging against real existing HubSpot props instead of `{}` (D-72-01, D-72-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 72-02-PLAN.md — The remaining seven widened keys reach the ingest candidate; `hs_linkedin_url` as a second write target; derived three-way parity test (D-72-01, D-72-02, D-72-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 72-03-PLAN.md — `merge_enriched`: LinkedIn name reconciliation, CREATE-time provider-wins, held-row carry, a truthful round-level `source_by_field`; the strip goes inert (D-72-19, D-72-05, D-72-20)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 72-04-PLAN.md — Recency: a real TTL gate + generalized system-correctable clause in all three engines, plus the ingest lane's `propertiesWithHistory` hop (D-72-06..09)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 72-05-PLAN.md — Portal probe, the three `_2` slot declarations, and winner/loser slot routing stamped in provenance (D-72-10..13)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 72-06-PLAN.md — Company geo/phone producers where a provider really supplies them; contact geo can never reach the company region signal (D-72-14..16)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 72-07-PLAN.md — Closing: charter todo retired, history gap filed, plugin 0.49.0, CLAUDE.md as-built delta, D-72-17 gate spec
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 72-08-PLAN.md — The one live gate: create the properties, deploy + bounce disarmed, one armed record, read it back, delete it (D-72-11, D-72-17, D-72-21)

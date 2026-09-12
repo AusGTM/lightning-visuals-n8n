@@ -2,17 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 71
+current_phase: 72
+current_phase_name: Enrichment extras land in HubSpot
 status: completed
 stopped_at: Phase 72 context gathered — 18 decisions (mapping lane, recency scoped to stale_refreshable TTL, fixed _2 slots, company parity); next /gsd-plan-phase 72
-last_updated: "2026-09-12T02:32:11.066Z"
+last_updated: "2026-09-12T04:32:13.020Z"
 last_activity: 2026-09-12
 last_activity_desc: Phase 71 complete
-state_head: 665a1499fd8d13187dc32026bf7cde503484059f
+state_head: aa18858848de7bdaac9bd7e852c1a0de355b4a1a
 progress:
   total_phases: 9
   completed_phases: 2
-  total_plans: 37
+  total_plans: 45
   completed_plans: 37
   percent: 22
 ---
@@ -357,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 71
+Phase: 72 (Enrichment extras land in HubSpot) — READY TO EXECUTE
 Plan: Not started
 Status: All phases complete
 Last activity: 2026-09-12 — Phase 71 complete
