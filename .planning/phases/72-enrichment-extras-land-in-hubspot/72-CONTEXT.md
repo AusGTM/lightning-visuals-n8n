@@ -126,6 +126,16 @@ property — stated non-goal), a `_3` overflow slot, per-field `_source`/`_verif
   `observed_signals`, `resume_fingerprint`, `row`, optional `company_known`) stays literally
   untouched. D-72-05's "on the held row" wording is superseded by this ruling.
 
+- **D-72-21: Deploy scope widens to EVERY regenerated workflow whose JSON changed (supersedes
+  D-72-18's "ingest only / others diff clean").** `mergeContacts.js` and `mergeCompanies.js` are
+  inlined by `scripts/build_cloud_workflows.py` into `wf_enrichment_cloud`, `wf_review_decision_cloud`
+  and `wf_scheduled_maintenance_cloud` as well as `wf_contact_ingest_cloud`, so D-72-09's recency
+  change cannot leave those diff clean. At the gate: regenerate all, deploy + bounce DISARMED every
+  cloud workflow with a changed body (`scripts/deploy_n8n_workflows.py`, `scripts/bounce_n8n_workflows.py`),
+  read node counts and `settings.executionOrder: "v1"` back, keep "committed and live are level".
+  A workflow whose regenerated JSON is byte-identical is not redeployed. Rollback bundle = the last
+  pre-72 commit. Nothing armed before the gate; the D-72-17 armed send stays one record.
+
 ### Claude's Discretion
 - Exact parity-test shape for the YAML/JS/policy three-way list (extend
   `tests/n8n/columnMapIdentityParity.test.mjs`'s idiom or a new test).
