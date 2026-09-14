@@ -30,3 +30,8 @@ operator-claude-plugin/config/role_vocabulary.derived.yaml
 
 # operator UAT spreadsheets carry real names and emails — never commit
 uat-batch-*.csv
+
+# UAT stress assets: the contacts CSV carries real CRM people (rows 1-2); snapshots/reports carry record ids
+tests/stress-tests/uat-stress-mixed-batch-*.csv
+tests/stress-tests/uat-reset-snapshot*.json
+tests/stress-tests/uat-reset-report-*.json

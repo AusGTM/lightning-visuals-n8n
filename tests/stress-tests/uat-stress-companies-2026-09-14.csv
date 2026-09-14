@@ -1,0 +1,37 @@
+Company Name,Website,Notes,UAT Marker
+Australian Turf Club,australianturfclub.com.au,existing — match by domain,UAT-STRESS-2026-09-14
+Harness Racing NSW,hrnsw.com.au,"existing under www.harnessmediacentre.com.au — must match by NAME, not create (exec 11922 precedent)",UAT-STRESS-2026-09-14
+Melbourne Racing Club,mrc.racing.com,existing,UAT-STRESS-2026-09-14
+Brisbane Racing Club,brc.com.au,existing,UAT-STRESS-2026-09-14
+Perth Racing,perthracing.com.au,existing (score floor 60),UAT-STRESS-2026-09-14
+Racing Victoria,racingvictoria.com.au,existing,UAT-STRESS-2026-09-14
+Hawkesbury Race Club,hawkesburyraceclub.com.au,create; staff page expected,UAT-STRESS-2026-09-14
+Wyong Race Club,wyongraceclub.com.au,create,UAT-STRESS-2026-09-14
+Scone Race Club,sconeraceclub.com.au,create,UAT-STRESS-2026-09-14
+Newcastle Jockey Club,newcastleracecourse.com.au,create,UAT-STRESS-2026-09-14
+Canberra Racing Club,thoroughbredpark.com.au,create; name ≠ domain brand,UAT-STRESS-2026-09-14
+Ballarat Turf Club,ballaratturfclub.com.au,create,UAT-STRESS-2026-09-14
+Bendigo Jockey Club,bendigojc.com.au,create,UAT-STRESS-2026-09-14
+Geelong Racing Club,geelongracingclub.com.au,create,UAT-STRESS-2026-09-14
+Pakenham Racing Club,pakenhamracing.com.au,create,UAT-STRESS-2026-09-14
+Gold Coast Turf Club,gctc.com.au,create,UAT-STRESS-2026-09-14
+Sunshine Coast Turf Club,sctc.com.au,create,UAT-STRESS-2026-09-14
+Darwin Turf Club,darwinturfclub.org.au,create; .org.au,UAT-STRESS-2026-09-14
+Murray Bridge Racing Club,murraybridgeracingclub.com.au,create,UAT-STRESS-2026-09-14
+Tasracing,tasracing.com.au,create; governing body,UAT-STRESS-2026-09-14
+Harness Racing Victoria,hrv.org.au,create; governing body,UAT-STRESS-2026-09-14
+Greyhound Racing NSW,grnsw.com.au,"create; governing body, non-thoroughbred",UAT-STRESS-2026-09-14
+Racing and Wagering Western Australia,rwwa.com.au,create; regulator/wagering mix — org_type edge,UAT-STRESS-2026-09-14
+New Zealand Thoroughbred Racing,nzracing.co.nz,"create; NZ geography (ANZ, no veto)",UAT-STRESS-2026-09-14
+Auckland Thoroughbred Racing,aucklandracing.co.nz,create; NZ,UAT-STRESS-2026-09-14
+Sky Racing,skyracing.com.au,"broadcaster — content producer, no veto",UAT-STRESS-2026-09-14
+Tabcorp,tabcorp.com.au,gambling operator — graduated deduction lane,UAT-STRESS-2026-09-14
+Daktronics,daktronics.com,hardware/LED vendor + non-ANZ — BOTH hard vetoes,UAT-STRESS-2026-09-14
+New York Racing Association,nyra.com,"non-ANZ — hard veto, Tier D",UAT-STRESS-2026-09-14
+Wagga Wagga Rowing Club,waggarowing.org.au,fictitious org; matches contact CSV row 41 — second contact run should associate,UAT-STRESS-2026-09-14
+Victoria Racing Club,https://www.vrc.com.au/,scheme + www prefix — must normalise to vrc.com.au,UAT-STRESS-2026-09-14
+Moonee Valley Racing Club,WWW.THEVALLEY.COM.AU,upper-case + www — normalise,UAT-STRESS-2026-09-14
+Hawkesbury Race Club,hawkesburyraceclub.com.au,exact duplicate of row 7 — dedupe to one,UAT-STRESS-2026-09-14
+Gosford Race Club,,NO domain — refused by name / domain research offered,UAT-STRESS-2026-09-14
+Illawarra Turf Club,https://www.linkedin.com/company/illawarra-turf-club/,"LinkedIn page as domain — must be REFUSED, never created",UAT-STRESS-2026-09-14
+Country Racing Collective,gmail.com,freemail as domain — should be refused,UAT-STRESS-2026-09-14
