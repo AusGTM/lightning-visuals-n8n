@@ -120,6 +120,70 @@ def test_adapter_flags_lookup_failed_and_decide_never_creates_on_it():
     assert 'row.lookup_failed === true && action === "create"' in decide
 
 
+def test_per_row_search_nodes_are_throttled():
+    """F-A3 (uat-stress-2026-09-15, execution 12429): a 48-row batch fired one request per
+    item per search node in a single burst against HubSpot's account-wide 5 req/s CRM
+    Search cap and 429'd on most items (33/48, 38/48, 42/48). All three per-row search
+    nodes must carry `options.batching` so n8n paces them, one item at a time."""
+    for name in ("HubSpot Search by Email", "HubSpot Company Search by Domain",
+                 "HubSpot Company Search by Name"):
+        batching = _node(name)["parameters"]["options"]["batching"]
+        assert batching["batch"]["batchSize"] == 1
+        assert batching["batch"]["batchInterval"] > 0, \
+            f"{name}: a zero interval throttles nothing"
+        # 5 req/s is HubSpot's documented account-wide CRM Search cap; stay under it.
+        assert batching["batch"]["batchInterval"] >= 200, \
+            f"{name}: interval faster than 5 req/s risks the same 429"
+
+
+def test_decide_action_names_lookup_failure_distinctly_from_a_genuine_miss():
+    """F-A4 (uat-stress-2026-09-15, execution 12429): when the batch-wide `lookup_failed`
+    flag is set, a row whose identity search legitimately found zero hits ("valid email,
+    no existing match") is indistinguishable from a row whose search never ran at all —
+    execution 12429 reported Colin Telfer (`1251`, an EXISTING contact) as "no existing
+    match" for exactly this reason. The reason string must name the lookup failure
+    instead, but ONLY for that one identity.reason (a real match/multi-match/emailless
+    reason must survive unchanged — a 429 can't manufacture a positive hit, and an
+    emailless row never issues this search)."""
+    decide = _node("Decide Action")["parameters"]["jsCode"]
+    assert "lookup failed" in decide.lower()
+    assert 'identity_reason === "valid email, no existing match"' in decide
+    # the override reads row.lookup_failed, and the final reason no longer takes id.reason
+    # directly (it must pass through the override variable first)
+    assert "identity_reason = id.reason" in decide
+    assert "reason: company_hold || identity_reason" in decide
+
+    import subprocess
+
+    # Execution 12429's exact shape for Colin Telfer (`1251`, an EXISTING contact): a
+    # valid email whose search 429'd, misread as net_new. Row 2 is the same row with a
+    # healthy search (control: reason must survive unchanged). Row 3 is a genuinely
+    # emailless row caught by the SAME batch-wide flag (control: unaffected, its own
+    # search never ran).
+    rows = [
+        {"identity": {"outcome": "net_new", "contact_id": None,
+                       "reason": "valid email, no existing match"},
+         "lookup_failed": True, "email": "ctelfer@australianturfclub.com.au"},
+        {"identity": {"outcome": "net_new", "contact_id": None,
+                       "reason": "valid email, no existing match"},
+         "lookup_failed": False, "email": "ctelfer@australianturfclub.com.au"},
+        {"identity": {"outcome": "ambiguous", "contact_id": None,
+                       "reason": "no email, insufficient identity"},
+         "lookup_failed": True, "email": None},
+    ]
+    harness = """
+const $input = { all: () => (%s).map((json) => ({ json })) };
+const out = (function () { %s })();
+console.log(JSON.stringify(out.map((o) => o.json.reason)));
+""" % (json.dumps(rows), decide)
+    r = subprocess.run(["node", "-e", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr[:1000]
+    reasons = json.loads(r.stdout.strip().splitlines()[-1])
+    assert reasons[0] == "lookup failed (HubSpot search unavailable/rate-limited) — held, not matched"
+    assert reasons[1] == "valid email, no existing match"
+    assert reasons[2] == "no email, insufficient identity"
+
+
 def test_ingest_webhook_requires_header_auth_like_the_enrichment_webhook():
     """Security fix, activation day 2026-07-29: this webhook shipped UNAUTHENTICATED while
     the enrichment webhook has always required native Header Auth — anyone with the URL

@@ -898,6 +898,19 @@ return $input.all().map((it) => {
     action = "review";
     company_hold = row.company_hold_reason || "no company matched this contact";
   }
+  // F-A4 (uat-stress-2026-09-15, execution 12429): a batch-wide HubSpot search failure
+  // (`lookup_failed`, stamped by "Adapt Search Results" when ANY row's email search
+  // 429s/errors — Phase 36 Finding B's deliberate whole-batch scope) makes a genuine
+  // "valid email, zero hits" indistinguishable from "the search never actually ran".
+  // Overriding ONLY that one identity.reason string: it is the SOLE outcome a failed
+  // search can silently manufacture (a real match/multi-match found an actual hit a 429
+  // can't invent; an emailless row never issues this search at all, so its own "no
+  // email, insufficient identity" reason is untouched). Read BEFORE `company_hold` so a
+  // row that also failed to resolve a company keeps its own distinct reason.
+  let identity_reason = id.reason;
+  if (row.lookup_failed === true && identity_reason === "valid email, no existing match") {
+    identity_reason = "lookup failed (HubSpot search unavailable/rate-limited) — held, not matched";
+  }
   if (action === "create") {
     // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without
     // this seed writes a record the by-email search can never find again — and the next
@@ -942,7 +955,7 @@ return $input.all().map((it) => {
     // the response path still read it.
     contact_id: id.contact_id || null,
     hs_object_id: id.contact_id || null,
-    reason: company_hold || id.reason || row.reject_reason || null,
+    reason: company_hold || identity_reason || row.reject_reason || null,
     email_status: row.email_status || null,
     // The association lane's row context (2026-08-25). `company_id` is what Build
     // Association Request joins on; `email` makes a created row identifiable in the
@@ -1284,6 +1297,13 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     # own re-upload path breaking on its own emailless output. The RFC 2606 `.invalid`
     # sentinel can never be a real address, so HubSpot now returns 200 with zero hits
     # instead of rejecting the filter, and `lookup_failed` stays false.
+    # F-A3 (uat-stress-2026-09-15, execution 12429): a 48-row batch fired 48 requests per
+    # search node in one burst against HubSpot's account-wide 5 req/s CRM Search cap and
+    # 429'd on most items (see `_http_node`'s `batch_interval_ms` docstring). 250ms = 4
+    # req/s, 20% headroom under the documented cap. Applies to all three per-row search
+    # nodes below (email + the two company-link searches) — they run one at a time (each
+    # processes every row before the next node starts), so the intervals never overlap.
+    _INGEST_SEARCH_BATCH_INTERVAL_MS = 250
     hs_search = _http_node(
         "HubSpot Search by Email",
         "https://api.hubapi.com/crm/v3/objects/contacts/search", x, y,
@@ -1295,6 +1315,7 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
                    "\"mobilephone\", \"city\", \"state\", \"country\", \"hs_state_code\", "
                    "\"hs_country_region_code\", \"seniority\", \"lv_persona_group\", "
                    "\"lv_linkedin_url\", \"hs_linkedin_url\", \"hs_object_id\"], limit: 10 }) }}"),
+        batch_interval_ms=_INGEST_SEARCH_BATCH_INTERVAL_MS,
     )
     nodes.append(hs_search)
 
@@ -1393,7 +1414,8 @@ return $input.all().map((it) => {
     nodes.append(_http_node(
         "HubSpot Company Search by Domain",
         "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
-        auth="hubspot", json_body=CO_LINK_DOMAIN_SEARCH_BODY))
+        auth="hubspot", json_body=CO_LINK_DOMAIN_SEARCH_BODY,
+        batch_interval_ms=_INGEST_SEARCH_BATCH_INTERVAL_MS))
     x += 220
     # Phase 70 Plan 02 (D-70-04): nests the domain search's own response so the carry
     # merge spliced after "HubSpot Company Search by Name" (below) never clashes the
@@ -1403,7 +1425,8 @@ return $input.all().map((it) => {
     nodes.append(_http_node(
         "HubSpot Company Search by Name",
         "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
-        auth="hubspot", json_body=CO_LINK_NAME_SEARCH_BODY))
+        auth="hubspot", json_body=CO_LINK_NAME_SEARCH_BODY,
+        batch_interval_ms=_INGEST_SEARCH_BATCH_INTERVAL_MS))
 
     for name, js in [("Adapt Company Link", ADAPT_COMPANY_LINK),
                      ("Decide Action", decide_action_js)]:
@@ -5179,7 +5202,7 @@ def build_enrichment_local_live():
 # ---- CLOUD enrichment workflow ----------------------------------------------
 
 def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_body=None,
-                method="POST", on_error="continueRegularOutput"):
+                method="POST", on_error="continueRegularOutput", batch_interval_ms=None):
     """auth: None | 'header' (generic Header Auth credential) | 'basic' (generic Basic Auth)
     | 'hubspot' (predefinedCredentialType, reuses the SAME provisioned hubspotAppToken
     credential the native n8n-nodes-base.hubspot nodes use — BUG 10's fix, see
@@ -5197,8 +5220,20 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
               continueRegularOutput, because that mode would turn a rejected HubSpot PATCH
               into a normal-looking item that flows on to Build Response and returns a
               healthy 200 — the exact swallowed-failure mechanism that made ten live-only
-              bugs invisible offline. A failed write must fail the execution instead."""
+              bugs invisible offline. A failed write must fail the execution instead.
+    batch_interval_ms: F-A3 (uat-stress-2026-09-15, execution 12429). None (default) OMITS
+              `options.batching` entirely — every existing call site keeps firing one
+              request per item in a burst, unchanged. A per-row search node fed 48 items
+              fires 48 requests in one burst; HubSpot's CRM Search API is capped at 5
+              req/s ACCOUNT-WIDE (developers.hubspot.com/changelog/crm-search-api-rate-
+              limit-increase), so a batch past single digits 429s. Setting this makes n8n
+              process exactly 1 item per `batch_interval_ms` on THIS node — the ingest
+              lane's three per-row search nodes run sequentially (each processes every
+              item before the next node starts, per this file's own generated topology),
+              so their intervals never overlap."""
     params = {"method": method, "url": url, "options": {"timeout": 20000}}
+    if batch_interval_ms is not None:
+        params["options"]["batching"] = {"batch": {"batchSize": 1, "batchInterval": batch_interval_ms}}
     if form_body is not None:
         params.update({"sendBody": True, "contentType": "form-urlencoded",
                        "bodyParameters": {"parameters": form_body}})
