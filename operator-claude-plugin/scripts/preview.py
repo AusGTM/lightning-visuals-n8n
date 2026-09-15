@@ -138,6 +138,20 @@ def _fill_rates(headers, rows) -> dict:
     return rates
 
 
+def collapse_block(collapsed) -> dict:
+    """The within-batch duplicate collapse summary for the operator's preview
+    (D-73-03/D-73-04, F-A5): how many rows `csv_dedupe.py` collapsed before this file
+    was previewed, and each one's own losing row number, winner row number, and the
+    identity key that matched. Always returns the same shape — `count: 0`/`rows: []`
+    when nothing collapsed, or `collapsed` was never supplied — so a caller renders one
+    shape either way rather than branching on whether the key is present at all. This
+    module never imports `csv_dedupe` (that import would run the wrong direction — the
+    collapse already happened upstream; this is display of its result, not a second
+    computation of it)."""
+    collapsed = collapsed or []
+    return {"count": len(collapsed), "rows": list(collapsed)}
+
+
 def tabular_cost_block(row_count) -> str:
     """This lane's cost block, rendered through the enrichment lane's SAME helper.
 
@@ -150,21 +164,31 @@ def tabular_cost_block(row_count) -> str:
     return cost_block(zero_cost_estimate(row_count), {}, reason=TABULAR_COST_REASON)
 
 
-def build_preview(path, mapping_path=None) -> dict:
+def build_preview(path, mapping_path=None, collapsed=None) -> dict:
     """Build the structured preview for one tabular file. Read-only end to end: no
     network call, and the source file's bytes are identical before and after.
 
     Mapping-file resolution order: an explicit `mapping_path` argument, then the repo's
     config/column_mapping.yaml, then unavailable (labels flagged, not guessed).
+
+    `collapsed` (D-73-03/D-73-04, F-A5) is the `csv_dedupe.py` collapse list for
+    whatever file was previewed BEFORE its duplicates were collapsed — `path` here is
+    already the deduped file, so `row_count` alone cannot say how many rows the
+    operator's own file started with. `pre_collapse_row_count` restores that
+    reconciliation number (`row_count + len(collapsed)`) without this module ever
+    re-deriving the collapse itself.
     """
     headers, rows = read_table(path)
     row_count = len(rows)
+    collapsed = collapsed or []
 
     header_labels = label_headers(headers, resolve_mapping_path(mapping_path))
 
     preview = {
         "headers": headers,
         "row_count": row_count,
+        "pre_collapse_row_count": row_count + len(collapsed),
+        "collapsed_rows": collapse_block(collapsed),
         "outgoing_bytes": len(to_csv_bytes(path)),
         "header_labels": header_labels["labels"],
         "mapping_available": header_labels["available"],
@@ -218,9 +242,19 @@ def build_extracted_preview(result) -> dict:
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 2:
-        print(json.dumps({"ok": False, "error": "usage: preview.py <path>"}))
+    _args = sys.argv[1:]
+    if not _args:
+        print(json.dumps({
+            "ok": False,
+            "error": "usage: preview.py <path> [--collapsed <collapsed.json>]",
+        }))
         raise SystemExit(1)
+
+    _path = _args[0]
+    _collapsed_arg_path = None
+    for _i, _a in enumerate(_args):
+        if _a == "--collapsed" and _i + 1 < len(_args):
+            _collapsed_arg_path = _args[_i + 1]
 
     _mapping_path = None
     try:
@@ -230,8 +264,17 @@ if __name__ == "__main__":
     except Exception:
         _mapping_path = None
 
+    _collapsed = None
+    if _collapsed_arg_path:
+        # csv_dedupe.py's own `--apply` sidecar report — read-only, never re-derived
+        # here (this module never imports csv_dedupe; see collapse_block's docstring).
+        try:
+            _collapsed = json.loads(Path(_collapsed_arg_path).read_text(encoding="utf-8"))
+        except Exception:
+            _collapsed = None
+
     try:
-        _preview = build_preview(sys.argv[1], _mapping_path)
+        _preview = build_preview(_path, _mapping_path, collapsed=_collapsed)
     except Exception as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)

@@ -48,7 +48,7 @@ def test_case_and_whitespace_variant_email_collapses_first_wins_verbatim(tmp_pat
         _row(" PRIYA@EXAMPLE.COM ", "PRIYA", "WHITCOMBE", "Turf Club", "", "Head of Broadcast"),
     ])
 
-    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
 
     assert result["collapsed"] == [{
         "row": 3,
@@ -78,7 +78,7 @@ def test_name_and_company_group_collapses_when_email_absent(tmp_path):
         _row("", "  colin  ", " TELFER ", "australian turf club", "", "Duplicate Row"),
     ])
 
-    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
 
     assert len(result["collapsed"]) == 1
     entry = result["collapsed"][0]
@@ -105,7 +105,7 @@ def test_linkedin_url_only_group_collapses(tmp_path):
         _row("", "", "", "", " " + li.upper() + " ", "second sighting"),
     ])
 
-    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
 
     assert len(result["collapsed"]) == 1
     entry = result["collapsed"][0]
@@ -129,7 +129,7 @@ def test_distinct_people_and_identity_less_rows_are_never_collapsed(tmp_path):
         _row("", "", "", "", "", "no identity here either"),
     ])
 
-    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
 
     assert result["collapsed"] == []
     with Path(result["deduped_path"]).open(newline="", encoding="utf-8") as f:
@@ -152,7 +152,7 @@ def test_three_occurrences_all_losers_name_the_same_winner(tmp_path):
         _row("Priya@Example.com", "priya", "whitcombe", "turf club", "", "row 38"),
     ])
 
-    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
 
     assert len(result["collapsed"]) == 2
     assert all(entry["duplicate_of"] == 2 for entry in result["collapsed"])
@@ -178,7 +178,7 @@ def test_column_order_and_surviving_row_order_preserved(tmp_path):
         _row("a@example.com", "Ann", "Adams", "Co A", "", "last kept"),
     ])
 
-    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
 
     with Path(result["deduped_path"]).open(newline="", encoding="utf-8") as f:
         out = list(csv.reader(f))
@@ -247,3 +247,101 @@ def test_module_introduces_no_similarity_or_fuzzy_matching():
 def test_module_imports_extraction_identity_primitives():
     src = inspect.getsource(csv_dedupe)
     assert "from extraction import" in src or "import extraction" in src
+
+
+# ========================================================================================
+# Task 2 — preview surfacing (preview.py), the corrected file is what is SENT, the batch
+# is never refused, and the D-73-21 scope guard (enrich-before-ingest untouched).
+# ========================================================================================
+import preingest  # noqa: E402
+from dispatch import dispatch  # noqa: E402
+from preview import build_preview, collapse_block  # noqa: E402
+
+
+def test_collapse_block_always_returns_the_same_shape():
+    assert collapse_block(None) == {"count": 0, "rows": []}
+    assert collapse_block([]) == {"count": 0, "rows": []}
+    entry = {"row": 3, "duplicate_of": 2, "identity_key": "email", "outcome": "duplicate_in_csv"}
+    assert collapse_block([entry]) == {"count": 1, "rows": [entry]}
+
+
+def test_build_preview_surfaces_the_collapse_and_the_pre_collapse_row_count(tmp_path):
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, HEADERS, [
+        _row("priya@example.com", "Priya", "Whitcombe", "Turf Club", "", "kept"),
+    ])
+    collapsed = [
+        {"row": 37, "duplicate_of": 3, "identity_key": "email", "outcome": "duplicate_in_csv"},
+        {"row": 38, "duplicate_of": 3, "identity_key": "email", "outcome": "duplicate_in_csv"},
+    ]
+
+    preview = build_preview(path, REAL_MAPPING_PATH, collapsed=collapsed)
+
+    assert preview["row_count"] == 1
+    assert preview["pre_collapse_row_count"] == 3
+    assert preview["collapsed_rows"] == {"count": 2, "rows": collapsed}
+
+
+def test_build_preview_with_no_collapse_reports_zero_not_a_missing_key(tmp_path):
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, HEADERS, [_row("a@example.com", "Ann", "Adams", "Co A", "", "")])
+
+    preview = build_preview(path, REAL_MAPPING_PATH)
+
+    assert preview["collapsed_rows"] == {"count": 0, "rows": []}
+    assert preview["pre_collapse_row_count"] == preview["row_count"]
+
+
+def test_apply_dedupe_never_raises_and_keeps_exactly_the_winners(tmp_path):
+    # D-73-04: the batch is never refused over a duplicate.
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, HEADERS, [
+        _row("priya@example.com", "Priya", "Whitcombe", "Turf Club", "", "row 3"),
+        _row("PRIYA@EXAMPLE.COM", "PRIYA", "WHITCOMBE", "Turf Club", "", "row 37"),
+        _row("Priya@Example.com", "priya", "whitcombe", "turf club", "", "row 38"),
+    ])
+
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
+
+    assert result["kept_count"] == 1
+
+
+def test_only_the_deduped_file_reaches_the_wire(
+    tmp_path, fake_config, stub_transport, dispatch_no_recovery_kwargs
+):
+    # Mirrors test_preview_rendering.py's Phase 34-03 pattern: assert on the recorded
+    # multipart BODY BYTES, never on which path was passed (34-RESEARCH.md Pitfall 3).
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, HEADERS, [
+        _row("priya@example.com", "Priya", "Whitcombe", "Turf Club", "", "Media Manager"),
+        _row("PRIYA@EXAMPLE.COM", "PRIYA", "WHITCOMBE", "Turf Club", "", "Head of Broadcast"),
+    ])
+
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
+
+    dispatch(result["deduped_path"], True, fake_config, transport=stub_transport,
+              **dispatch_no_recovery_kwargs)
+    sent = stub_transport.calls[0]["files"]["data"][1]
+    assert b"Head of Broadcast" not in sent
+    assert b"Media Manager" in sent
+    assert sent.count(b"priya@example.com") + sent.count(b"PRIYA@EXAMPLE.COM") == 1
+
+
+def test_enrich_before_ingest_row_id_minting_is_unaffected_by_a_duplicate_csv(tmp_path):
+    # D-73-21: the collapse applies to the plain contact-upload lane only.
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, HEADERS, [
+        _row("priya@example.com", "Priya", "Whitcombe", "Turf Club", "", "row 3"),
+        _row("PRIYA@EXAMPLE.COM", "PRIYA", "WHITCOMBE", "Turf Club", "", "row 37"),
+    ])
+
+    built = preingest.rows_from_table(path, mapping_path=REAL_MAPPING_PATH)
+    spec = preingest.build_rows_spec(built["rows"])
+
+    assert len(spec["rows"]) == 2
+    assert [r["row_id"] for r in spec["rows"]] == ["row-1", "row-2"]
+
+
+def test_preingest_never_imports_csv_dedupe():
+    src = inspect.getsource(preingest)
+    assert "csv_dedupe" not in src

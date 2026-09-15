@@ -112,7 +112,7 @@ be sent, and — only when explicitly armed — send it.
 
      The returned `split_path` carries `firstname`/`lastname` columns in place of the
      original, and becomes the path you carry forward — feed it to step 2b's
-     `--confirm` pass if other headers still need correcting, then to step 3.
+     `--confirm` pass if other headers still need correcting, then to step 2c.
 
      Three rules. The splitter **never** applies its own proposals — `--apply` writes only
      what the operator resolved, which is why the resolved list is an argument and not
@@ -141,25 +141,53 @@ be sent, and — only when explicitly armed — send it.
 
    Two constraints. The path is always the **original** file, never a previously
    corrected one — running the correction against its own output is how a two-round
-   session rewrites a header twice. And the returned `corrected_path` becomes **the**
-   path for step 3 and every step after it: one path, previewed and dispatched, so what
-   the operator approves is provably what is sent. If the operator confirmed nothing,
-   carry the original path forward unchanged.
+   session rewrites a header twice. And the returned `corrected_path` becomes the path
+   step 2c consumes next (and, through it, step 3 and every step after that): one path,
+   previewed and dispatched, so what the operator approves is provably what is sent. If
+   the operator confirmed nothing, carry the original path forward unchanged.
 
    The boundary this whole step lives inside: the client corrects the header row of the
    file it sends and nothing else. It maps no data, writes no canonical-prop value into
    any row, and the backend's `Map Columns` node stays the single authority on what a
    header means.
 
+2c. **Collapse within-batch duplicates before you preview.** (Lettered for the same
+   reason 2b is — this file cross-references its own step numbers.) Attempt 2's Stage A
+   CSV carried the same person three times, one a case variant, and nothing collapsed
+   them before the send — the batch reached HubSpot Create with a duplicate email and
+   took a 409 (D-73-03/D-73-04, F-A5). Run the apply mode unconditionally, on whatever
+   path step 2b left you with (`split_path`, `corrected_path`, or the original file if
+   2b produced neither — the LAST path in the chain, always):
+
+   ```
+   python3 scripts/csv_dedupe.py <path> --apply
+   ```
+
+   Unlike step 2b's own `--confirm` rule, this does **not** re-run against the original
+   file — it needs the fully-resolved columns (a full name only just split into
+   `firstname`/`lastname` by step 2b) to see the identity groups that matter. There is
+   nothing here for the operator to review: the match is exact, casefolded and
+   trimmed, on the same identity rule `config/column_mapping.yaml` already states —
+   email, or firstname+lastname+company, or linkedin_url — never a similarity score,
+   so it runs without asking.
+
+   The returned `deduped_path` becomes **the** path for step 3 and every step after it,
+   exactly as `corrected_path`/`split_path` already do: one path, previewed and
+   dispatched. Hold onto `collapsed_path` too — step 3 passes it straight to
+   `preview.py`. When nothing collapsed, `collapsed` comes back empty and
+   `deduped_path` is a full copy of what came in; nothing about the steps after this
+   one changes either way. The first occurrence of a duplicate always wins verbatim
+   (no field merge), and the batch is never refused over a duplicate.
+
 3. **Build and show the preview.**
 
    ```
-   python3 scripts/preview.py <path>
+   python3 scripts/preview.py <deduped_path> --collapsed <collapsed_path>
    ```
 
-   The path to preview is `corrected_path` when step 2b produced one, otherwise the
-   original. This preview is the operator's view of the real mapping prediction — the
-   re-preview that makes an approval mean something.
+   The path to preview is `deduped_path` from step 2c, which already carries forward
+   whatever step 2b produced. This preview is the operator's view of the real mapping
+   prediction — the re-preview that makes an approval mean something.
 
    This reads the file once and reads `config/column_mapping.yaml` only as a read-only
    lookup for labelling — it never changes what gets sent. The file goes over the wire
@@ -188,6 +216,12 @@ be sent, and — only when explicitly armed — send it.
      e.g. a missing email column)
    - if `mapping_available` is `false`, say plainly that labels are unavailable rather
      than guessing them
+   - how many within-batch duplicate rows step 2c collapsed before this preview
+     (`collapsed_rows.count`) and, for each one, the losing row number, the winner's
+     row number, and the identity key that matched (`collapsed_rows.rows`) — say this
+     even when the count is 0, and state `pre_collapse_row_count` alongside `row_count`
+     so the operator can reconcile the count they expected in their own file against
+     the count actually being sent
 
    If `adaptive` is `true` (more than ~20 rows), do not print every row. Show instead:
    the leading and trailing sample rows (`sample_rows.leading` / `.trailing`) and the
