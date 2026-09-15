@@ -1,9 +1,25 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "F-A3/F-A4"
 created: 2026-09-15T05:40:00Z
 updated: 2026-09-15T06:40:00Z
+resolved_by: "Phase 73 Plan 02, D-73-15"
+resolved_at: 2026-09-15
 ---
+
+## Closing note (Phase 73 Plan 02, D-73-15)
+
+F-A3r — the residual 429 this file's F-A3 fix left at 250ms (1 hit on a 48-row send,
+`tests/stress-tests/SESSION-2026-09-15.md` F-A3r row; the account-wide search cap is shared
+with the scheduled jobs, so 4 req/s left no headroom — is resolved by widening
+`_INGEST_SEARCH_BATCH_INTERVAL_MS` from 250 to **400ms** (2.5 req/s, 50% headroom under
+HubSpot's 5 req/s cap; a 48-row send now takes ≈58s across the three search nodes).
+`retryOnFail` was again rejected, per this file's own original constraint. Pinned by
+`tests/n8n/ingestSearchThrottle.test.mjs`, the first test in this repo asserting a batching
+interval — it derives the throttled node set from `n8n/wf_contact_ingest_cloud.json`
+structurally, not from a hard-coded node-name list, so a future unthrottled fourth search
+node fails it automatically. Archived here per this file's own "Archive it when D-73-15
+lands" instruction (73-CONTEXT.md).
 
 ## Current Focus
 <!-- OVERWRITE on each update - always reflects NOW -->

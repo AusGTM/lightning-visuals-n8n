@@ -1304,24 +1304,27 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     # instead of rejecting the filter, and `lookup_failed` stays false.
     # F-A3 (uat-stress-2026-09-15, execution 12429): a 48-row batch fired 48 requests per
     # search node in one burst against HubSpot's account-wide 5 req/s CRM Search cap and
-    # 429'd on most items (see `_http_node`'s `batch_interval_ms` docstring). 250ms = 4
-    # req/s, 20% headroom under the documented cap ([documented] only — n8n's own
-    # published docs, docs.n8n.io/build/flow-logic/understand-execution-order and the
-    # httpRequest batching option page; no batching option has run on this instance yet,
-    # so this is not yet an [observed live] fact). Applies to all three per-row search
-    # nodes below (email + the two company-link searches) — they run one at a time (each
-    # processes every row before the next node starts), so the intervals never overlap.
-    # Wall-time cost: 48 rows x 250ms x 3 nodes ~= 36s added to THIS branch's own
+    # 429'd on most items (see `_http_node`'s `batch_interval_ms` docstring). Applies to
+    # all three per-row search nodes below (email + the two company-link searches) —
+    # they run one at a time (each processes every row before the next node starts), so
+    # the intervals never overlap.
+    # F-A3r (D-73-15, tests/stress-tests/SESSION-2026-09-15.md): 250ms (4 req/s, 20%
+    # headroom) left 1 residual 429 on a 48-row send because the search cap is
+    # account-wide and shared with the scheduled jobs' own search traffic. Widened to
+    # 400ms — 2.5 req/s, 50% headroom under the 5 req/s cap. retryOnFail was considered
+    # and rejected (n8n ignores it under `onError: continueRegularOutput`, RESEARCH
+    # Pitfall 3) in favour of this wider interval.
+    # Wall-time cost: 48 rows x 400ms x 3 nodes ~= 58s added to THIS branch's own
     # runtime. Under this workflow's `executionOrder: "v1"` (confirmed live on all five
     # cloud workflows, Phase 72 gate), n8n runs "Set Config"'s fanned-out branches
     # topmost-canvas-position-first, to completion, before the next branch starts — and
     # this whole pipeline (the "Extract From File" branch) sits ABOVE "Build Ingest Ack"
     # on the canvas (position [x, y] vs [x, y+180]), so the ack does NOT fire early: the
-    # added 36s lands BEFORE the response, counting against the ~100s Cloudflare webhook
+    # added ~58s lands BEFORE the response, counting against the ~100s Cloudflare webhook
     # ceiling (safe at 48 rows; a batch several times larger would need re-checking
     # against that ceiling together with the lane's other per-row work, e.g. the email
     # verification batch and the matched-row Contact History hop).
-    _INGEST_SEARCH_BATCH_INTERVAL_MS = 250
+    _INGEST_SEARCH_BATCH_INTERVAL_MS = 400
     hs_search = _http_node(
         "HubSpot Search by Email",
         "https://api.hubapi.com/crm/v3/objects/contacts/search", x, y,

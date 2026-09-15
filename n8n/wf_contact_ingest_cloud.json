@@ -176,7 +176,7 @@
           "batching": {
             "batch": {
               "batchSize": 1,
-              "batchInterval": 250
+              "batchInterval": 400
             }
           }
         },
@@ -326,7 +326,7 @@
           "batching": {
             "batch": {
               "batchSize": 1,
-              "batchInterval": 250
+              "batchInterval": 400
             }
           }
         },
@@ -369,7 +369,7 @@
           "batching": {
             "batch": {
               "batchSize": 1,
-              "batchInterval": 250
+              "batchInterval": 400
             }
           }
         },
