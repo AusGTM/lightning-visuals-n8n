@@ -2356,11 +2356,40 @@ hand-edited) now carries eight more nodes:
 | `HubSpot Company Search by Domain` | companies search, `domain` EQ |
 | `HubSpot Company Search by Name` | companies search, `name` EQ — reads its key from `Build Company Link` by node name (its own `$json` is the prior search's response) |
 | `Adapt Company Link` | `n8n/code/companyLink.js::resolveCompanyLink` -> `company_id` + `company_match` + `company_hold_reason` |
-| `Build Association Request` | joins each write RESPONSE back to its row **by value** (update by `id`, create by `properties.email`) — index alignment is gone downstream of the write IFs |
+| `Build Association Request` | joins each write RESPONSE back to its row — see the amendment below for how the CREATE side actually does this now |
 | ~~`HubSpot Associate Company Write Gate`~~ | **REMOVED by Phase 70 (D-70-15, 2026-09-09).** The association no longer has a gate of its own: ONE verdict is taken at `HubSpot Update Write Gate` and covers both the update and the association it implies. An `update` is never held for lack of a company. `Associate Lane Sentinel` duplicates that gate's predicate purely for Merge plumbing — `n8n_arming.set_write_safety` rewrites it too, and an arming run that misses it drops associations on a real batch. |
 | `HubSpot Associate Company` | `PUT /crm/v4/objects/contacts/{id}/associations/default/companies/{id}` — idempotent, no body, no `onError` |
 | `Build Ingest Response` | one row-identifying item per decided row: `action`, `contact_id`, `company_id`, `association`, `reason` |
 | `Build Ingest Ack` | **Phase 70 (D-70-07):** the lane's ONE responder — `{run_id, accepted, row_ids}` and nothing else. `Build Ingest Response`'s rows no longer reach the wire; they are read from the settled execution's runData (D-70-05). |
+
+**Amended 2026-09-16 (Phase 73 Plan 06, D-73-01, F-A6) — the CREATE side's pairing is now
+an identity join, not a positional one, and this section's own prior wording (below) was
+stale even before that change.** Research for this plan found that `Build Association
+Request`'s jsCode did no by-value join at all — it read the carried row's fields straight
+off the single item a `combineByPosition` carry merge had already paired **by construction**
+(index alignment), and this section's "joins... by value" sentence describes a mechanism
+Phase 70's positional-merge refactor had already superseded. Two more nodes now sit between
+`Create Carry Merge` and `Build Association Request`:
+
+| Node | Does |
+| --- | --- |
+| `Pair Create Outcome To Row` | `n8n/code/pairCreateOutcome.js::pairCreateOutcome` — the ACTUAL identity join: `Create Carry Merge` is append-mode now (not `combine`), so a create rejected on HubSpot Create's error output (below) shrinks the success array without shifting anything out of alignment. Classifies every item by shape (a carried row always carries `action`; a success response always carries `id`; anything else is an error item) and joins on the SAME ladder `columnMap.js`'s `requiredIdentity` encodes for CSV completeness — email, then firstname+lastname+company, then linkedin_url — never by position. Fails closed: an uncomputable or ambiguous key is refused, never guessed. |
+| `Build Create Failure Row` | Fed by `Pair Create Outcome To Row`'s own classification (it cannot sit upstream of it). Emits one `create_failed` refusal row per rejected create, reading at most a message/description/status code off the raw HubSpot error — never the whole error object, which can carry the outbound request's own Authorization header. Emits its own sentinel marker when the batch had no rejections at all, so `Ingest Merge Response`'s dedicated input for this lane never starves. |
+
+`HubSpot Create` itself carries `onError: "continueErrorOutput"` (the ingest lane's ONLY
+write node with this setting — `HubSpot Update` keeps `onError: null`, per the BUG 11 rule
+that a write node never gets `continueRegularOutput`) plus `alwaysOutputData: true`. The
+second flag is load-bearing, not decorative: without it, `Create Carry Merge`'s error input
+never delivers at all on a zero-rejection batch (the common case), which makes that merge
+itself drain-only rather than normally-completing — and that timing change silently starved
+`Build Association Request Merge`'s downstream completion (an immediate write-gate sentinel
+let it drain with only the Update-side input filled, before the delayed Create-side content
+ever arrived). `alwaysOutputData` gives the error branch a real (marker) delivery during
+NORMAL processing whenever it would otherwise be empty, so the merge completes exactly as it
+did before this plan. No starved-lane sentinel was added to that input — a `_add_starved_
+lane_sentinel` there would have been a SECOND producer and double-fired the lane under v1.
+Stays `[documented]` only, per D-73-19: the create-error lane is proven offline (`node --test
+tests/n8n/ingestCreateErrorLane.test.mjs`), never live, until a real race occurs.
 
 Resolution order: **manual `company_id` column, then exact email-domain match (freemail and
 AU ISP domains resolve nothing), then exact company-name match** (a name matching two
