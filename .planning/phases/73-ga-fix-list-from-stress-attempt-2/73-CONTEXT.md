@@ -14,8 +14,7 @@ plugin (`operator-claude-plugin/`). The operator deploys + bounces disarmed, res
 (`tests/stress-tests/uat_reset.py`), and re-runs A–F per `tests/stress-tests/RUNBOOK.md`
 "Restart procedure". Nothing is armed from Claude.
 
-Out of scope: F-B2 (name + TLD variant duplicates — Perth Racing), F-B4 (name-only company
-rows), F-C1 (suggest-contacts updating real contacts — expected behaviour), any new lane,
+Out of scope: F-B2 (name + TLD variant duplicates — Perth Racing), F-C1 (suggest-contacts updating real contacts — expected behaviour), any new lane,
 any Phase 72-style property work.
 
 </domain>
@@ -101,14 +100,41 @@ any Phase 72-style property work.
 - **D-73-18:** One deploy: regenerate every changed cloud JSON once, operator deploys +
   bounces disarmed, resets, runs attempt 3 A–F. No staged ingest-first deploy.
 
+### Plan-time rulings (operator, 2026-09-15, after research — §31 rule 3)
+- **D-73-19 (F-A6 proof):** the create-error lane is proven OFFLINE only. Extend
+  `tests/n8n/lib/walkWorkflow.mjs` so an HTTP node under `onError: "continueErrorOutput"`
+  yields a second (error) output when its stub is shaped `{success, error}`; a node test walks
+  the ingest graph through the new lane to `Build Ingest Response`. No test-only dedupe bypass
+  ships in the plugin; no RUNBOOK trigger is engineered. The lane stays `[documented]` until a
+  real race occurs (F-A5 removes attempt 3's natural 409 trigger).
+- **D-73-20 (F-B7 `total > 1`):** an IN search returning two companies (bare + `www.`) takes
+  `results[0]`, preferring the bare-domain hit when both are present, and names both ids in the
+  row's reason. No review route — same tolerance the lane already has for name collisions.
+- **D-73-21 (dedupe scope):** D-73-03/04 applies to the plain `contact-upload` lane only (it
+  mints no `row_id`, so no accounting conflict). `enrich-before-ingest`'s CSV intake and its
+  `total_row_ids` accounting are untouched this phase.
+- **D-73-22 (F-B4 FOLDED — option A):** the sentinel guard lands in `ENRICH_BUILD_CO_IDENTITY`
+  (`domain_variants` is never `[]`; `["no-company-domain.invalid"]` when no domain — the ingest
+  idiom at `BUILD_COMPANY_LINK`), AND the F-S4 mislabel is fixed so a clean no-match on a
+  name-only row does NOT stamp `lookup_failed=true`, which lets `Adapt Company Name Search` run
+  for name-only rows. Outcomes: exactly ONE exact-name hit → `enrich` (update that record,
+  `company_match_basis: "name"`); otherwise → `review` (never `create`, never `skip`) with an
+  EXPLICIT reason that says which of the two failure shapes occurred and what to do:
+  - no hit: `name-only row: no existing company matched by exact name; no domain — supply one to create`
+  - more than one hit: `name-only row: N companies share this exact name, target could not be isolated; no domain — supply one`
+  Wording may be tightened by the planner but must keep all three facts: match outcome
+  (not found / could not be isolated), "no domain", "supply one". `lookup_failed` (a real HTTP
+  error) keeps its own existing reason.
+- **Todo to open (kind: question, §31):** research found CLAUDE.md §13.0.1 describes `Build
+  Association Request` joining write responses to rows BY VALUE, while the current code joins
+  positionally. Planner opens `.planning/todos/pending/` entry with `trigger:` = the F-A6 lane
+  design (which must decide the pairing rule anyway) and `owner:` operator.
+
 ### Claude's Discretion
 - Exact shape of the `create_failed` refusal row and where the error-output carry Merge /
   sentinel sits (must satisfy the walker: `node --test tests/n8n/*.test.mjs`).
 - Whether the semicolon-join becomes one shared helper or a copied choke point.
 - Preview wording for `duplicate_in_csv` and the freemail review reason.
-- F-B4 (name-only company row → `domain EQ ""` 400): fold ONLY if it is a one-line reason
-  fix inside the same `Decide Company Action` / search body already being edited for D-73-06
-  and a ruling is taken at plan time (CLAUDE.md §31 rule 3); otherwise stays deferred.
 
 ### Folded Todos
 - `2026-09-12-shared-run-manifest-accumulates-positional-verdicts-across-runs.md` —
@@ -224,8 +250,6 @@ any Phase 72-style property work.
 
 - F-B2: name + TLD variant company duplicates (Perth Racing) — needs fuzzy name/TLD logic;
   own phase or ruling.
-- F-B4: name-only company rows produce `domain EQ ""` 400 then `skip` — deferred unless
-  folded at plan time under §31 rule 3.
 - Orphan-association repair script / sweep condition — rejected for this phase (D-73-02).
 - Retry-on-429 for the ingest search nodes — rejected in favour of the wider interval.
 - Handoff tasks 8–12 (from the retired HANDOFF.json): deploy + bounce + reset + attempt 3
