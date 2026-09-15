@@ -141,4 +141,9 @@ Say *"What needs review?"* Work three items: approve one (Claude shows the exact
    ```
    2026-09-15 result: **21/32 protected** (www-aware) — none of the deleted ids present. A company created from a domain researched in-session (not in the CSV, e.g. Gosford → `theentertainmentgrounds.com.au`) is invisible to the domain rule: pass it with `--extra-company-id <id> --since <attempt start ISO>` (the new snapshot's `taken_at` postdates it, so `--since` must be explicit).
 3. New baseline: *"What's the backend doing?"* — record the latest execution id on a fresh attempt section of the session sheet.
-4. Stage A again. The contacts CSV needs no change; the companies CSV keeps its three known-gap rows (Perth Racing, gmail, LinkedIn) on purpose — they document F-B2/F-B3/F-B4 until fixed.
+4. Stage A again. The contacts CSV needs no change; the companies CSV keeps its three original
+   rows (Perth Racing, gmail, LinkedIn) on purpose, but Phase 73 fixed two of the three — they
+   now exercise the fix rather than document a gap. The gmail row (F-B3) is refused with a
+   freemail reason instead of being mishandled; the LinkedIn-only/name-only row (F-B4, folded
+   into F-B7/F-B4 under D-73-22) is held for review naming exactly what to supply. Only the
+   Perth Racing row (F-B2, name+TLD variant) remains a documented known gap (D-73-07).

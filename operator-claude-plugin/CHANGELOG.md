@@ -16,6 +16,60 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-16
+
+GA fix list from stress attempt 2 (Phase 73, plans `73-01`..`73-06`). Six defects and gaps
+found during the second live stress attempt are fixed and proven offline; the operator's
+attempt 3 is this release's own gate.
+
+### Changed
+- **A duplicate spreadsheet row is now dropped before the send, not sent.** Two rows that
+  identify the same person (matching email, or matching name + company, or matching
+  LinkedIn URL) collapse to the first one before the batch goes anywhere; the preview names
+  the losing row's number and which winning row it collapsed onto. **This is a behaviour
+  change an existing operator can be surprised by:** a batch that used to send N rows, some
+  of them duplicates HubSpot quietly merged or rejected, now sends fewer than N — the row
+  count in the preview is the real count of what will land.
+- **A company whose website is a freemail address (gmail.com, outlook.com, and similar) is
+  now refused with that reason**, rather than being created or matched against a domain
+  that identifies nothing. The row is held for review naming "freemail domain — supply the
+  real website."
+- **A company already in the portal under a `www.`-prefixed domain is now found instead of
+  duplicated.** The lookup matches both the bare and `www.`-prefixed form of a domain in one
+  search; if the portal happens to hold both forms as separate records, the row names both
+  ids in its reason rather than silently picking one.
+- **A name-only company (no usable domain at all) now says exactly what to supply** instead
+  of being held with a generic reason — the review reason names the missing domain.
+- **Approving a held record from the review queue no longer fails when the record carries a
+  multi-value field.** The same array-to-string fix the enrichment lane already had is now
+  applied before a review approval's own HubSpot write.
+- **The run report now accounts for enrich and update outcomes, not just creates and
+  skips.** A row that only updated an existing HubSpot record used to fall out of the
+  report's accounting entirely; it now reports correctly against the run's own settled
+  results.
+- **The cost estimate a write grant shows before a send is now priced per lane** (contact
+  upload, company enrichment, enrich-before-ingest each has its own real rate/execution
+  model) instead of one flat estimate applied everywhere. The backend status read also now
+  reports real Lusha and ZoomInfo credit balances; Apollo's balance is reported as unknown
+  rather than a stale guess, because Apollo has no balance endpoint.
+
+### Fixed
+- A rejected create inside a larger contact-upload batch (for example, a duplicate email
+  HubSpot itself refuses) now costs only its own row — every other create in the same batch
+  still associates to its own company correctly. Previously a single rejection risked
+  mis-associating a sibling row in the same batch (proven offline only, per D-73-19; the
+  duplicate-collapse fix above removes the batch-internal conflict that used to trigger
+  this live, so it is not re-exercised by attempt 3).
+- The ingest lane's per-row HubSpot search throttle widened from 250ms to 400ms, closing
+  out the one residual rate-limit error seen on a large batch in the prior stress attempt.
+
+### Notes
+- Every change in this release is proven by an offline test suite and a regenerated,
+  disarmed `n8n/` tree (zero live deploy, zero live write) — see this repository's
+  `.planning/phases/73-ga-fix-list-from-stress-attempt-2/` for the full record. Nothing
+  in this release was deployed, bounced, armed, or pushed; those are the operator's own
+  steps, run after this release is cut.
+
 ## [0.49.1] - 2026-09-13
 
 Documentation-only release. No script, skill-flow, config or backend behaviour changed.
