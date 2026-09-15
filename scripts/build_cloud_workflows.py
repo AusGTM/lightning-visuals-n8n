@@ -163,6 +163,26 @@ def inline(*modules: str) -> str:
     return "\n\n".join(strip_module(m) for m in modules)
 
 
+def extract_js_const(module_name: str, const_name: str) -> str:
+    """Regex-extracts ONE top-level `const NAME = ...;` statement verbatim from a Wave-A
+    module — for splicing a single shared constant into a Code node whose job has nothing
+    to do with that module's other exports (`inline()`'d whole, they would be dead weight
+    and a needless second surface for name collisions). D-73-08 (F-B3): "Decide Company
+    Action" needs `companyLink.js`'s authoritative `FREEMAIL_DOMAINS` set and none of that
+    module's ingest-lane-specific helper functions.
+
+    Byte-identical to the source, so editing the list in `companyLink.js` propagates on
+    the next regen — never a second, driftable copy. Raises if the constant is not found,
+    so a rename in the source module fails the build rather than silently inlining stale
+    text."""
+    src = (CODE / module_name).read_text()
+    m = re.search(rf"^const\s+{re.escape(const_name)}\s*=.*?;\s*$", src, re.MULTILINE | re.DOTALL)
+    if not m:
+        raise ValueError(
+            f"extract_js_const: no top-level `const {const_name} = ...;` found in {module_name}")
+    return m.group(0)
+
+
 # D-70-12 (Phase 70 Plan 05 Task 1): the single canonical write-request shape every gated
 # write's upstream decide/set node must emit — `{action, hs_object_id, domain, email}`,
 # exactly those four keys. The four-way identity fallback ladder `_write_gate_js` used to
@@ -4502,7 +4522,7 @@ return $input.all().map((it) => {
 # removed in Phase 15), so this node cannot emit them even if it tried.
 ENRICH_DECIDE_CO_CLOUD = inline(
     "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js",
-    "matchProposal.js") + r"""
+    "matchProposal.js") + "\n\n" + extract_js_const("companyLink.js", "FREEMAIL_DOMAINS") + r"""
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
 """ + WRITE_REQUEST_JS + r"""
@@ -4639,7 +4659,18 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
   const id = row.identity_keys || {};
   const domain = id.domain;
-  if (row.action === "create" && !returnOnly) {
+  // D-73-08/D-73-09: freemail is never a company's own domain. Authoritative set:
+  // n8n/code/companyLink.js's FREEMAIL_DOMAINS — extracted verbatim at build time
+  // (extract_js_const) above, never a second list — mirrored in
+  // operator-claude-plugin/scripts/enrichment.py (Python). This node needs only the
+  // constant; that module's companion helpers (cleanCompanyDomain/companyDomainForRow/
+  // emailDomain) are ingest-lane specific and have no meaning here. Computed BEFORE the
+  // create-seed block below — a refused create must never seed the freemail domain (or
+  // its provenance) it is about to be refused for. Never fires when returnOnly (a propose
+  // call writes nothing anyway and always reports "proposed" below regardless).
+  const isFreemailCreate =
+    row.action === "create" && !returnOnly && !!domain && FREEMAIL_DOMAINS.has(domain);
+  if (row.action === "create" && !returnOnly && !isFreemailCreate) {
     // BUG 19 (confirmed live on a throwaway, 2026-07-29): canonicalPatch never carries
     // domain (manual_protected — an UPDATE rule) and name is in no policy at all, so an
     // unseeded create wrote name=None/domain=None and the domain-EQ search that had just
@@ -4668,6 +4699,11 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     properties.lv_enrichment_provenance = stableStringify(outgoingProvenance).slice(0, 60000);
   }
   let action = row.action;
+  let freemailReviewReason = null;
+  if (isFreemailCreate) {
+    action = "review";
+    freemailReviewReason = "freemail domain — supply the real website";
+  }
   if (returnOnly) {
     // Phase 36-04 Task 2 (36-CONTEXT.md §7 step 4): set BEFORE _writeSafetyAllows,
     // unconditionally on the mode predicate alone — no ALLOW_* constant is read on this
@@ -4722,7 +4758,7 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     // preserved onto the OUTPUT as a top-level `reason`, so Build Response's own
     // `reason: row.reason ?? (row.gate && row.gate.reason) ?? null` hoist has
     // something to read for this lane too, instead of always resolving null.
-    reason: (row.gate && row.gate.reason) || null,
+    reason: freemailReviewReason ?? ((row.gate && row.gate.reason) || null),
     // D-70-12: the canonical shape the spliced "HubSpot Company Create/Update Write Gate"
     // reads. Companies carry no email identity — the allowlist matches on id or domain.
     write_request: _buildWriteRequest(action, hs_object_id, domain || null, null),

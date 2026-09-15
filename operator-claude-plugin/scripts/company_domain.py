@@ -38,6 +38,30 @@ class DomainDecisionError(Exception):
     nothing at all, and the caller's own input is unchanged."""
 
 
+def _guard_domain(decision, proposal):
+    """Raises unless `decision`, once cleaned, could plausibly be a company's own domain.
+
+    D-73-08/D-73-09 (F-B3, stress attempt 2 exec 12449): a freemail domain (`gmail.com`)
+    passed this gate unrefused and was created as a company's identity. Reuses
+    `enrichment.FREEMAIL_DOMAINS` — the same set `preingest.py` and `held_queue.py`
+    already refuse contacts on — never a second list (this module defines no host
+    collection of its own; see test_company_domain_module_defines_no_host_collection_of_
+    its_own)."""
+    cleaned = enrichment._clean_domain(decision)
+    if cleaned is None:
+        raise DomainDecisionError(
+            f"{decision!r} is a profile page rather than {proposal.get('name')!r}'s own "
+            f"website, so it cannot be recorded as their domain. Give the company's own "
+            f"website address instead. Nothing was applied."
+        )
+    if cleaned in enrichment.FREEMAIL_DOMAINS:
+        raise DomainDecisionError(
+            f"{decision!r} is a personal mailbox domain, not {proposal.get('name')!r}'s "
+            f"own website, so it cannot be recorded as their domain. Give the company's "
+            f"own website address instead. Nothing was applied."
+        )
+
+
 def _validate_decision(row_id, decision, proposal):
     """Raises if `decision` cannot be applied to `proposal`. Never mutates or builds
     anything — the validation pass is a pure guard, run once per entry before the apply
@@ -52,22 +76,13 @@ def _validate_decision(row_id, decision, proposal):
                 f"on this row to say yes to. Nothing was applied."
             )
         # Defence in depth: even a CONFIRM of the row's own proposed value must survive
-        # the shared guard, in case the proposal itself was built from a profile page.
-        if enrichment._clean_domain(decision) is None:
-            raise DomainDecisionError(
-                f"{decision!r} is a profile page rather than {proposal.get('name')!r}'s "
-                f"own website, so it cannot be confirmed as their domain. Give the "
-                f"company's own website address instead. Nothing was applied."
-            )
+        # the shared guard, in case the proposal itself was built from a profile page or
+        # (D-73-08) a freemail domain.
+        _guard_domain(decision, proposal)
         return
     # Anything else is an operator correction — accepted on the operator's word, with no
     # research pass, but still required to survive the shared guard.
-    if enrichment._clean_domain(decision) is None:
-        raise DomainDecisionError(
-            f"{decision!r} is a profile page rather than {proposal.get('name')!r}'s own "
-            f"website, so it cannot be recorded as their domain. Give the company's own "
-            f"website address instead. Nothing was applied."
-        )
+    _guard_domain(decision, proposal)
 
 
 def apply_domain_decisions(proposals, resolved):
