@@ -81,6 +81,11 @@ started: First observed 2026-09-15 on the first ≥ 20-row ingest send this repo
   found: topology alone (no data dependency from "Set Config" to "Build Ingest Ack") is NECESSARY but NOT SUFFICIENT — under v1's documented branch-ordering rule, "Set Config"'s THREE fanned-out branches run topmost-canvas-position-first, to completion, one at a time. "Extract From File" (the entire main pipeline, including all three now-throttled search nodes) sits at the SAME y as "Set Config" — topmost of the three branches — while "Build Ingest Ack" (y+180) and "Set Config Fields" (y+360) sit below it. The main pipeline branch therefore runs to completion FIRST; the ack does not fire until after it.
   implication: the constraint's original claim ("post-ack work is not bounded by the ~100s ceiling") is WRONG for this workflow's actual live configuration (v1). The added throttling wall time (48 rows x 250ms x 3 nodes ~= 36s) lands BEFORE "Respond to Webhook", counting against the Cloudflare ~100s ceiling — not after it. Still safe at 48 rows (36s is well under 100s even before adding the lane's other per-row work), but this bounds how much larger a future batch can grow under the same per-row-search design before approaching that ceiling; a materially larger batch would need this rechecked together with the lane's other latency (email verification batch, the matched-row Contact History hop).
 
+- timestamp: 2026-09-15T06:40:00Z
+  checked: node start times in execution 12429's runData (orchestrator, after the debugger's "correction" about ack ordering)
+  found: `Set Config` 0.00s, `Extract From File` 0.01s, `Build Ingest Ack` 0.02s, `Respond to Webhook` 0.03s, then `HubSpot Search by Email` 0.57s, `Company Search by Domain` 2.97s, `Company Search by Name` 5.05s, `Decide Action` 7.18s. Total wall 7.4s.
+  implication: the ack fires BEFORE the pipeline on the live v1 body — the debugger's static reading (pipeline topmost, ack after) is contradicted by the observed execution. Post-ack work is therefore not bounded by the plugin's 30s `dispatch.py` transport timeout or the ~100s webhook ceiling; the ~36s the throttle adds (48 rows × 250ms × 3 nodes) lands after the ack and only lengthens the recovery poll (bound 600s). The Constraints section's original claim stands.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
