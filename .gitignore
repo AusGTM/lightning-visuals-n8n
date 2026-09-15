@@ -39,3 +39,6 @@ tests/stress-tests/uat-reset-report-*.json
 # demo-run reset artefacts (record ids)
 tests/demo-run/uat-reset-snapshot*.json
 tests/demo-run/uat-reset-report-*.json
+
+# raw plugin-session transcript (1MB+, may embed tool output)
+tests/stress-tests/session.log
