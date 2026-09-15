@@ -498,7 +498,7 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 1/7 plans executed
+**Plans:** 2/7 plans executed
 
 Plans:
 
@@ -508,7 +508,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 73-02-PLAN.md — F-E1 array serialization at `reviewApply()`'s one choke point + F-A3r ingest search throttle 250→400 ms, pinned by a new test (D-73-10, D-73-15)
+- [x] 73-02-PLAN.md — F-E1 array serialization at `reviewApply()`'s one choke point + F-A3r ingest search throttle 250→400 ms, pinned by a new test (D-73-10, D-73-15)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
