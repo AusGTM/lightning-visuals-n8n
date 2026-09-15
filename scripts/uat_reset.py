@@ -131,7 +131,14 @@ def search(object_type: str, filters: list[dict], props: list[str]) -> list[dict
 
 
 def company_by_domain(domain: str) -> list[dict]:
-    return search("companies", [{"propertyName": "domain", "operator": "EQ", "value": domain}], COMPANY_PROPS)
+    """EQ on the bare domain AND its `www.` form — HubSpot stores many records as
+    `www.example.com.au` (seen 2026-09-15: HRNSW `www.hrnsw.com.au`), and `domain EQ` is exact."""
+    hits = search("companies", [{"propertyName": "domain", "operator": "EQ", "value": domain}], COMPANY_PROPS)
+    seen = {h["id"] for h in hits}
+    for h in search("companies", [{"propertyName": "domain", "operator": "EQ", "value": "www." + domain}], COMPANY_PROPS):
+        if h["id"] not in seen:
+            hits.append(h)
+    return hits
 
 
 def contacts_for_company(company_id: str) -> list[dict]:
