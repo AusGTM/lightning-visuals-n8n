@@ -4,7 +4,7 @@ slug: "enrichment-extras-land-in-hubspot"
 status: verified
 # threats_open = count of OPEN threats at or above workflow.security_block_on severity (the blocking gate)
 threats_open: 0
-threats_open_below_threshold: 1
+threats_open_below_threshold: 0
 asvs_level: 1
 block_on: high
 register_authored_at_plan_time: true
@@ -68,7 +68,7 @@ created: "2026-09-13"
 | T-72-26 (plan 07) | Information Disclosure | CHANGELOG and gate spec content | low | accept | no token / portal id / record data | closed (accepted) | reviewed 2026-09-13 docs sweep |
 | T-72-27 / T-72-12-01 (plans 08/12) | Elevation of Privilege / Tampering | the armed window; live HubSpot data during it | critical | mitigate | one record-scoped window per gate, closed same sitting, every `ALLOW_*` read back `false`, zero post-disarm executions | closed | 72-UAT.md Tests 2 and 3: flags `false` read back, zero executions after final disarm (execs 12402/12406, 12414) |
 | T-72-29 (plan 08) | Repudiation | trusting the send's 200 | high | mitigate | every assertion from a re-read of the record | closed | 72-UAT.md read-back basis (9 refs) |
-| T-72-30 (plan 08) | Information Disclosure | live test record left on the portal | medium | mitigate | created id recorded; hand-deletion is a confirmed checklist item | **open — below `high` threshold (non-blocking)** | Test 2 contact `352455353810` deleted (72-UAT.md line 197, operator-reported 204). Test 3 contact `352522004980`: DELETE command handed to operator 2026-09-13, **no 204 reported** (72-UAT.md Test 3 row (e)). Closes when the operator confirms the 204 or re-runs the delete. |
+| T-72-30 (plan 08) | Information Disclosure | live test record left on the portal | medium | mitigate | created id recorded; hand-deletion is a confirmed checklist item | closed | Test 2 contact `352455353810` deleted (operator-reported 204, 2026-09-13). Test 3 contact `352522004980` deleted 2026-09-15: `GET` 200 then `DELETE` 204, operator-run, recorded 72-UAT.md Test 3 row (e). |
 | T-72-09-01 (plan 09) | Tampering | `MERGE_CONTACTS` confidence derivation | high | mitigate | 85 only for a non-`csv` `source_by_field` provider; csv/80 default untouched | closed | `scripts/build_cloud_workflows.py` `CANDIDATE_ALIASES` (4 refs); `tests/n8n/ingestWidenedFieldsFlow.test.mjs` pre-alias fixture |
 | T-72-09-02 (plan 09) | Elevation of Privilege | `CANDIDATE_ALIASES` write-target expansion | medium | mitigate | closed literal, one entry, two already-promotable targets, not request-derived | closed | same |
 | T-72-09-03 (plan 09) | Repudiation | provenance source for `lv_linkedin_url` | low | accept | more accurate provenance; recorded | closed (accepted) | 72-UAT.md Test 3: source `waterfall`/85 |
@@ -111,13 +111,9 @@ created: "2026-09-13"
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-09-13 | 41 | 40 | 1 (T-72-30, medium — below `high` threshold, non-blocking) | secure-phase orchestrator, ASVS L1 grep-depth (short-circuit: `threats_open: 0`, register authored at plan time) |
+| 2026-09-15 | 41 | 41 | 0 | operator confirmed DELETE 204 for contact `352522004980`; T-72-30 closed |
 
-**Residual for the operator:** confirm the restorable DELETE of UAT contact `352522004980`
-returned `204`, or re-run it, then flip T-72-30 to closed. Command (credentials from `.env`):
-
-```
-! set -a; . ./.env; set +a; curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -H "Authorization: Bearer $HUBSPOT_PRIVATE_APP_TOKEN" https://api.hubapi.com/crm/v3/objects/contacts/352522004980
-```
+**Residual for the operator:** none — closed 2026-09-15.
 
 ---
 
@@ -125,7 +121,7 @@ returned `204`, or re-run it, then flip T-72-30 to closed. Command (credentials 
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [x] `threats_open: 0` confirmed (one medium-severity item open below the `high` block threshold)
+- [x] `threats_open: 0` confirmed (all 41 closed as of 2026-09-15)
 - [x] `status: verified` set in frontmatter
 
 **Approval:** verified 2026-09-13

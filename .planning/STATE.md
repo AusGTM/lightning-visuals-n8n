@@ -1020,7 +1020,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 - lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
 - Open UAT item: 70-02 Task 2's disarmed Merge-semantics probe (Gate 1, deferred per operator ruling 2026-09-09) must be exercised in the end-of-phase UAT — see .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md.
-- ~~F72-1~~ CLOSED 2026-09-13 by gap plan 72-09 (`CANDIDATE_ALIASES`), proven live on contact `352522004980` / execution `12414`. Residual (operator-owned): confirm the restorable DELETE of `352522004980` returned `204` — no confirmation reached this session; 72-UAT.md Test 3 row (e) records it as requested, not confirmed.
+- ~~F72-1~~ CLOSED 2026-09-13 by gap plan 72-09 (`CANDIDATE_ALIASES`), proven live on contact `352522004980` / execution `12414`. Residual closed 2026-09-15: DELETE of `352522004980` returned `204`.
 
 ### Quick Tasks Completed
 
@@ -1100,7 +1100,7 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 ## Operator Next Steps
 
-- Confirm the restorable DELETE of UAT contact `352522004980` (Phase 72 Test 3) returned `204`, or re-run it.
+- ~~Confirm the restorable DELETE of UAT contact `352522004980`~~ done 2026-09-15 (`204`).
 - Phase 72 was the last roadmap phase: run `/gsd-complete-milestone`, or add a new phase with `/gsd-add-phase`.
 
 ## Deferred Items
