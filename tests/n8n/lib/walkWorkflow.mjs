@@ -292,6 +292,21 @@ export function runNode(node, items, ctx) {
       throw new Error(`unstubbed HTTP node: ${node.name}`);
     }
     const raw = typeof stub === "function" ? stub(items, node) : stub;
+    // Phase 73 Plan 06 Task 2 (D-73-19): a node built with `onError:
+    // "continueErrorOutput"` gets a SECOND output when its stub is shaped
+    // `{ success: [...], error: [...] }` — mirrors the `n8n-nodes-base.if` branch
+    // directly above (two named output arrays instead of one). A plain array stub (the
+    // shape every existing test uses) still yields exactly one output regardless of
+    // `onError` — only the `{success, error}` object shape opts in, so no existing
+    // stub's meaning changes.
+    if (node.onError === "continueErrorOutput" && raw && !Array.isArray(raw) &&
+        (Object.prototype.hasOwnProperty.call(raw, "success") ||
+         Object.prototype.hasOwnProperty.call(raw, "error"))) {
+      return { outputs: [
+        (raw.success || []).map(unwrapJson),
+        (raw.error || []).map(unwrapJson),
+      ] };
+    }
     return { outputs: [(raw || []).map(unwrapJson)] };
   }
   if (type === "n8n-nodes-base.set") {
@@ -316,7 +331,13 @@ export function runNode(node, items, ctx) {
  *   triggerItems: array of plain (unwrapped) items to seed that trigger with.
  *   httpStubs: { [nodeName]: array | (inputItems, node) => items } — an unstubbed HTTP
  *     node throws by name (never silently returns []), so a test cannot pass on an
- *     unmodelled hop.
+ *     unmodelled hop. Phase 73 Plan 06 Task 2 (D-73-19): when the node's own `onError`
+ *     is `"continueErrorOutput"`, a stub (or a function's resolved value) may instead be
+ *     shaped `{ success: [...], error: [...] }` — either key may be omitted (treated as
+ *     `[]`) — to drive BOTH of the node's outputs: `success` on output 0, `error` on
+ *     output 1. A stub in the plain array form still yields exactly one output even on
+ *     such a node (no existing stub's meaning changes), and a node without
+ *     `continueErrorOutput` never reads this shape at all.
  *   codeStubs: { [nodeName]: array | (inputItems, node) => items } — the same
  *     substitution for a Code node whose body `await`s (the walker runs Code bodies
  *     synchronously and cannot execute one). Both directions throw: an await-bearing
