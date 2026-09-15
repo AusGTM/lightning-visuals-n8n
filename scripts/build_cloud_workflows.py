@@ -9007,8 +9007,22 @@ def build_backend_status_cloud():
     conns["Wrap ZoomInfo Usage Result"] = {"main": [[{"node": _zoom_usage_old_target, "type": "main", "index": 0}]]}
     splice_carry_merge_after(nodes, conns, "Wrap ZoomInfo Usage Result", "ZoomInfo Usage Token Gate",
                               merge_name="ZoomInfo Usage Result Carry Merge")
+    # Phase 73 Plan 05 (F-B6, wiring gap): carry_source here MUST be "Build Credit
+    # Status" — that node is "HS Requested Search (Companies)"'s actual, untouched
+    # direct predecessor (never re-pointed by any splice above) and is the ONLY node
+    # in this chain that emits `balances`. The prior carry_source, "ZoomInfo Usage
+    # Result Carry Merge", is the item that FEEDS "Build Credit Status" — one hop too
+    # early — so it carries the raw provider results forward but never `balances`
+    # itself. Item counts matched either way (this whole chain is single-item, D-14),
+    # which is exactly why the mismatch went undetected until a graph-level walk: a
+    # node-count assertion could not have caught a correct-cardinality, wrong-content
+    # carry. `balances` was silently lost for the entire rest of the chain, and
+    # "Build Status" read `merged.balances` as `undefined` -> `[]` -> every provider's
+    # `configured` fell back to `false` -> `not_configured` for all three, matching
+    # F-B6's live symptom exactly (SESSION-2026-09-15.md, Stage D vs the status
+    # endpoint's own read in the same session). Regression: backendStatusCredits.test.mjs.
     splice_carry_merge_after(nodes, conns, "Wrap HS Requested Companies Result",
-                              "ZoomInfo Usage Result Carry Merge",
+                              "Build Credit Status",
                               merge_name="HS Requested Companies Carry Merge")
     splice_carry_merge_after(nodes, conns, "Wrap HS Review Companies Result",
                               "HS Requested Companies Carry Merge",

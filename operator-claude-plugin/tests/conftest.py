@@ -630,6 +630,24 @@ def backend_status_zoominfo_unrecognized_response_shape():
 
 
 @pytest.fixture
+def backend_status_all_three_lusha_zoominfo_known_apollo_unknown():
+    """Phase 73 Plan 05 (D-73-17): the combined shape the status lane must produce once
+    F-B6's wiring gap is fixed — Lusha AND ZoomInfo both carry a real, provisioned
+    balance in the SAME response Apollo's 403 comes back in. Distinct from
+    `backend_status_unknown_balance` above (Lusha-only) — the point of this fixture is
+    that a spend guard reading it must bound on TWO real numbers at once while still
+    reporting Apollo as unknown, never `not_configured` (Apollo has a real credential;
+    it simply answers 403)."""
+    return _backend_status(
+        balances=[_balance("lusha", 3708), _balance("zoominfo", 9358),
+                  _balance("apollo", None, error="http_403", status=403)],
+        credential_health=[_health("lusha", "ok"), _health("zoominfo", "ok"),
+                           _health("apollo", "refused", status=403, reason="http_403")],
+        counts=_counts(),
+    )
+
+
+@pytest.fixture
 def backend_status_unconfigured_provider():
     """The third provider state: never probed at all. Absent from `balances` entirely
     (that node maps over the REQUESTED providers), present in credential_health as

@@ -710,6 +710,11 @@
             "node": "HS Requested Search (Companies)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "HS Requested Companies Carry Merge",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -847,11 +852,6 @@
             "node": "Build Credit Status",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "HS Requested Companies Carry Merge",
-            "type": "main",
-            "index": 1
           }
         ]
       ]

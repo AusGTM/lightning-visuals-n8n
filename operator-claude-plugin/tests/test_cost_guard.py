@@ -447,3 +447,28 @@ def test_unrecognized_response_shape_is_also_unknown_and_distinct_from_the_other
         b for b in backend_status_unknown_balance["data"]["balances"]
         if b["provider"] == "apollo")
     assert len({shape_row["error"], error_row["error"], refused_row["error"]}) == 3
+
+
+def test_spend_guard_bounds_on_lusha_and_zoominfo_while_apollo_stays_unknown(
+    monkeypatch, rates, backend_status_all_three_lusha_zoominfo_known_apollo_unknown,
+):
+    """D-73-17 (Phase 73 Plan 05): once F-B6's status-lane wiring is fixed, Lusha and
+    ZoomInfo both carry a real number in the SAME response Apollo's 403 lands in — the
+    guard must bound on both real numbers at once, never fall back to Apollo's unknown
+    verdict for the providers that actually answered, and never render Apollo's
+    permanently-unreadable balance as free (0 credits) or as a passing verdict."""
+    balances = _balances_from_fixture(
+        monkeypatch, backend_status_all_three_lusha_zoominfo_known_apollo_unknown)
+    estimate = cost_guard.estimate_batch(
+        10, "companies", ["lusha", "zoominfo", "apollo"], rates)
+    verdicts = cost_guard.compare(estimate, balances)
+
+    assert verdicts["lusha"]["verdict"] == "ok"
+    assert verdicts["lusha"]["remaining_credits"] == 3708
+    assert verdicts["zoominfo"]["verdict"] == "ok"
+    assert verdicts["zoominfo"]["remaining_credits"] == 9358
+
+    assert verdicts["apollo"]["verdict"] == "unknown"
+    assert verdicts["apollo"]["remaining_credits"] is None
+    assert verdicts["apollo"]["remaining_credits"] != 0
+    assert write_grant._headroom(verdicts["apollo"]) == "unconfirmed"
