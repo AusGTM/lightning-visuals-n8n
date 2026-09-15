@@ -94,7 +94,16 @@ function reviewApply(candidateJson, refetchedProperties, fieldPolicy) {
       invalid.push({ field: d.field, value: d.chosen_value, reason: enumCheck.reason });
       continue;
     }
-    canonicalPatch[d.field] = enumCheck.value;
+    // F-E1 (Phase 73 Plan 02, D-73-10): normalizeEnumValue's documented multi-select
+    // contract preserves the container shape passed in (array in -> array out), and a
+    // non-enum-bound field returns its value completely unchanged -- either can still be
+    // a raw array here. HubSpot's PATCH body requires a semicolon-joined string, never a
+    // JSON array (execution 12502). Join strictly AFTER the enum check above, never
+    // before -- joining first would let an unaccepted element hide inside an accepted
+    // string instead of being refused into `invalid`.
+    canonicalPatch[d.field] = Array.isArray(enumCheck.value)
+      ? enumCheck.value.join(";")
+      : enumCheck.value;
   }
 
   if (staleFields.length > 0) {
