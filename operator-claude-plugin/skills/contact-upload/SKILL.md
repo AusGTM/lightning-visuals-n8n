@@ -292,8 +292,14 @@ be sent, and — only when explicitly armed — send it.
    proposal = write_grant.plan_grant(
        config, lanes=["contacts"], object_type="contacts",
        record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
-       label="contact-upload batch")
+       label="contact-upload batch", cost_lane="contact-upload")
    ```
+
+   `cost_lane="contact-upload"` (Phase 73 Plan 05, D-73-16): this lane calls no
+   provider and makes no model call, so the grant must price at zero provider credits
+   and one execution per POST — never the per-record chunk-plus-record-count formula
+   the provider-driven lanes use. Omitting this argument silently reverts to that
+   over-charged pricing.
 
    Show the operator `proposal["envelope"]["block"]` and `proposal["consequence"]` —
    the same arithmetic the explicit grant path already shows before its yes
@@ -430,7 +436,8 @@ be sent, and — only when explicitly armed — send it.
        write_grant.authorize_ungranted_send(
            cfg, lane="contacts", object_type="contacts",
            record_ids=send_ids, record_domains=send_domains,
-           allow_create=allow_create, label="this send")
+           allow_create=allow_create, label="this send",
+           cost_lane="contact-upload")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or

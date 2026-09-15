@@ -733,6 +733,26 @@ def test_envelope_contact_upload_lane_prices_zero_provider_credits_and_one_execu
         "give 1 + 3 = 4 here)")
 
 
+def test_envelope_contact_upload_lane_stays_one_execution_even_when_chunk_count_exceeds_one():
+    """`dispatch.py::dispatch()` sends the WHOLE csv as a single multipart POST
+    regardless of row count (`watch.recover_dispatch(..., expected_chunk_count=1, ...)`
+    is a hardcoded 1 — there is no per-record chunking loop for this lane at all;
+    `chunking.plan_chunks`/`chunk_ceiling` belong to the ENRICHMENT lane's
+    `dispatch_plan`, a different call path this lane never uses). A batch large enough
+    to need 3 chunks under the write-path ceiling must still project exactly ONE
+    execution — proving `projected_executions` is not silently equal to `chunk_count`
+    by coincidence of a small batch size."""
+    figures = _lane_envelope(
+        _lane_config(max_records_per_chunk=5), object_type="contacts",
+        record_ids=[str(i) for i in range(12)], providers=["lusha"],
+        lane="contact-upload")
+
+    assert figures["chunk_count"] == 3, "12 records at a ceiling of 5 needs 3 chunks"
+    assert figures["projected_executions"] == 1, (
+        "still exactly one execution — this lane makes one POST no matter how many "
+        "chunks the write-path ceiling would carve the same record count into")
+
+
 def test_envelope_contact_upload_figure_equals_the_previews_figure_for_the_identical_send():
     """The two call sites (this envelope and `preview_enrichment.tabular_cost_block`) must
     never be able to disagree about the same contact-upload send again."""
@@ -824,6 +844,32 @@ def test_plan_grant_threads_the_cost_lane_through_to_the_envelope(
     assert proposal["kind"] == write_grant.PROPOSAL_KIND, proposal
     assert proposal["envelope"]["provider_credits"] == {}
     assert proposal["envelope"]["projected_executions"] == 1
+
+
+def test_authorize_ungranted_send_threads_the_cost_lane_through_to_plan_grant(
+        granting_config, stub_module_transport_factory):
+    """The per-send path must forward `cost_lane` exactly like the standing-grant path
+    does — an ungranted contact-upload send priced with no `cost_lane` would silently
+    revert to the over-charged default (D-73-16)."""
+    config = {**granting_config, "max_records_per_chunk": 5}
+    transport = stub_module_transport_factory([
+        _workflow_list(),
+        _executions_page(),
+        _base_workflow(),
+        _base_workflow(), _base_workflow(), {}, {}, {},
+        _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),
+        _armed_workflow(), _armed_workflow(), {}, {}, {}, _base_workflow(),
+    ])
+
+    decision = write_grant.authorize_ungranted_send(
+        config, lane="contacts", object_type="contacts",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", providers=["lusha"], cost_lane="contact-upload",
+        transport=transport)
+
+    assert decision["armed"] is True
+    assert decision["grant"]["envelope"]["provider_credits"] == {}
+    assert decision["grant"]["envelope"]["projected_executions"] == 1
 
 
 # --- Phase 60: "a grant approves one flagged record", end to end -------------------------

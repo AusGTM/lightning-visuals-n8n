@@ -551,14 +551,23 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
             {"record_ids": ids + domains, "object_type": object_type},
             chunk_record_ceiling).chunk_count
         if cost_lane == COST_LANE_CONTACT_UPLOAD:
-            # D-73-16/F-A2: one execution per POST — never `chunk_count + record_count`,
-            # which is the per-record-search cost model the provider-driven lanes incur
-            # and this lane does not. No separate "association hop" execution count is
-            # tracked anywhere in this codebase today (the association PUT runs inside
-            # the same n8n execution as the create, not as a further one) — if a future
-            # lane ever dispatches an association as its own execution, its count is
-            # added here, not folded into `chunk_count`.
-            executions = chunk_count
+            # D-73-16/F-A2: exactly ONE execution per POST, hardcoded — never
+            # `chunk_count` and never `chunk_count + record_count`. Verified against
+            # `dispatch.py::dispatch()`, the contact-upload lane's only send path: it
+            # sends the WHOLE csv as a single multipart POST regardless of row count
+            # (no chunking loop exists for this lane at all — `chunking.plan_chunks`/
+            # `chunk_ceiling` belong to the ENRICHMENT lane's `dispatch_plan`, a
+            # different call path this lane never uses) and recovers it via
+            # `watch.recover_dispatch(..., expected_chunk_count=1, ...)` — a literal,
+            # hardcoded 1, not a computed chunk count. `chunk_count` above is still
+            # computed and shown for informational parity with the other lanes'
+            # figures, but it is NOT this lane's real POST count and must never drive
+            # its execution projection. No separate "association hop" execution count
+            # is tracked anywhere in this codebase today (the association PUT runs
+            # inside the same n8n execution as the create, not as a further one) — if a
+            # future lane ever dispatches an association as its own execution, its
+            # count is added here.
+            executions = 1
         else:
             executions = chunk_count + record_count
     except chunking.ChunkPlanError:
@@ -1623,7 +1632,7 @@ def authorize_review_batch(grant):
 
 def authorize_ungranted_send(config, *, lane, object_type, record_ids, record_domains,
                              allow_create, label, providers=None, transport=None,
-                             preflight=None, today=None):
+                             preflight=None, today=None, cost_lane=None):
     """The per-send counterpart to `authorize_send`, for a send with NO standing grant
     open (F2, 2026-08-25, debug/resolved/walk-write-path-defects.md). Before this, an
     ungranted send's per-send "yes" (VOCAB-05 consent) armed the client's own POST only —
@@ -1672,11 +1681,17 @@ def authorize_ungranted_send(config, *, lane, object_type, record_ids, record_do
 
     `record_ids`/`record_domains` are THIS SEND's records — never a wider batch — the
     same narrowing rule `authorize_send` already documents.
+
+    `cost_lane` (Phase 73 Plan 05, D-73-16): forwarded verbatim to `plan_grant`'s own
+    `cost_lane` — see `envelope()`'s docstring for why this is spelled `cost_lane`
+    rather than `lane` (this function's own ARMING `lane` argument already claims that
+    name). `None` (default) prices this send exactly as before this parameter existed.
     """
     proposal = plan_grant(
         config, lanes=[lane], object_type=object_type, record_ids=record_ids,
         record_domains=record_domains, allow_create=allow_create, label=label,
-        providers=providers, transport=transport, preflight=preflight, today=today)
+        providers=providers, transport=transport, preflight=preflight, today=today,
+        cost_lane=cost_lane)
     if proposal.get("kind") != PROPOSAL_KIND:
         # plan_grant's own refusal (authority, empty record set, an unresolved workflow,
         # or Guardrail A) — relayed verbatim, never re-worded into a second message.

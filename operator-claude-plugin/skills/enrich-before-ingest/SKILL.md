@@ -398,8 +398,13 @@ whatever seven columns happened to be in the source file.
        config, lanes=["enrichment", "contacts", "review"], object_type="contacts",
        record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
        label="enrich-before-ingest batch",
-       suggestion_companies=len(set(send_domains)))
+       suggestion_companies=len(set(send_domains)),
+       cost_lane="enrich-before-ingest")
    ```
+
+   `cost_lane="enrich-before-ingest"` (Phase 73 Plan 05, D-73-16): this lane keeps
+   today's contact rates and execution model unchanged — named explicitly so a future
+   change to `envelope()`'s omitted-lane default cannot silently retarget this skill.
 
    Show the operator `proposal["envelope"]["block"]` and `proposal["consequence"]` — the
    same arithmetic the explicit grant path already shows before its yes
@@ -566,7 +571,8 @@ whatever seven columns happened to be in the source file.
        write_grant.authorize_ungranted_send(
            cfg, lane="enrichment", object_type=object_type,
            record_ids=send_ids, record_domains=send_domains,
-           allow_create=allow_create, label="this run")
+           allow_create=allow_create, label="this run",
+           cost_lane="enrich-before-ingest")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or
@@ -1061,7 +1067,8 @@ whatever seven columns happened to be in the source file.
        write_grant.authorize_ungranted_send(
            cfg, lane="contacts", object_type="contacts",
            record_ids=send_ids, record_domains=send_domains,
-           allow_create=allow_create, label="this write")
+           allow_create=allow_create, label="this write",
+           cost_lane="enrich-before-ingest")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or

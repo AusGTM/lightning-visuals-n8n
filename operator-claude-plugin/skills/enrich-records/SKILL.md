@@ -209,8 +209,13 @@ says nothing per record, this lane reports at chunk granularity and says so.
        record_ids=send_ids, record_domains=send_domains, allow_create=allow_create,
        label="enrich-records batch",
        suggestion_companies=(
-           len(set(send_domains)) if object_type == "companies" else None))
+           len(set(send_domains)) if object_type == "companies" else None),
+       cost_lane=("companies" if object_type == "companies" else None))
    ```
+
+   `cost_lane` (Phase 73 Plan 05, D-73-16): `"companies"` prices Lusha at the measured
+   companies-match rate rather than the contacts first-time-enrich rate — `None` for a
+   contacts batch leaves today's already-correct contacts pricing unchanged.
 
    Show the operator `proposal["envelope"]["block"]` and `proposal["consequence"]` —
    the same arithmetic the explicit grant path already shows before its yes
@@ -451,7 +456,8 @@ says nothing per record, this lane reports at chunk granularity and says so.
        write_grant.authorize_ungranted_send(
            cfg, lane="enrichment", object_type=object_type,
            record_ids=send_ids, record_domains=send_domains,
-           allow_create=allow_create, label="this send")
+           allow_create=allow_create, label="this send",
+           cost_lane=("companies" if object_type == "companies" else None))
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or
