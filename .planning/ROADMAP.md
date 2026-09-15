@@ -470,3 +470,36 @@ Plans:
 **Wave 12** *(blocked on Wave 11 completion)*
 
 - [x] 72-12-PLAN.md — Gap-closure seal: idempotent regeneration, both suites, the live deploy + one armed CREATE read-back, CLAUDE.md updated to observed-closed (D-72-04, D-72-17, D-72-21)
+
+### Phase 73: GA fix list from stress attempt 2
+
+**Goal:** close every finding stress attempt 2 (2026-09-15, `tests/stress-tests/SESSION-2026-09-15.md`)
+left open, so attempt 3 runs A–F clean and the plugin + backend are GA-ready. Fix in the builder
+(`scripts/build_cloud_workflows.py`) and the plugin, regenerate JSON, suites green; the operator
+deploys + bounces disarmed, resets the portal, and re-runs per `tests/stress-tests/RUNBOOK.md`
+"Restart procedure". Findings, in fix order:
+
+| Id | Sev | What |
+| --- | --- | --- |
+| F-A6 | blocker | ingest `HubSpot Create` has no continue-on-error; one 409 duplicate aborts the batch, discards output, skips associations; creates land orphaned (exec `12454`) |
+| F-A5 | high | duplicate rows within a CSV not collapsed before create (the F-A6 trigger) |
+| F-E1 | high | review approve sends array candidates raw (`lv_content_type: ['unknown']`) → HubSpot 400 (exec `12502`) |
+| F-B7 | high | companies branch `domain EQ bare` misses `www.`-stored portal records → duplicate companies (RV, Wyong, Canberra) |
+| F-B3 | medium | freemail accepted as company domain (gmail company created) |
+| F-B5 | medium-high | plugin run report cannot see enrich/update outcomes |
+| F-A3r | medium | 250 ms ingest-search throttle leaves no headroom (1 residual 429 in 144 searches) → 300 ms |
+| F-A1/A2/B1/B6 | low-medium | cost envelope uses wrong lane rates/execution model; provider balances read `not_configured` |
+
+Out of scope: F-B2 (name + TLD variant duplicates, Perth Racing) stays partial-mitigation only unless
+a ruling lands during planning.
+
+**Gate:** stress attempt 3 A–F per RUNBOOK.md on the redeployed disarmed bodies; A and E must pass
+where attempt 2 failed/partialled. Nothing armed from Claude.
+
+**Requirements**: TBD — coverage by finding id (F-A6, F-A5, F-E1, F-B7, F-B3, F-B5, F-A3r, F-A1/A2/B1/B6).
+**Depends on:** Phase 72
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 73 to break down)

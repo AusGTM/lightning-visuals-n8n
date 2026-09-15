@@ -864,6 +864,8 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 
 ### Roadmap Evolution
 
+- Phase 73 added (2026-09-15): GA fix list from stress attempt 2 — F-A6, F-A5, F-E1, F-B7, F-B3, F-B5, F-A3r, F-A1/A2/B1/B6
+
 - Phase 72 added (2026-09-12): Enrichment extras land in HubSpot — from the four operator rulings at the D-71-06 gate (F71-5); depends on Phase 71
 
 - **Phase 71 added 2026-09-11: A held new person lands in HubSpot with one reply.** Operator
