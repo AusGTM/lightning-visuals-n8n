@@ -117,4 +117,7 @@ slug starts `uat-` (every fictitious row in the contacts CSV); companies from th
 are NOT in the snapshot and were created at/after the snapshot time (`--since` overrides);
 and contacts created since then that are associated with one of those companies (the real
 people suggest-contacts found). Rows 1–2 of the contacts CSV (`1251`, Busteed) are never
-selected — real emails, old `createdate`. Pass `--since <ISO>` to tighten the window.
+selected — real emails, old `createdate`. Pass `--since <ISO>` to tighten the window. A company the run created under a domain the rule
+refuses (freemail, social page) is invisible to the domain rule — name it with
+`--extra-company-id <id>` (repeatable; still guarded by createdate). Stage B 2026-09-15 created
+`288135240183` ("Country Racing Collective", domain `gmail.com`) this way.
