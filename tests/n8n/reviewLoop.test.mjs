@@ -112,6 +112,39 @@ test("reviewApply: absent/empty candidate JSON is a no-op, not a crash", () => {
   assert.equal(result.stale, false);
 });
 
+// --- (5) F-E1 array serialization (73-02, D-73-10) --------------------------------------
+//
+// normalizeEnumValue's documented multi-select contract preserves the container shape
+// passed in (array in -> array out). Execution 12502 sent that array straight to HubSpot's
+// PATCH body, which requires a semicolon-joined string, and the whole approve 400'd.
+
+test("reviewApply: a one-element array chosen_value on a multi-select enum serializes to a string, not an array", () => {
+  const candidateJson = JSON.stringify([
+    { field: "lv_content_type", current_value: null, chosen_value: ["unknown"], decision: "needs_review" },
+  ]);
+  const result = reviewApply(candidateJson, {});
+  assert.equal(result.canonicalPatch.lv_content_type, "unknown");
+  assert.equal(typeof result.canonicalPatch.lv_content_type, "string");
+});
+
+test("reviewApply: a multi-element array chosen_value serializes joined with a semicolon, in order", () => {
+  const candidateJson = JSON.stringify([
+    { field: "lv_content_type", current_value: null, chosen_value: ["live_broadcast", "streaming"], decision: "needs_review" },
+  ]);
+  const result = reviewApply(candidateJson, {});
+  assert.equal(result.canonicalPatch.lv_content_type, "live_broadcast;streaming");
+});
+
+test("reviewApply: an array element normalizeEnumValue refuses still yields invalid with an empty canonicalPatch, not a joined string", () => {
+  const candidateJson = JSON.stringify([
+    { field: "lv_content_type", current_value: null, chosen_value: ["not_a_real_content_type"], decision: "needs_review" },
+  ]);
+  const result = reviewApply(candidateJson, {});
+  assert.deepEqual(result.canonicalPatch, {}, "a refused element must never be silently joined into an accepted string");
+  assert.equal(result.invalid.length, 1);
+  assert.equal(result.invalid[0].field, "lv_content_type");
+});
+
 // --- Workflow wiring ---------------------------------------------------------------------
 
 test("the built workflow contains an Apply Review node reachable from a review-approved search, which requests hs_object_id + candidate fields' current values", () => {
