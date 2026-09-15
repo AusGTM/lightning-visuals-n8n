@@ -163,10 +163,24 @@ def test_build_credit_status_only_inbound_is_the_last_probe_in_the_chain():
 
 def test_build_credit_status_only_outbound_feeds_the_hubspot_count_search_chain():
     """Phase 27 Plan 01: Build Credit Status now feeds the four HubSpot count searches
-    (still sequential, never fanned out — D-14) rather than responding directly."""
+    (still sequential, never fanned out — D-14) rather than responding directly.
+
+    RECORDED EDIT — Phase 73 Plan 05 (F-B6, wiring gap fix): before this fix,
+    "HS Requested Companies Carry Merge" fanned from "ZoomInfo Usage Result Carry
+    Merge" — the item that FEEDS Build Credit Status, one hop too early — so
+    `balances` never reached this Merge and was silently lost for the rest of the
+    chain (backendStatusCredits.test.mjs's RED). The fix re-points that carry's
+    fan-in edge to "Build Credit Status" itself, which is what this test's ADDITIONAL
+    target pins: Build Credit Status now fans to the real next probe (unchanged) AND
+    to the carry Merge that re-attaches `balances` onto the row for the rest of the
+    chain — the SAME two-target carry idiom "Status Credit Request" already uses to
+    feed both "Lusha Usage" and "Lusha Usage Carry Merge" (see the D-14 sequential
+    tests above: D-14 governs the PROBE nodes' single inbound edge, never a node's
+    number of outbound edges)."""
     doc = _load()
     targets = [e["node"] for b in doc["connections"]["Build Credit Status"]["main"] for e in b]
-    assert targets == ["HS Requested Search (Companies)"]
+    assert set(targets) == {"HS Requested Search (Companies)", "HS Requested Companies Carry Merge"}
+    assert len(targets) == 2, "no duplicate edges to the same target"
 
 
 def test_build_status_only_outbound_is_respond_to_webhook():

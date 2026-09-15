@@ -679,6 +679,153 @@ def test_the_review_lane_is_grantable_with_flag_separation_intact(
     assert "ALLOW_HUBSPOT_REVIEW_WRITES" not in n8n_arming.DISPATCH_FLAGS
 
 
+# --- Phase 73 Plan 05 (D-73-16): the cost-pricing `lane` argument -----------------------
+#
+# NOT to be confused with `lanes`/`lane` above (the ARMING targets `plan_grant`/
+# `authorize_ungranted_send` already had — "enrichment"/"contacts"/"review", looked up in
+# `write_grant.LANES`). This is a SEPARATE, cost-pricing identity
+# ("contact-upload"/"companies"/"enrich-before-ingest") that controls which rate and
+# execution model `envelope()` prices a batch with — a grant can (and often does) still
+# name arming lanes independently of which cost lane it is priced as.
+
+HEADROOM_2500 = {
+    "allowance": 2500, "spent_sampled": 0, "remaining_sampled": 2500,
+    "sampled": True, "covers_full_window": True, "listing_exhausted": True,
+    "truncated_by_page_cap": False,
+}
+
+
+def _lane_config(**overrides):
+    return {
+        "n8n_url": "https://fake-tenant.n8n.cloud",
+        "webhook_secret": "fake-secret-for-tests-only",
+        "n8n_monthly_execution_allowance": 2500,
+        "max_records_per_chunk": 5,
+        **overrides,
+    }
+
+
+def _lane_envelope(config, *, object_type, record_ids, providers, lane, **kwargs):
+    """`envelope()` needs no transport at all when `headroom=` is supplied directly and
+    the batch prices no provider — the same trick test_write_grant_suggestion.py's own
+    `_envelope` helper uses."""
+    return write_grant.envelope(
+        config, object_type=object_type, record_ids=list(record_ids), record_domains=[],
+        providers=providers, cost_lane=lane, headroom=HEADROOM_2500, **kwargs)
+
+
+def test_envelope_contact_upload_lane_prices_zero_provider_credits_and_one_execution_per_post():
+    """RED first (D-73-16 / F-A1/F-A2): before this fix, `envelope()` had no `lane`
+    argument at all and priced every batch through `cost_guard.estimate_batch`, which
+    would have charged this all-Lusha, all-contacts batch a real per-contact rate and
+    projected `chunk_count + record_count` executions."""
+    figures = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane="contact-upload")
+
+    assert figures["provider_credits"] == {}, (
+        "contact-upload calls no provider — the batch must price at zero credits "
+        "regardless of which providers were named")
+    assert figures["anthropic_usd"] == 0.0, "contact-upload makes no model call either"
+    assert figures["chunk_count"] == 1, "3 records at a ceiling of 5 is one POST"
+    assert figures["projected_executions"] == 1, (
+        "one execution per POST — never chunk_count + record_count (that formula would "
+        "give 1 + 3 = 4 here)")
+
+
+def test_envelope_contact_upload_figure_equals_the_previews_figure_for_the_identical_send():
+    """The two call sites (this envelope and `preview_enrichment.tabular_cost_block`) must
+    never be able to disagree about the same contact-upload send again."""
+    import preview_enrichment
+
+    figures = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane="contact-upload")
+    preview_figure = preview_enrichment.zero_cost_estimate(3)
+
+    assert figures["provider_credits"] == preview_figure["provider_credits"]
+    assert figures["anthropic_usd"] == preview_figure["anthropic_usd"]
+    assert figures["anthropic_usd_per_record"] == preview_figure["anthropic_usd_per_record"]
+
+
+def test_envelope_companies_lane_prices_lusha_at_the_companies_match_rate_not_the_contacts_rate():
+    """RED first (D-73-16 / F-B1): a companies batch must never be priced at Lusha's
+    7-credit contacts first-time-enrich rate — it must use the measured 2-credit
+    companies-match rate. Deliberately passes the WRONG `object_type` ("contacts") to
+    prove `lane="companies"` is authoritative over a caller's mistaken object_type,
+    never merely trusting whatever was passed through."""
+    figures = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1"],
+        providers=["lusha"], lane="companies")
+
+    assert figures["object_type"] == "companies"
+    assert figures["provider_credits"]["lusha"]["credits"] == 2, (
+        "must be the measured companies-match rate (2 credits/company), never the "
+        "contacts first-time-enrich rate (7 credits/contact)")
+
+
+def test_envelope_enrich_before_ingest_lane_keeps_the_contact_rates_unchanged():
+    """D-73-16: enrich-before-ingest keeps today's contact rates and execution model —
+    this lane is a documented no-op, pinned so a future change cannot silently widen the
+    scope of this fix."""
+    with_lane = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane="enrich-before-ingest")
+    without_lane = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane=None)
+
+    assert with_lane["provider_credits"] == without_lane["provider_credits"]
+    assert with_lane["provider_credits"]["lusha"]["credits"] == 21, "7 credits/contact x 3"
+    assert with_lane["projected_executions"] == without_lane["projected_executions"]
+    assert with_lane["projected_executions"] == 4, "chunk_count (1) + record_count (3)"
+
+
+def test_envelope_refuses_an_unrecognised_cost_lane_rather_than_defaulting():
+    """An unrecognised lane must never fall through to a default price — that would
+    silently under-price whatever the caller actually meant."""
+    with pytest.raises(ValueError, match="bogus-lane"):
+        _lane_envelope(
+            _lane_config(), object_type="contacts", record_ids=["1"],
+            providers=["lusha"], lane="bogus-lane")
+
+
+def test_plan_grant_refuses_an_unrecognised_cost_lane_by_name(
+        granting_config, stub_module_transport_factory):
+    """The same refusal, at the `plan_grant` proposal boundary — a structured refusal
+    dict, never a raised exception, and before any transport call (mirrors the existing
+    unknown ARMING-lane refusal immediately above)."""
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = write_grant.plan_grant(
+        granting_config, lanes=["enrichment"], object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="the 2026-08-25 batch", cost_lane="bogus-lane", transport=transport)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert "bogus-lane" in result["detail"]
+    assert transport.calls == []
+
+
+def test_plan_grant_threads_the_cost_lane_through_to_the_envelope(
+        granting_config, stub_module_transport_factory):
+    """`plan_grant` must forward `cost_lane` to `envelope()` rather than swallowing it —
+    a contact-upload grant opened through `plan_grant` must show the same zero-cost
+    figures `envelope()` produces directly."""
+    transport = stub_module_transport_factory(_plan_reads())
+    config = {**granting_config, "max_records_per_chunk": 5}
+
+    proposal = write_grant.plan_grant(
+        config, lanes=["contacts"], object_type="contacts",
+        record_ids=["1", "2", "3"], record_domains=[], allow_create=False,
+        label="contact-upload batch", providers=["lusha"], cost_lane="contact-upload",
+        transport=transport)
+
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND, proposal
+    assert proposal["envelope"]["provider_credits"] == {}
+    assert proposal["envelope"]["projected_executions"] == 1
+
+
 # --- Phase 60: "a grant approves one flagged record", end to end -------------------------
 
 def test_a_review_decision_arms_and_authorizes_under_an_opened_review_grant(

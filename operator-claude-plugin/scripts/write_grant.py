@@ -51,11 +51,24 @@ import cost_guard
 import executions_client
 import n8n_arming
 import n8n_read
+import preview_enrichment
 import scheduled_arm
 import written_records
 
 KIND = "write_grant"
 PROPOSAL_KIND = "write_grant_proposal"
+
+# Phase 73 Plan 05 (D-73-16, F-A1/F-A2/F-B1): the COST-PRICING lane `envelope()`/
+# `plan_grant()` estimate a batch as. Deliberately a SEPARATE name and vocabulary from
+# `LANES` below (the ARMING targets a grant opens against — "enrichment"/"contacts"/
+# "review") — a grant names both independently, e.g. arming lanes ["contacts"] priced as
+# the "contact-upload" cost lane. Before this, `plan_grant`/`envelope()` had no notion of
+# a cost lane at all and priced every batch through the same provider-cost/chunk-
+# execution estimator regardless of which skill was asking (RESEARCH Pitfall 5).
+COST_LANE_CONTACT_UPLOAD = "contact-upload"
+COST_LANE_COMPANIES = "companies"
+COST_LANE_ENRICH_BEFORE_INGEST = "enrich-before-ingest"
+COST_LANES = {COST_LANE_CONTACT_UPLOAD, COST_LANE_COMPANIES, COST_LANE_ENRICH_BEFORE_INGEST}
 
 OPEN = "open"
 CLOSED = "closed"
@@ -414,8 +427,40 @@ def _post_transport(transport):
 
 def envelope(config, *, object_type, record_ids, record_domains, providers,
              transport=None, today=None, headroom=None,
-             suggestion_companies=None, suggestion_cap=None):
+             suggestion_companies=None, suggestion_cap=None, cost_lane=None):
     """The arithmetic an operator reads BEFORE the yes (GRANT-02).
+
+    `cost_lane` (D-73-16) is DELIBERATELY not spelled `lane` — this file already uses
+    `lane` pervasively for the ARMING lane a grant opens against (`covers()`,
+    `authorize_send()`, `check_before_send()`, `authorize_ungranted_send()`, and
+    `plan_grant`'s own `for lane in lane_names:` loop below). A plain `for lane in ...:`
+    loop is NOT scoped in Python — reusing that name here would have let the arming
+    loop's leftover value silently overwrite this one before it ever reached
+    `estimate_batch` (caught RED in this plan's own first implementation attempt).
+
+    `cost_lane=None` (default): prices exactly as before this parameter existed —
+    `object_type` drives the provider rate un-overridden, and the execution projection is
+    `chunk_count + record_count`. Passing one of `COST_LANES` overrides that:
+
+    * `"contact-upload"` — this lane calls no provider and makes no model call (the rows
+      go straight to `hubspot/contact-upload`; enriching them is a separate step with its
+      own preview and its own approval — `preview_enrichment.TABULAR_COST_REASON`). Priced
+      with the SAME zero-cost estimator that lane's preview already uses
+      (`preview_enrichment.zero_cost_estimate`), so the two call sites cannot price the
+      identical send differently again, and projected at one execution per POST
+      (`chunk_count` — never `chunk_count + record_count`, which would count a per-record
+      cost this lane does not incur).
+    * `"companies"` — forces `object_type="companies"` before pricing, so a companies
+      batch always reaches `cost_guard.estimate_batch` at the measured
+      `lusha_companies_match` rate (2 credits/company) rather than the contacts
+      first-time-enrich rate (7 credits/contact), regardless of what `object_type` the
+      caller passed in.
+    * `"enrich-before-ingest"` — a documented no-op: keeps today's contact rates and
+      execution model unchanged.
+
+    An unrecognised `cost_lane` raises `ValueError` rather than silently pricing at a
+    default — a wrong price in the operator's favour is worse than a loud refusal
+    (D-73-16).
 
     Returns `{figures..., "block": <markdown>}`. Every figure carries its basis in
     `basis`: `measured` for anything read off the dated rate table times a counted
@@ -445,6 +490,13 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     `ceiling_verdict` runs, so an over-budget round is refused before it starts
     (D-62-13) rather than discovered mid-session.
     """
+    if cost_lane is not None and cost_lane not in COST_LANES:
+        raise ValueError(
+            f"there is no cost lane called {cost_lane!r}. The priceable lanes are: "
+            f"{', '.join(sorted(COST_LANES))}. Refusing rather than pricing this batch "
+            f"at a default rate."
+        )
+
     ids = _normalise(record_ids)
     domains = _normalise(record_domains)
     # Worst case, deliberately: a grant naming 3 ids and 2 domains is priced as 5
@@ -452,8 +504,20 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     record_count = len(ids) + len(domains)
     providers = sorted({str(p).strip().lower() for p in (providers or []) if str(p).strip()})
 
+    # D-73-16: `cost_lane="companies"` is authoritative over a caller's `object_type` —
+    # never merely trusted-if-agreeing. This is what fixes F-B1 regardless of whether
+    # some upstream caller ever mismatched the two.
+    if cost_lane == COST_LANE_COMPANIES:
+        object_type = "companies"
+
     rates = cost_guard.load_rates()
-    estimate = cost_guard.estimate_batch(record_count, object_type, providers, rates)
+    if cost_lane == COST_LANE_CONTACT_UPLOAD:
+        # Reuses the SAME zero-cost estimator preview_enrichment.tabular_cost_block()
+        # already applies for this identical lane (RESEARCH Pitfall 5) — two call sites
+        # pricing the same send can no longer drift apart.
+        estimate = preview_enrichment.zero_cost_estimate(record_count)
+    else:
+        estimate = cost_guard.estimate_batch(record_count, object_type, providers, rates)
 
     balances = {}
     if estimate.get("provider_credits"):
@@ -486,7 +550,17 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
         chunk_count = chunking.plan_chunks(
             {"record_ids": ids + domains, "object_type": object_type},
             chunk_record_ceiling).chunk_count
-        executions = chunk_count + record_count
+        if cost_lane == COST_LANE_CONTACT_UPLOAD:
+            # D-73-16/F-A2: one execution per POST — never `chunk_count + record_count`,
+            # which is the per-record-search cost model the provider-driven lanes incur
+            # and this lane does not. No separate "association hop" execution count is
+            # tracked anywhere in this codebase today (the association PUT runs inside
+            # the same n8n execution as the create, not as a further one) — if a future
+            # lane ever dispatches an association as its own execution, its count is
+            # added here, not folded into `chunk_count`.
+            executions = chunk_count
+        else:
+            executions = chunk_count + record_count
     except chunking.ChunkPlanError:
         executions_basis = UNCONFIGURED
 
@@ -962,7 +1036,7 @@ def split_for_allowance(config, *, object_type, spec=None, record_ids=None,
 def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_create,
                label, providers=None, transport=None, preflight=None, today=None,
                override=False, override_reason=None,
-               suggestion_companies=None, suggestion_cap=None):
+               suggestion_companies=None, suggestion_cap=None, cost_lane=None):
     """Compose a PROPOSAL for a write grant. Reads only — never mutates anything.
 
     Refuses, in this order and before returning anything: an unauthorized config, an
@@ -1046,6 +1120,16 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
             f"a write grant must name at least one lane. The grantable lanes are: "
             f"{', '.join(sorted(LANES))}.")
 
+    # D-73-16: the COST-pricing lane (`cost_lane` — deliberately not `lane`, see
+    # `envelope()`'s docstring for why that name is unsafe in this function), refused
+    # here as a structured proposal (never a raised exception — this is a user-facing
+    # `plan_grant` refusal, mirroring the ARMING-lane refusal just above) and before any
+    # transport call.
+    if cost_lane is not None and cost_lane not in COST_LANES:
+        return _refusal(
+            f"there is no cost lane called {cost_lane!r}. The priceable lanes are: "
+            f"{', '.join(sorted(COST_LANES))}.")
+
     ids = _normalise(record_ids)
     domains = _normalise(record_domains)
     if not ids and not domains:
@@ -1098,7 +1182,8 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
         providers=providers if providers is not None
         else (config or {}).get("enrichment_providers"),
         transport=transport, today=today, headroom=headroom,
-        suggestion_companies=suggestion_companies, suggestion_cap=suggestion_cap)
+        suggestion_companies=suggestion_companies, suggestion_cap=suggestion_cap,
+        cost_lane=cost_lane)
 
     # Phase 57 / D-57-01 / RUN-05: the refuse-before-starting check, computed from the
     # SAME headroom sample the envelope was just built from (a refusal still carries the
