@@ -3156,8 +3156,23 @@ return $input.all().map((it) => {
     return { json: { ...merged, existingRecord: {}, lookup_failed: true, num_associated_contacts: null } };
   }
   let existingRecord = {};
+  // D-73-20 (F-B7 total > 1): the [bare, www.bare] IN search can return BOTH stored
+  // forms for one company. Prefer the hit whose stored domain is the bare request
+  // form; otherwise take results[0] — the same take-the-first tolerance this branch
+  // already has for a name-search collision. Never a review route for this case; the
+  // note names both ids so the choice is auditable (surfaced onto gate.reason by
+  // "Company Gate").
+  let domain_match_note = null;
   if (Array.isArray(merged.results)) {
-    if (merged.results.length) {
+    if (merged.results.length > 1) {
+      const wanted = merged.identity_keys && merged.identity_keys.domain;
+      const bareHit = wanted && merged.results.find((r) => (r.properties || {}).domain === wanted);
+      const chosen = bareHit || merged.results[0];
+      const otherIds = merged.results.map((r) => r.id).filter((id) => id !== chosen.id);
+      existingRecord = { ...(chosen.properties || {}), hs_object_id: chosen.id };
+      domain_match_note = "domain search matched multiple companies (" +
+        [chosen.id, ...otherIds].join(", ") + "); preferring " + chosen.id;
+    } else if (merged.results.length === 1) {
       const first = merged.results[0];
       existingRecord = { ...(first.properties || {}), hs_object_id: first.id };  // search envelope
     }
@@ -3165,7 +3180,8 @@ return $input.all().map((it) => {
     existingRecord = { ...merged.properties, hs_object_id: merged.id };          // single object
   }
   return { json: { ...merged, existingRecord, lookup_failed: false,
-    num_associated_contacts: _numAssociatedContacts(existingRecord) } };
+    num_associated_contacts: _numAssociatedContacts(existingRecord),
+    ...(domain_match_note ? { domain_match_note } : {}) } };
 });
 """
 
@@ -3208,16 +3224,33 @@ return $input.all().map((it) => {
   if (row.lookup_failed === true || existing.hs_object_id) return { json: row };
   const wanted = String((row.identity_keys && row.identity_keys.companyName) || "").trim().toLowerCase();
   if (!wanted) return { json: row };
-  if (error) return { json: row };
+  // D-73-22: a name-only row (no domain — a domain-present row already has a legitimate
+  // identity to create from, see companyNameFallbackFlow.test.mjs's own precedent) is the
+  // shape this outcome stamp is for. A genuine HTTP error on the name search itself is an
+  // unknown, not an absence — stamp lookup_failed so Company Gate's pre-existing
+  // fail-closed override (create -> skip) applies, with its own existing reason
+  // untouched, exactly like a failed DOMAIN lookup already does.
+  const nameOnly = !(row.identity_keys && row.identity_keys.domain);
+  if (error) {
+    return { json: nameOnly ? { ...row, lookup_failed: true } : row };
+  }
   const hits = (Array.isArray(results) ? results : []).filter(
     (r) => r && r.id &&
       String((r.properties || {}).name || "").trim().toLowerCase() === wanted
   );
-  if (hits.length !== 1) return { json: row };
-  return { json: { ...row,
-    existingRecord: { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) },
-    company_match_basis: "name",
-  }};
+  if (hits.length === 1) {
+    return { json: { ...row,
+      existingRecord: { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) },
+      company_match_basis: "name",
+    }};
+  }
+  if (nameOnly) {
+    return { json: { ...row,
+      name_search_outcome: hits.length === 0 ? "zero_hits" : "many_hits",
+      name_search_hit_count: hits.length,
+    }};
+  }
+  return { json: row };
 });
 """
 
@@ -3291,6 +3324,11 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   const RECOMPUTE_REQUESTED = row.recompute === true;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
   let action = gate.action;
+  // D-73-20: a two-hit domain resolution is never a review route — surface the choice
+  // (both ids) onto the reason that already rides to the caller, so it is auditable.
+  if (row.domain_match_note) {
+    gate.reason = row.domain_match_note + (gate.reason ? " -- " + gate.reason : "");
+  }
   // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
   if (row.lookup_failed === true && action === "create") action = "skip";
   // Phase 47.5 (RECOMP-01) — exactly two mappings, and only under the request-level intent
@@ -3311,6 +3349,21 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
         "a recompute was requested for a company that did not resolve to an existing " +
         "record — refused rather than created (" + gate.reason + ")";
     }
+  }
+  // D-73-22: a name-only row (no domain) whose exact-name search did not resolve to
+  // exactly one company is neither a duplicate risk nor a genuine new-company case — it
+  // is missing the one identity anchor (domain) that would let either be answered safely.
+  // Never create (risks the duplicate the ingest lane's own dedupe already refuses to
+  // guess at) and never skip (there is nothing here to skip). Ordered AFTER the
+  // lookup_failed and recompute overrides above: a genuine transport error keeps its own
+  // existing reason untouched, and a recompute request that resolved to nothing stays
+  // `recompute_refused` rather than being reclassified — this only fires when the
+  // verdict is STILL "create".
+  if (row.name_search_outcome && action === "create") {
+    action = "review";
+    gate.reason = row.name_search_outcome === "zero_hits"
+      ? "name-only row: no existing company matched by exact name; no domain — supply one to create"
+      : `name-only row: ${row.name_search_hit_count} companies share this exact name, target could not be isolated; no domain — supply one`;
   }
   return { json: { ...row, gate, action } };
 });
