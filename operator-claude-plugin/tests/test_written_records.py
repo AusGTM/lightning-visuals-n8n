@@ -163,7 +163,9 @@ def test_the_eleven_real_action_values_are_extracted_from_the_builder_not_hardco
     there fails this test in the client, which is the point. Phase 70 Plan 03 Task 2
     (D-70-07) added `list_expansion_refused` and `scale_up_dispatched`, "Build Refusal
     Row"'s two shapes; Phase 70 Plan 13 (D-70-24) deleted the fan-out lane and with it
-    the second of those, leaving eleven."""
+    the second of those, leaving eleven. Phase 73 Plan 06 Task 3 (D-73-01) added a
+    twelfth, "Build Create Failure Row"'s own `create_failed` — the test name is kept
+    (renaming it is not the point the test makes) but the count is now twelve."""
     extracted = _action_literals_from_builder()
     assert extracted == set(written_records.ACTION_TO_OUTCOME) | written_records.WRITE_ACTIONS
 
@@ -171,10 +173,10 @@ def test_the_eleven_real_action_values_are_extracted_from_the_builder_not_hardco
 @pytest.mark.parametrize("action", [
     "create", "update", "enrich", "write_blocked", "review", "needs_match_review",
     "research_failed", "recompute_refused", "skip", "proposed",
-    "list_expansion_refused",
+    "list_expansion_refused", "create_failed",
 ])
 def test_every_one_of_the_eleven_real_actions_is_exercised(action):
-    """Non-circular per-value exercise — the eleven literals above are typed here only to
+    """Non-circular per-value exercise — the literals above are typed here only to
     drive the call, not to assert what the mapping table says; the actual mapping
     assertions live in the more specific tests above and the builder-extraction test."""
     entry = written_records.classify_item({"action": action, "hs_object_id": "999"})

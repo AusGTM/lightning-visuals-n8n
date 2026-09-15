@@ -187,8 +187,11 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     # rather than sharing the association lane's, because on an armed batch with a mixed
     # verdict the zero-hop refusal would beat the permitted row's multi-hop association
     # to a shared input and the Merge would fire and lock without it (walker-proven,
-    # tests/n8n/writeGateShape.test.mjs's armed-mixed case).
-    assert ingest_merge["parameters"]["numberInputs"] == 5
+    # tests/n8n/writeGateShape.test.mjs's armed-mixed case). Phase 73 Plan 06 Task 3
+    # (D-73-01) adds a SIXTH: "Build Create Failure Row"'s own contribution — the
+    # create-error lane's report, reached the same way "Set Review"'s own contribution
+    # is (one producer, its own input, never a share of another lane's).
+    assert ingest_merge["parameters"]["numberInputs"] == 6
 
     combine_merges = {n["name"]: n for n in merges if n["parameters"]["mode"] == "combine"}
     # Every per-item HTTP hop this lane carries a row across — Phase 70 Plan 02 Task 3's

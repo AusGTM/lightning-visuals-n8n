@@ -293,18 +293,35 @@ export function runNode(node, items, ctx) {
     }
     const raw = typeof stub === "function" ? stub(items, node) : stub;
     // Phase 73 Plan 06 Task 2 (D-73-19): a node built with `onError:
-    // "continueErrorOutput"` gets a SECOND output when its stub is shaped
-    // `{ success: [...], error: [...] }` — mirrors the `n8n-nodes-base.if` branch
-    // directly above (two named output arrays instead of one). A plain array stub (the
-    // shape every existing test uses) still yields exactly one output regardless of
-    // `onError` — only the `{success, error}` object shape opts in, so no existing
-    // stub's meaning changes.
-    if (node.onError === "continueErrorOutput" && raw && !Array.isArray(raw) &&
+    // "continueErrorOutput"` ALWAYS has two outputs — mirrors the `n8n-nodes-base.if`
+    // branch directly above. A stub shaped `{ success: [...], error: [...] }` drives
+    // both explicitly; a PLAIN ARRAY stub (the shape every pre-existing test uses) is
+    // treated as `{ success: <that array>, error: [] }` — the second output exists but
+    // is empty, never a MISSING output.
+    //
+    // [Rule 1 - Bug, found running Task 3's own suite] the ORIGINAL version of this
+    // branch made a plain-array stub yield exactly ONE output (no second branch at
+    // all), reasoned as "no existing stub's meaning changes". That was true for every
+    // stub in isolation, but it also meant the walker could never model
+    // "alwaysOutputData rescues an otherwise-silent second output" on such a node —
+    // exactly the mechanism Task 3's own graph change needs (an empty error branch
+    // must still deliver a marker so a downstream Merge completes NORMALLY instead of
+    // needing the v1 end-of-run drain, which a separate append Merge sharing an
+    // instant sentinel input can race and lose — `ingestWidenedFieldsFlow.test.mjs`'s
+    // pre-existing single-create tracer tests caught this live). This is STILL
+    // observably unchanged for every plain-array stub with no `alwaysOutputData`: an
+    // empty array under v1 makes NO delivery either way (`propagate`'s own
+    // `outItems.length === 0` early return, below), so nothing downstream that ignores
+    // the error branch ever sees a difference.
+    if (node.onError === "continueErrorOutput") {
+      const shaped = (raw && !Array.isArray(raw) &&
         (Object.prototype.hasOwnProperty.call(raw, "success") ||
-         Object.prototype.hasOwnProperty.call(raw, "error"))) {
+         Object.prototype.hasOwnProperty.call(raw, "error")))
+        ? raw
+        : { success: raw, error: [] };
       return { outputs: [
-        (raw.success || []).map(unwrapJson),
-        (raw.error || []).map(unwrapJson),
+        (shaped.success || []).map(unwrapJson),
+        (shaped.error || []).map(unwrapJson),
       ] };
     }
     return { outputs: [(raw || []).map(unwrapJson)] };

@@ -181,6 +181,12 @@ ACTION_TO_OUTCOME = {
     # node's second shape, the fan-out dispatch confirmation, along with the lane that
     # produced it — no backend this repo builds can emit that action any more.
     "list_expansion_refused": FAILED,
+    # Phase 73 Plan 06 Task 3 (D-73-01, F-A6): a HubSpot rejection of a create the write
+    # gate already permitted -- "Build Create Failure Row"'s own row shape. Never GATED
+    # (the gate did not refuse this -- it never reached a gate at all) and never HELD
+    # (there is nothing queued for review; the row simply never landed) -- FAILED is the
+    # honest word: the create was attempted and HubSpot itself said no.
+    "create_failed": FAILED,
 }
 
 # The review endpoint's seven outcome words (review_decision.OUTCOMES), mapped onto

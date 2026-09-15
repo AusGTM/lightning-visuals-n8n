@@ -190,12 +190,24 @@ test("splice_carry_merge_after's mechanism retired every by-name read on this la
      "HubSpot Associate Company"].includes(n.name));
   assert.equal(httpNodes.length, 7, "every HTTP hop this task carries a row across is present");
   for (const httpNode of httpNodes) {
-    const targets = (wf.connections[httpNode.name]?.main || []).flatMap(
-      (outs) => (outs || []).map((c) => c.node));
-    assert.equal(targets.length, 1, `${httpNode.name} has exactly one outbound edge`);
-    const target = wf.nodes.find((n) => n.name === targets[0]);
-    assert.equal(target.type, "n8n-nodes-base.merge",
-      `${httpNode.name}'s only consumer must be a carry merge, not a by-name reader`);
+    // Phase 73 Plan 06 Task 3 (D-73-01): "HubSpot Create" alone now has TWO outbound
+    // edges — its success output (unchanged) and its NEW error output
+    // (`onError: "continueErrorOutput"`), both feeding "Create Carry Merge" (one
+    // producer per input, never a fan-out to more than one consumer). The assertion's
+    // real intent — no untracked fan-out, every consumer a carry merge, never a
+    // by-name reader — is unchanged; only the expected EDGE COUNT for this one node
+    // moves from 1 to 2, each edge asserted individually.
+    const outputs = wf.connections[httpNode.name]?.main || [];
+    const expectedOutputs = httpNode.name === "HubSpot Create" ? 2 : 1;
+    assert.equal(outputs.length, expectedOutputs,
+      `${httpNode.name} has exactly ${expectedOutputs} output branch(es)`);
+    for (const outs of outputs) {
+      assert.equal((outs || []).length, 1,
+        `${httpNode.name}: each output branch has exactly one outbound edge`);
+      const target = wf.nodes.find((n) => n.name === outs[0].node);
+      assert.equal(target.type, "n8n-nodes-base.merge",
+        `${httpNode.name}'s only consumer must be a carry merge, not a by-name reader`);
+    }
   }
 });
 

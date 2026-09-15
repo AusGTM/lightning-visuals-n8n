@@ -752,6 +752,52 @@ PAIR_CREATE_OUTCOME_JS = inline("pairCreateOutcome.js") + r"""
 return pairCreateOutcome($input.all().map((it) => it.json)).map((row) => ({ json: row }));
 """
 
+# Phase 73 Plan 06 Task 3 (D-73-01, F-A6): fed by "Pair Create Outcome To Row"'s FULL
+# output (a fan-out — the SAME delivery "Build Association Request Merge" receives),
+# never by "HubSpot Create"'s error output directly — it needs the pair node's own
+# classification to tell a genuine rejection apart from a carried row or a success, so it
+# cannot sit upstream of it. One producer, downstream of the classification, so it can
+# actually tell whether the batch had any rejections at all — this is what lets it emit
+# its OWN sentinel marker on the common (zero-rejection) case rather than relying on a
+# SEPARATE starved-lane sentinel, which would be a second producer on the same "Ingest
+# Merge Response" input and double-fire the lane under v1 (CLAUDE.md §13.0.3).
+BUILD_CREATE_FAILURE_ROW_JS = r"""// Build Create Failure Row — the create-error lane's own contribution to "Ingest
+// Merge Response", the same way "Set Review"'s own contribution reaches it.
+//
+// T-73-06-01 (information disclosure): an n8n HTTP error item can carry the OUTBOUND
+// request configuration, including its Authorization header. This reads at most three
+// named fields off the raw error object — message, description, a status code — with a
+// fixed fallback string when none is present. It never serializes the whole error
+// object into a row, a response, or a fixture.
+function _createFailureReason(err) {
+  err = err || {};
+  const nested = err.error || {};
+  const message = [err.message, nested.message, err.description, nested.description]
+    .find((v) => typeof v === "string" && v.length > 0);
+  const statusCode = err.statusCode || err.httpCode || nested.statusCode || nested.httpCode || null;
+  if (message) return statusCode ? `${message} (HTTP ${statusCode})` : message;
+  return "HubSpot rejected this create — no error detail available";
+}
+
+const allItems = $input.all().map((it) => it.json).filter(Boolean);
+const errors = allItems.filter((row) => row.create_outcome === "error");
+
+if (errors.length === 0) {
+  return [{ json: { __SENTINEL_MARKER_KEY__: true } }];
+}
+
+return errors.map((row) => ({ json: {
+  action: "create_failed",
+  outcome: "create_failed",
+  contact_id: null,
+  hs_object_id: null,
+  email: String(row.email || (row.properties && row.properties.email) || "").toLowerCase() || null,
+  company_id: row.company_id || null,
+  company_match: row.company_match || null,
+  reason: _createFailureReason(row.create_error),
+}}));
+""".replace("__SENTINEL_MARKER_KEY__", SENTINEL_MARKER_KEY)
+
 BUILD_INGEST_RESPONSE = ROW_IDENTITY_KEYS_JS + r"""// Build Ingest Response — the lane's per-row report, now read from the settled
 // execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.
 // Phase 70 Plan 02 (D-70-01/D-70-04): sits behind "Ingest Merge Response", a
@@ -799,6 +845,19 @@ for (const row of blocked) {
   if (row.hs_object_id) blockedByContactId[String(row.hs_object_id)] = row;
   if (row.email) blockedByEmail[String(row.email).toLowerCase()] = row;
 }
+// Phase 73 Plan 06 Task 3 (D-73-01): "Build Create Failure Row"'s own contribution — a
+// create the write gate ALLOWED but HubSpot itself rejected (a distinct question from
+// `blocked` above, which is a gate refusal; a row can never be both, since a row only
+// reaches "HubSpot Create" once its gate has already permitted it). Joined by email
+// only — this lane mints no `row_id` (D-73-21) and a create's `hs_object_id` is null
+// pre-write by construction, so email is the ONE identity BUG-19 guarantees is present
+// on both the decided snapshot and the failure row.
+const failed = allItems.filter((row) =>
+  row._decided_snapshot !== true && row.action === "create_failed");
+const failedByEmail = {};
+for (const row of failed) {
+  if (row.email) failedByEmail[String(row.email).toLowerCase()] = row;
+}
 const byRowId = {};
 const byContactId = {};
 const byEmail = {};
@@ -820,6 +879,7 @@ return decided.map((row) => {
   const block = (row.row_id && blockedByRowId[String(row.row_id)]) ||
                 (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||
                 (email && blockedByEmail[email]) || null;
+  const fail = (email && failedByEmail[email]) || null;
   let association;
   if (!row.company_id) {
     association = "none";
@@ -829,17 +889,18 @@ return decided.map((row) => {
     association = "not_confirmed";  // never reached the write gate, or HubSpot refused it
   }
   return { json: {
-    action: block ? "write_blocked" : row.action,
-    outcome: block ? "write_blocked" : (row.outcome || null),
+    action: fail ? "create_failed" : (block ? "write_blocked" : row.action),
+    outcome: fail ? "create_failed" : (block ? "write_blocked" : (row.outcome || null)),
     contact_id: contactId,
     hs_object_id: contactId,
     email: email || null,
     company_id: row.company_id || null,
     company_match: row.company_match || null,
     // A refused write never reached the association lane either — one verdict covers
-    // both (D-70-15), so it cannot report "associated".
-    association: block && association === "associated" ? "not_confirmed" : association,
-    reason: (block && block.write_blocked_reason) || row.reason || null,
+    // both (D-70-15), so it cannot report "associated". A rejected create is the same
+    // story from HubSpot's own side, not the gate's — same rule applies.
+    association: (fail || (block && association === "associated")) ? "not_confirmed" : association,
+    reason: (fail && fail.reason) || (block && block.write_blocked_reason) || row.reason || null,
     email_status: row.email_status || null,
     // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`
     // pre-write. Closes the join for every lane whose rows carry `row_id` into the
@@ -1513,7 +1574,12 @@ return $input.all().map((it) => {
     # Same BUG 13 shape as the enrichment lane's create node: `additionalFields: {}`
     # discarded the patch, and `$json.properties.email` can never resolve because `email`
     # is manual_protected and never promotes into the patch.
-    nodes.append(_hs_http_create_node("HubSpot Create", "contacts", x + 440, y - 20))
+    # D-73-01 (Phase 73 Plan 06 Task 3, F-A6): `onError: "continueErrorOutput"` — a
+    # rejected create (duplicate email, execution 12454) leaves on this node's OWN
+    # error output and becomes a `create_failed` refusal row, instead of throwing and
+    # discarding the whole batch's remaining creates/associations/response.
+    nodes.append(_hs_http_create_node("HubSpot Create", "contacts", x + 440, y - 20,
+                                      on_error="continueErrorOutput"))
 
     # F1's original fix made "Set Review" a dead end that "Build Ingest Response" never
     # needed to read (it reconstructed everything from "Decide Action" by name instead).
@@ -1886,6 +1952,59 @@ return anyNonWrite ? [] : [{}];
     _pair_create_outcome_node = next(
         n for n in nodes if n["name"] == "Pair Create Outcome To Row")
     _pair_create_outcome_node["parameters"]["jsCode"] = PAIR_CREATE_OUTCOME_JS
+
+    # Phase 73 Plan 06 Task 3 (D-73-01, F-A6): the create node's error output feeds
+    # "Create Carry Merge" directly at a NEW third input — one producer, no intermediate
+    # classifier (the pair node right after it does the classifying, per its own
+    # docstring). Deliberately NO starved-lane sentinel here: `_add_starved_lane_
+    # sentinel` evaluates its SOURCE's own rows, which for this input would be the
+    # PRE-write rows — it cannot see an HTTP outcome, so it would have to fire
+    # unconditionally, becoming a SECOND producer on this input, which the write-gate
+    # refusal lane's own docstring already documents as the mechanism that fabricates a
+    # combined row on a `combineByPosition` merge and double-fires an append one.
+    #
+    # [Rule 1 - Bug, found running this task's own suite] the plan's own must-have
+    # ("the v1 end-of-run drain fires Create Carry Merge once on whichever inputs
+    # arrived, so the error input needs no sentinel") is true in ISOLATION but was
+    # incomplete: it never delivering in the common (zero-rejection) case makes THIS
+    # merge itself drain-only rather than normally-completing, and that timing change
+    # propagates downstream. "Build Association Request Merge" (fed by this merge via
+    # "Pair Create Outcome To Row", and separately by an ALWAYS-immediate write-gate
+    # sentinel on its Update-lane input) is ALSO an append merge with a v1
+    # required-input count of 1 — the walker's own drain caps at ONE drained run per
+    # Merge (MN-01), so once the sentinel's immediate delivery lets it drain with only
+    # the Update-side input filled, the LATER real Create-side delivery (arriving only
+    # once Create Carry Merge's own drain fires and propagates through the pair node)
+    # opens a SECOND, now-undrainable pending run — the association is silently lost.
+    # Observed directly: `ingestWidenedFieldsFlow.test.mjs`'s pre-existing single-create
+    # tracer tests (D-72-01/D-72-04), previously green, failed with
+    # `merge_pending_runs_undrained` on exactly this shape once the third input existed.
+    #
+    # The fix is `alwaysOutputData` — a DIFFERENT, already-established mechanism in this
+    # exact function (`set_always_output_data`, below) — not a second producer: it makes
+    # "HubSpot Create"'s OWN sole error-output edge deliver an empty marker whenever the
+    # branch would otherwise be silent, so "Create Carry Merge" completes NORMALLY (not
+    # via drain) in the common case, exactly as it did before this plan. A marker with
+    # no `action` and no `id` classifies as an "error" item with an uncomputable
+    # identity key (`pairCreateOutcome.js`'s own `identityKey` returns null for `{}`),
+    # so it joins to nothing and is silently ignored — harmless on every batch shape,
+    # including an all-rejected batch where the SUCCESS branch is the one left empty.
+    _append_merge_input(nodes, conns, "Create Carry Merge", "HubSpot Create", source_out_idx=1)
+    set_always_output_data(nodes, ["HubSpot Create"])
+
+    # "Build Create Failure Row" needs the pair node's OWN classification (it must tell
+    # a genuine HubSpot rejection apart from a carried row or a success), so it cannot
+    # sit upstream of it — fed by a SECOND fan-out edge off "Pair Create Outcome To
+    # Row"'s single output, the same "single-producer node, safe to fan out further"
+    # pattern "Decide Action Snapshot" already uses on this lane. One producer,
+    # downstream of the classification, so it can actually tell whether the batch had
+    # any rejections — it emits its OWN sentinel marker on the zero-rejection case
+    # rather than relying on a separate starved-lane sentinel, which would be a SECOND
+    # producer on "Ingest Merge Response"'s new input.
+    nodes.append(code_node("Build Create Failure Row", BUILD_CREATE_FAILURE_ROW_JS, 40, 560))
+    conns["Pair Create Outcome To Row"]["main"][0].append(
+        {"node": "Build Create Failure Row", "type": "main", "index": 0})
+    _append_merge_input(nodes, conns, ingest_merge_response, "Build Create Failure Row")
 
     return {
         "id": "LVcontactIngestCloud01",
@@ -9524,7 +9643,7 @@ def _hs_http_patch_node(name, resource, x, y):
     )
 
 
-def _hs_http_create_node(name, resource, x, y):
+def _hs_http_create_node(name, resource, x, y, on_error=None):
     """Credential-bound httpRequest replacement for the native hubspot node's `create`
     operation — BUG 13, the create-side twin of BUG 11, found 2026-07-29 while auditing
     the write lane before exercising creates live. 16.7-01 deliberately left the create
@@ -9546,16 +9665,24 @@ def _hs_http_create_node(name, resource, x, y):
 
     POSTing `{"properties": $json.properties}` to the collection endpoint fixes both: the
     real patch is sent, and nothing outside the Decide output's own shape is referenced.
-    Node NAMES are preserved so NODE_CREDENTIAL_MAP binding by name keeps working, and
-    `on_error=None` is retained for the same reason as the PATCH node — a rejected write
-    must fail its execution rather than flowing on as a healthy item."""
+    Node NAMES are preserved so NODE_CREDENTIAL_MAP binding by name keeps working.
+
+    `on_error` (Phase 73 Plan 06 Task 3, D-73-01): defaults to `None` — the PATCH node's
+    own rule (a rejected write must fail its execution rather than flow on as a healthy
+    item, BUG 11) still holds for every call site that does not pass this. The ingest
+    lane's own call site passes `on_error="continueErrorOutput"`: a duplicate-email 409
+    there must cost its own row, not the whole batch (F-A6) — the failed item leaves on
+    the node's SECOND (error) output, a distinct branch this function never routes
+    anywhere by itself; the caller wires it. Never `"continueRegularOutput"` — that would
+    let a rejected write flow on as a healthy item, the exact BUG 11 family this
+    function's docstring already forbids."""
     if resource not in ("contacts", "companies"):
         raise ValueError(f"_hs_http_create_node only supports contacts/companies — got resource={resource!r}")
     url = "https://api.hubapi.com/crm/v3/objects/" + resource
     body = "={{ JSON.stringify({ properties: $json.properties }) }}"
     return _http_node(
         name, url, x, y,
-        auth="hubspot", json_body=body, method="POST", on_error=None,
+        auth="hubspot", json_body=body, method="POST", on_error=on_error,
     )
 
 
