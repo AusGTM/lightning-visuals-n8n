@@ -738,6 +738,20 @@ return $input.all().map((it) => {
 }).filter(Boolean);
 """
 
+# Phase 73 Plan 06 Task 1 (D-73-01, F-A6, 73-RESEARCH.md Pitfall 0): "Create Carry Merge"
+# is append-mode now (see this constant's own call site) — it concatenates whatever each
+# input delivered rather than pairing item i of the response array with item i of the
+# carried-row array, so a shrinking response array (a create rejected on Task 3's error
+# output, or simply fewer responses than rows) can never shift every later pairing out of
+# alignment. This node performs the join `combineByPosition` used to do for free.
+PAIR_CREATE_OUTCOME_JS = inline("pairCreateOutcome.js") + r"""
+
+// --- n8n wrapper: identity-join HubSpot Create's outcome back to its OWN carried row ---
+// No $() by-name read — every item ("Create Carry Merge"'s carried rows, success
+// responses, and — once Task 3 wires it — error items) arrives on $input.
+return pairCreateOutcome($input.all().map((it) => it.json)).map((row) => ({ json: row }));
+"""
+
 BUILD_INGEST_RESPONSE = ROW_IDENTITY_KEYS_JS + r"""// Build Ingest Response — the lane's per-row report, now read from the settled
 // execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.
 // Phase 70 Plan 02 (D-70-01/D-70-04): sits behind "Ingest Merge Response", a
@@ -1851,6 +1865,27 @@ return anyNonWrite ? [] : [{}];
     # since it always receives at least the count it was given), and "HubSpot Associate
     # Company" never runs with zero input regardless of this flag.
     set_always_output_data(nodes, ["Set Review", "HubSpot Associate Company"])
+
+    # Phase 73 Plan 06 Task 1 (D-73-01, F-A6, 73-RESEARCH.md Pitfall 0): "Create Carry
+    # Merge" must survive item-count SHRINKAGE once Task 3 gives "HubSpot Create" an
+    # error output — combineByPosition would pair response i with carried row i and
+    # silently mis-associate everything after the first gap. Switch it to append
+    # (concatenate whatever each input delivers, never pair by position) and interpose
+    # "Pair Create Outcome To Row" (identity join, n8n/code/pairCreateOutcome.js) between
+    # it and "Build Association Request Merge" — the SAME two edges
+    # `splice_carry_merge_after`/`splice_merge_before` already wired above, only their
+    # SHAPE changes. Run AFTER the write-gate refusal loop above: that loop's
+    # `_merge_input_index(conns, "Create Carry Merge", build_association_request_merge)`
+    # lookup needs "Create Carry Merge" -> `build_association_request_merge` to still be
+    # a DIRECT edge when it runs; retargeting it earlier would break that lookup.
+    _create_carry_merge = next(n for n in nodes if n["name"] == "Create Carry Merge")
+    _create_carry_merge["parameters"] = {"mode": "append", "numberInputs": 2}
+    _retarget_merge_edge_through_passthrough(
+        nodes, conns, "Create Carry Merge", 0, build_association_request_merge,
+        "Pair Create Outcome To Row", 40, 700)
+    _pair_create_outcome_node = next(
+        n for n in nodes if n["name"] == "Pair Create Outcome To Row")
+    _pair_create_outcome_node["parameters"]["jsCode"] = PAIR_CREATE_OUTCOME_JS
 
     return {
         "id": "LVcontactIngestCloud01",

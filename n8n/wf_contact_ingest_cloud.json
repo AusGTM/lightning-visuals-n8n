@@ -729,16 +729,8 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "numberInputs": 2,
-        "combineBy": "combineByPosition",
-        "options": {
-          "clashHandling": {
-            "values": {
-              "resolveClash": "preferLast"
-            }
-          }
-        }
+        "mode": "append",
+        "numberInputs": 2
       },
       "id": "m00450000-0000-4000-8000-000000000000",
       "name": "Create Carry Merge",
@@ -1336,6 +1328,20 @@
         40,
         860
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// pairCreateOutcome.js \u2014 pure identity join for the ingest lane's HubSpot Create outcome.\n//\n// \"Create Carry Merge\" (scripts/build_cloud_workflows.py) concatenates (append mode)\n// two or three streams onto one array: the carried pre-write rows (Decide Action's own\n// output for every create-routed row), the HubSpot Create HTTP node's SUCCESS response\n// items, and (D-73-01) its ERROR response items when a create is rejected. Before this\n// module the merge was `combineByPosition` \u2014 item i of the response array paired with\n// item i of the carried-row array \u2014 which held only because the two arrays always had\n// the SAME length and order. `onError: \"continueErrorOutput\"` breaks that: once ANY\n// create in a batch fails, the success array shrinks and every response after the first\n// gap pairs with the WRONG carried row (73-RESEARCH.md's Pitfall 0). Append mode plus\n// this module's identity join replaces positional pairing with a join on each row's OWN\n// identity, so a shrinking response set can never mis-associate a contact.\n//\n// Classification is by SHAPE, not an added marker \u2014 the three sources this merge ever\n// sees are already structurally disjoint by construction:\n//   - a carried row (Decide Action's own output) always carries a non-empty `action`;\n//     no HubSpot HTTP response, success or error, ever has an `action` field (it is not\n//     a valid HubSpot property and this code never sends one).\n//   - a SUCCESS response is HubSpot's own `{id, properties, ...}` echo \u2014 `id` is never\n//     present on a carried row (no top-level `id` field is ever stamped on one) and\n//     HubSpot's own error bodies report a conflict in `message`, never a fresh `id`.\n//   - anything left over (no `action`, no usable `id`) is an ERROR item.\n//\n// The join key is the SAME identity ladder columnMap.js's `requiredIdentity` encodes\n// for CSV completeness (config/column_mapping.yaml's `required_identity.any_of`):\n// email first, then firstname+lastname+company, then linkedin_url \u2014 casefolded and\n// trimmed, computed identically on the carried row and the response side.\n\nfunction _norm(v) {\n  return String(v == null ? \"\" : v).trim().toLowerCase();\n}\n\nfunction _emailOf(row) {\n  row = row || {};\n  const props = row.properties || {};\n  return _norm(row.email || props.email);\n}\n\nfunction _nameKeyOf(row) {\n  row = row || {};\n  const props = row.properties || {};\n  const first = _norm(row.firstname || props.firstname);\n  const last = _norm(row.lastname || props.lastname);\n  const company = _norm(row.company || props.company);\n  if (first && last && company) return `${first}|${last}|${company}`;\n  return \"\";\n}\n\nfunction _linkedinOf(row) {\n  row = row || {};\n  const props = row.properties || {};\n  const raw = row.linkedin_url || props.linkedin_url || props.lv_linkedin_url || props.hs_linkedin_url;\n  return _norm(raw);\n}\n\n// identityKey(row) -> string | null. Never a guess: returns null when no rung of the\n// ladder resolves, so the caller can refuse the pairing instead of matching on nothing.\nfunction identityKey(row) {\n  const email = _emailOf(row);\n  if (email) return `email:${email}`;\n  const nameKey = _nameKeyOf(row);\n  if (nameKey) return `name:${nameKey}`;\n  const li = _linkedinOf(row);\n  if (li) return `linkedin:${li}`;\n  return null;\n}\n\nfunction _isCarriedRow(row) {\n  return typeof (row && row.action) === \"string\" && row.action.length > 0;\n}\n\nfunction _isSuccessResponse(row) {\n  return Boolean(row) && row.id !== undefined && row.id !== null && row.id !== \"\";\n}\n\n// pairCreateOutcome(items) \u2014 `items` already unwrapped to plain json objects (no\n// `{json: ...}` envelopes). Returns one item per carried row, in the carried rows' own\n// order, each stamped `create_outcome`:\n//   \"success\" \u2014 paired with the response sharing its identity key. The response's own\n//               fields are re-attached with the carried row's fields winning any clash\n//               (`{...match, ...row}`) \u2014 the SAME carried-row-wins semantics the retired\n//               combineByPosition carry-merge used (merge_node's own `resolveClash:\n//               \"preferLast\"`, carried row wired last) \u2014 so `id` survives (the response\n//               is the only side that has one) while the row's own email/company_id/\n//               write_request/properties (the request that was actually sent) win.\n//   \"error\"   \u2014 paired with a create ERROR item the same way, plus `create_error`\n//               carrying the raw error item for a caller (Build Create Failure Row) to\n//               classify into a refusal reason.\n//   \"none\"    \u2014 no response of either kind ever arrived for this row's identity key.\n//   \"refused\" \u2014 the row's own identity key is uncomputable, or it collides with\n//               another carried row's key, or more than one response shares the key.\n//               Never guessed \u2014 `create_outcome_reason` names which.\nfunction pairCreateOutcome(items) {\n  const carried = [];\n  const responses = [];\n  for (const row of items || []) {\n    if (!row) continue;\n    if (_isCarriedRow(row)) carried.push(row);\n    else if (_isSuccessResponse(row)) responses.push({ row, outcome: \"success\" });\n    else responses.push({ row, outcome: \"error\" });\n  }\n\n  const carriedKeys = carried.map((row) => identityKey(row));\n  const keyCounts = new Map();\n  for (const key of carriedKeys) {\n    if (key === null) continue;\n    keyCounts.set(key, (keyCounts.get(key) || 0) + 1);\n  }\n\n  const responsesByKey = new Map();\n  for (const resp of responses) {\n    const key = identityKey(resp.row);\n    if (key === null) continue; // an uncomputable response key can never be joined\n    if (!responsesByKey.has(key)) responsesByKey.set(key, []);\n    responsesByKey.get(key).push(resp);\n  }\n\n  return carried.map((row, i) => {\n    const key = carriedKeys[i];\n    if (key === null) {\n      return { ...row, create_outcome: \"refused\",\n               create_outcome_reason: \"no computable identity key\" };\n    }\n    if (keyCounts.get(key) > 1) {\n      return { ...row, create_outcome: \"refused\",\n               create_outcome_reason: \"identity key matches more than one carried row\" };\n    }\n    const matches = responsesByKey.get(key) || [];\n    if (matches.length === 0) {\n      return { ...row, create_outcome: \"none\" };\n    }\n    if (matches.length > 1) {\n      return { ...row, create_outcome: \"refused\",\n               create_outcome_reason: \"identity key matches more than one create response\" };\n    }\n    const [match] = matches;\n    if (match.outcome === \"success\") {\n      return { ...match.row, ...row, create_outcome: \"success\" };\n    }\n    return { ...row, create_outcome: \"error\", create_error: match.row };\n  });\n}\n\n// --- n8n wrapper: identity-join HubSpot Create's outcome back to its OWN carried row ---\n// No $() by-name read \u2014 every item (\"Create Carry Merge\"'s carried rows, success\n// responses, and \u2014 once Task 3 wires it \u2014 error items) arrives on $input.\nreturn pairCreateOutcome($input.all().map((it) => it.json)).map((row) => ({ json: row }));\n"
+      },
+      "id": "c00840000-0000-4000-8000-000000000000",
+      "name": "Pair Create Outcome To Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        700
+      ]
     }
   ],
   "connections": {
@@ -1873,9 +1879,9 @@
       "main": [
         [
           {
-            "node": "Build Association Request Merge",
+            "node": "Pair Create Outcome To Row",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -2305,6 +2311,17 @@
             "node": "Ingest Merge Response",
             "type": "main",
             "index": 4
+          }
+        ]
+      ]
+    },
+    "Pair Create Outcome To Row": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request Merge",
+            "type": "main",
+            "index": 1
           }
         ]
       ]

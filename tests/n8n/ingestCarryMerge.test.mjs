@@ -198,3 +198,100 @@ test("splice_carry_merge_after's mechanism retired every by-name read on this la
       `${httpNode.name}'s only consumer must be a carry merge, not a by-name reader`);
   }
 });
+
+// =====================================================================================
+// Phase 73 Plan 06 Task 1 (D-73-01, 73-RESEARCH.md Pitfall 0) — the short-return case.
+// Three net-new rows all route to create; the "HubSpot Create" stub returns responses
+// for rows 1 and 3 only (row 2's create silently returns nothing) — under the OLD
+// combineByPosition carry merge, row 3's response would pair with row 2's carried row
+// (item count/order no longer agree once the response array is shorter than the carried
+// row array), associating row 3's contact to row 2's company. This case needs no error
+// output at all — a stub simply short of items is enough to prove positional pairing is
+// unsafe and an identity join fixes it.
+// =====================================================================================
+
+const SR_ROW1_EMAIL = "row1@rowone.example";
+const SR_ROW2_EMAIL = "row2@rowtwo.example";
+const SR_ROW3_EMAIL = "row3@rowthree.example";
+const SR_COMPANY1 = "9201";
+const SR_COMPANY2 = "9202";
+const SR_COMPANY3 = "9203";
+const SR_CREATED1 = "hs-created-1";
+const SR_CREATED3 = "hs-created-3";
+
+function armGraphForCreate(wf, domains) {
+  const domainsCsv = domains.join(",");
+  const decide = wf.nodes.find((n) => n.name === "Decide Action");
+  assert.ok(decide, "node present: Decide Action");
+  decide.parameters.jsCode = decide.parameters.jsCode.replace(
+    'const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
+  for (const name of ["HubSpot Create Write Gate", "Associate Lane Sentinel"]) {
+    const node = wf.nodes.find((n) => n.name === name);
+    assert.ok(node, `node present: ${name}`);
+    node.parameters.jsCode = node.parameters.jsCode
+      .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+        'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+      .replace('const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";')
+      .replace('const TEST_RECORD_DOMAINS = "";', `const TEST_RECORD_DOMAINS = "${domainsCsv}";`);
+  }
+  return wf;
+}
+
+test("short-return case: three net-new creates, one response missing — every response pairs with its OWN row's company", () => {
+  const wf = armGraphForCreate(
+    JSON.parse(fs.readFileSync(WF_PATH, "utf8")),
+    ["rowone.example", "rowtwo.example", "rowthree.example"]
+  );
+
+  const triggerItems = [
+    { email: SR_ROW1_EMAIL, firstname: "Row", lastname: "One", company: "Row One Co" },
+    { email: SR_ROW2_EMAIL, firstname: "Row", lastname: "Two", company: "Row Two Co" },
+    { email: SR_ROW3_EMAIL, firstname: "Row", lastname: "Three", company: "Row Three Co" },
+  ];
+
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems,
+    httpStubs: {
+      "Verify Emails (batch)": [{
+        results: triggerItems.map((r) => ({ email: r.email, status: "VALID" })),
+      }],
+      "HubSpot Search by Email": triggerItems.map(() => ({ results: [] })), // net-new
+      "HubSpot Company Search by Domain": [
+        { results: [{ id: SR_COMPANY1, properties: { domain: "rowone.example" } }] },
+        { results: [{ id: SR_COMPANY2, properties: { domain: "rowtwo.example" } }] },
+        { results: [{ id: SR_COMPANY3, properties: { domain: "rowthree.example" } }] },
+      ],
+      "HubSpot Company Search by Name": triggerItems.map(() => ({ results: [] })),
+      // The short return: three rows enter "HubSpot Create", only two responses leave.
+      "HubSpot Create": (items) => items
+        .filter((it) => it.email !== SR_ROW2_EMAIL)
+        .map((it) => ({
+          id: it.email === SR_ROW1_EMAIL ? SR_CREATED1 : SR_CREATED3,
+          properties: { email: it.email },
+        })),
+      "HubSpot Associate Company": (items) => items.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), [], "no merge may lose a row on this batch");
+
+  const rows = nodeItems(runData, "Build Ingest Response");
+  const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));
+
+  assert.equal(byEmail[SR_ROW1_EMAIL].contact_id, SR_CREATED1);
+  assert.equal(byEmail[SR_ROW1_EMAIL].company_id, SR_COMPANY1);
+  assert.equal(byEmail[SR_ROW1_EMAIL].association, "associated");
+
+  assert.equal(byEmail[SR_ROW3_EMAIL].contact_id, SR_CREATED3);
+  assert.equal(byEmail[SR_ROW3_EMAIL].company_id, SR_COMPANY3,
+    "row 3 must associate to its OWN company — the old combineByPosition pairing would " +
+    "have shifted this to row 2's company (9202) once row 2's response went missing");
+  assert.equal(byEmail[SR_ROW3_EMAIL].association, "associated");
+
+  // Row 2's create never returned a response — it must never claim an association, and
+  // it must never be reported as if it landed on someone else's company.
+  assert.notEqual(byEmail[SR_ROW2_EMAIL].association, "associated");
+  assert.notEqual(byEmail[SR_ROW2_EMAIL].company_id, SR_COMPANY1);
+  assert.notEqual(byEmail[SR_ROW2_EMAIL].company_id, SR_COMPANY3);
+});

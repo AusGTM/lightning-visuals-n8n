@@ -165,12 +165,20 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     Phase 72 Plan 04 (D-72-06/07) adds a SECOND such exception: "Contact History Merge",
     the genuine two-lane (matched-with-history / no-contact-id) convergence in front of
     "Merge Contacts" that `splice_merge_before` builds for the same reason as
-    "Build Association Request Merge" above -- a real fan-in, not an HTTP-hop carry."""
+    "Build Association Request Merge" above -- a real fan-in, not an HTTP-hop carry.
+
+    Phase 73 Plan 06 Task 1 (D-73-01, F-A6) adds a THIRD exception, of a different
+    shape: "Create Carry Merge" is switched from `combine`/`combineByPosition` to
+    `append` so a create rejected on the (Task 3) error output can never shift a later
+    success's positional pairing — it is no longer a per-hop carry merge at all, it is
+    the identity-join input "Pair Create Outcome To Row" reads."""
     wf = b.build_cloud()
     merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
     append_merges = [n for n in merges if n["parameters"]["mode"] == "append"]
-    assert sorted(n["name"] for n in append_merges) == sorted(
-        ["Ingest Merge Response", "Build Association Request Merge", "Contact History Merge"])
+    assert sorted(n["name"] for n in append_merges) == sorted([
+        "Ingest Merge Response", "Build Association Request Merge", "Contact History Merge",
+        "Create Carry Merge",
+    ])
 
     ingest_merge = next(n for n in append_merges if n["name"] == "Ingest Merge Response")
     # Task 3: a THIRD input — "Decide Action Snapshot" — alongside "Associate Carry
@@ -188,7 +196,7 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     # (the same splice_carry_merge_after idiom, joining the new history GET back to its
     # row ahead of "Contact History Merge"'s two-lane convergence above).
     assert set(combine_merges) == {
-        "Update Carry Merge", "Create Carry Merge", "Associate Carry Merge",
+        "Update Carry Merge", "Associate Carry Merge",
         "Verify Email Carry Merge", "Search By Email Carry Merge",
         "Company Domain Carry Merge", "Company Name Carry Merge",
         "Source By Field Broadcast", "HubSpot Contact History Carry Merge",
