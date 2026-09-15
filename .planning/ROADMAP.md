@@ -496,10 +496,36 @@ a ruling lands during planning.
 **Gate:** stress attempt 3 A–F per RUNBOOK.md on the redeployed disarmed bodies; A and E must pass
 where attempt 2 failed/partialled. Nothing armed from Claude.
 
-**Requirements**: TBD — coverage by finding id (F-A6, F-A5, F-E1, F-B7, F-B3, F-B5, F-A3r, F-A1/A2/B1/B6).
+**Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 73 to break down)
+**Wave 1**
+
+- [ ] 73-01-PLAN.md — F-B5: freeze the real `12434`/`12449` runData redacted, assert the run's account RED first, then fix where the 24 updates are lost; run_manifest scoped per run (D-73-11..14)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 73-02-PLAN.md — F-E1 array serialization at `reviewApply()`'s one choke point + F-A3r ingest search throttle 250→400 ms, pinned by a new test (D-73-10, D-73-15)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 73-03-PLAN.md — F-B7/F-B4/F-B3: one IN search over a never-empty `[bare, www.]` variant pair, honest name-only review reasons, freemail refused in both engines (D-73-06..09, D-73-20, D-73-22)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 73-04-PLAN.md — F-A5: first-wins CSV collapse in the plugin pre-flight with a `duplicate_in_csv` outcome shown in the preview, contact-upload lane only (D-73-03, D-73-04, D-73-21)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 73-05-PLAN.md — F-B6 diagnosed offline before any code, plus the per-lane cost envelope and execution model (D-73-16, D-73-17)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 73-06-PLAN.md — F-A6: identity pairing first, then the walker's error-output extension, then the `create_failed` refusal lane; §13.0.1 corrected (D-73-01, D-73-02, D-73-05, D-73-19)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 73-07-PLAN.md — Operator gate: idempotent regen, both suites, plugin 0.50.0, then the operator's deploy + bounce disarmed, reset, and attempt 3 A–F (D-73-18)
