@@ -798,7 +798,12 @@ whatever seven columns happened to be in the source file.
    # -- a held row's stored value is what the waterfall found, not the source line.
    merged_by_id = {row["row_id"]: row for row in merge_report.rows}
    held_entries = held_queue.load()
-   verdicts = run_manifest.load()
+   # D-73-14 (Phase 73 Plan 01, F-B5's folded todo): run-SCOPED read, never the
+   # accumulated shared file. An unscoped call to `run_manifest.load` (no path)
+   # returns every prior run's held rows too -- a report over THIS run_id must never
+   # start pre-populated with another run's verdicts. Starts from `{}` when this run
+   # has not saved a scoped manifest yet (its first held row, below, is what creates it).
+   verdicts = run_manifest.load(path=run_manifest.run_manifest_path(run_id))
 
    for row in unmatched_rows:
        row_id = row["row_id"]
@@ -1274,7 +1279,7 @@ whatever seven columns happened to be in the source file.
    loads whatever this run has already accumulated, folds this chunk's verdicts on top,
    and saves the whole thing — the crash window this bounds is exactly one chunk wide.
 
-   The next time this skill runs against the same source, do not read `run_manifest.load()`
+   The next time this skill runs against the same source, do not read `run_manifest.load`
    and `rows_to_resume` directly — classify the file first, through `watch.resume_or_disclose`,
    and say its disclosure sentence out loud, VERBATIM, before anything else in this step:
 

@@ -367,10 +367,16 @@ COVERED = {
     # company_known stamp's own domain-cleaning call. Read from this test's own
     # failure output, not guessed. The covering test is extended to actually stamp
     # a held entry and assert it, not merely re-pinned.
+    # Phase 73 Plan 01 (D-73-14, F-B5's folded todo): the tuple gains a second
+    # `run_manifest.run_manifest_path` call, immediately after `run_manifest.load` --
+    # the load itself is now run-SCOPED (`run_manifest.load(path=run_manifest.
+    # run_manifest_path(run_id))`), never the accumulated shared file. Read from this
+    # test's own failure output, not guessed.
     (
         "enrich-before-ingest",
         (
-            "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
+            "held_queue.load", "run_manifest.load", "run_manifest.run_manifest_path",
+            "preingest.parse_outcome",
             "confidence.assess", "enrichment._clean_domain",
             "held_queue.build_entry", "held_queue.stable_key",
             "held_queue.save",

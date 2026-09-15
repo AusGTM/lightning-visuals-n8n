@@ -29,3 +29,21 @@ the whole merged map back under its own run_id, and `run_report.build_run_report
   carried as source position only.
 
 Either way the run report must only count verdicts whose entry carries THIS run_id.
+
+## Resolved (Phase 73 Plan 01, 2026-09-15, D-73-14)
+
+Took the first fix shape named above: `enrich-before-ingest` SKILL.md step 5's
+`verdicts = run_manifest.load()` (shared, unscoped) is now
+`run_manifest.load(path=run_manifest.run_manifest_path(run_id))` — a run's held-row
+loop starts from `{}` (or its own prior scoped state), never another run's
+accumulated verdicts. The dual-write two lines below (shared `save` + scoped `save`)
+was already correct and is untouched. `chunking.merge_chunk_verdicts`'s own shared
+default is deliberate (same-run crash resume) and was left alone, per this plan's own
+scope line.
+
+Regression: `operator-claude-plugin/tests/test_run_manifest.py`'s two new tests prove
+(1) a scoped read of run B never returns run A's verdicts even though both share the
+same shared-file write, and (2) a brand-new run_id with no scoped manifest yet reads
+`{}`, not the shared file's accumulated state. `operator-claude-plugin/tests/
+test_mandatory_report_call_sites.py` (unaffected — it does not scan for this literal
+call) and the full plugin suite stayed green.

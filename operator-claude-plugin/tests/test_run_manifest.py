@@ -883,3 +883,60 @@ def test_manifest_classify_read_never_raises_on_any_input(tmp_path):
     target = tmp_path / "not-even-a-real-directory" / "run_manifest-x.json"
     assert run_manifest.classify_read("x", path=target) == run_manifest.ABSENT
     assert run_manifest.classify_read(None, path=target) == run_manifest.ABSENT
+
+
+# =====================================================================================
+# Phase 73 Plan 01 (D-73-14, F-B5's folded todo): a run-SCOPED read of run B must never
+# return run A's verdicts, even when both were saved through the SHARED path
+# `enrich-before-ingest` step 5 also writes to. This is the exact defect the folded todo
+# named: the shared `manifest_path()` file accumulates every run's held rows, so an
+# unscoped `run_manifest.load()` at the top of a fresh run's held-row loop starts
+# pre-populated with a PRIOR run's entries too.
+# =====================================================================================
+
+
+def test_scoped_read_of_run_b_does_not_return_run_as_verdicts_even_though_both_share_the_shared_manifest(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setattr(durable_paths, "resolve_state_path", lambda *a, **k: tmp_path / "dashboard_artifact.json")
+
+    # Both runs write to the SAME shared file (`manifest_path()`, no override) — this
+    # mirrors step 5's own dual-write: `run_manifest.save(run_id, verdicts)` (shared)
+    # alongside `run_manifest.save(run_id, verdicts, path=run_manifest.run_manifest_path(run_id))`
+    # (scoped). Run A's held rows land in the shared file first.
+    run_manifest.save("run-a", {"row-a1": "confidence_held", "row-a2": "held"})
+    run_manifest.save("run-a", {"row-a1": "confidence_held", "row-a2": "held"},
+                       path=run_manifest.run_manifest_path("run-a"))
+
+    # Run B then does the SAME dual-write for its own, disjoint row.
+    run_manifest.save("run-b", {"row-b1": "confidence_held"})
+    run_manifest.save("run-b", {"row-b1": "confidence_held"},
+                       path=run_manifest.run_manifest_path("run-b"))
+
+    # The unscoped shared read (what step 5 used to do) DOES leak run A's rows into
+    # whatever reads it next — this is the bug's own precondition, asserted here so the
+    # test does not merely assume it.
+    assert run_manifest.load() == {"row-b1": "confidence_held"}
+
+    # The scoped read (D-73-14's fix) sees ONLY this run's own verdicts.
+    scoped_a = run_manifest.load(path=run_manifest.run_manifest_path("run-a"))
+    scoped_b = run_manifest.load(path=run_manifest.run_manifest_path("run-b"))
+    assert scoped_a == {"row-a1": "confidence_held", "row-a2": "held"}
+    assert scoped_b == {"row-b1": "confidence_held"}
+    assert "row-a1" not in scoped_b
+    assert "row-a2" not in scoped_b
+
+
+def test_scoped_read_of_a_run_with_no_scoped_manifest_yet_is_an_empty_mapping_not_the_shared_file(
+    tmp_path, monkeypatch,
+):
+    """The other half of D-73-14: a brand-new run_id that has never saved its own
+    scoped file (its first held row is what creates it, per step 5's own loop) must
+    start from `{}` — never silently fall back to the shared file's accumulated state,
+    which is exactly the leak this fix closes."""
+    monkeypatch.setattr(durable_paths, "resolve_state_path", lambda *a, **k: tmp_path / "dashboard_artifact.json")
+
+    run_manifest.save("run-a", {"row-a1": "matched"})  # shared file has SOMETHING in it
+
+    brand_new_run_id = "run-never-seen-before"
+    assert run_manifest.load(path=run_manifest.run_manifest_path(brand_new_run_id)) == {}

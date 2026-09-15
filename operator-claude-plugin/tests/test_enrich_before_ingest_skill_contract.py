@@ -775,8 +775,12 @@ def test_the_persist_fence_adds_no_merge_call_the_registered_sequence_is_untouch
     # company_known stamp's own domain-cleaning call, inserted between
     # `confidence.assess` and `held_queue.build_entry` -- read from this test's own
     # failure output, not guessed.
+    # Phase 73 Plan 01 (D-73-14): `run_manifest.load` is now run-scoped
+    # (`run_manifest.load(path=run_manifest.run_manifest_path(run_id))`), adding a
+    # second call to `run_manifest.run_manifest_path` immediately after it.
     assert calls == (
-        "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
+        "held_queue.load", "run_manifest.load", "run_manifest.run_manifest_path",
+        "preingest.parse_outcome",
         "confidence.assess", "enrichment._clean_domain",
         "held_queue.build_entry", "held_queue.stable_key",
         "held_queue.save",
