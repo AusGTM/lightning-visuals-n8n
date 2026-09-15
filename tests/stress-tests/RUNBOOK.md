@@ -139,6 +139,6 @@ Say *"What needs review?"* Work three items: approve one (Claude shows the exact
    ```
    ! set -a; . ./.env; set +a; python3 scripts/uat_reset.py --snapshot --companies-csv tests/stress-tests/uat-stress-companies-2026-09-14.csv
    ```
-   Expect the protected list to grow by HRNSW (`www.hrnsw.com.au`) and to NOT contain any id the reset just deleted.
+   2026-09-15 result: **21/32 protected** (www-aware) — none of the deleted ids present. A company created from a domain researched in-session (not in the CSV, e.g. Gosford → `theentertainmentgrounds.com.au`) is invisible to the domain rule: pass it with `--extra-company-id <id> --since <attempt start ISO>` (the new snapshot's `taken_at` postdates it, so `--since` must be explicit).
 3. New baseline: *"What's the backend doing?"* — record the latest execution id on a fresh attempt section of the session sheet.
 4. Stage A again. The contacts CSV needs no change; the companies CSV keeps its three known-gap rows (Perth Racing, gmail, LinkedIn) on purpose — they document F-B2/F-B3/F-B4 until fixed.
