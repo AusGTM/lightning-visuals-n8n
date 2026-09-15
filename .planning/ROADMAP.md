@@ -498,7 +498,7 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 2/7 plans executed
+**Plans:** 3/7 plans executed
 
 Plans:
 
@@ -512,7 +512,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 73-03-PLAN.md — F-B7/F-B4/F-B3: one IN search over a never-empty `[bare, www.]` variant pair, honest name-only review reasons, freemail refused in both engines (D-73-06..09, D-73-20, D-73-22)
+- [x] 73-03-PLAN.md — F-B7/F-B4/F-B3: one IN search over a never-empty `[bare, www.]` variant pair, honest name-only review reasons, freemail refused in both engines (D-73-06..09, D-73-20, D-73-22)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
