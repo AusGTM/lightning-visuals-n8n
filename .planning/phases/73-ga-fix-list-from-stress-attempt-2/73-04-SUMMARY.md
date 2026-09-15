@@ -35,7 +35,7 @@ key-files:
     - operator-claude-plugin/skills/contact-upload/SKILL.md
 
 key-decisions:
-  - "Row numbering is 1-based with the header as row 1 (first data row = row 2), matching this repo's own stress-session vocabulary (SESSION-2026-09-15.md: 'rows 37/38 = row 3')."
+  - "Row numbers are spreadsheet rows (header = row 1, first data row = row 2) — the operator's own gutter, and the number `pre_collapse_row_count`'s reconciliation is built for. Checked against the real Stage A CSV, this deliberately differs by one from SESSION-2026-09-15.md's own 'rows 37/38 = row 3' prose, which counts data rows only and excludes the header: the session's 'row 3' is this module's row 4, and its 'rows 37/38' are this module's rows 38/39."
   - "csv_dedupe.py maps raw CSV headers onto canonical prop names via preview.label_headers/resolve_mapping_path (the SAME alias lookup preview.py's own display labelling uses) before running identity-group clustering — the real attempt-2 CSV used aliased headers ('E-mail Address', 'Surname', 'LinkedIn'), not canonical names, so clustering on raw headers directly would never have fired on the actual defect."
   - "csv_dedupe.py does NOT import preingest.rows_from_table (which does the same canonical-mapping) to avoid coupling the plain contact-upload lane's new module to the enrich-before-ingest-specific module; the ~5-line mapping loop is small enough to duplicate rather than pull in a much larger, differently-scoped module."
   - "Step 2c ('Collapse within-batch duplicates') runs unconditionally and without asking the operator — unlike step 2b's name-split, there is no ambiguity to review: the match is exact, casefolded, trimmed only. It runs on whatever path step 2b left (split_path/corrected_path/original), never re-running against the original the way step 2b's own --confirm rule requires, because it needs the fully-resolved columns (e.g. a name only just split by step 2b) to see the identity groups that matter."
@@ -167,6 +167,16 @@ None - no external service configuration required.
 ## Next Phase Readiness
 - F-A5 is closed: the known within-batch duplicate trigger for F-A6's HubSpot Create 409
   can no longer recur on the plain `contact-upload` lane.
+- **Known, in-scope non-collapse:** the real Stage A CSV's file line 24 (a third Priya
+  row, name+company only, no email) does NOT collapse into the email-keyed cluster at
+  lines 4/38/39 — `_first_satisfied_key` clusters on each row's own first-satisfied
+  identity group only (inherited from `extraction.dedupe()`'s documented
+  first-satisfied-key simplification, not full pairwise cross-group matching), and line
+  24 satisfies firstname+lastname+company, not email. It stays a standalone kept row.
+  This is by design, not a miss: a name+company-only row has no email to 409 on, so
+  F-A6's trigger is still fully removed. Attempt 3's preview will legitimately still
+  show two surviving "Priya" rows (the email-cluster winner and this one) — expected,
+  not a regression.
 - Plan-level verification passed in full: `.venv/bin/python -m pytest -q --tb=short -p no:cacheprovider tests/ operator-claude-plugin/tests/` → 4979 passed / 154 skipped (baseline 4961/154 + 18 new); `node --test tests/n8n/*.test.mjs` → 1195 passed / 0 failed (unchanged, this plan touches no graph); `.venv/bin/python scripts/build_cloud_workflows.py` → zero `n8n/` diff.
 - No deploy, no bounce, no arming performed or required by this plan — it is plugin-only.
 - Ready for the operator's end-of-phase deploy + bounce + reset + attempt-3 run once all of phase 73's plans land, per D-73-18.

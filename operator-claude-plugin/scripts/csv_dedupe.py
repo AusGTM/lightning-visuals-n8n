@@ -14,8 +14,11 @@ disagreements as conflicts, which is the wrong semantics here. D-73-04 wants: th
 occurrence wins byte-for-byte, no field merge, no batch refusal — and the loser is
 reported with the outcome `duplicate_in_csv`, naming the winner's row number.
 
-Row numbering matches this repo's own stress-session vocabulary (SESSION-2026-09-15.md:
-"rows 37/38 = row 3") — the header is row 1, so the first data row is row 2.
+Row numbers are spreadsheet rows, as an operator sees them in the file's own gutter: the
+header is row 1, so the first data row is row 2. This is NOT the same count as
+SESSION-2026-09-15.md's own "rows 37/38 = row 3" prose, which counts data rows only and
+excludes the header — checked against the real Stage A CSV, its "row 3" is this module's
+row 4, and its "rows 37/38" are this module's rows 38/39 (off by one, the header row).
 
 Mirrors `name_split.py`'s established idiom: a propose mode that reports without writing,
 and an apply mode that writes a corrected copy into the scratch dir and returns its path.

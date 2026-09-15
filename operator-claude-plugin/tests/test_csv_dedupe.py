@@ -8,8 +8,9 @@ from `extraction.dedupe()` on purpose (D-73-04): the FIRST occurrence wins byte-
 with no field merge, and the loser is reported with the outcome `duplicate_in_csv` naming
 the winner's row number rather than the two being folded into one merged row.
 
-Row numbering matches this repo's own stress-session vocabulary (SESSION-2026-09-15.md:
-"rows 37/38 = row 3") — the header is row 1, so the first data row is row 2.
+Row numbers are spreadsheet rows (header = row 1, first data row = row 2) — see
+csv_dedupe.py's own module docstring for why this deliberately differs by one from
+SESSION-2026-09-15.md's own "rows 37/38 = row 3" prose, which counts data rows only.
 """
 import csv
 import inspect

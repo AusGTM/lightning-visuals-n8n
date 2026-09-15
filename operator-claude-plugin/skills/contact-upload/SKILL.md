@@ -187,7 +187,10 @@ be sent, and — only when explicitly armed — send it.
 
    The path to preview is `deduped_path` from step 2c, which already carries forward
    whatever step 2b produced. This preview is the operator's view of the real mapping
-   prediction — the re-preview that makes an approval mean something.
+   prediction — the re-preview that makes an approval mean something. (File input only —
+   a batch that arrived via step 2's `extraction.md` branch has no path and no step 2c:
+   its validator already ran its own identity-group dedupe: continue with the
+   extracted-preview surface described further below instead.)
 
    This reads the file once and reads `config/column_mapping.yaml` only as a read-only
    lookup for labelling — it never changes what gets sent. The file goes over the wire
@@ -221,7 +224,9 @@ be sent, and — only when explicitly armed — send it.
      row number, and the identity key that matched (`collapsed_rows.rows`) — say this
      even when the count is 0, and state `pre_collapse_row_count` alongside `row_count`
      so the operator can reconcile the count they expected in their own file against
-     the count actually being sent
+     the count actually being sent. Row numbers here are spreadsheet rows as the
+     operator's own file shows them (the header is row 1, the first data row is row 2)
+     — not the same count as a data-row-only tally.
 
    If `adaptive` is `true` (more than ~20 rows), do not print every row. Show instead:
    the leading and trailing sample rows (`sample_rows.leading` / `.trailing`) and the
