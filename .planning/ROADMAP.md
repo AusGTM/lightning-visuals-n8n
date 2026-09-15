@@ -498,13 +498,13 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 7 plans
+**Plans:** 1/7 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 73-01-PLAN.md — F-B5: freeze the real `12434`/`12449` runData redacted, assert the run's account RED first, then fix where the 24 updates are lost; run_manifest scoped per run (D-73-11..14)
+- [x] 73-01-PLAN.md — F-B5: freeze the real `12434`/`12449` runData redacted, assert the run's account RED first, then fix where the 24 updates are lost; run_manifest scoped per run (D-73-11..14)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 73
 current_phase_name: GA fix list from stress attempt 2
 status: executing
-stopped_at: Phase 73 context gathered
-last_updated: "2026-09-15T12:09:56.015Z"
+stopped_at: Completed 73-01-PLAN.md
+last_updated: "2026-09-15T12:53:35.149Z"
 last_activity: 2026-09-15
 last_activity_desc: Phase 73 execution started
-state_head: f99a6885c138d5c15b7a46c5f57f1c527d25be0b
+state_head: 8ecf582d865b26766ed9a8e0bcf8396ef4bf43fb
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 56
-  completed_plans: 49
+  completed_plans: 50
   percent: 20
 ---
 
@@ -359,8 +359,8 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 73 (GA fix list from stress attempt 2) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 73
+Plan: 2 of 7
+Status: Ready to execute
 Last activity: 2026-09-15 — Phase 73 execution started
 
 *The v1.1 retained sections below are history, not current position.*
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-15T10:44:16.148Z
-**Stopped at:** Phase 73 context gathered
+**Last session:** 2026-09-15T12:53:34.966Z
+**Stopped at:** Completed 73-01-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -514,7 +514,7 @@ pre-gate anyWrite check needs to account for gate refusal once the ingest preche
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
 `blocked` (operator could not run a live test) on an earlier phase's UAT; Phase 62 verified
 13/13 but awaiting live UAT.
-**Resume file:** .planning/phases/73-ga-fix-list-from-stress-attempt-2/73-CONTEXT.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -676,6 +676,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 72 P10 | 25min | 2 tasks | 3 files |
 | Phase 72 P11 | 25min | 3 tasks | 12 files |
 | Phase 72 P12 | 20 min | 3 tasks | 2 files |
+| Phase 73 P01 | 55min | 3 tasks | 12 files |
 
 ## Decisions
 
@@ -862,6 +863,7 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 72]: Node selection for the new non-clobber fetch-gate assertion requires BOTH the ENRICH_MERGE/ENRICH_MERGE_CO wrapper's call-site shorthand AND one of the two merge modules inlined verbatim, not the shorthand text alone. — A Phase 72 Plan 06 comment on the unrelated "Normalize + Score Company" node contains the same shorthand substring in prose without being a merge call site; the combined predicate reproduces the plan's stated "exactly five nodes" result.
 - [Phase 72]: Case-insensitive overflow dedup chosen as parity direction across all three merge engines (WR-02); Python oracle unchanged, both JS engines moved to match it.
 - [Phase 72]: Live gate confirmed F72-1 closed: contact 352522004980 (n8n execution 12414) carries both lv_linkedin_url and hs_linkedin_url as the identical full URL, completing D-72-04's dual write on both CREATE and UPDATE paths. — Operator's Test 3 read-back was transcribed verbatim before CLAUDE.md was allowed to claim closure, per the plan's own prohibition against sealing an unclosed gap.
+- [Phase 73]: F-B5 root cause: Build Response's item for a company update carries no action/hs_object_id/row_id (create is decorated by Adapt Company Create, update is a bare Merge pass-through) -- fixed at chunking.dispatch_and_recover + a new report_enrichment.backfill_missing_identity, not inside run_report.py, which needed zero changes. — The join in run_report._identity_for_entry was already correct per D-73-11/D-73-12 research; the identity was stripped upstream, before written_records ever saw it.
 
 ### Roadmap Evolution
 
