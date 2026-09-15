@@ -28,7 +28,7 @@ record, never a 200.
    ```
    ! set -a; . ./.env; set +a; python3 scripts/uat_reset.py --snapshot --companies-csv tests/stress-tests/uat-stress-companies-2026-09-14.csv
    ```
-   Expect roughly 6 of 32 domains reported *protected* (ATC, MRC, BRC, Perth Racing, Racing Victoria, and HRNSW only if filed under `hrnsw.com.au`). The snapshot file lands next to the CSV and is gitignored. Without it the reset refuses to run.
+   Taken 2026-09-15: **12 of 32 domains protected** — ATC, MRC, BRC, Hawkesbury, Newcastle JC, GCTC, SCTC, Darwin TC, Tasracing, HRV, RWWA, Moonee Valley. Three companies known to exist were NOT matched by domain — **Perth Racing** (`9604794662`), **Racing Victoria**, **HRNSW** (`18756544347`, filed under `www.harnessmediacentre.com.au`) — so those three are the live name-match test in Stage B: they must match by exact name, never be recreated. The snapshot file lands next to the CSV and is gitignored. Without it the reset refuses to run.
 7. **Budget.** Whole session ≈ 60–90 n8n executions of the 2,500/month plan; provider spend is bounded to Stage D and Stage C sends. Have the client confirm both figures before you start.
 
 ---
@@ -64,7 +64,7 @@ Domain table (one row per company) must show: rows 31–32 normalised (`vrc.com.
 Cost guard: ~30 companies × full waterfall (Lusha 2 credits/company; ZoomInfo ~1; Anthropic ≈ $0.07/record). Grant → dispatch at 2 companies per POST (~15 executions) → watch until settled.
 
 Verify:
-- Rows 1–6 **matched, not recreated** — HRNSW must match by name against `www.harnessmediacentre.com.au`. If a second HRNSW appears, that is a finding, stop and record it.
+- The 12 snapshot-protected companies **matched by domain, not recreated**. Perth Racing, Racing Victoria and HRNSW (portal domains differ from the CSV) **matched by exact name** — a second copy of any of the three is a finding: stop, record the new id (the reset will remove it, since it postdates the snapshot).
 - Created companies carry `lv_org_type`, region, produces-content, and a tier: Daktronics and NYRA → `lv_anti_icp_flag` true, Tier D; Tabcorp → deduction only, no veto; Sky Racing → no veto.
 - Wagga Wagga Rowing Club created (fictitious, will not enrich).
 - Conflicting-provider companies land in `needs_review` with the field and sources named, never a silently promoted value (§15.0).

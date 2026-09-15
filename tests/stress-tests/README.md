@@ -77,8 +77,8 @@ with nobody named — that is the lane this file exists to exercise.
 
 | Rows | Shape | Expected |
 | --- | --- | --- |
-| 1–6 | ATC, HRNSW, MRC, BRC, Perth Racing, Racing Victoria — already in the portal | **matched, never recreated**. HRNSW is filed under `www.harnessmediacentre.com.au`, so `hrnsw.com.au` must fall through to the exact-NAME match (exec `11922` precedent) |
-| 7–25 | Real ANZ racing bodies and clubs with public websites, probably absent | **created** (armed) and ICP-scored; then suggest-contacts crawls each site's about/board/team pages. Verify a domain live before blaming the lane — a few are best-effort (`gctc.com.au`, `sctc.com.au`, `aucklandracing.co.nz`) |
+| 1–6 | ATC, HRNSW, MRC, BRC, Perth Racing, Racing Victoria — already in the portal | **matched, never recreated**. ATC/MRC/BRC match by domain. HRNSW (`www.harnessmediacentre.com.au`), Perth Racing and Racing Victoria are held under domains that differ from the CSV, so all three must fall through to the exact-NAME match (exec `11922` precedent) — the snapshot did not see them by domain |
+| 7–25 | Real ANZ racing bodies and clubs with public websites — snapshot 2026-09-15 found 9 of these already in the portal (Hawkesbury, Newcastle JC, GCTC, SCTC, Darwin, Tasracing, HRV, RWWA) plus Moonee Valley from row 32; the rest are creates | **created** (armed) and ICP-scored; then suggest-contacts crawls each site's about/board/team pages. Verify a domain live before blaming the lane — a few are best-effort (`gctc.com.au`, `sctc.com.au`, `aucklandracing.co.nz`) |
 | 26 | Sky Racing | broadcaster / content producer — no veto |
 | 27 | Tabcorp | gambling operator — graduated deduction, no hard veto |
 | 28 | Daktronics | hardware vendor AND non-ANZ — both hard vetoes, Tier D |
