@@ -131,9 +131,10 @@ def test_per_row_search_nodes_are_throttled():
         assert batching["batch"]["batchSize"] == 1
         assert batching["batch"]["batchInterval"] > 0, \
             f"{name}: a zero interval throttles nothing"
-        # 5 req/s is HubSpot's documented account-wide CRM Search cap; stay under it.
-        assert batching["batch"]["batchInterval"] >= 200, \
-            f"{name}: interval faster than 5 req/s risks the same 429"
+        # 5 req/s is HubSpot's documented account-wide CRM Search cap: exactly 200ms IS
+        # that rate, so the interval must be strictly greater to have headroom under it.
+        assert batching["batch"]["batchInterval"] > 200, \
+            f"{name}: interval at or faster than 5 req/s risks the same 429"
 
 
 def test_decide_action_names_lookup_failure_distinctly_from_a_genuine_miss():
@@ -147,7 +148,9 @@ def test_decide_action_names_lookup_failure_distinctly_from_a_genuine_miss():
     emailless row never issues this search)."""
     decide = _node("Decide Action")["parameters"]["jsCode"]
     assert "lookup failed" in decide.lower()
-    assert 'identity_reason === "valid email, no existing match"' in decide
+    # matches on the OUTCOME, not a hardcoded copy of resolveIdentity's reason text —
+    # a future reword of that text can't silently break the override
+    assert 'id.outcome === "net_new"' in decide
     # the override reads row.lookup_failed, and the final reason no longer takes id.reason
     # directly (it must pass through the override variable first)
     assert "identity_reason = id.reason" in decide
@@ -159,7 +162,9 @@ def test_decide_action_names_lookup_failure_distinctly_from_a_genuine_miss():
     # valid email whose search 429'd, misread as net_new. Row 2 is the same row with a
     # healthy search (control: reason must survive unchanged). Row 3 is a genuinely
     # emailless row caught by the SAME batch-wide flag (control: unaffected, its own
-    # search never ran).
+    # search never ran). Row 4 is a valid email that found MULTIPLE hits (ambiguous, a
+    # real positive signal a 429 can't invent) under the same batch-wide flag (control:
+    # only `net_new` is overridden, not every outcome that happens to carry an email).
     rows = [
         {"identity": {"outcome": "net_new", "contact_id": None,
                        "reason": "valid email, no existing match"},
@@ -170,6 +175,9 @@ def test_decide_action_names_lookup_failure_distinctly_from_a_genuine_miss():
         {"identity": {"outcome": "ambiguous", "contact_id": None,
                        "reason": "no email, insufficient identity"},
          "lookup_failed": True, "email": None},
+        {"identity": {"outcome": "ambiguous", "contact_id": None,
+                       "reason": "multiple email matches"},
+         "lookup_failed": True, "email": "dup@example.com"},
     ]
     harness = """
 const $input = { all: () => (%s).map((json) => ({ json })) };
@@ -182,6 +190,7 @@ console.log(JSON.stringify(out.map((o) => o.json.reason)));
     assert reasons[0] == "lookup failed (HubSpot search unavailable/rate-limited) — held, not matched"
     assert reasons[1] == "valid email, no existing match"
     assert reasons[2] == "no email, insufficient identity"
+    assert reasons[3] == "multiple email matches"
 
 
 def test_ingest_webhook_requires_header_auth_like_the_enrichment_webhook():

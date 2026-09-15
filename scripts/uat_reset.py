@@ -164,9 +164,15 @@ def do_snapshot(domains: list[str], snap_path: Path) -> None:
         print(f"  protected  {d}  {[h['id'] for h in hits]}")
 
 
-def build_plan(domains: list[str], snapshot: dict, since: datetime | None) -> dict:
+def company_by_id(company_id: str) -> dict | None:
+    r = _req("GET", f"{BASE}/crm/v3/objects/companies/{company_id}?properties={','.join(COMPANY_PROPS)}")
+    return r.json() if r.status_code == 200 else None
+
+
+def build_plan(domains: list[str], snapshot: dict, since: datetime | None, extra_company_ids=()) -> dict:
     plan = {"companies": [], "contacts": [], "skipped": []}
     protected = set(snapshot.get("existing", {}))
+    protected_ids = {h["id"] for hits in snapshot.get("existing", {}).values() for h in hits}
     seen_contacts = set()
 
     # 1. marker-matched contacts (fictitious rows)
@@ -201,6 +207,25 @@ def build_plan(domains: list[str], snapshot: dict, since: datetime | None) -> di
                                              "reason": f"created since --since, associated to run company {co['id']}"})
                 else:
                     plan["skipped"].append({"contact": c["id"], "reason": "associated but predates --since"})
+    # 4. explicitly named companies (domain rule cannot reach them) — same createdate guard
+    for cid in extra_company_ids:
+        if cid in protected_ids or any(c["id"] == cid for c in plan["companies"]):
+            continue
+        co = company_by_id(cid)
+        if not co:
+            plan["skipped"].append({"id": cid, "reason": "not found"})
+            continue
+        p = co["properties"]
+        if not created_since(p, since):
+            plan["skipped"].append({"id": cid, "reason": "createdate before --since"})
+            continue
+        plan["companies"].append({"id": cid, "domain": p.get("domain"), "name": p.get("name"),
+                                  "createdate": p.get("createdate"), "reason": "--extra-company-id"})
+        for c in contacts_for_company(cid):
+            if c["id"] not in seen_contacts and created_since(c["properties"], since):
+                seen_contacts.add(c["id"])
+                plan["contacts"].append({"id": c["id"], "email": c["properties"].get("email"),
+                                         "reason": f"created since --since, associated to run company {cid}"})
     return plan
 
 
@@ -210,6 +235,8 @@ def main(argv=None) -> int:
     ap.add_argument("--since", help="ISO timestamp — only records created at/after this are candidates")
     ap.add_argument("--snapshot", action="store_true", help="record pre-existing companies, then exit")
     ap.add_argument("--snapshot-file", type=Path, help="default: <csv dir>/uat-reset-snapshot.json")
+    ap.add_argument("--extra-company-id", action="append", default=[],
+                    help="a company id created by the run that the domain rule cannot reach (e.g. one filed under a freemail domain); repeatable; still subject to --since")
     ap.add_argument("--execute", action="store_true", help="actually DELETE (also needs ALLOW_UAT_RESET=true)")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args(argv)
@@ -234,7 +261,7 @@ def main(argv=None) -> int:
         print("REFUSED: no --since and the snapshot carries no taken_at.")
         return 2
 
-    plan = build_plan(domains, snapshot, since)
+    plan = build_plan(domains, snapshot, since, extra_company_ids=a.extra_company_id)
     print(f"plan: {len(plan['contacts'])} contacts, {len(plan['companies'])} companies to delete; {len(plan['skipped'])} skipped")
     for c in plan["contacts"]:
         print(f"  contact  {c['id']:>14}  {c.get('email') or '-':45}  {c['reason']}")

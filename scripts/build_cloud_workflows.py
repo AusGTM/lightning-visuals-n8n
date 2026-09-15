@@ -902,13 +902,18 @@ return $input.all().map((it) => {
   // (`lookup_failed`, stamped by "Adapt Search Results" when ANY row's email search
   // 429s/errors — Phase 36 Finding B's deliberate whole-batch scope) makes a genuine
   // "valid email, zero hits" indistinguishable from "the search never actually ran".
-  // Overriding ONLY that one identity.reason string: it is the SOLE outcome a failed
-  // search can silently manufacture (a real match/multi-match found an actual hit a 429
-  // can't invent; an emailless row never issues this search at all, so its own "no
-  // email, insufficient identity" reason is untouched). Read BEFORE `company_hold` so a
-  // row that also failed to resolve a company keeps its own distinct reason.
+  // Overriding ONLY the `net_new` outcome (resolveIdentity's SOLE `net_new` return is
+  // reason "valid email, no existing match" — matching on `outcome` instead of that
+  // literal string survives a future reword of resolveIdentity's text): it is the ONE
+  // outcome a failed search can silently manufacture (a real match/multi-match found an
+  // actual hit a 429 can't invent; an emailless row never issues this search at all, so
+  // its own "no email, insufficient identity" reason is untouched). `company_hold`
+  // (above) can never fire in this same branch — a net_new row only reaches the
+  // company_hold check with `action === "create"`, and the lookup_failed guard two
+  // lines above it already downgraded `create` to `review` first — so this override is
+  // never shadowed by a company-resolution reason.
   let identity_reason = id.reason;
-  if (row.lookup_failed === true && identity_reason === "valid email, no existing match") {
+  if (row.lookup_failed === true && id.outcome === "net_new") {
     identity_reason = "lookup failed (HubSpot search unavailable/rate-limited) — held, not matched";
   }
   if (action === "create") {
@@ -1300,9 +1305,22 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     # F-A3 (uat-stress-2026-09-15, execution 12429): a 48-row batch fired 48 requests per
     # search node in one burst against HubSpot's account-wide 5 req/s CRM Search cap and
     # 429'd on most items (see `_http_node`'s `batch_interval_ms` docstring). 250ms = 4
-    # req/s, 20% headroom under the documented cap. Applies to all three per-row search
+    # req/s, 20% headroom under the documented cap ([documented] only — n8n's own
+    # published docs, docs.n8n.io/build/flow-logic/understand-execution-order and the
+    # httpRequest batching option page; no batching option has run on this instance yet,
+    # so this is not yet an [observed live] fact). Applies to all three per-row search
     # nodes below (email + the two company-link searches) — they run one at a time (each
     # processes every row before the next node starts), so the intervals never overlap.
+    # Wall-time cost: 48 rows x 250ms x 3 nodes ~= 36s added to THIS branch's own
+    # runtime. Under this workflow's `executionOrder: "v1"` (confirmed live on all five
+    # cloud workflows, Phase 72 gate), n8n runs "Set Config"'s fanned-out branches
+    # topmost-canvas-position-first, to completion, before the next branch starts — and
+    # this whole pipeline (the "Extract From File" branch) sits ABOVE "Build Ingest Ack"
+    # on the canvas (position [x, y] vs [x, y+180]), so the ack does NOT fire early: the
+    # added 36s lands BEFORE the response, counting against the ~100s Cloudflare webhook
+    # ceiling (safe at 48 rows; a batch several times larger would need re-checking
+    # against that ceiling together with the lane's other per-row work, e.g. the email
+    # verification batch and the matched-row Contact History hop).
     _INGEST_SEARCH_BATCH_INTERVAL_MS = 250
     hs_search = _http_node(
         "HubSpot Search by Email",

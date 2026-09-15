@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "F-A3/F-A4"
 created: 2026-09-15T05:40:00Z
-updated: 2026-09-15T06:20:00Z
+updated: 2026-09-15T06:40:00Z
 ---
 
 ## Current Focus
@@ -21,8 +21,8 @@ reasoning_checkpoint:
     - "HubSpot's own changelog (developers.hubspot.com/changelog/crm-search-api-rate-limit-increase): CRM Search is capped at 5 req/s, account-wide — 48 requests in one burst on three separate nodes vastly exceeds this"
     - "Code trace: DECIDE_CLOUD's `reason: company_hold || id.reason || row.reject_reason` reads `id.reason` verbatim from `resolveIdentity`, which returns \"valid email, no existing match\" for a valid email with 0 search hits — indistinguishable from 0 hits because the search never ran"
   falsification_test: "If the three search nodes already throttled requests below 5 req/s, or if `Decide Action`'s reason already named lookup_failed distinctly, the hypothesis would be false. Confirmed false only for those two claims by direct inspection of the pre-fix generated JSON and jsCode."
-  fix_rationale: "F-A3: throttle the three per-row search nodes via n8n's native `options.batching.batch.{batchSize,batchInterval}` (1 item / 250ms = 4 req/s, 20% headroom under the 5 req/s cap) — the mechanism the constraints named as a candidate, confirmed sufficient because the three nodes are wired sequentially (node-by-node) in the generated topology, not concurrently, so their intervals never overlap. F-A4: override ONLY the one identity.reason string a failed search can manufacture (\"valid email, no existing match\" while `row.lookup_failed===true`) — a real match/multi-match reason reflects a genuine positive hit a 429 cannot invent, and an emailless row's reason never touches this search at all, so both must and do survive unchanged."
-  blind_spots: "Live proof is out of scope for this session (deploy/bounce/arm forbidden) — the throttled interval's real-world sufficiency against concurrent scheduled-job search traffic on the same HubSpot account is unverified; company-search failures unrelated to email search (companyLink.js's `searchResults()` swallowing an errored response as `[]` with no lookup_failed-equivalent flag) are a separate, pre-existing gap this fix does not touch (out of F-A4's scope per the debug file's own evidence, which ties the reported reason string specifically to the email-search path)."
+  fix_rationale: "F-A3: throttle the three per-row search nodes via n8n's native `options.batching.batch.{batchSize,batchInterval}` (1 item / 250ms = 4 req/s, 20% headroom under the 5 req/s cap) — the mechanism the constraints named as a candidate, confirmed sufficient because the three nodes are wired sequentially (node-by-node) in the generated topology, not concurrently, so their intervals never overlap. Wall-time cost is 48 x 0.25 x 3 ~= 36s, and — CORRECTED after re-verifying the constraint's own ack-timing claim against this workflow's live `executionOrder: v1` and n8n's documented v1 branch-ordering rule (topmost-canvas-position-first, to completion) — this 36s lands BEFORE \"Build Ingest Ack\"/\"Respond to Webhook\" fires (the main pipeline branch is topmost of Set Config's three fan-out targets), so it counts against the ~100s Cloudflare webhook ceiling rather than being free post-ack time as originally assumed. Still safe at 48 rows. F-A4: override ONLY the `net_new` outcome (resolveIdentity's SOLE net_new return carries reason \"valid email, no existing match\" — matched on `id.outcome` rather than that literal string so a future reword of the text can't silently disable the override) — a real match/multi-match reason reflects a genuine positive hit a 429 cannot invent, and an emailless row's reason never touches this search at all, so both must and do survive unchanged (now proven directly, including a multi-match ambiguous control)."
+  blind_spots: "Live proof is out of scope for this session (deploy/bounce/arm forbidden) — the throttled interval's real-world sufficiency against concurrent scheduled-job search traffic on the same HubSpot account is unverified; company-search failures unrelated to email search (companyLink.js's `searchResults()` swallowing an errored response as `[]` with no lookup_failed-equivalent flag) are a separate, pre-existing gap this fix does not touch (out of F-A4's scope per the debug file's own evidence, which ties the reported reason string specifically to the email-search path); a batch meaningfully larger than 48 rows has not been checked against the corrected pre-ack wall-time budget (36s at 48 rows leaves headroom, but the lane's OTHER per-row work — email verification batch, the matched-row Contact History hop — also runs inside the same topmost branch and was not measured here)."
   candidate_causes:
     - "code: no throttling on the per-row HTTP nodes (builder, `_http_node`/call sites)"
     - "environment: HubSpot's account-wide 5 req/s CRM Search rate limit, shared across all traffic on the HubID — a constraint neither the builder nor this fix controls, only respects"
@@ -76,6 +76,10 @@ started: First observed 2026-09-15 on the first ≥ 20-row ingest send this repo
   checked: generated `n8n/wf_contact_ingest_cloud.json` node parameters for the three search nodes; builder `_live_http`
   found: `n8n-nodes-base.httpRequest` typeVersion 4.2, `options: {"timeout": 20000}` only, `onError: continueRegularOutput`, no `retryOnFail`, no `options.batching`; `_live_http` docstring explains why retryOnFail is deliberately absent. No node in any generated workflow uses `batching` today.
   implication: the fix is a builder change to the per-row search nodes (throttle or batch the body); it must survive regeneration and be pinned by an offline structural test.
+- timestamp: 2026-09-15T06:35:00Z
+  checked: the constraint's own claim ("the ingest lane answers its ack early... post-ack work is not bounded by [the ~100s Cloudflare] ceiling") — verified per the constraint's own instruction, not assumed. Checked node positions in the generated JSON (`Set Config` [440,300], `Extract From File` [660,300], `Build Ingest Ack` [440,480], `Set Config Fields` [440,660]), the workflow's `settings.executionOrder` ("v1", confirmed generated AND confirmed live on all five cloud workflows as of the Phase 72 gate per CLAUDE.md), and n8n's own published v1 semantics (docs.n8n.io/build/flow-logic/understand-execution-order: "v1... executes each branch in turn, completing one branch before starting another... orders the branches based on their position on the canvas, from topmost to bottommost").
+  found: topology alone (no data dependency from "Set Config" to "Build Ingest Ack") is NECESSARY but NOT SUFFICIENT — under v1's documented branch-ordering rule, "Set Config"'s THREE fanned-out branches run topmost-canvas-position-first, to completion, one at a time. "Extract From File" (the entire main pipeline, including all three now-throttled search nodes) sits at the SAME y as "Set Config" — topmost of the three branches — while "Build Ingest Ack" (y+180) and "Set Config Fields" (y+360) sit below it. The main pipeline branch therefore runs to completion FIRST; the ack does not fire until after it.
+  implication: the constraint's original claim ("post-ack work is not bounded by the ~100s ceiling") is WRONG for this workflow's actual live configuration (v1). The added throttling wall time (48 rows x 250ms x 3 nodes ~= 36s) lands BEFORE "Respond to Webhook", counting against the Cloudflare ~100s ceiling — not after it. Still safe at 48 rows (36s is well under 100s even before adding the lane's other per-row work), but this bounds how much larger a future batch can grow under the same per-row-search design before approaching that ceiling; a materially larger batch would need this rechecked together with the lane's other latency (email verification batch, the matched-row Contact History hop).
 
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
@@ -104,15 +108,24 @@ fix: |
   250ms (4 req/s, 20% headroom under HubSpot's 5 req/s cap) on all three per-row
   search nodes. Default is `None` (omits `options.batching` entirely), so every other
   existing `_http_node` call site is byte-for-byte unchanged — confirmed by the
-  regeneration diff touching only the three named nodes plus Decide Action.
+  regeneration diff touching only the three named nodes plus Decide Action. Wall-time
+  cost documented at the call site: 48 rows x 250ms x 3 nodes ~= 36s, added BEFORE
+  "Respond to Webhook" fires under this workflow's live `executionOrder: v1` (see the
+  2026-09-15T06:35:00Z Evidence entry — the ack does not fire early), safely under the
+  ~100s Cloudflare webhook ceiling at 48 rows.
   F-A4: in `DECIDE_CLOUD`'s jsCode, introduced `identity_reason` (copied from
   `id.reason`) and override it to "lookup failed (HubSpot search unavailable/rate-
   limited) — held, not matched" ONLY when `row.lookup_failed === true &&
-  identity_reason === "valid email, no existing match"` — the one reason string a
-  failed search can manufacture (a real match/multi-match reflects an actual hit a 429
-  can't invent; an emailless row's own reason is computed without ever touching this
-  search). The final `reason:` field now reads `company_hold || identity_reason ||
-  row.reject_reason || null` (was `id.reason`).
+  id.outcome === "net_new"` — matched on the outcome rather than a hardcoded copy of
+  resolveIdentity's reason text (net_new's sole reason is that exact string, so the two
+  conditions are equivalent, but outcome-matching survives a future reword). A real
+  match/multi-match reflects an actual hit a 429 can't invent; an emailless row's own
+  reason is computed without ever touching this search. The final `reason:` field now
+  reads `company_hold || identity_reason || row.reject_reason || null` (was
+  `id.reason`); `company_hold` can never be set in this same branch (a net_new row only
+  reaches the company_hold check with `action === "create"`, and the lookup_failed
+  guard immediately above it already downgraded `create` to `review` first), so the
+  override is never shadowed.
   Regenerated `n8n/wf_contact_ingest_cloud.json` via
   `python3 scripts/build_cloud_workflows.py` — diff is scoped to exactly these three
   nodes' `options.batching` and Decide Action's `jsCode`; no other generated workflow
@@ -120,18 +133,23 @@ fix: |
 verification: |
   - signal 1 (offline structural test, NEW): tests/test_ingest_search_contract.py::
     test_per_row_search_nodes_are_throttled — asserts all three search nodes carry
-    `options.batching.batch` with batchSize=1 and batchInterval >= 200 (i.e. <= 5
-    req/s). PASS.
+    `options.batching.batch` with batchSize=1 and batchInterval > 200ms (200ms IS the
+    5 req/s cap, so the interval must be strictly slower to have headroom). [documented]
+    only per CLAUDE.md's evidence-tagging convention — no batching option has ever run
+    on this n8n Cloud instance; this proves the generated config, not live throttling
+    behavior. PASS.
   - signal 2 (offline behavioral test, NEW): tests/test_ingest_search_contract.py::
     test_decide_action_names_lookup_failure_distinctly_from_a_genuine_miss — executes
-    the COMPILED `Decide Action` jsCode (via `node -e`) against three rows: (1)
-    execution 12429's exact shape for Colin Telfer (valid email + lookup_failed=true)
-    -> asserts the new lookup-failed reason string; (2) same row with
-    lookup_failed=false (control) -> asserts the ORIGINAL "valid email, no existing
-    match" reason is untouched; (3) a genuinely emailless row with lookup_failed=true
-    (control) -> asserts its "no email, insufficient identity" reason is untouched.
-    Boundary neighbors (lookup_failed true/false toggle; email-present vs emailless)
-    both covered, not just the single reported case. PASS.
+    the COMPILED `Decide Action` jsCode (via `node -e`) against four rows: (1)
+    execution 12429's exact shape for Colin Telfer (valid email, net_new,
+    lookup_failed=true) -> asserts the new lookup-failed reason string; (2) same row
+    with lookup_failed=false (control) -> asserts the ORIGINAL "valid email, no
+    existing match" reason is untouched; (3) a genuinely emailless row with
+    lookup_failed=true (control) -> asserts its "no email, insufficient identity"
+    reason is untouched; (4) a valid email with MULTIPLE hits (ambiguous,
+    lookup_failed=true, control) -> asserts "multiple email matches" is untouched
+    (only the net_new outcome is overridden, not every email-bearing outcome under the
+    batch-wide flag). PASS.
   - signal 3 (regression, full suites): `.venv/bin/python -m pytest -q --tb=short
     -p no:cacheprovider tests/ operator-claude-plugin/tests/` -> 4952 passed, 154
     skipped (baseline immediately before this session's edits, same checkout: 4950
@@ -143,7 +161,10 @@ verification: |
   - NOT verified this session (explicit scope boundary, constraints + debug file's own
     `expecting`): a live re-run of the 48-row CSV against the deployed workflow. This
     session may not deploy, bounce, or arm anything. That live proof is the operator's
-    step, tracked in tests/stress-tests/SESSION-2026-09-15.md.
+    step, tracked in tests/stress-tests/SESSION-2026-09-15.md — it should confirm 0
+    errored items on the three search nodes, `lookup_failed: false` on every row, and
+    contact `1251` resolving to `action: "update"` (not the pre-fix "no existing
+    match").
   guardrail_verdict: accepted (all applicable offline signals pass; live-proof signal
     is explicitly out of this session's scope by the task's own constraints, not
     skipped by omission)
