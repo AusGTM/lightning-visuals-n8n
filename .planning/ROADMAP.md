@@ -498,7 +498,7 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 
 Plans:
 
@@ -524,7 +524,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 73-06-PLAN.md — F-A6: identity pairing first, then the walker's error-output extension, then the `create_failed` refusal lane; §13.0.1 corrected (D-73-01, D-73-02, D-73-05, D-73-19)
+- [x] 73-06-PLAN.md — F-A6: identity pairing first, then the walker's error-output extension, then the `create_failed` refusal lane; §13.0.1 corrected (D-73-01, D-73-02, D-73-05, D-73-19)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
