@@ -498,7 +498,7 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 3/7 plans executed
+**Plans:** 4/7 plans executed
 
 Plans:
 
@@ -516,7 +516,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 73-04-PLAN.md — F-A5: first-wins CSV collapse in the plugin pre-flight with a `duplicate_in_csv` outcome shown in the preview, contact-upload lane only (D-73-03, D-73-04, D-73-21)
+- [x] 73-04-PLAN.md — F-A5: first-wins CSV collapse in the plugin pre-flight with a `duplicate_in_csv` outcome shown in the preview, contact-upload lane only (D-73-03, D-73-04, D-73-21)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
