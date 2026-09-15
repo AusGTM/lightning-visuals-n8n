@@ -35,3 +35,7 @@ uat-batch-*.csv
 tests/stress-tests/uat-stress-mixed-batch-*.csv
 tests/stress-tests/uat-reset-snapshot*.json
 tests/stress-tests/uat-reset-report-*.json
+
+# demo-run reset artefacts (record ids)
+tests/demo-run/uat-reset-snapshot*.json
+tests/demo-run/uat-reset-report-*.json
