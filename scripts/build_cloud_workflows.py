@@ -611,8 +611,13 @@ BUILD_COMPANY_LINK = inline("companyLink.js") + r"""
 // returns a clean 200 with zero hits. Sentinel in, empty result out, row order preserved.
 return $input.all().map((it) => {
   const row = it.json;
+  const domain = companyDomainForRow(row);
   return { json: { ...row,
-    company_search_domain: companyDomainForRow(row) || "no-company-domain.invalid",
+    company_search_domain: domain || "no-company-domain.invalid",
+    // D-73-06 parity: the same [bare, www.bare] pair the companies branch searches with
+    // (ENRICH_BUILD_CO_IDENTITY's domain_variants) — uat_reset.py --snapshot already
+    // queries both forms, and this is what makes the ingest lane agree with it.
+    company_search_domain_variants: domain ? [domain, "www." + domain] : ["no-company-domain.invalid"],
     company_search_name: companyNameForRow(row) || "no company name .invalid",
   }};
 });
@@ -620,7 +625,7 @@ return $input.all().map((it) => {
 
 CO_LINK_DOMAIN_SEARCH_BODY = (
     '={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "domain", '
-    'operator: "EQ", value: $json.company_search_domain } ] } ], '
+    'operator: "IN", values: $json.company_search_domain_variants } ] } ], '
     'properties: ["name","domain"], limit: 5 }) }}'
 )
 
@@ -3051,12 +3056,27 @@ function cleanDomain(raw) {
   d = d.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
   return d || null;
 }
+// D-73-06/D-73-22 (F-B7 + the folded F-B4 sentinel): a portal record may be STORED under
+// either the bare form or a `www.`-prefixed form (three live duplicates — Racing
+// Victoria, Wyong, Canberra RC — proved a bare-only EQ search misses the latter). The
+// search now matches BOTH in one IN query, mirroring the `linkedin_url_variants`
+// precedent (Phase 61 Plan 02 Task 2) — a sibling row field, deliberately off
+// identity_keys, for the same reason that field is: it cannot perturb any test pinning
+// identity_keys' own exact shape. Never normalises the STORED domain (D-73-06) — only the
+// two candidate values sent in the search. Never `[]`: HubSpot 400s on an empty `values`
+// list, and a name-only row's blank domain must return a clean zero-hit 200 instead (the
+// Phase 36 Finding B `.invalid` sentinel idiom `BUILD_COMPANY_LINK` already uses).
+function domainVariants(domain) {
+  if (!domain) return ["no-company-domain.invalid"];
+  return [domain, "www." + domain];
+}
 return $input.all().map((it) => {
   const row = it.json;
   const domain = cleanDomain(row.domain || row.website);
   return { json: { ...row,
     object_type: "companies",
     identity_keys: { domain, companyName: row.company || row.name || null },
+    domain_variants: domainVariants(domain),
   }};
 });
 """
@@ -3088,9 +3108,11 @@ return $input.all().map((it) => {
 # this local-live one. All four are fill_blank_only/protect_if_current_present, so an
 # existingRecord that never fetches them reads `undefined`, `_isBlank(undefined)` is
 # `true`, and the gate promotes a candidate over a real recorded phone/state value.
+# D-73-06: IN over the [bare, www.bare] variant pair — parity with the cloud lane's own
+# "HubSpot Company Search" node (below) and the ingest lane's CO_LINK_DOMAIN_SEARCH_BODY.
 HS_CO_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
-    '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
+    '[ { propertyName: "domain", operator: "IN", values: $json.domain_variants } ] } ], '
     'properties: ["name","domain","industry","annualrevenue","numberofemployees",'
     '"lv_org_type","lv_produces_content","lv_content_type","lv_is_hardware_vendor",'
     '"lv_is_gambling_operator","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
@@ -7114,9 +7136,15 @@ def build_enrichment_cloud():
     cx = x
     build_company_identity_x = cx
     nodes.append(code_node("Build Company Identity", ENRICH_BUILD_CO_IDENTITY, cx, cy))
-    # Task 6 (review #8): real filterGroups (domain EQ, reusing the same envelope shape
+    # Task 6 (review #8): real filterGroups (domain IN, reusing the same envelope shape
     # HS_CO_SEARCH_BODY_EXPR already proves for the raw-HTTP local-live variant) +
     # hs_object_id in the property list.
+    #
+    # D-73-06 (F-B7, 2026-09-15): EQ -> IN over the [bare, www.bare] variant pair
+    # `domain_variants` computes (ENRICH_BUILD_CO_IDENTITY) — a bare-only EQ search missed
+    # every portal record stored under a `www.` domain, duplicating three live companies.
+    # Same shape as the "HubSpot Linkedin Search" IN-filter precedent (Phase 61 Plan 02
+    # Task 2). ONE search per row, never two sequential ones.
     #
     # BUG 10 / Phase 16.6: credential-bound httpRequest, NOT the native hubspot node —
     # n8n's HubSpot node has no `operation: "search"` for resource:company at all (see
@@ -7127,8 +7155,8 @@ def build_enrichment_cloud():
     hs_co_search_x = cx
     hs_co_search = _hs_http_search_node(
         "HubSpot Company Search", "company", cx, cy,
-        filter_groups=[[{"propertyName": "domain", "operator": "EQ",
-                          "value": "={{ $json.identity_keys.domain }}"}]],
+        filter_groups=[[{"propertyName": "domain", "operator": "IN",
+                          "values": "={{ $json.domain_variants }}"}]],
         properties_csv=ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
     )
     nodes.append(hs_co_search)
