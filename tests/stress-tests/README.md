@@ -77,18 +77,20 @@ with nobody named — that is the lane this file exists to exercise.
 
 | Rows | Shape | Expected |
 | --- | --- | --- |
-| 1–6 | ATC, HRNSW, MRC, BRC, Perth Racing, Racing Victoria — already in the portal | **matched, never recreated**. ATC/MRC/BRC match by domain. HRNSW is held twice (`10204524171` `www.hrnsw.com.au`, `18756544347` `www.harnessmediacentre.com.au`) and Perth Racing as `9604794662` "Perth Racing (Previously WA Turf Club)" / `perthracing.org.au`; **Racing Victoria does not exist in the portal** (corrected 2026-09-15 — only VRC/HRV/GRV/Country Racing Victoria do). Observed 2026-09-15: HRNSW matched `10204524171` by name; Perth Racing was DUPLICATED (F-B2); RV created legitimately |
-| 7–25 | Real ANZ racing bodies and clubs with public websites — snapshot 2026-09-15 found 9 of these already in the portal (Hawkesbury, Newcastle JC, GCTC, SCTC, Darwin, Tasracing, HRV, RWWA) plus Moonee Valley from row 32; the rest are creates | **created** (armed) and ICP-scored; then suggest-contacts crawls each site's about/board/team pages. Verify a domain live before blaming the lane — a few are best-effort (`gctc.com.au`, `sctc.com.au`, `aucklandracing.co.nz`) |
+| 1–6 | ATC, HRNSW, MRC, BRC, Perth Racing (Racing Victoria is NOT in the portal) | **matched, never recreated** — except Perth Racing, which attempt 1 DUPLICATED (`288108751332`; portal name "Perth Racing (Previously WA Turf Club)", domain `perthracing.org.au` — exact name/domain matching cannot see it; F-B2 open). Reset removes the duplicate. ATC/MRC/BRC match by domain. HRNSW is held twice (`10204524171` `www.hrnsw.com.au`, `18756544347` `www.harnessmediacentre.com.au`) and Perth Racing as `9604794662` "Perth Racing (Previously WA Turf Club)" / `perthracing.org.au`; **Racing Victoria does not exist in the portal** (corrected 2026-09-15 — only VRC/HRV/GRV/Country Racing Victoria do). Observed 2026-09-15: HRNSW matched `10204524171` by name; Perth Racing was DUPLICATED (F-B2); RV created legitimately |
+| 7–25 | Real ANZ racing bodies and clubs with public websites — snapshot 2026-09-15 found 9 already in the portal (Hawkesbury, Newcastle JC, GCTC, SCTC, Darwin, Tasracing, HRV, RWWA) plus Moonee Valley from row 32; the rest are creates. Attempt 1 created: Wyong, Canberra RC, Pakenham, Murray Bridge, NZTR, Sky Racing, Gosford (researched domain), plus Racing Victoria (row 6, genuinely absent) | **created** (armed) and ICP-scored; then suggest-contacts crawls each site's about/board/team pages. Verify a domain live before blaming the lane — a few are best-effort (`gctc.com.au`, `sctc.com.au`, `aucklandracing.co.nz`) |
 | 26 | Sky Racing | broadcaster / content producer — no veto |
 | 27 | Tabcorp | gambling operator — graduated deduction, no hard veto |
 | 28 | Daktronics | hardware vendor AND non-ANZ — both hard vetoes, Tier D |
 | 29 | New York Racing Association | non-ANZ — hard veto, Tier D |
-| 30 | Wagga Wagga Rowing Club (fictitious) | created if armed; a SECOND run of the contacts CSV then associates row 41/42 instead of holding them; suggest-contacts crawl fails cleanly (no site) |
+| 30 | Wagga Wagga Rowing Club (fictitious) | created if armed (attempt 1: `288179567075`); a SECOND run of the contacts CSV then associates row 41/42 instead of holding them; suggest-contacts crawl fails cleanly (no site) |
 | 31–32 | `https://www.vrc.com.au/`, `WWW.THEVALLEY.COM.AU` | normalised to `vrc.com.au` / `thevalley.com.au` before search |
 | 33 | duplicate of row 7 | deduped to one |
-| 34 | Gosford Race Club, no website | refused by name in the domain table; domain research offered (costed) |
-| 35 | LinkedIn company page as website | **refused** — never created under `linkedin.com` |
-| 36 | `gmail.com` as website | refused / flagged (freemail is not a company domain) |
+| 34 | Gosford Race Club, no website | domain table asks; research → `theentertainmentgrounds.com.au` (attempt 1, created `288097166812`) |
+| 35 | LinkedIn company page as website | **refused** as a domain — never created under `linkedin.com`. Declined to name-only in attempt 1: the lane then sent `domain EQ ""` (HubSpot 400) and skipped with "no existing record" — F-B4, open |
+| 36 | `gmail.com` as website | SHOULD be refused (freemail is not a company domain) — attempt 1 accepted and CREATED it (`288135240183`), F-B3 open. Reset needs `--extra-company-id` for it |
+
+Attempt 1 (2026-09-15, run `6891d018…`): 24 enriched in place, 11 created, 1 skipped, executions `12432`–`12449`, no 429s.
 
 Cost: company enrichment is the expensive lane (providers + Haiku + Sonnet per company, ~37 s
 each at 2 records per POST → ~15 write POSTs for 30 companies). Lusha 2 credits/company.

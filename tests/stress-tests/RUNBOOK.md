@@ -28,7 +28,7 @@ record, never a 200.
    ```
    ! set -a; . ./.env; set +a; python3 scripts/uat_reset.py --snapshot --companies-csv tests/stress-tests/uat-stress-companies-2026-09-14.csv
    ```
-   Taken 2026-09-15: **12 of 32 domains protected** — ATC, MRC, BRC, Hawkesbury, Newcastle JC, GCTC, SCTC, Darwin TC, Tasracing, HRV, RWWA, Moonee Valley. Three companies known to exist were NOT matched by domain — **Perth Racing** (`9604794662`), **Racing Victoria**, **HRNSW** (`18756544347`, filed under `www.harnessmediacentre.com.au`) — so those three are the live name-match test in Stage B: they must match by exact name, never be recreated. The snapshot file lands next to the CSV and is gitignored. Without it the reset refuses to run.
+   `--snapshot` queries both `domain` and `www.domain` (F-B7). Taken 2026-09-15 (pre-fix): **12 of 32 domains protected** — ATC, MRC, BRC, Hawkesbury, Newcastle JC, GCTC, SCTC, Darwin TC, Tasracing, HRV, RWWA, Moonee Valley. Three companies known to exist were NOT matched by domain — **Perth Racing** (`9604794662`), **Racing Victoria**, **HRNSW** (`18756544347`, filed under `www.harnessmediacentre.com.au`) — so those three are the live name-match test in Stage B: they must match by exact name, never be recreated. The snapshot file lands next to the CSV and is gitignored. Without it the reset refuses to run.
 7. **Budget.** Whole session ≈ 60–90 n8n executions of the 2,500/month plan; provider spend is bounded to Stage D and Stage C sends. Have the client confirm both figures before you start.
 
 ---
@@ -47,7 +47,7 @@ Preview must show:
 
 Approve. Claude asks for the write grant (name the batch, worst-case spend shown, one yes). Autonomy is on: it states the price, pauses seven seconds, arms **that send only**, sends in chunks, disarms, and reports per record.
 
-Verify by re-read (Claude does it; spot-check two in the HubSpot UI):
+Verify by re-read (Claude does it; spot-check two in the HubSpot UI). First: no row may carry `lookup_failed` or the reason "lookup failed (HubSpot search unavailable/rate-limited)" — that is F-A3 recurring (the three search nodes are throttled to 4 req/s since `248754c6`; a 48-row send takes ~45 s after the ack).
 - Contact `1251` (Telfer): phone unchanged (`+61 2 9663 8400`), job title unchanged — SAFE-01.
 - Any dense create (rows 3–14): Mobile Phone populated, LinkedIn URL in BOTH `lv_linkedin_url` and HubSpot's own LinkedIn field, city/state/country, seniority, persona; company association present.
 - Row 43: `(08) 9277 0777` and `0421 555 210` normalised to `+61 …`.
@@ -64,7 +64,7 @@ Domain table (one row per company) must show: rows 31–32 normalised (`vrc.com.
 Cost guard: ~30 companies × full waterfall (Lusha 2 credits/company; ZoomInfo ~1; Anthropic ≈ $0.07/record). Grant → dispatch at 2 companies per POST (~15 executions) → watch until settled.
 
 Verify:
-- The 12 snapshot-protected companies **matched by domain, not recreated**. Perth Racing, Racing Victoria and HRNSW (portal domains differ from the CSV) **matched by exact name** — a second copy of any of the three is a finding: stop, record the new id (the reset will remove it, since it postdates the snapshot).
+- The snapshot-protected companies **matched by domain, not recreated**; HRNSW matches `10204524171` by exact name. **Known open gaps from attempt 1:** Perth Racing is DUPLICATED (F-B2 — portal name/domain differ; exact matching cannot see it), the `gmail.com` row is CREATED (F-B3), the name-only row 400s on the domain search and skips (F-B4). Racing Victoria is a legitimate create. Treat a repeat of those three as expected until their fixes ship; anything else new is a fresh finding.
 - Created companies carry `lv_org_type`, region, produces-content, and a tier: Daktronics and NYRA → `lv_anti_icp_flag` true, Tier D; Tabcorp → deduction only, no veto; Sky Racing → no veto.
 - Wagga Wagga Rowing Club created (fictitious, will not enrich).
 - Conflicting-provider companies land in `needs_review` with the field and sources named, never a silently promoted value (§15.0).
@@ -112,7 +112,7 @@ Say *"What needs review?"* Work three items: approve one (Claude shows the exact
    ! set -a; . ./.env; set +a; python3 scripts/uat_reset.py --companies-csv tests/stress-tests/uat-stress-companies-2026-09-14.csv
    ! set -a; . ./.env; set +a; ALLOW_UAT_RESET=true python3 scripts/uat_reset.py --companies-csv tests/stress-tests/uat-stress-companies-2026-09-14.csv --execute
    ```
-   The plan must NOT list `1251`, any snapshot-protected company, or any contact predating the snapshot. Every DELETE prints `204`; the JSON report lands next to the CSV. Deletes are restorable from HubSpot's recycle bin (HubSpot retains deleted records for a limited period; restore before the session report is filed if anything was wrong).
+   Add `--extra-company-id <id>` for any company created under a domain the rule refuses (attempt 1: `--extra-company-id 288135240183`, the `gmail.com` row). The plan must NOT list `1251`, any snapshot-protected company, or any contact predating the snapshot. Every DELETE prints `204`; the JSON report lands next to the CSV. Enrichment written onto PRE-EXISTING companies during Stage B (24 records in attempt 1) is NOT undone by the reset — those are real records receiving real enrichment, and HubSpot property history keeps the prior values. Deletes are restorable from HubSpot's recycle bin (HubSpot retains deleted records for a limited period; restore before the session report is filed if anything was wrong).
 4. **Post-reset check.** Say *"What's the backend doing?"* once more; HubSpot search *email contains uat.* returns nothing; `1251` intact.
 5. **Report.** Copy `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md`'s shape: per stage the run id, execution range, counts, and a findings table (`F-S1..`) with severity. Never a runData block.
 
@@ -129,3 +129,16 @@ Say *"What needs review?"* Work three items: approve one (Claude shows the exact
 | Provider credits dropping faster than the cost guard stated | stop; compare the guard's figure with the provider dashboard before continuing |
 | A second HRNSW / any duplicate company | stop Stage B; record; the dedupe rule is the finding |
 | Client asks to keep any created record | exclude it from the reset plan by passing a later `--since`, or delete the rest by hand from the dry-run list |
+
+---
+
+## Restart procedure (after a reset, back to Stage A)
+
+1. Close-out steps 1–4 above (disarmed read-back, execution delta, reset dry run → execute, post-reset check).
+2. Re-take the snapshot — the reset changed the portal and the snapshot code now sees `www.` domains:
+   ```
+   ! set -a; . ./.env; set +a; python3 scripts/uat_reset.py --snapshot --companies-csv tests/stress-tests/uat-stress-companies-2026-09-14.csv
+   ```
+   Expect the protected list to grow by HRNSW (`www.hrnsw.com.au`) and to NOT contain any id the reset just deleted.
+3. New baseline: *"What's the backend doing?"* — record the latest execution id on a fresh attempt section of the session sheet.
+4. Stage A again. The contacts CSV needs no change; the companies CSV keeps its three known-gap rows (Perth Racing, gmail, LinkedIn) on purpose — they document F-B2/F-B3/F-B4 until fixed.
