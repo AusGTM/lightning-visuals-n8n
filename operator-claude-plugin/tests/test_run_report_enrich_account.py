@@ -139,8 +139,15 @@ def test_run_report_enrich_account_reconciles_after_backfill():
     unjoinable = sum(1 for b in records.values() if b["join"] == "unjoinable")
 
     # 24 enrich + 11 create = 35 rows now carry a real HubSpot id and join correctly —
-    # D-73-11's stated target in full.
-    assert joined_by_hs_object_id == 35
+    # D-73-11's stated target in full. This buckets to 34, not 35, distinct
+    # (identity, lane) records: hs_object_id `9604780317` was independently enriched
+    # in TWO of this run's 18 executions (`12435` and `12448`) — a real feature of the
+    # live data, not a test artifact — and `_build_records`'s own bucketing (one entry
+    # per identity+lane, events appended, REVIEW-57-H) correctly folds both events
+    # into one record rather than manufacturing a second. The event COUNT (36) is
+    # asserted above; this is the bucket count.
+    assert joined_by_hs_object_id == 34
+    assert sum(len(b["events"]) for b in records.values() if b["join"] == "hs_object_id") == 35
 
     # The Illawarra skip never existed in HubSpot: the companies form mints no
     # `row_id` (enrichment.build_envelope's `companies` branch never sets one) and a
@@ -155,4 +162,4 @@ def test_run_report_enrich_account_reconciles_after_backfill():
     assert unjoinable == 1
     assert unjoinable_seen is True
 
-    assert joined_by_hs_object_id + unjoinable == 36
+    assert joined_by_hs_object_id + unjoinable == 35

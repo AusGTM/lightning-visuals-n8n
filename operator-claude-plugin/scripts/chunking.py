@@ -656,10 +656,25 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
 
     can_write = any(r.can_write for r in outcome.results)
 
+    # Phase 73 Plan 01 (F-B5, D-73-11/D-73-12): the durable copy is backfilled here,
+    # immediately before it is persisted — the RETURNED `rows` (read by step 9's
+    # immediate per-send report, `report_enrichment.build_row_reports`) are left
+    # untouched, unmutated and in the caller's own hands; only what reaches
+    # `written_records` is corrected. See `report_enrichment.backfill_missing_identity`
+    # for why: `Build Response`'s own item for a company update carries none of
+    # `action`/`hs_object_id`/`row_id` at top level (the create branch is decorated,
+    # the update branch is a bare Merge pass-through), so the join
+    # `run_report._identity_for_entry` already performs correctly has nothing to join
+    # on unless this restores it first. Lazy import — `report_enrichment` -> `report`
+    # has no cycle back here, but every other cross-module import in this function is
+    # lazy (see `dispatch_plan`'s own note) and this one follows the same convention.
+    import report_enrichment as _report_enrichment
     written_records_failures = []
     if can_write and rows:
+        write_records_rows, _excluded_marker_count = (
+            _report_enrichment.backfill_missing_identity(rows, run_data))
         try:
-            flushed = written_records.append_chunk(outcome.run_id, 0, rows)
+            flushed = written_records.append_chunk(outcome.run_id, 0, write_records_rows)
         except written_records.WrittenRecordsError as e:
             flushed = False
             bookkeeping_reason = str(e)

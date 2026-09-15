@@ -168,6 +168,95 @@ def enrichment_row_ledger(execution):
     return ledger, None
 
 
+# Phase 73 Plan 01 (F-B5, D-73-11/D-73-12): `Build Response`'s own item for a company
+# UPDATE (`enrich`) is the bare `HubSpot Company Update` HTTP response passed straight
+# through a Merge — no `action`, no `hs_object_id`, no `row_id`, no `object_type` at
+# top level, only `id`/`properties` (live-confirmed, run `6891d018e84f4d869eb8080292dac6c5`,
+# executions `12432`-`12449`: 24 of 54 recovered rows had this exact shape). The CREATE
+# branch gets `Adapt Company Create`, which decorates the raw response with the full
+# envelope; the UPDATE branch gets nothing. `written_records.classify_item` then
+# defaults `object_type` to `"contacts"` and resolves `outcome_for_action(None, None)`
+# to `FAILED` — the record is not merely unjoinable, it is actively mislabeled.
+#
+# This is NOT a second join (D-73-11's join rule — row_id then hs_object_id — is
+# already correct in `run_report._identity_for_entry`): it restores identity that was
+# stripped BEFORE the item ever reached a join, using data this run's OWN settled
+# execution already carries. `Decide Company Action`/`Decide Action` run BEFORE the
+# write and, for a genuine update, already know the pre-existing `hs_object_id` — this
+# reads that ledger by the id the raw response independently confirms (`item["id"]`),
+# never by position (Build Response's Merge idiom does not preserve item order).
+_WHOLE_REQUEST_MARKER_ACTIONS = frozenset({
+    # Documented together in written_records.ACTION_TO_OUTCOME's own comment: "a
+    # whole-request refusal before any row was even attempted, so nothing was
+    # enriched". These carry no row identity of any kind because they never described
+    # a row — one such marker was observed per execution (18 of 18), never per item.
+    "research_failed", "recompute_refused", "list_expansion_refused",
+})
+
+
+def backfill_missing_identity(rows, run_data):
+    """`(rows, run_data) -> (backfilled_rows, excluded_marker_count)`. Pure — never
+    mutates its inputs, never raises (a row this cannot make sense of is returned
+    unchanged).
+
+    Per row:
+      - A whole-request marker (`_WHOLE_REQUEST_MARKER_ACTIONS`) carrying no `id`,
+        `hs_object_id` or `row_id` at all is EXCLUDED from the returned list —
+        `excluded_marker_count` is incremented instead. It never described a company
+        or contact, so counting it as an `unjoinable` per-record outcome (D-73-12's
+        literal ask) would be inventing a row where none existed; dropping it is what
+        "never counted as unjoinable" means here.
+      - Otherwise, `hs_object_id` is recovered from `row.get("hs_object_id") or
+        row.get("id")` — the raw HubSpot response's own `id` field, which every write
+        response (create or update) carries even when the envelope-decoration step
+        that copies it to `hs_object_id` never ran.
+      - When `action` is still missing after that, `Decide Company Action`/`Decide
+        Action`'s own ledger (read fresh from `run_data`, never cached) is searched
+        for an item whose `hs_object_id` equals the recovered id; `action`,
+        `object_type` and `row_id` are copied from it when found. A miss leaves
+        `action` alone — this never guesses.
+    """
+    ledger_by_id = {}
+    if isinstance(run_data, dict):
+        for _lane, node_name in _ACTION_LANE_ORDER:
+            for item in all_node_items(run_data, node_name):
+                if not (isinstance(item, dict) and isinstance(item.get("json"), dict)):
+                    continue
+                ledger_json = item["json"]
+                ledger_id = ledger_json.get("hs_object_id")
+                if ledger_id:
+                    ledger_by_id[str(ledger_id)] = ledger_json
+
+    backfilled = []
+    excluded_marker_count = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            backfilled.append(row)
+            continue
+
+        has_identity = bool(row.get("row_id") or row.get("hs_object_id") or row.get("id"))
+        if not has_identity and row.get("action") in _WHOLE_REQUEST_MARKER_ACTIONS:
+            excluded_marker_count += 1
+            continue
+
+        recovered_id = row.get("hs_object_id") or row.get("id")
+        if not recovered_id:
+            backfilled.append(row)
+            continue
+
+        new_row = dict(row)
+        new_row["hs_object_id"] = str(recovered_id)
+        if not new_row.get("action"):
+            ledger_row = ledger_by_id.get(str(recovered_id))
+            if ledger_row:
+                for key in ("action", "object_type", "row_id"):
+                    if ledger_row.get(key) is not None:
+                        new_row[key] = ledger_row[key]
+        backfilled.append(new_row)
+
+    return backfilled, excluded_marker_count
+
+
 def _outcome_for_row(row):
     """Delegates to `written_records.outcome_for_action` — the one pure, total,
     never-raising vocabulary both client-side readers resolve through (57-02, D-57-03).
