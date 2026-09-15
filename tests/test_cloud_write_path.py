@@ -129,9 +129,11 @@ def test_hubspot_search_filters_use_the_correct_identity_property():
     assert 'propertyName: "email"' in contact_body
     assert 'operator: "EQ"' in contact_body
 
+    # D-73-06 (F-B7, 73-03 Task 1): domain search is IN over [bare, www.bare], not EQ —
+    # see tests/n8n/companyDomainVariants.test.mjs for the full behavioural pin.
     company_body = _node(doc, "HubSpot Company Search")["parameters"]["jsonBody"]
     assert 'propertyName: "domain"' in company_body
-    assert 'operator: "EQ"' in company_body
+    assert 'operator: "IN"' in company_body
 
 
 @pytest.mark.parametrize("adapt_js,label", [(ENRICH_ADAPT_SEARCH, "contacts"), (ENRICH_ADAPT_CO_SEARCH, "companies")])

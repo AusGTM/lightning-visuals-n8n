@@ -47,9 +47,12 @@ NODES = {
     "HubSpot Company Search": {
         "workflow": "wf_enrichment_cloud.json",
         "properties_csv": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
+        # D-73-06 (F-B7, 2026-09-15, 73-03 Task 1): EQ -> IN over the [bare, www.bare]
+        # variant pair — a bare-only EQ search missed every portal record stored under a
+        # www. domain (three live duplicates). See tests/n8n/companyDomainVariants.test.mjs.
         "body_tokens": [
-            'propertyName: "domain"', 'operator: "EQ"',
-            "$json.identity_keys.domain",
+            'propertyName: "domain"', 'operator: "IN"',
+            "$json.domain_variants",
         ],
     },
     "HubSpot Company Fetch By Id": {
