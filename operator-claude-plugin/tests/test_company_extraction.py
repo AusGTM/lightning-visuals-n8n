@@ -8,10 +8,12 @@ against the same config the code reads, structurally rather than by a retyped li
 """
 from pathlib import Path
 
+import pytest
 import yaml
 
 import extraction
 import enrichment
+import company_domain
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 EXTRACTION_MD = PLUGIN_ROOT / "skills" / "contact-upload" / "extraction.md"
@@ -435,3 +437,52 @@ def test_profile_page_never_becomes_a_company_domain_is_documented():
     text = _extraction_md_text()
     assert "linkedin" in text.lower()
     assert "never recorded as that company" in text or "never recorded as the company" in text
+
+
+# =====================================================================================
+# D-73-08/D-73-09 (F-B3, stress attempt 2 exec 12449): "Country Racing Collective",
+# website gmail.com, was accepted and CREATED — freemail is never a company's own
+# domain, and the plugin's domain-confirm/decline lane (company_domain.py, the actual
+# path this row travelled) did not refuse it. Fixed at `_validate_decision`'s shared
+# `_guard_domain`, reusing `enrichment.FREEMAIL_DOMAINS` — the same set the backend's
+# "Decide Company Action" now refuses on too (tests/n8n/companyFreemailRefusal.test.mjs).
+# =====================================================================================
+
+def _freemail_proposal(row_id="row-1", name="Country Racing Collective", domain=None):
+    return {"row_id": row_id, "name": name, "domain": domain, "source": "operator",
+            "reason": "operator-supplied"}
+
+
+def test_confirming_a_freemail_domain_raises_the_live_fb3_case():
+    """The live F-B3 shape: the operator's own confirmation names gmail.com."""
+    proposals = [_freemail_proposal(domain="gmail.com")]
+    with pytest.raises(company_domain.DomainDecisionError) as exc:
+        company_domain.apply_domain_decisions(proposals, {"row-1": "gmail.com"})
+    message = str(exc.value)
+    assert "gmail.com" in message
+    assert "website" in message.lower()
+
+
+def test_correcting_to_a_freemail_domain_also_raises():
+    proposals = [_freemail_proposal(domain="realsite.example")]
+    with pytest.raises(company_domain.DomainDecisionError):
+        company_domain.apply_domain_decisions(proposals, {"row-1": "hotmail.com"})
+
+
+def test_a_legitimate_confirmed_domain_is_unaffected_by_the_freemail_guard():
+    proposals = [_freemail_proposal(domain="realracingclub.example")]
+    result = company_domain.apply_domain_decisions(
+        proposals, {"row-1": "realracingclub.example"})
+    assert result["undecided"] == []
+    assert result["decided_with_domain"][0]["domain"] == "realracingclub.example"
+
+
+def test_company_domain_still_defines_no_host_collection_of_its_own_after_the_guard():
+    """The freemail check reuses enrichment.FREEMAIL_DOMAINS — no new set, no new
+    literal (D-73-08)."""
+    own_collections = [
+        name for name, value in vars(company_domain).items()
+        if not name.startswith("__")
+        and isinstance(value, (frozenset, set, tuple, list))
+    ]
+    assert own_collections == []
