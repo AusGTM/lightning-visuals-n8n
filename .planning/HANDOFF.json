@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-15T10:22:08.296Z",
+  "phase": "72",
+  "phase_name": "enrichment-extras-land-in-hubspot",
+  "phase_dir": ".planning/phases/72-enrichment-extras-land-in-hubspot",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Phase 72 complete, verified 22/22, security 41/41 closed", "status": "done", "commit": "7867b50d"},
+    {"id": 2, "name": "Docs staleness sweep + plugin 0.49.1 released and installed", "status": "done", "commit": "94f7356b"},
+    {"id": 3, "name": "Stress-test kit tests/stress-tests (CSVs, RUNBOOK, session sheet, uat_reset.py)", "status": "done", "commit": "9acba218"},
+    {"id": 4, "name": "F-A3/F-A4 fix: throttled ingest searches + lookup-failed reason; deployed live 05:58Z", "status": "done", "commit": "248754c6"},
+    {"id": 5, "name": "Stress test attempt 2 A–F run by plugin session; reset 2 (35 deletes); portal at pre-UAT set", "status": "done", "commit": "1f09cd6b"},
+    {"id": 6, "name": "Demo kit tests/demo-run (standalone runbook + assets)", "status": "done", "commit": "4a054f28"}
+  ],
+  "remaining_tasks": [
+    {"id": 7, "name": "GA quick batch: F-A6 create continue-on-error + orphan handling; F-A5 in-CSV row dedupe; F-E1 array serialisation on review approve; F-B7 www. domain match in companies branch; F-B3 freemail refuse; F-B5 run report sees enrich/update outcomes; F-A3r throttle headroom (250→300 ms); F-A1/A2/B1/B6 cost + balance surface", "status": "not_started"},
+    {"id": 8, "name": "Deploy + bounce disarmed, reset, full stress run A–F (attempt 3) per tests/stress-tests/RUNBOOK.md", "status": "not_started"},
+    {"id": 9, "name": "Clean-machine install test in default permission mode following USAGE.md only", "status": "not_started"},
+    {"id": 10, "name": "Record demo with real client data (tests/demo-run); extend reset.py to read written_records-<run_id>.json for contacts", "status": "not_started"},
+    {"id": 11, "name": "/gsd-debug continue ingest-search-429-rate-limit (archive: live re-run proved throttle, 1 residual 429 = F-A3r)", "status": "not_started"},
+    {"id": 12, "name": "Plugin 0.50.0 bump + CHANGELOG; /gsd-complete-milestone", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "GA blocked by F-A6 (ingest HubSpot Create aborts whole batch on one 409 duplicate; creates land orphaned) and F-E1 (review approve sends array values raw → HubSpot 400)", "type": "technical", "workaround": "none — fix in builder (scripts/build_cloud_workflows.py), regenerate, deploy disarmed"},
+    {"description": "Provider balances read not_configured through the plugin; spend guard cannot bound provider credits (F-B6)", "type": "external", "workaround": "read provider dashboards before/after each batch"}
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Decide F-B6: give the backend-status workflow provider keys, or accept 'unknown' balances", "context": "client will ask how many credits remain", "blocking": false},
+    {"action": "git push after each session — pushes from this session intermittently return 403 (credential helper); the operator's own push works", "context": "unpushed commits are invisible to the marketplace clone", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Never arm n8n writes from Claude; the operator runs arming via `!`; auto-mode classifier hard-denies it anyway", "rationale": "standing constraint, re-confirmed 2026-09-15", "phase": "72"},
+    {"decision": "Reset selects only run-created records: snapshot-protected domains + createdate >= since + uat./demo. markers; researched domains need --extra-company-id", "rationale": "portal safety; proven twice (11 + 35 deletes, 0 pre-existing touched)", "phase": "72"},
+    {"decision": "Stress CSVs keep their known-gap rows (Perth Racing, gmail, LinkedIn, duplicate priya) on purpose until F-B2/B3/B4/A5 ship", "rationale": "they document the gaps; reset removes their side effects", "phase": "72"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Open a quick batch for the GA fix list (remaining task 7) from tests/stress-tests/SESSION-2026-09-15.md findings table; start with F-A6 + F-A5 (ingest lane), then F-E1 (review lane), F-B7/F-B3 (companies), F-B5 (plugin report).",
+  "context_notes": "Backend disarmed PASS at 10:19Z; live bodies 30/78/287/55/43 v1 with the ingest throttle. Snapshot tests/stress-tests/uat-reset-snapshot.json valid (21 protected, www-aware). session.log (raw plugin transcript) is gitignored. The 4 real contacts Stage C updated (22801, 6551, 35551, 17951) and 24 enriched companies keep their enrichment. Debug session ingest-search-429-rate-limit at awaiting_human_verify. Memory: subagent-shares-working-tree — clean tree before spawning agents that commit."
+}
