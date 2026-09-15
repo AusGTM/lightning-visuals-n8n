@@ -124,6 +124,7 @@ Say *"What needs review?"* Work three items: approve one (Claude shows the exact
 | --- | --- |
 | Executions climbing with no send in flight (>10 in a minute) | `POST /workflows/950HPb7a1GgSAIyZ/deactivate` on the n8n REST API (CLAUDE.md §13.0.3 — deactivate drains over ~30 s, not instantly); then disarm + bounce; record the id range |
 | Any `ALLOW_*` flag reads armed after a send has finished | disarm, bounce, re-read before anything else |
+| A code fix must go live mid-session | `DRY_RUN=false ALLOW_N8N_DEPLOY=true python3 scripts/deploy_n8n_workflows.py && python3 scripts/bounce_n8n_workflows.py && python3 scripts/verify_live_write_safety.py` — without the two env flags the deploy script only prints its table |
 | A HubSpot PATCH to an empty id / a `405` in a run | stop sends; that is the legacy-execution-order symptom — check `settings.executionOrder` is `v1` on the live body |
 | Provider credits dropping faster than the cost guard stated | stop; compare the guard's figure with the provider dashboard before continuing |
 | A second HRNSW / any duplicate company | stop Stage B; record; the dedupe rule is the finding |
