@@ -557,11 +557,16 @@ Scope:
   string; the identity ladder, `partition_for_dispatch` (email domain must relate to the company)
   and the 2-per-company cap are unchanged. A person found by a provider AND on the company page
   is one person, not two.
+  **Amended 2026-09-18 (discuss, 73.1-CONTEXT.md D-16):** the identity ladder is WIDENED —
+  ingest matches email > linkedin > mobilephone (single hit), and name+number groups become
+  identity; `phone` is identity for create only, never a match rung.
 - Role vocabulary: add the families the pickleball round dropped (`executive_officer`,
   `board_chair`/chairwoman/chairman) to `role_vocabulary.yaml`; classifier still contiguous-token,
   never fuzzy.
 - Cost guard + grant disclosure price discovery per company; `cost_rates.json` gains the search
   rates; a round states what discovery will cost before spending.
+  **Amended 2026-09-18 (73.1-CONTEXT.md D-13):** a provider whose search rate is still
+  unknown proceeds and reports the measured cost after; known rates are stated up front.
 - Tests: offline fixtures for each adapter's response shape; walker test for the lane; parity
   test pinning the allowlist tiers against the constants; one live disarmed proof at end-of-phase
   UAT (operator gate, `blocking-human`).
