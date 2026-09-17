@@ -66,6 +66,7 @@ carrying its live evidence.
 - [x] Phase 71: A held new person lands in HubSpot with one reply (added 2026-09-12 after quick batch 260911-w6n) (completed 2026-09-12)
 - [x] Phase 72: Enrichment extras land in HubSpot (added 2026-09-12 after Phase 71 F71-5; 8 plans + 4 gap-closure plans) (completed 2026-09-13)
 - [x] Phase 73: GA fix list from stress attempt 2 (added 2026-09-15 after stress attempt 2; 7 plans; attempt 3 A–F PASS) (completed 2026-09-18)
+- [ ] Phase 73.1: Provider-backed contact discovery as source tier 2 (inserted 2026-09-18 by operator ruling; runs before 74)
 - [ ] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
@@ -531,6 +532,50 @@ Plans:
 **Wave 7** *(blocked on Wave 6 completion)*
 
 - [x] 73-07-PLAN.md — Operator gate: idempotent regen, both suites, plugin 0.50.0, then the operator's deploy + bounce disarmed, reset, and attempt 3 A–F (D-73-18)
+
+### Phase 73.1: Provider-backed contact discovery as source tier 2 (INSERTED)
+
+**Goal:** suggest-contacts discovers people through the enrichment providers, not only by
+crawling the company's own website. Operator ruling 2026-09-18 (after a fresh-instance round
+found people at 1 of 7 pickleball companies because 6 had no team page, a 301 to another host,
+or a coming-soon site): **provider discovery is source tier 2; LinkedIn moves to tier 3;
+industry bodies and media move to tier 4.** Tier 1 (the company's own host) is unchanged.
+
+Scope:
+- `config/source_allowlist.yaml` re-tiered (2 = providers, 3 = LinkedIn, 4 = industry); the
+  tier constants in `search_fallback.py` (`STRONG_TIERS`, `KNOWN_TIERS`, `LISTED_TIERS`) and every
+  rank/sendability rule in `suggest_contacts.py` + the skill's step text follow the new numbering.
+  Sendability decision to be taken at discuss time: which tiers propose as sendable and which
+  are held-until-evidenced (today: rank 1–2 sendable, rank 3 held).
+- Discovery adapters: company domain (+ role vocabulary) → candidate people. Apollo people search
+  first (search itself costs no credit; reveal costs on accept), then ZoomInfo contact search and
+  Lusha prospecting behind the cost guard (credits per result). Provider keys live in n8n
+  credentials, never on the operator machine, so discovery is a **backend lane** (new webhook or
+  an extension of the suggest-contacts anonymous response), built in `scripts/build_cloud_workflows.py`
+  and regenerated — never hand-edited JSON. Zero self-dispatch (D-70-24).
+- Provenance: a discovered person carries `source: <provider>_search` + the provider's own role
+  string; the identity ladder, `partition_for_dispatch` (email domain must relate to the company)
+  and the 2-per-company cap are unchanged. A person found by a provider AND on the company page
+  is one person, not two.
+- Role vocabulary: add the families the pickleball round dropped (`executive_officer`,
+  `board_chair`/chairwoman/chairman) to `role_vocabulary.yaml`; classifier still contiguous-token,
+  never fuzzy.
+- Cost guard + grant disclosure price discovery per company; `cost_rates.json` gains the search
+  rates; a round states what discovery will cost before spending.
+- Tests: offline fixtures for each adapter's response shape; walker test for the lane; parity
+  test pinning the allowlist tiers against the constants; one live disarmed proof at end-of-phase
+  UAT (operator gate, `blocking-human`).
+- Plugin release with CHANGELOG; deploy/bounce disarmed is the operator's step.
+
+Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different host (still a
+refusal per D-62-03); changing the email-domain partition rule.
+**Requirements**: TBD
+**Depends on:** Phase 73
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 73.1 to break down)
 
 ### Phase 74: Code-review follow-ups from phase 73
 

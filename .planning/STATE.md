@@ -2,12 +2,12 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 74
+current_phase: "73.1"
 status: ready_to_plan
-stopped_at: Phase 73 closed 2026-09-18 (VERIFICATION passed + resealed, SECURITY 30/30, VALIDATION validated, REVIEW issues_found carried to Phase 74); Phase 74 added, not yet planned
+stopped_at: "Phase 73.1 inserted 2026-09-18 (operator ruling: provider discovery = tier 2, LinkedIn tier 3, industry tier 4); ready to discuss/plan. Phase 74 (code-review follow-ups) queued after it."
 last_updated: "2026-09-17T21:57:58.565Z"
 last_activity: 2026-09-18
-last_activity_desc: Phase 73 closed; Phase 74 (code-review follow-ups) added, ready to plan
+last_activity_desc: Phase 73.1 inserted before 74 — provider-backed contact discovery
 state_head: c5bd9e69e8ff612d8a4f1815e5755248b9469d85
 progress:
   total_phases: 10
@@ -15,7 +15,7 @@ progress:
   total_plans: 56
   completed_plans: 56
   percent: 30
-current_phase_name: Code-review follow-ups from phase 73
+current_phase_name: Provider-backed contact discovery as source tier 2
 ---
 
 # Project State
