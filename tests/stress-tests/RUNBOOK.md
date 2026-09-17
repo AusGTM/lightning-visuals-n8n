@@ -83,9 +83,11 @@ Record: companies crawled / sites refused / proposals ready / held / sent.
 
 ### Stage D — enrich-before-ingest, providers on (~15 min, real spend — optional)
 
-Say: *"Enrich these contacts before uploading them"* with the contacts CSV again. Purpose: rows 41–42 now associate to Wagga (created in B); held rows from A get a second, enriched pass; rows 1–2 (real people) exercise the waterfall — Busteed's email reveal is the known-good case (Lusha up to 7 credits).
+Say: *"Enrich these contacts before uploading them"* with the contacts CSV again. Purpose: held rows from A get a second, enriched pass; rows 1–2 (real people) exercise the waterfall — Busteed's email reveal is the known-good case (Lusha up to 7 credits).
 
-Two yeses without a grant (before spend, before write), one with. Verify rows 41–42 landed with the association; fictitious rows report NOT_FOUND at 0 Lusha credits.
+Rows 41–42 (Wagga) correctly stay **held**, not auto-associated — per D-70-11, a new person is never created without an explicit operator "create N" reply, even when the company already exists from Stage B. Expect them in the held-rows list with a reason naming no confident match, not a landed association.
+
+Two yeses without a grant (before spend, before write), one with. Fictitious rows report NOT_FOUND at 0 Lusha credits.
 
 Skip this stage if the client declines provider spend; nothing later depends on it.
 
