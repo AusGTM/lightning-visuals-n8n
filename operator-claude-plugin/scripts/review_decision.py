@@ -363,6 +363,34 @@ def _verdict(status, response, message, mismatched=None) -> dict:
             "message": message, "mismatched": list(mismatched or [])}
 
 
+def _as_hubspot_text(value) -> str:
+    """Render a value the way HubSpot stores it, for comparison only (F-S5, 260918-322).
+
+    HubSpot returns every property as a string. Python's own rendering of a boolean is
+    capitalised (`str(False)` is "False") while HubSpot's is lowercase, so an approve that
+    set a true/false field to false read as a mismatch against its own landed value — a
+    false negative on a write that was entirely correct (live: MRC company 9604614548,
+    2026-09-18, both boolean fields holding the string "false").
+
+    `None` renders as the empty string because both spell the same absence. ONE narrow
+    consequence, accepted deliberately: a key whose intended value is already blank and
+    which is absent from `would_write` or from the refetch now compares EQUAL where before
+    it did not. Both patches originate in the same `clearPatch`, and HubSpot omits a blank
+    property from a read, so there is nothing for that comparison to catch. A key whose
+    value is non-blank still fails when it goes missing. No sentinel type is introduced to
+    tell absent from blank apart.
+
+    What this does NOT do: blank is never equal to false. A blank reads as `unknown` to
+    `src/icp_scoring.py` and to `Company Gate`'s REQUIRED set, so a genuinely dropped write
+    must keep failing.
+    """
+    if isinstance(value, bool):        # first — a bool is an int subclass in Python
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
+
+
 def verify_decision(intended, response) -> dict:
     """Did the write land? Decided by comparing an INDEPENDENT re-read, never a status code.
 
@@ -466,10 +494,14 @@ def verify_decision(intended, response) -> dict:
     would_write = response.get("would_write")
     would_write = would_write if isinstance(would_write, dict) else {}
     leg1_keys = (set(intended) | set(would_write)) - PREVIEW_UNPINNABLE_KEYS
-    # HubSpot stores and returns every property as a string, so compare stringwise: a
-    # boolean or numeric intent must not read as a mismatch against its own stored form.
+    # HubSpot stores and returns every property as a string, so compare stringwise through
+    # `_as_hubspot_text` on BOTH sides: a boolean or numeric intent must not read as a
+    # mismatch against its own stored form. Lowercasing a boolean there is REQUIRED, not
+    # incidental — Python renders `False` with a capital F and HubSpot stores "false", and
+    # a bare `str()` on both sides made every such approve report failed (F-S5).
     intent_mismatched = [key for key in leg1_keys
-                         if str(would_write.get(key)) != str(intended.get(key))]
+                         if _as_hubspot_text(would_write.get(key))
+                         != _as_hubspot_text(intended.get(key))]
 
     if intent_mismatched:
         return _verdict(
@@ -499,7 +531,8 @@ def verify_decision(intended, response) -> dict:
             expected[key] = would_write[key]
 
     mismatched = [key for key in intended
-                  if str(properties.get(key)) != str(expected[key])]
+                  if _as_hubspot_text(properties.get(key))
+                  != _as_hubspot_text(expected[key])]
 
     if mismatched:
         return _verdict(

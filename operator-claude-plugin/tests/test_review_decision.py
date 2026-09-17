@@ -463,6 +463,69 @@ def test_values_are_compared_stringwise_because_hubspot_stores_every_property_as
     assert result["status"] == "verified"
 
 
+# --- boolean rendering across the n8n -> plugin boundary (F-S5, quick 260918-322) ------
+#
+# Live evidence 2026-09-18: approving MRC company 9604614548 landed both boolean fields and
+# HubSpot re-read them as the STRING "false". The backend's `would_write` carried the raw
+# JS boolean, so Python saw `False`, rendered it "False" with a capital F, and the whole
+# approve reported `failed` on a write that was entirely correct.
+
+MRC_BOOLEAN_APPROVE = {
+    "lv_is_hardware_vendor": False,
+    "lv_is_gambling_operator": False,
+    "lv_org_type": "governing_body_league",
+}
+
+
+def test_a_boolean_false_approve_that_hubspot_reads_back_as_the_string_false_is_verified():
+    """The live MRC shape (F-S5). Python's `False` and HubSpot's "false" are the same
+    value in two spellings, and the verifier must not read the capital F as a mismatch."""
+    result = review_decision.verify_decision(MRC_BOOLEAN_APPROVE, {
+        "available": True, "outcome": "applied", "message": "Applied 3 fields.",
+        "would_write": dict(MRC_BOOLEAN_APPROVE),
+        "verified_properties": {"lv_is_hardware_vendor": "false",
+                                "lv_is_gambling_operator": "false",
+                                "lv_org_type": "governing_body_league"},
+        "verified": True})
+
+    assert result["status"] == "verified"
+    assert result["mismatched"] == []
+
+
+def test_a_boolean_false_approve_that_reads_back_BLANK_still_reports_failed():
+    """Blank is NOT false. A blank reads as `unknown` to the scoring engine and to Company
+    Gate's REQUIRED set, so a dropped write must keep failing and keep naming its fields —
+    this is the guard against "fixing" the test above into a pass-through."""
+    result = review_decision.verify_decision(MRC_BOOLEAN_APPROVE, {
+        "available": True, "outcome": "applied", "message": "Applied 3 fields.",
+        "would_write": dict(MRC_BOOLEAN_APPROVE),
+        "verified_properties": {"lv_is_hardware_vendor": "",
+                                "lv_is_gambling_operator": "",
+                                "lv_org_type": "governing_body_league"},
+        "verified": True})
+
+    assert result["status"] == "failed"
+    assert sorted(result["mismatched"]) == ["lv_is_gambling_operator",
+                                            "lv_is_hardware_vendor"]
+
+
+def test_an_intended_none_against_a_blank_refetch_is_verified_by_design():
+    """Deliberate behaviour change, not a regression guard: an intended `None` used to
+    render as the four-character word and fail against HubSpot's blank. Both spell the
+    same absence, and HubSpot omits a blank property from a read."""
+    result = review_decision.verify_decision(
+        {"lv_org_type": "governing_body_league", "lv_content_evidence_url": None},
+        {"available": True, "outcome": "applied", "message": "Applied 1 field.",
+         "would_write": {"lv_org_type": "governing_body_league",
+                         "lv_content_evidence_url": None},
+         "verified_properties": {"lv_org_type": "governing_body_league",
+                                 "lv_content_evidence_url": ""},
+         "verified": True})
+
+    assert result["status"] == "verified"
+    assert result["mismatched"] == []
+
+
 @pytest.mark.parametrize("outcome", review_decision.NON_WRITING_OUTCOMES)
 def test_every_non_writing_outcome_is_surfaced_verbatim_not_translated_into_success(outcome):
     """stale / no_candidate / not_flagged / refused each wrote nothing, and the operator is

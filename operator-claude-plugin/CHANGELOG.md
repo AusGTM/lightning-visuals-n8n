@@ -16,6 +16,25 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.50.1] - 2026-09-18
+
+### Fixed
+- **A review approve that set a true/false field to *false* is no longer reported as
+  failed.** The write was always correct — only the confirmation was wrong. When you
+  approved a record and one of the approved fields was a true/false field being set to
+  false, the run report said the field "did not take the approved value", even though
+  HubSpot had accepted it. Live proof: Melbourne Racing Club (company `9604614548`) was
+  approved on 2026-09-18 and re-read the same day with **both** `lv_is_hardware_vendor` and
+  `lv_is_gambling_operator` holding `false` exactly as approved; every text field on the
+  same record already reported correctly, which is what isolated the fault to the
+  confirmation step rather than the write. The cause was a spelling difference nobody could
+  see: this client wrote the value out as `False` and HubSpot stores it as `false`, and the
+  two were compared letter for letter.
+
+  **What has NOT changed:** a field that reads back **blank** is still reported as failed,
+  and the report still names it. A blank is not a false — the scoring engine reads a blank
+  as *unknown* — so a write that genuinely went missing keeps failing loudly.
+
 ## [0.50.0] - 2026-09-16
 
 GA fix list from stress attempt 2 (Phase 73, plans `73-01`..`73-06`). Six defects and gaps
