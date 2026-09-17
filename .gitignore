@@ -42,3 +42,4 @@ tests/demo-run/uat-reset-report-*.json
 
 # raw plugin-session transcript (1MB+, may embed tool output)
 tests/stress-tests/session.log
+tests/stress-tests/session-*.log
