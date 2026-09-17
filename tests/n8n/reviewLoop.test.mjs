@@ -44,7 +44,9 @@ test("reviewApply: consumes the exact producer shape for held needs_review candi
   assert.equal(result.stale, false);
   assert.deepEqual(result.canonicalPatch, {
     lv_org_type: "governing_body_league",
-    lv_produces_content: true,
+    // F-S5 (260918-322): a string, not a bare JS boolean — D-07's stringify now covers
+    // canonicalPatch as well as clearPatch.
+    lv_produces_content: "true",
   });
   assert.deepEqual(result.clearPatch, {
     // 43-01 (D-07/PIPE-01): quoted strings, not bare JS booleans — HubSpot EQ filters
@@ -133,6 +135,24 @@ test("reviewApply: a multi-element array chosen_value serializes joined with a s
   ]);
   const result = reviewApply(candidateJson, {});
   assert.equal(result.canonicalPatch.lv_content_type, "live_broadcast;streaming");
+});
+
+// --- (5b) F-S5 boolean serialization (quick 260918-322) ---------------------------------
+//
+// mergeCompanies mints a boolean candidate's chosen_value as a raw JS boolean, and a
+// non-enum-bound field passes through normalizeEnumValue unchanged, so the boolean reached
+// canonicalPatch bare. D-07's stringify has only ever covered clearPatch.
+
+test("reviewApply: a boolean chosen_value lands in canonicalPatch as a lowercase string, not a bare JS boolean", () => {
+  const candidateJson = JSON.stringify([
+    { field: "lv_is_hardware_vendor", current_value: null, chosen_value: false, decision: "needs_review" },
+    { field: "lv_produces_content", current_value: null, chosen_value: true, decision: "needs_review" },
+  ]);
+  const result = reviewApply(candidateJson, {});
+  assert.equal(result.canonicalPatch.lv_is_hardware_vendor, "false");
+  assert.equal(typeof result.canonicalPatch.lv_is_hardware_vendor, "string");
+  assert.equal(result.canonicalPatch.lv_produces_content, "true");
+  assert.equal(typeof result.canonicalPatch.lv_produces_content, "string");
 });
 
 test("reviewApply: an array element normalizeEnumValue refuses still yields invalid with an empty canonicalPatch, not a joined string", () => {

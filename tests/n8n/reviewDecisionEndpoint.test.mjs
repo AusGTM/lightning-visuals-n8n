@@ -148,9 +148,12 @@ test("approve on a clean flagged row applies the held candidate, clears the queu
   const out = approve();
   assert.equal(out.outcome, "applied");
 
-  // reviewApply's canonical patch — the candidate's own chosen values, unchanged.
+  // reviewApply's canonical patch — the candidate's own chosen values, unchanged except
+  // for F-S5's boolean stringify (quick 260918-322), which completes D-07 across
+  // canonicalPatch as well as clearPatch: a string, never a bare JS boolean.
   assert.equal(out.properties.lv_org_type, "governing_body_league");
-  assert.equal(out.properties.lv_produces_content, true);
+  assert.equal(out.properties.lv_produces_content, "true");
+  assert.equal(typeof out.properties.lv_produces_content, "string");
   // ...plus its clear patch, which is what takes the record OUT of the queue. Unlike a
   // rejection (D-10), an approval is entitled to: the decision is recorded alongside it.
   // 43-01 (D-07/PIPE-01): quoted string, not a bare JS boolean.

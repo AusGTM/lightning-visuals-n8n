@@ -101,9 +101,20 @@ function reviewApply(candidateJson, refetchedProperties, fieldPolicy) {
     // JSON array (execution 12502). Join strictly AFTER the enum check above, never
     // before -- joining first would let an unaccepted element hide inside an accepted
     // string instead of being refused into `invalid`.
-    canonicalPatch[d.field] = Array.isArray(enumCheck.value)
-      ? enumCheck.value.join(";")
-      : enumCheck.value;
+    //
+    // F-S5 (quick 260918-322): the same treatment for a bare JS boolean, and for the same
+    // reason. This COMPLETES D-07 (43-01, PIPE-01), whose stringify below has only ever
+    // covered `clearPatch` -- `canonicalPatch` was the missing half. mergeCompanies mints a
+    // boolean candidate's `chosen_value` as a raw JS boolean and a non-enum-bound field
+    // (neither lv_is_hardware_vendor nor lv_produces_content is in hubspotEnums.generated)
+    // passes through normalizeEnumValue unchanged, so it reached the PATCH body -- and the
+    // response's `would_write` -- as JSON `false`. Strings, numbers and null pass through
+    // untouched. Runs strictly AFTER the enum check and the stale compare-and-set, so it
+    // can bypass neither.
+    let value = enumCheck.value;
+    if (Array.isArray(value)) value = value.join(";");
+    else if (typeof value === "boolean") value = String(value);
+    canonicalPatch[d.field] = value;
   }
 
   if (staleFields.length > 0) {

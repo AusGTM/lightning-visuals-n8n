@@ -6,6 +6,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`reviewApply` now stringifies a boolean `canonicalPatch` value, completing D-07**
+  (quick task 260918-322, F-S5). `mergeCompanies` mints a boolean candidate's
+  `chosen_value` as a raw JS boolean, and a field that is not enum-bound (neither
+  `lv_is_hardware_vendor` nor `lv_produces_content` appears in
+  `hubspotEnums.generated.js`) passes through `normalizeEnumValue` unchanged — so the
+  boolean reached the HubSpot PATCH body, and the response's `would_write`, as JSON
+  `false`. D-07's existing stringify (43-01, PIPE-01) has only ever covered `clearPatch`;
+  `canonicalPatch` was the missing half. The map runs strictly AFTER the enum check and
+  the stale compare-and-set, alongside the existing array-join, so neither gate can be
+  bypassed by it. **Only two generated bodies inline this module** —
+  `wf_review_decision_cloud.json` and `wf_scheduled_maintenance_cloud.json` (the two that
+  splice `ENRICH_APPLY_REVIEW`); the enrichment bodies never carried it. Node counts
+  unchanged at 55/287/82/43. **The committed JSON is now AHEAD of the live n8n instance;
+  deploying it is the operator's step.**
+
 ### Added
 - **Todo triage rules (2026-09-11, CLAUDE.md §31).** `scripts/todo_triage.py` classifies
   every pending todo by `kind:` (`defect` with `evidence:`, `question` with `trigger:` +
