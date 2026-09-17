@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 74
-current_phase_name: Code-review follow-ups from phase 73
 status: ready_to_plan
-stopped_at: "Phase 73 closed 2026-09-18 (VERIFICATION passed + resealed, SECURITY 30/30, VALIDATION validated, REVIEW issues_found carried to Phase 74); Phase 74 added, not yet planned"
-last_updated: "2026-09-17T21:45:10.553Z"
+stopped_at: Phase 73 closed 2026-09-18 (VERIFICATION passed + resealed, SECURITY 30/30, VALIDATION validated, REVIEW issues_found carried to Phase 74); Phase 74 added, not yet planned
+last_updated: "2026-09-17T21:57:58.565Z"
 last_activity: 2026-09-18
 last_activity_desc: Phase 73 closed; Phase 74 (code-review follow-ups) added, ready to plan
-state_head: c46c9ceaa47de8aacb68f5e5f85b77065f890d99
+state_head: c5bd9e69e8ff612d8a4f1815e5755248b9469d85
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 56
   completed_plans: 56
   percent: 30
+current_phase_name: Code-review follow-ups from phase 73
 ---
 
 # Project State
@@ -1071,6 +1071,9 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 | 260911-w6r | F2-4: operator-claude-plugin/skills/enrich-before-ingest/SKILL.md step 6/9: remove the held-rows AskUserQuestion (UAT F4), render the new-people rows from the facet classifier with the ready one-line answer (reply create all N now, or later in /operator-claude-plugin:review-triage), never block; if the operator replies in-conversation, dispatch the create under the standing grant via the same fences review-triage uses. Correct the end-of-run text that today says work them with review-triage (false until F2-3 lands). Pin with the skill-contract and sequence-coverage tests. Bump operator-claude-plugin to 0.47.0 with one CHANGELOG section naming F2-1..F2-4 and the ruling. | 2026-09-11 | 5e71828f | — | .planning/quick/260911-w6r-f2-4-operator-claude-plugin-skills-enrich-before-ingest-skil |
 | 260918-322 | Fix F-S5 verify_decision boolean false-negative | 2026-09-18 | e9f05e2b | — | [260918-322-fix-f-s5-verify-decision-boolean-false-n](./quick/260918-322-fix-f-s5-verify-decision-boolean-false-n/) |
 | 260918-32u | Fix F-S2 phantom research_failed marker row | 2026-09-18 | 6437ce75 | — | [260918-32u-fix-f-s2-phantom-research-failed-marker-](./quick/260918-32u-fix-f-s2-phantom-research-failed-marker-/) |
+| 33 | Remove repo-root config fallbacks from operator plugin (0.50.2); parity tests own the repo path | 2026-09-17 | c5bd9e69 | — | — |
+| 34 | Operator install bundle: gitignored operator-claude-plugin/install/ with clickable install.command + README | 2026-09-17 | c5bd9e69 | — | — |
+| 35 | tests/demo-adversarial/: short main-path demo on the two adversarial fixtures, run.command + RUNBOOK | 2026-09-17 | c5bd9e69 | — | — |
 
 ## Deferred Items
 
