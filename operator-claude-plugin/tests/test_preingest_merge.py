@@ -329,8 +329,12 @@ def test_every_merged_row_key_is_in_the_merge_allowlist_or_row_id():
 # being dropped before the fill-versus-conflict rule is ever consulted.
 # =====================================================================================
 
+# The repo copy is a TEST-side path only (0.50.2): the runtime resolver no longer knows it.
+REPO_POLICY_PATH = Path(__file__).resolve().parents[2] / "config" / "field_policy.yaml"
+
+
 def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
-    if not preingest.REPO_POLICY_PATH.exists():
+    if not REPO_POLICY_PATH.exists():
         pytest.skip(
             "no repo root beside this checkout (installed plugin tree) -- the parity "
             "pin only bites in a dev checkout"
@@ -342,7 +346,7 @@ def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
     )
     assert (
         preingest.PLUGIN_POLICY_PATH.read_bytes()
-        == preingest.REPO_POLICY_PATH.read_bytes()
+        == REPO_POLICY_PATH.read_bytes()
     )
 
     # Phase 65 Plan 02 Task 3 (SAFE-01): the widening changes only WHICH keys may be
@@ -350,7 +354,7 @@ def test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source():
     # every contacts: entry's min_confidence to this plan's own Findings, so no future
     # edit to either copy can quietly lower a threshold under cover of this widening.
     import yaml as _yaml
-    data = _yaml.safe_load(preingest.REPO_POLICY_PATH.read_text(encoding="utf-8"))
+    data = _yaml.safe_load(REPO_POLICY_PATH.read_text(encoding="utf-8"))
     contacts = data["contacts"]
     expected_min_confidence = {
         "email": 80, "city": 80, "state": 80, "country": 80,
@@ -840,11 +844,12 @@ def test_promotable_contact_props_is_empty_when_the_policy_has_no_contacts_secti
 
 def test_merge_allowlist_falls_back_to_canonical_props_when_the_policy_is_unreadable(
         monkeypatch, tmp_path):
-    # Points BOTH resolution steps at nonexistent paths so resolve_policy_path(None)
-    # (what merge_enriched calls internally) returns None -- the fallback path a real
+    # Points the ONLY resolution step at a nonexistent path so resolve_policy_path(None)
+    # (what merge_enriched calls internally) returns None -- the path a real
     # unresolvable-policy install would hit, not just the explicit-argument path.
+    # 0.50.2: there is no repo-root step left to point away.
     monkeypatch.setattr(preingest, "PLUGIN_POLICY_PATH", tmp_path / "no-plugin-copy.yaml")
-    monkeypatch.setattr(preingest, "REPO_POLICY_PATH", tmp_path / "no-repo-copy.yaml")
+    assert not hasattr(preingest, "REPO_POLICY_PATH")
 
     assert preingest.promotable_contact_props() == []
     assert preingest.refreshable_contact_props() == [], (

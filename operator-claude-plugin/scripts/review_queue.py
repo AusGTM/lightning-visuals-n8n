@@ -39,8 +39,9 @@ import requests
 import config_gate
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
-REPO_ROOT = PLUGIN_ROOT.parent
-DEFAULT_POLICY_PATH = REPO_ROOT / "config" / "field_policy.yaml"
+# The plugin's own shipped copy (0.50.2: was the repo-root copy, which an installed plugin
+# with no repo beside it could never find -- the protected LABEL then silently vanished).
+DEFAULT_POLICY_PATH = PLUGIN_ROOT / "config" / "field_policy.yaml"
 
 QUEUE_PATH = "webhook/hubspot/review/queue"
 DEFAULT_TIMEOUT = 30

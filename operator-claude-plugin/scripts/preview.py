@@ -19,17 +19,19 @@ from preview_enrichment import TABULAR_COST_REASON, cost_block, zero_cost_estima
 from tabular import read_table, to_csv_bytes
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
-REPO_ROOT = PLUGIN_ROOT.parent
 # Shipped INSIDE the plugin package, so an installed copy with no repo beside it can still
-# resolve it. Until 0.7.3 only the REPO_ROOT path existed, which meant every real install
+# resolve it. Until 0.7.3 only a repo-root path existed, which meant every real install
 # resolved to nothing: preview labels silently went unavailable and extraction REFUSED
 # outright (`mapping_unavailable`), blocking every non-tabular adapter. Found by an operator
 # walking UAT session 2 on the 0.7.2 install.
+#
+# 0.50.2: the repo-root fallback (`PLUGIN_ROOT.parent / "config" / ...`) is GONE from every
+# runtime resolver in this plugin (here, preingest.py, review_queue.py). The plugin must
+# behave identically with and without a repo checkout beside it — a fallback that only a
+# dev machine can take hides a missing shipped file from every dev-machine test. The
+# repo copy is now referenced by the parity TESTS only (test_column_mapping_shipped.py,
+# test_preingest_merge.py), which compute the repo path themselves.
 PLUGIN_MAPPING_PATH = PLUGIN_ROOT / "config" / "column_mapping.yaml"
-# The repo copy stays in the order as a dev-checkout convenience and as the drift oracle:
-# test_column_mapping_shipped.py pins the two byte-identical, because two copies of a
-# backend contract is exactly the second-source-of-truth this milestone avoids elsewhere.
-DEFAULT_MAPPING_PATH = REPO_ROOT / "config" / "column_mapping.yaml"
 
 LEAD_ROWS = 10
 TRAIL_ROWS = 3
@@ -46,7 +48,7 @@ def _normalize_header(header: str) -> str:
 
 def resolve_mapping_path(mapping_path=None):
     """The one rule for finding config/column_mapping.yaml: an explicit path argument,
-    then the plugin's own shipped copy, then the repo's (dev checkouts), then None (unavailable). Shared by this
+    then the plugin's own shipped copy, then None (unavailable). Shared by this
     module's display-only labelling and extraction.py's canonical-prop/identity-group
     derivation, so exactly one rule for finding that file exists in the plugin — callers
     decide whether "unavailable" degrades gracefully (this module's labels) or is a hard
@@ -55,8 +57,6 @@ def resolve_mapping_path(mapping_path=None):
         return Path(mapping_path)
     if PLUGIN_MAPPING_PATH.exists():
         return PLUGIN_MAPPING_PATH
-    if DEFAULT_MAPPING_PATH.exists():
-        return DEFAULT_MAPPING_PATH
     return None
 
 

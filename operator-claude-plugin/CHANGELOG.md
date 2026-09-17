@@ -16,6 +16,28 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.50.2] - 2026-09-18
+
+### Changed
+- **The plugin no longer looks for any file in a repository checkout beside it.** Three
+  resolvers (`preview.py` for `column_mapping.yaml`, `preingest.py` and `review_queue.py`
+  for `field_policy.yaml`) used to fall back to `<plugin folder>/../config/...` — a path
+  that exists only on a developer's machine. The fallback is removed: each resolver now
+  reads the copy shipped inside the plugin, or reports the file unavailable. Nothing an
+  operator sees changes on a normal install (the shipped copy was already found first);
+  what changes is that a missing shipped file can no longer be hidden by a repo copy on the
+  developer's own machine. The repo copy is now referenced by the parity tests only.
+
+### Added
+- **`install/` folder (not shipped, not committed).** A gitignored folder in the source
+  tree that holds the operator's own `operator.local.json` plus a double-clickable
+  `install.command` (macOS) which adds the marketplace, installs this plugin, copies the
+  settings file into its default location
+  (`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`) and installs
+  the three Python packages. For handing a ready-to-run bundle to an operator who has no
+  access to this repository. The scripts themselves find that default location on their
+  own — nothing in the plugin needs the install folder after it has run.
+
 ## [0.50.1] - 2026-09-18
 
 ### Fixed

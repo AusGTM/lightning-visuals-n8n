@@ -30,30 +30,26 @@ from dispatch import DispatchError
 from tabular import read_table
 
 # The one rule for finding config/field_policy.yaml, mirroring `preview.
-# resolve_mapping_path`'s exact three-step order (explicit path, then the plugin's own
-# shipped copy, then the repo's) and reusing `preview.PLUGIN_ROOT`/`preview.REPO_ROOT`
-# rather than re-deriving them a second time in this module. The plugin copy exists
-# because the marketplace ships `operator-claude-plugin/` alone -- without it, a
-# repo-root-only lookup resolves to nothing in an installed plugin tree and this
-# widening would be inert in production (RICH-04 finding 2). `tests/test_preingest_
+# resolve_mapping_path`'s order (explicit path, then the plugin's own shipped copy) and
+# reusing `preview.PLUGIN_ROOT` rather than re-deriving it a second time in this module.
+# The plugin copy exists because the marketplace ships `operator-claude-plugin/` alone --
+# without it, a repo-root-only lookup resolves to nothing in an installed plugin tree and
+# this widening would be inert in production (RICH-04 finding 2). `tests/test_preingest_
 # merge.py::test_the_shipped_field_policy_copy_is_byte_identical_to_the_repo_source`
-# pins the two copies byte-for-byte in a dev checkout.
+# pins the two copies byte-for-byte in a dev checkout. 0.50.2: no repo-root fallback here
+# either -- see the note above `PLUGIN_MAPPING_PATH` in preview.py.
 PLUGIN_POLICY_PATH = preview.PLUGIN_ROOT / "config" / "field_policy.yaml"
-REPO_POLICY_PATH = preview.REPO_ROOT / "config" / "field_policy.yaml"
 
 
 def resolve_policy_path(policy_path=None):
     """The one rule for finding `config/field_policy.yaml`: an explicit path argument,
-    then the plugin's own shipped copy, then the repo's (dev checkouts), then None
-    (unavailable) -- the same three-step rule `preview.resolve_mapping_path` uses for
-    `column_mapping.yaml`, so exactly one resolution rule exists per config file this
-    plugin reads, never a second ad hoc lookup."""
+    then the plugin's own shipped copy, then None (unavailable) -- the same rule
+    `preview.resolve_mapping_path` uses for `column_mapping.yaml`, so exactly one
+    resolution rule exists per config file this plugin reads, never a second ad hoc lookup."""
     if policy_path is not None:
         return Path(policy_path)
     if PLUGIN_POLICY_PATH.exists():
         return PLUGIN_POLICY_PATH
-    if REPO_POLICY_PATH.exists():
-        return REPO_POLICY_PATH
     return None
 
 

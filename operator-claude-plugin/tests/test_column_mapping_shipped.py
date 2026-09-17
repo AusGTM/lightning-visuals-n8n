@@ -15,7 +15,8 @@ import extraction
 import preview
 
 PLUGIN_COPY = Path(preview.PLUGIN_MAPPING_PATH)
-REPO_COPY = Path(preview.DEFAULT_MAPPING_PATH)
+# The repo copy is a TEST-side path only (0.50.2): the runtime resolver no longer knows it.
+REPO_COPY = Path(__file__).resolve().parents[2] / "config" / "column_mapping.yaml"
 
 
 def test_the_mapping_ships_inside_the_plugin_package():
@@ -42,6 +43,16 @@ def test_the_shipped_copy_has_not_drifted_from_the_repo_copy():
 def test_resolution_prefers_the_shipped_copy_over_the_repo_copy():
     """The install case is the one that was broken; it must win."""
     assert preview.resolve_mapping_path() == PLUGIN_COPY
+
+
+def test_resolution_never_falls_back_to_the_repo_copy(monkeypatch, tmp_path):
+    """0.50.2: with the shipped copy absent the resolver returns None -- it must NOT reach
+    for a repo checkout that an operator's machine does not have, because that fallback
+    hid a missing shipped file from every dev-machine test."""
+    monkeypatch.setattr(preview, "PLUGIN_MAPPING_PATH", tmp_path / "absent.yaml")
+    assert preview.resolve_mapping_path() is None
+    assert not hasattr(preview, "REPO_ROOT")
+    assert not hasattr(preview, "DEFAULT_MAPPING_PATH")
 
 
 def test_extraction_can_build_its_allowlist_from_the_shipped_copy():
