@@ -1,9 +1,9 @@
 First Name,Surname,Organisation,E-mail Address,Job Title,Tel,Mobile,LinkedIn,City,State/Region,Country
-Priya,Whitcombe,Australian Turf Club,demo.priya.whitcombe@australianturfclub.com.au,Media Manager,+61 2 9203 4051,+61 454 815 657,https://www.linkedin.com/in/demo-priya-whitcombe,Sydney,NSW,Australia
-Tomas,Nakamura,Brisbane Racing Club,demo.tomas.nakamura@brc.com.au,Commercial Director,+61 7 3268 2171,0439 489 246,,Brisbane,QLD,Australia
-Ngaire,Delacroix,Pakenham Racing Club,demo.ngaire.delacroix@pakenhamracing.com.au,General Manager Racing,,,,,,
-,,,demo.declan.okafor@murraybridgeracingclub.com.au,,,,,,,
+Priya,Whitcombe,Australian Turf Club,,Media Manager,+61 2 9203 4051,+61 454 815 657,,Sydney,NSW,Australia
+Tomas,Nakamura,Brisbane Racing Club,,Commercial Director,+61 7 3268 2171,0439 489 246,,Brisbane,QLD,Australia
+Ngaire,Delacroix,Pakenham Racing Club,,General Manager Racing,,,,,,
+Declan,Okafor,Murray Bridge Racing Club,,Racing Operations Manager,,,,,,
 Mei,Oyelaran,Sky Racing,,Head of Broadcast,,,,,,
-,,,,,,,https://www.linkedin.com/in/demo-harriet-kowalczyk,,,
-Kofi,Tuilagi,,,,,,,,,
-Ines,Castellano,New Zealand Thoroughbred Racing,demo.ines.castellano@nzracing.co.nz,Marketing Executive,,+64 21 555 0100,,Wellington,,New Zealand
+Harriet,Kowalczyk,Australian Turf Club,,Digital Content Producer,,0412 555 019,,Sydney,NSW,Australia
+Kofi,Tuilagi,Brisbane Racing Club,,Marketing Coordinator,,,,,,
+Ines,Castellano,New Zealand Thoroughbred Racing,,Marketing Executive,,+64 21 555 0100,,Wellington,,New Zealand

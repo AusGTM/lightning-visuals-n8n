@@ -2,14 +2,18 @@
 """Reset a UAT stress session or a recorded demo: restorable-delete the HubSpot records it created.
 
 Standalone copy for tests/demo-run/ — needs only Python 3 + `requests` + HUBSPOT_PRIVATE_APP_TOKEN.
-Markers accepted: `uat.`/`uat-` (stress tests) and `demo.`/`demo-` (demo run).
+Markers accepted: `uat.`/`uat-` (stress tests) and `demo.`/`demo-` (legacy demo assets).
+The demo assets carry NO email or LinkedIn any more (fake ones broke real enrichment), so
+demo contacts are found by NAME: pass every demo contacts CSV with ``--contacts-csv``.
 
 Three protections, all on by default:
 
-1. **Marker match for contacts.** A contact is a candidate only if its email local-part
-   starts with ``uat.`` or its ``lv_linkedin_url`` slug starts with ``uat-`` (the shape the
-   stress CSVs use) — OR it was created at/after ``--since`` AND is associated with a
-   company this run created (suggest-contacts creates real people at those companies).
+1. **Marker or name match for contacts.** A contact is a candidate only if its email
+   local-part starts with ``uat.`` or its ``lv_linkedin_url`` slug starts with ``uat-``
+   (the shape the stress CSVs use) — OR its first+last name appears in a ``--contacts-csv``
+   AND it was created at/after ``--since`` — OR it was created at/after ``--since`` AND is
+   associated with a company this run created (suggest-contacts creates real people at
+   those companies).
 2. **Snapshot for companies.** ``--snapshot`` records, BEFORE the run, which domains from
    the companies CSV already exist in the portal. A company is a candidate only if its
    domain is in the CSV, it is NOT in the snapshot, and its ``createdate`` >= ``--since``.
@@ -86,6 +90,40 @@ def created_since(props: dict, since: datetime | None) -> bool:
         return False
     created = parse_ts(props.get("createdate"))
     return created is not None and created >= since
+
+
+def split_name(full: str) -> tuple[str, str]:
+    """'Rafael Petrakis' -> ('rafael', 'petrakis'); 'Cher' -> ('cher', '')."""
+    parts = (full or "").strip().split()
+    return (" ".join(parts[:-1]).casefold(), parts[-1].casefold()) if len(parts) > 1 else ((parts[0].casefold() if parts else ""), "")
+
+
+def csv_names(path: Path) -> dict[tuple[str, str], str]:
+    """{(firstname, lastname) casefolded: surname as written} from a contacts CSV:
+    `First Name`+`Surname` columns, or a single `Name` column split on its last space. The
+    raw surname feeds HubSpot's `lastname EQ` filter (whether EQ folds case is unobserved;
+    the record was created from this CSV, so its casing is this casing). Rows missing either
+    half contribute nothing — a first-name-only row can never select a record."""
+    with path.open(newline="") as fh:
+        reader = csv.DictReader(fh)
+        cols = {h.strip().lower(): h for h in reader.fieldnames or []}
+        first = next((cols[k] for k in ("first name", "firstname", "given name") if k in cols), None)
+        last = next((cols[k] for k in ("surname", "last name", "lastname") if k in cols), None)
+        full = cols.get("name")
+        out = {}
+        for row in reader:
+            if first and last:
+                raw = (row.get(last) or "").strip()
+                f, l = (row.get(first) or "").strip().casefold(), raw.casefold()
+            elif full:
+                raw = (row.get(full) or "").strip().split()[-1:] or [""]
+                raw = raw[0]
+                f, l = split_name(row.get(full) or "")
+            else:
+                raise SystemExit(f"{path}: no First Name/Surname or Name column in {reader.fieldnames}")
+            if f and l:
+                out[(f, l)] = raw
+        return out
 
 
 def csv_domains(path: Path) -> list[str]:
@@ -183,11 +221,25 @@ def company_by_id(company_id: str) -> dict | None:
     return r.json() if r.status_code == 200 else None
 
 
-def build_plan(domains: list[str], snapshot: dict, since: datetime | None, extra_company_ids=()) -> dict:
+def build_plan(domains: list[str], snapshot: dict, since: datetime | None, extra_company_ids=(), names=None) -> dict:
+    names = names or {}
     plan = {"companies": [], "contacts": [], "skipped": []}
     protected = set(snapshot.get("existing", {}))
     protected_ids = {h["id"] for hits in snapshot.get("existing", {}).values() for h in hits}
     seen_contacts = set()
+
+    # 0. name-matched contacts (fictitious demo rows, no email) — createdate-guarded
+    for raw_last in sorted(set(names.values())):
+        for c in search("contacts", [{"propertyName": "lastname", "operator": "EQ", "value": raw_last}], CONTACT_PROPS):
+            p = c["properties"]
+            key = ((p.get("firstname") or "").strip().casefold(), (p.get("lastname") or "").strip().casefold())
+            if key in names and c["id"] not in seen_contacts:
+                if created_since(p, since):
+                    seen_contacts.add(c["id"])
+                    plan["contacts"].append({"id": c["id"], "email": p.get("email") or f"{key[0]} {key[1]}",
+                                             "reason": "name in --contacts-csv, created since --since"})
+                else:
+                    plan["skipped"].append({"contact": c["id"], "reason": "name matches but predates --since"})
 
     # 1. marker-matched contacts (fictitious rows)
     for flt in (
@@ -247,6 +299,8 @@ def build_plan(domains: list[str], snapshot: dict, since: datetime | None, extra
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--companies-csv", type=Path, help="the companies stress CSV (Website column)")
+    ap.add_argument("--contacts-csv", type=Path, action="append", default=[],
+                    help="a contacts CSV whose First Name+Surname (or Name) rows select contacts by name; repeatable; still subject to --since")
     ap.add_argument("--since", help="ISO timestamp — only records created at/after this are candidates")
     ap.add_argument("--snapshot", action="store_true", help="record pre-existing companies, then exit")
     ap.add_argument("--snapshot-file", type=Path, help="default: <csv dir>/uat-reset-snapshot.json")
@@ -276,7 +330,8 @@ def main(argv=None) -> int:
         print("REFUSED: no --since and the snapshot carries no taken_at.")
         return 2
 
-    plan = build_plan(domains, snapshot, since, extra_company_ids=a.extra_company_id)
+    names = {k: v for p in a.contacts_csv for k, v in csv_names(p).items()}
+    plan = build_plan(domains, snapshot, since, extra_company_ids=a.extra_company_id, names=names)
     print(f"plan: {len(plan['contacts'])} contacts, {len(plan['companies'])} companies to delete; {len(plan['skipped'])} skipped")
     for c in plan["contacts"]:
         print(f"  contact  {c['id']:>14}  {c.get('email') or '-':45}  {c['reason']}")
@@ -322,6 +377,14 @@ def self_test() -> int:
     assert is_uat_contact({"email": "demo.rafael.petrakis@australianturfclub.com.au"})
     assert is_uat_contact({"email": "", "lv_linkedin_url": "https://www.linkedin.com/in/demo-harriet-kowalczyk"})
     assert not is_uat_contact({"email": "demonstration@x.com"})
+    assert split_name("Rafael Petrakis") == ("rafael", "petrakis")
+    assert split_name("Mary Anne Smith") == ("mary anne", "smith")
+    assert split_name("Cher") == ("cher", "") and split_name("") == ("", "")
+    here = Path(__file__).resolve().parent
+    if (here / "demo-attendees.csv").exists():
+        assert csv_names(here / "demo-attendees.csv")[("zara", "rangi")] == "Rangi"
+        assert csv_names(here / "demo-contacts-mixed.csv")[("harriet", "kowalczyk")] == "Kowalczyk"
+        assert ("harriet", "") not in csv_names(here / "demo-contacts-mixed-adversarial.csv")  # first-name-only row selects nothing
     since = parse_ts("2026-09-14T00:00:00Z")
     assert created_since({"createdate": "2026-09-14T03:00:00.000Z"}, since)
     assert not created_since({"createdate": "2026-09-13T23:59:59.000Z"}, since)
