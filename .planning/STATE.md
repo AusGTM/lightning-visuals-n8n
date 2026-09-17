@@ -6,10 +6,10 @@ current_phase: 73
 current_phase_name: GA fix list from stress attempt 2
 status: verifying
 stopped_at: "Paused: phase 73 executed 7/7, UAT A+E pass, reset 3 done; verifier spawned, code review + secure/validate + phase.complete pending"
-last_updated: "2026-09-17T16:29:10.854Z"
+last_updated: "2026-09-17T16:36:40.734Z"
 last_activity: 2026-09-18
-last_activity_desc: Completed quick task 260918-322 — F-S5 verify_decision boolean false-negative fixed (plugin 0.50.1)
-state_head: e9f05e2b30266a84008cdfa98015bc2f2210eaa0
+last_activity_desc: Completed quick tasks 260918-322 (F-S5 verify) and 260918-32u (F-S2 phantom research_failed marker); phase 73 close tail pending
+state_head: 6437ce7517188a7a5b7063475b5d8986c66128a9
 progress:
   total_phases: 10
   completed_phases: 2
@@ -361,7 +361,7 @@ Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 73 (GA fix list from stress attempt 2) — EXECUTING
 Plan: 7 of 7
 Status: Phase complete — ready for verification
-Last activity: 2026-09-18 — Completed quick task 260918-322: Fix F-S5 verify_decision boolean false-negative
+Last activity: 2026-09-18 — Completed quick task 260918-32u: Fix F-S2 phantom research_failed marker row
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -1070,6 +1070,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 | 260911-w6q | F2-3: operator-claude-plugin/skills/review-triage/SKILL.md today reads ONLY HubSpot lv_enrichment_needs_review records and never opens the local held_queue.json. Make it read BOTH queues and render ONE numbered table with four facets (conflicts: approve/reject; new people: create/skip, create pre-suggested; needs a company: create company/skip; nothing found: not listed, one parked-count line with show parked). Same numbering and count-restating vocabulary as the match table (create all 2). create dispatches the row through the contact-ingest lane under a review-lane grant (write_grant lanes include review; contacts lane for the ingest write), then confirms by re-reading the record, then marks the entry created. Absent company stays downgraded to review server-side (CLAUDE.md 13.0.1). Offline tests only; no live call. | 2026-09-11 | 2101b747 | — | .planning/quick/260911-w6q-f2-3-operator-claude-plugin-skills-review-triage-skill-md-to |
 | 260911-w6r | F2-4: operator-claude-plugin/skills/enrich-before-ingest/SKILL.md step 6/9: remove the held-rows AskUserQuestion (UAT F4), render the new-people rows from the facet classifier with the ready one-line answer (reply create all N now, or later in /operator-claude-plugin:review-triage), never block; if the operator replies in-conversation, dispatch the create under the standing grant via the same fences review-triage uses. Correct the end-of-run text that today says work them with review-triage (false until F2-3 lands). Pin with the skill-contract and sequence-coverage tests. Bump operator-claude-plugin to 0.47.0 with one CHANGELOG section naming F2-1..F2-4 and the ruling. | 2026-09-11 | 5e71828f | — | .planning/quick/260911-w6r-f2-4-operator-claude-plugin-skills-enrich-before-ingest-skil |
 | 260918-322 | Fix F-S5 verify_decision boolean false-negative | 2026-09-18 | e9f05e2b | — | [260918-322-fix-f-s5-verify-decision-boolean-false-n](./quick/260918-322-fix-f-s5-verify-decision-boolean-false-n/) |
+| 260918-32u | Fix F-S2 phantom research_failed marker row | 2026-09-18 | 6437ce75 | — | [260918-32u-fix-f-s2-phantom-research-failed-marker-](./quick/260918-32u-fix-f-s2-phantom-research-failed-marker-/) |
 
 ## Deferred Items
 
