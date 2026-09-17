@@ -9,36 +9,114 @@
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Phase 73 discussed (D-73-01..22), researched, pattern-mapped, planned 7/7, checker PASS", "status": "done", "commit": "c42d6935"},
-    {"id": 2, "name": "Plans 73-01..06 executed (F-B5, F-E1+F-A3r, F-B7/B4/B3, F-A5, F-B6+cost lanes, F-A6 lane); suites 4990/154 py, 1215/0 node; regen zero-diff; all bodies disarmed", "status": "done", "commit": "de5d2f8b"},
-    {"id": 3, "name": "73-07: pre-flight + plugin 0.50.0 + RUNBOOK; operator deployed+bounced disarmed (30/80/287/55/43, v1), snapshot, reset, attempt 3 A-F recorded in 73-UAT.md (A+E PASS, F-S1..S6); continuation wrote SUMMARY + section-31 triage; ROADMAP 7/7", "status": "done", "commit": "1bf0534c"},
-    {"id": 4, "name": "Reset 3 executed: 27/27 deleted, 21 protected untouched; plugin 0.50.0 installed; master pushed through f1e4f878", "status": "done", "commit": "f1e4f878"},
-    {"id": 5, "name": "execute-phase tail: aggregate + post-wave gate green; gsd-verifier SPAWNED in background at pause (73-VERIFICATION.md did NOT exist at 15:44Z); code-review 45-file scope computed but gsd-code-reviewer NOT spawned", "status": "in_progress", "progress": "verifier may have written VERIFICATION.md after the pause; check before re-spawning"}
+    {
+      "id": 1,
+      "name": "Phase 73 discussed (D-73-01..22), researched, pattern-mapped, planned 7/7, checker PASS",
+      "status": "done",
+      "commit": "c42d6935"
+    },
+    {
+      "id": 2,
+      "name": "Plans 73-01..06 executed (F-B5, F-E1+F-A3r, F-B7/B4/B3, F-A5, F-B6+cost lanes, F-A6 lane); suites 4990/154 py, 1215/0 node; regen zero-diff; all bodies disarmed",
+      "status": "done",
+      "commit": "de5d2f8b"
+    },
+    {
+      "id": 3,
+      "name": "73-07: pre-flight + plugin 0.50.0 + RUNBOOK; operator deployed+bounced disarmed (30/80/287/55/43, v1), snapshot, reset, attempt 3 A-F recorded in 73-UAT.md (A+E PASS, F-S1..S6); continuation wrote SUMMARY + section-31 triage; ROADMAP 7/7",
+      "status": "done",
+      "commit": "1bf0534c"
+    },
+    {
+      "id": 4,
+      "name": "Reset 3 executed: 27/27 deleted, 21 protected untouched; plugin 0.50.0 installed; master pushed through f1e4f878",
+      "status": "done",
+      "commit": "f1e4f878"
+    },
+    {
+      "id": 5,
+      "name": "execute-phase tail: post-wave gate green; gsd-verifier DONE \u2014 73-VERIFICATION.md status: passed, 12/12 findings, 22/22 decisions, digest resealed with library computeCoveredDigest",
+      "status": "done",
+      "commit": "(this commit)"
+    }
   ],
   "remaining_tasks": [
-    {"id": 6, "name": "Check 73-VERIFICATION.md exists + status; if missing, re-spawn gsd-verifier (must_haves 1-9 per session prompt; D-73-19 offline-only is NOT a failure; covered_files = all 14 PLAN/SUMMARY; frontmatter shape from 72-VERIFICATION.md)", "status": "not_started"},
-    {"id": 7, "name": "Code-review gate: spawn gsd-code-reviewer (sonnet, standard) over the 45-file scope (SUMMARY key-files + git diff since a662ec7c^, minus .planning/ and generated n8n/wf_*.json) -> 73-REVIEW.md; /gsd-code-review 73 --fix if Critical/Warning", "status": "not_started"},
-    {"id": 8, "name": "verify:post hooks: /gsd-secure-phase 73 (threat models in all 7 plans; no SECURITY.md yet) and /gsd-validate-phase 73 (73-VALIDATION.md still status: draft)", "status": "not_started"},
-    {"id": 9, "name": "phase.complete 73 once VERIFICATION passed + security closed; reseal VERIFICATION covered_digest if any covered file changes after; close_phase_todos; config-set workflow._auto_chain_active false", "status": "not_started"},
-    {"id": 10, "name": "Fix F-S2 (web-research fenced-JSON rejected by Validate Research Output JS validator; Python _extract_json strips fences; Phase 46 parity) and F-S5 (review verify false-negative on booleancheckbox false vs empty) - typed defect todos already in pending/", "status": "not_started"},
-    {"id": 11, "name": "Carried from prior handoff: clean-machine install test following USAGE.md only; real-data demo recording tests/demo-run + reset reads written_records-<run_id>.json; /gsd-complete-milestone after phase 73 closes", "status": "not_started"},
-    {"id": 12, "name": "git push origin master (ahead of origin since f1e4f878: 6cfe65fb 08e4afe6 1bf0534c + pause WIP)", "status": "not_started"}
+    {
+      "id": 7,
+      "name": "Code-review gate: spawn gsd-code-reviewer (sonnet, standard) over the 45-file scope (SUMMARY key-files + git diff since a662ec7c^, minus .planning/ and generated n8n/wf_*.json) -> 73-REVIEW.md; /gsd-code-review 73 --fix if Critical/Warning",
+      "status": "not_started"
+    },
+    {
+      "id": 8,
+      "name": "verify:post hooks: /gsd-secure-phase 73 (threat models in all 7 plans; no SECURITY.md yet) and /gsd-validate-phase 73 (73-VALIDATION.md still status: draft)",
+      "status": "not_started"
+    },
+    {
+      "id": 9,
+      "name": "phase.complete 73 once VERIFICATION passed + security closed; reseal VERIFICATION covered_digest if any covered file changes after; close_phase_todos; config-set workflow._auto_chain_active false",
+      "status": "not_started"
+    },
+    {
+      "id": 10,
+      "name": "Fix F-S2 (web-research fenced-JSON rejected by Validate Research Output JS validator; Python _extract_json strips fences; Phase 46 parity) and F-S5 (review verify false-negative on booleancheckbox false vs empty) - typed defect todos already in pending/",
+      "status": "not_started"
+    },
+    {
+      "id": 11,
+      "name": "Carried from prior handoff: clean-machine install test following USAGE.md only; real-data demo recording tests/demo-run + reset reads written_records-<run_id>.json; /gsd-complete-milestone after phase 73 closes",
+      "status": "not_started"
+    },
+    {
+      "id": 12,
+      "name": "git push origin master (ahead of origin since f1e4f878: 6cfe65fb 08e4afe6 1bf0534c + pause WIP)",
+      "status": "not_started"
+    }
   ],
   "blockers": [
-    {"description": "Sonnet weekly rate limit killed executor 73-05 mid-plan on 2026-09-15 (resets Sep 19 02:00 Australia/Brisbane); account switched to continue. Background subagents on sonnet may hit it again.", "type": "external", "workaround": "switch account or wait; safe_resume_gate recovered 73-05 cleanly because every task commits atomically"}
+    {
+      "description": "Sonnet weekly rate limit killed executor 73-05 mid-plan on 2026-09-15 (resets Sep 19 02:00 Australia/Brisbane); account switched to continue. Background subagents on sonnet may hit it again.",
+      "type": "external",
+      "workaround": "switch account or wait; safe_resume_gate recovered 73-05 cleanly because every task commits atomically"
+    }
   ],
   "async_jobs": [],
   "human_actions_pending": [
-    {"action": "Decide GRNSW contacts Greg Johnson 353745909199 / Paul Gentle 353575790047 (Stage C suggest-contacts creates, real people, real emails, no uat marker, NOT in reset 3's plan): keep or delete by hand", "context": "uat_reset.py has no --extra-contact-id flag", "blocking": false},
-    {"action": "git push after each session", "context": "marketplace clone tracks origin; 0.50.0 already pushed and installed", "blocking": false}
+    {
+      "action": "Decide GRNSW contacts 353745909199 / 353575790047 (Stage C suggest-contacts creates, real people, real emails, no uat marker, NOT in reset 3's plan): keep or delete by hand",
+      "context": "uat_reset.py has no --extra-contact-id flag",
+      "blocking": false
+    },
+    {
+      "action": "git push after each session",
+      "context": "marketplace clone tracks origin; 0.50.0 already pushed and installed",
+      "blocking": false
+    }
   ],
   "decisions": [
-    {"decision": "73-07 checkpoint gate set to blocking-human (planner wrote blocking) so auto-chain never approves the operator gate", "rationale": "D-73-18; workflow._auto_chain_active was true", "phase": "73"},
-    {"decision": "F-A6 create-error lane proven offline only (walker error-output extension + node test); no test-only dedupe bypass; stays [documented]", "rationale": "D-73-19; F-A5 dedupe removes attempt 3's natural 409 trigger", "phase": "73"},
-    {"decision": "F-B4 folded, option A: name-only company rows may UPDATE an exact single-name match, never CREATE; review reasons name match outcome + no domain + supply one", "rationale": "D-73-22 operator ruling 2026-09-15", "phase": "73"},
-    {"decision": "tests/stress-tests/session-*.log transcripts gitignored", "rationale": "embed secret-referencing code strings; 3.5 MB", "phase": "73"}
+    {
+      "decision": "73-07 checkpoint gate set to blocking-human (planner wrote blocking) so auto-chain never approves the operator gate",
+      "rationale": "D-73-18; workflow._auto_chain_active was true",
+      "phase": "73"
+    },
+    {
+      "decision": "F-A6 create-error lane proven offline only (walker error-output extension + node test); no test-only dedupe bypass; stays [documented]",
+      "rationale": "D-73-19; F-A5 dedupe removes attempt 3's natural 409 trigger",
+      "phase": "73"
+    },
+    {
+      "decision": "F-B4 folded, option A: name-only company rows may UPDATE an exact single-name match, never CREATE; review reasons name match outcome + no domain + supply one",
+      "rationale": "D-73-22 operator ruling 2026-09-15",
+      "phase": "73"
+    },
+    {
+      "decision": "tests/stress-tests/session-*.log transcripts gitignored",
+      "rationale": "embed secret-referencing code strings; 3.5 MB",
+      "phase": "73"
+    }
   ],
-  "uncommitted_files": ["?? .planning/milestone.lock"],
-  "next_action": "ls .planning/phases/73-ga-fix-list-from-stress-attempt-2/73-VERIFICATION.md - if present read its status; else re-spawn gsd-verifier. Then spawn gsd-code-reviewer over the 45-file scope. Then secure-phase + validate-phase, then phase.complete 73.",
+  "uncommitted_files": [
+    "?? .planning/milestone.lock"
+  ],
+  "next_action": "Spawn gsd-code-reviewer (sonnet, standard) over the 45-file scope -> 73-REVIEW.md; then /gsd-secure-phase 73, /gsd-validate-phase 73, then phase.complete 73 (VERIFICATION already passed).",
   "context_notes": "Phase 73 execution is DONE (7/7 plans, all SUMMARYs, UAT Stage A+E pass where attempt 2 failed); only the phase-close tail remains. workflow._auto_chain_active=true is still set in .planning/config.json - clear it when resuming manually. .planning/milestone.lock is a runtime lock, untracked, never stage it. Two Medium live findings (F-S2 fenced-JSON validator, F-S5 boolean verify false-negative) are typed todos in .planning/todos/pending/2026-09-17-*.md, not yet fixed. Commit trailer convention now: Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com> + Claude-Session: https://claude.ai/code/session_013gwbkiUj9A3NBvXahp3rEr. Executor prompts this session inlined execute-plan.md + summary template + checkpoints + tdd verbatim (see transcript). Memories: subagent-shares-working-tree (clean tree, one executor at a time, use_worktrees=false); n8n-rundata-carries-webhook-secret (never paste Webhook Trigger runData). The Bash secret-read guard blocks any command text containing the env-sourcing line - write files with the Write tool when they must quote it."
 }
