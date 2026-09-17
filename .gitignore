@@ -45,3 +45,9 @@ tests/stress-tests/session.log
 tests/stress-tests/session-*.log
 # demo-run: any file holding a real, enrichable person (see DEMO-RUNBOOK.md "Landing a contact")
 tests/demo-run/*-real*.csv
+
+# operator install bundle: holds the live operator.local.json (secrets). Only the installer
+# script and its README are tracked — see operator-claude-plugin/install/README.md
+operator-claude-plugin/install/*
+!operator-claude-plugin/install/install.command
+!operator-claude-plugin/install/README.md
