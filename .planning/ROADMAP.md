@@ -498,7 +498,7 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans executed
 
 Plans:
 
@@ -528,4 +528,4 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 73-07-PLAN.md — Operator gate: idempotent regen, both suites, plugin 0.50.0, then the operator's deploy + bounce disarmed, reset, and attempt 3 A–F (D-73-18)
+- [x] 73-07-PLAN.md — Operator gate: idempotent regen, both suites, plugin 0.50.0, then the operator's deploy + bounce disarmed, reset, and attempt 3 A–F (D-73-18)
