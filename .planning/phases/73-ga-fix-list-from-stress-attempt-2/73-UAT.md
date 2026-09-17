@@ -149,7 +149,8 @@ reproduced anywhere.
   Illawarra LinkedIn declined to name-only.
 - Outcomes (from runData): **6 created, 25 enriched-in-place, 1 review, 2 gate-skip** — 34,
   zero unaccounted (**F-B5 PASS**; the run report accounts every enrich/create per-record with
-  real ids, and the 12 `research_failed` rows are intermediate lane markers, not counted as
+  real ids, and the 12 `research_failed` rows are phantom markers with no identity — one per
+  research-running execution, not intermediate rows of any real record — not counted as
   outcomes, never rendered unjoinable).
 - **F-B1 PASS**: grant envelope priced Lusha **66 credits / 33 companies = 2 credits/company**.
 - **F-B7 PASS**: Racing Victoria `18756544380`, Wyong `10215097384`, Canberra RC `10152138518`
@@ -235,7 +236,7 @@ reproduced anywhere.
 | ID | Sev | Finding |
 | --- | --- | --- |
 | F-S1 | Low | No-provider ingest withholds `mobilephone` and `lv_linkedin_url`/`hs_linkedin_url`. On a CSV-only ingest every field is `source=csv, confidence 80`; these fields carry `fill_blank_only`@85, so 80 < 85 → `needs_review`, not promoted even into a blank field. By long-standing `field_policy` (not a Phase 73 regression). The Phase 72 live proof used a provider value at confidence 85, never csv/80; a provider pass (Stage D) is what fills them. The RUNBOOK's Stage A "Mobile + LinkedIn land" spot-check is optimistic for a *no-provider* run. |
-| F-S2 | Medium | Web-research output validation rejects fenced JSON. The `Claude Web Research` node completes (haiku-4.5, `end_turn`, valid JSON with evidence URLs) but returns it wrapped in a ` ```json ` fence; the backend `Validate Research Output` node does not strip the fence → `research_failed` for ~12/18 companies in Stage B. Enrichment still completed on provider data, but web `lv_org_type`/`lv_produces_content`/`lv_content_type` were discarded → several records left `lv_org_type=None` and some fired spurious `no_content` vetoes (e.g. a `governing_body_league` with `produces_content=false`). The Python oracle's `_extract_json` strips fences; the deployed JS validator does not. |
+| F-S2 | Medium | Phantom `research_failed` marker rows reach the caller. 12 `research_failed` rows against 18 research calls in Stage B — but the fence claim was checked live on 2026-09-18 and found **false**: `extractFinalJson` already strips a ` ```json ` fence with the regex identical to `_extract_json`, and `Validate Research Output` parsed **18/18** responses. The 12 rows are phantoms, exactly one per research-running execution, each with no id and no domain: `IF Research Errored` carries `alwaysOutputData: true` (correctly — it feeds `Build Response Merge Stage 2` input 1), n8n pushes one literal `{}` down the empty TRUE branch, and `Build Research Failure Response` stamped `action: "research_failed"` onto it, which `hasRowIdentity` then admits and the plugin buckets FAILED. Fixed in quick task 260918-32u (the empty-input case now emits the reserved sentinel marker). Also seen in the same re-read, tracked separately as a research-prompt *quality* question (`.planning/todos/pending/2026-09-18-racing-clubs-researched-produces-content-false.md`): several racing clubs' parsed answers set `produces_content: false` with evidence at high confidence, firing `no_content` vetoes — the research model's own evidenced answers, not a parse loss. |
 | F-S3 | Low | suggest-contacts eligibility is not reconstructable outside the live batch response. `num_associated_contacts` is carried on the anonymous response rows but the Decide output carries the company id without the count, so the two cannot be joined from runData; with no direct HubSpot read available to the plugin, per-company eligibility could not be computed offline. Stage C was scoped to a representative eligible subset as a result. |
 | F-S4 | Info | Stage D held the Wagga rows (41–42) as new-person creates rather than auto-associating them to the Wagga company created in Stage B — correct D-70-11 behaviour (a create needs an explicit operator "create N" reply), but newer than the RUNBOOK's "rows 41–42 now associate" expectation. Also: 17 of 48 match rows came back `unchecked` (a match chunk did not settle inside the recovery bound) — safely bucketed, not misclassified, re-checked on retry. |
 | F-S5 | Medium | Review-approve verify reports overall `failed` on booleancheckbox fields set to `false`. Approving MRC landed every business field but `verify_decision` flagged `lv_is_hardware_vendor` and `lv_is_gambling_operator` as "did not take the approved value", because HubSpot stores an unchecked booleancheckbox as empty and returns empty (not "false") on re-read. This is a verify false-negative (false-vs-empty), not a real write failure — but it makes a successful approve read as `failed`, which would mislead an operator. |
@@ -247,7 +248,8 @@ Stage A and Stage E — the two that failed/partialled in attempt 2 — both **p
 Stage A wrote 21 creates + 1 update with no aborted execution, no 429, and the dedupe collapse
 that made the batch safe; Stage E's array-field approve landed where attempt 2 took a 400.
 Every stage boundary read disarmed, and the final read-back is DISARMED PASS on the v1 bodies
-at the Task-1 node counts. Six findings recorded (two Medium: the web-research fence defect
-F-S2 and the review-approve false-boolean verify false-negative F-S5); none blocked a stage.
+at the Task-1 node counts. Six findings recorded (two Medium: the phantom `research_failed`
+marker defect F-S2 and the review-approve false-boolean verify false-negative F-S5); none
+blocked a stage.
 The create-error lane (F-A6) and F-E1's multi-element array remain offline-proven only, by
 design (D-73-19). Reset deferred to the operator.
