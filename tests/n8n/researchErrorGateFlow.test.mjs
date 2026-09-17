@@ -199,3 +199,39 @@ test("a healthy research response still reaches Validate Research Output's real 
   assert.equal(out.length, 1);
   assert.ok(out[0].research_candidate, "a healthy payload still produces a research_candidate");
 });
+
+// --- behaviour: the alwaysOutputData empty item is a SENTINEL, not a fabricated outcome ---
+//
+// Quick task 260918-32u (F-S2). "IF Research Errored" carries alwaysOutputData:true so that
+// "Build Response Merge Stage 2" input 1 stays fed on the research-happened-no-error case.
+// n8n's ensureAlwaysOutputData then pushes one literal `{ json: {} }` down the TRUE branch,
+// which this terminal used to stamp `action: "research_failed"` onto -- a phantom failure
+// row with no identity, one per research-running execution, bucketed FAILED by the plugin.
+
+test("Build Research Failure Response emits a sentinel marker for the alwaysOutputData {} item", () => {
+  const { byName } = loadWorkflow();
+  const node = byName["Build Research Failure Response"];
+
+  const out = runCode(node, [{}], {});
+
+  // The delivery itself must survive -- emitting zero items would starve the stage Merge.
+  assert.equal(out.length, 1, "still delivers one item: alwaysOutputData exists to feed the Merge");
+  assert.equal(out[0]._gsd_sentinel_marker, true, "it is the reserved sentinel marker");
+  assert.equal(out[0].action, undefined, "no fabricated action");
+  assert.equal(out[0].gate, undefined, "no fabricated gate reason");
+});
+
+test("the sentinel never reaches the caller, and a genuine failure still does", () => {
+  const { byName } = loadWorkflow();
+  const failure = byName["Build Research Failure Response"];
+  const filter = byName["Filter Build Response Rows"];
+  assert.ok(filter, "Filter Build Response Rows node present in the built workflow");
+
+  const phantom = runCode(failure, [{}], {});
+  assert.equal(runCode(filter, phantom, {}).length, 0, "phantom dropped before Build Response");
+
+  const real = runCode(failure, [{ ...LIVE_ERROR_PAYLOAD, ...PRE_HTTP_ROW }], {});
+  const survivors = runCode(filter, real, {});
+  assert.equal(survivors.length, 1, "a genuine research failure is never silenced");
+  assert.equal(survivors[0].action, "research_failed");
+});

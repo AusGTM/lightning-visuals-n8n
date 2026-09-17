@@ -7587,11 +7587,19 @@ def build_enrichment_cloud():
 // ALREADY the combined {row, raw response/error} item, no by-name recovery.
 return $input.all().map((it) => {
   const merged = it.json || {};
+  // Quick task 260918-32u (F-S2): "IF Research Errored" carries alwaysOutputData:true so
+  // "Build Response Merge Stage 2" input 1 stays fed on the research-happened-no-error
+  // case; n8n's ensureAlwaysOutputData then pushes one literal `{}` down this TRUE branch.
+  // A zero-key item can ONLY be that push — every real item arrives through "Research
+  // Carry Merge" carrying the row — so emit the reserved sentinel marker (kept as a
+  // delivery, dropped at "Filter Build Response Rows") instead of stamping an `action`
+  // onto it and fabricating a `research_failed` outcome row with no identity.
+  if (Object.keys(merged).length === 0) return { json: { __SENTINEL_MARKER_KEY__: true } };
   const message = (merged.error && merged.error.message) || 'research call failed';
   const { id, type, role, content, model, usage, stop_reason, stop_sequence, error, ...row } = merged;
   return { json: { ...row, action: "research_failed", gate: { reason: message } } };
 });
-""", csx, cy - 260))
+""".replace("__SENTINEL_MARKER_KEY__", SENTINEL_MARKER_KEY), csx, cy - 260))
     csx += 220
     nodes.append(code_node("Validate Research Output", ENRICH_VALIDATE_RESEARCH, csx, cy - 180))
     csx += 220
