@@ -66,6 +66,7 @@ carrying its live evidence.
 - [x] Phase 71: A held new person lands in HubSpot with one reply (added 2026-09-12 after quick batch 260911-w6n) (completed 2026-09-12)
 - [x] Phase 72: Enrichment extras land in HubSpot (added 2026-09-12 after Phase 71 F71-5; 8 plans + 4 gap-closure plans) (completed 2026-09-13)
 - [x] Phase 73: GA fix list from stress attempt 2 (added 2026-09-15 after stress attempt 2; 7 plans; attempt 3 A–F PASS) (completed 2026-09-18)
+- [ ] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -499,7 +500,7 @@ where attempt 2 failed/partialled. Nothing armed from Claude.
 
 **Requirements**: coverage by finding id — F-A6, F-A5, F-E1, F-B7, F-B4, F-B3, F-B5, F-A3r, F-A1, F-A2, F-B1, F-B6.
 **Depends on:** Phase 72
-**Plans:** 7/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 
@@ -530,3 +531,25 @@ Plans:
 **Wave 7** *(blocked on Wave 6 completion)*
 
 - [x] 73-07-PLAN.md — Operator gate: idempotent regen, both suites, plugin 0.50.0, then the operator's deploy + bounce disarmed, reset, and attempt 3 A–F (D-73-18)
+
+### Phase 74: Code-review follow-ups from phase 73
+
+**Goal:** close the 16 findings in `73-REVIEW.md` (4 blocker, 12 warning) that were triaged
+2026-09-18 as non-breaking and carried out of phase 73. In fix order: CR-03 consume
+`create_outcome` (`none`/`refused` → `create_unconfirmed` → FAILED in `written_records`, never
+`created_id_unknown`); CR-02 explicit `_create_error` stamp on the `HubSpot Create` error edge
+ahead of shape classification; CR-04 widen `freeze_execution_rundata.py` scrub to `run.error` /
+`json.error.request` + a committed-fixture guard test; CR-01 correct the
+`set_always_output_data(["HubSpot Create"])` comment (n8n pads output 0 only — `[observed live]`
+execution `12522`: `HubSpot Create` outs `[21, 0]`, `Create Carry Merge` input 2 never delivered,
+association still landed via the v1 drain), make `walkWorkflow.mjs` pad index 0 only, add the
+§13.0.3 row; WR-01/02 grant-disclosure execution basis; WR-05 ledger keyed by object type + id;
+WR-06 keep `_excluded_marker_count`; WR-03/04/07/08/09/10/11/12 fix-or-accept with a one-line
+reason each. Regenerate JSON, suites green, disarmed deploy is the operator's step.
+**Requirements**: TBD
+**Depends on:** Phase 73
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 74 to break down)
