@@ -6,10 +6,10 @@ current_phase: 73
 current_phase_name: GA fix list from stress attempt 2
 status: verifying
 stopped_at: "Paused: phase 73 executed 7/7, UAT A+E pass, reset 3 done; verifier spawned, code review + secure/validate + phase.complete pending"
-last_updated: "2026-09-17T15:45:32.137Z"
-last_activity: 2026-09-15
-last_activity_desc: Phase 73 execution started
-state_head: 1bf0534cd7bba3756080781d874fb19e5894d8bc
+last_updated: "2026-09-17T16:29:10.854Z"
+last_activity: 2026-09-18
+last_activity_desc: Completed quick task 260918-322 — F-S5 verify_decision boolean false-negative fixed (plugin 0.50.1)
+state_head: e9f05e2b30266a84008cdfa98015bc2f2210eaa0
 progress:
   total_phases: 10
   completed_phases: 2
@@ -361,7 +361,7 @@ Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 73 (GA fix list from stress attempt 2) — EXECUTING
 Plan: 7 of 7
 Status: Phase complete — ready for verification
-Last activity: 2026-09-15 — Phase 73 execution started
+Last activity: 2026-09-18 — Completed quick task 260918-322: Fix F-S5 verify_decision boolean false-negative
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -1069,6 +1069,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 | 260911-w6p | F2-2: add a read-time FACET classifier to operator-claude-plugin/scripts/held_queue.py (no new hold code; confidence.ALL_HOLD_CODES stays closed, SAFE-01 untouched) deriving from a no_match entry's enriched row: new_person (usable email at the company's own domain via enrichment._clean_domain, company present), needs_company (email present, company absent), nothing_found (no usable email). Add durable per-entry verbs create/skip/retry/drop with status, timestamp, run_id, so an approved entry is never re-enriched or re-held on a later run (fingerprint rule). Tests on the recorded a254d1e entries (Katie Poggioli = needs_company, Jimmy Busteed = new_person). | 2026-09-11 | 66de79b8 | — | .planning/quick/260911-w6p-f2-2-add-a-read-time-facet-classifier-to-operator-claude-plu |
 | 260911-w6q | F2-3: operator-claude-plugin/skills/review-triage/SKILL.md today reads ONLY HubSpot lv_enrichment_needs_review records and never opens the local held_queue.json. Make it read BOTH queues and render ONE numbered table with four facets (conflicts: approve/reject; new people: create/skip, create pre-suggested; needs a company: create company/skip; nothing found: not listed, one parked-count line with show parked). Same numbering and count-restating vocabulary as the match table (create all 2). create dispatches the row through the contact-ingest lane under a review-lane grant (write_grant lanes include review; contacts lane for the ingest write), then confirms by re-reading the record, then marks the entry created. Absent company stays downgraded to review server-side (CLAUDE.md 13.0.1). Offline tests only; no live call. | 2026-09-11 | 2101b747 | — | .planning/quick/260911-w6q-f2-3-operator-claude-plugin-skills-review-triage-skill-md-to |
 | 260911-w6r | F2-4: operator-claude-plugin/skills/enrich-before-ingest/SKILL.md step 6/9: remove the held-rows AskUserQuestion (UAT F4), render the new-people rows from the facet classifier with the ready one-line answer (reply create all N now, or later in /operator-claude-plugin:review-triage), never block; if the operator replies in-conversation, dispatch the create under the standing grant via the same fences review-triage uses. Correct the end-of-run text that today says work them with review-triage (false until F2-3 lands). Pin with the skill-contract and sequence-coverage tests. Bump operator-claude-plugin to 0.47.0 with one CHANGELOG section naming F2-1..F2-4 and the ruling. | 2026-09-11 | 5e71828f | — | .planning/quick/260911-w6r-f2-4-operator-claude-plugin-skills-enrich-before-ingest-skil |
+| 260918-322 | Fix F-S5 verify_decision boolean false-negative | 2026-09-18 | e9f05e2b | — | [260918-322-fix-f-s5-verify-decision-boolean-false-n](./quick/260918-322-fix-f-s5-verify-decision-boolean-false-n/) |
 
 ## Deferred Items
 
