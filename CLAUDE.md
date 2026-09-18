@@ -2786,6 +2786,32 @@ start) and AFTER-03 (full end-of-run report).
 > `[documented]` to `[observed live]`. **Nothing armed. No HubSpot record written.** Full
 > record: `.planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/73.1-UAT.md`.
 
+> **Extended 2026-09-18 (73.1-09 Task 3 follow-through, `[observed live]`) — two
+> compounding defects in the discovery lane's ZoomInfo search, both found and fixed
+> disarmed, same day.** Execution `12666`'s zero-people result (previous paragraph) turned
+> out to hide two independent bugs, not one. (1) Rung 1's title filter could never have
+> succeeded: the 42-title `ROLE_TITLES` list OR-joins to 757 chars, and ZoomInfo's own 400
+> (`PFAPI0006`) caps `jobTitle` at under 500 — the leaf's swallowed try/catch read that 400
+> as an empty match. Fixed with `capRoleTitles()` (`n8n/code/discoverySearch.js`), a greedy
+> stop-before-cap OR-join (28 of 42 titles survive at 496 chars), plus per-rung
+> `search_diagnostics` (status/error/total, reusing `zoominfoToken.js`'s
+> `extractErrorStatus`) so a genuine zero-match is now distinguishable from a swallowed
+> error without a live replay. Redeployed disarmed (`--only
+> wf_suggest_discovery_cloud.json`, scoped single-workflow deploy), bounced, re-proved —
+> execution `12668` immediately surfaced defect (2): both rungs returned `401`, and runData
+> showed the token-mint nodes never ran — the leaf reused a token cached 27 minutes earlier
+> (by `12666`) that ZoomInfo had since rejected, with no `isAuthError`-clears-cache path
+> like the enrich lane's leaves already have. Fixed by mirroring that exact precedent
+> (`delete sd.zoominfo` on a 401, self-heals on the NEXT execution — a cloud split-code-node
+> cannot mint inline). Redeployed disarmed and bounced a second time; proof send 2
+> (execution `12669`) still read `401` (expected — the fix clears the cache for the run
+> that OWNS the 401, benefiting the next one, not itself), but a zero-cost read-only
+> `GET /workflows/VJJBZ2oJ0079MSzG` confirmed `staticData.global: {}` — the stale token was
+> deleted exactly as the fix predicts, without spending a third live execution. **Nothing
+> armed throughout either round. No HubSpot record written.** Full record:
+> `.planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/73.1-UAT.md`
+> section 5a.
+
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
 Established during Phase 61's premise spike. **Tags are load-bearing: `[documented]` means

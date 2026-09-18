@@ -201,6 +201,10 @@
       {
         "file": "tests/n8n/discoverySearch.test.mjs, tests/n8n/suggestDiscoveryLane.test.mjs, tests/test_probe_provider_discovery.py, operator-claude-plugin/tests/test_cost_guard.py",
         "change": "Every expectation that pinned three providers was updated to ZoomInfo-only, each seen RED against the pre-ruling code/config before being brought GREEN against the post-ruling code/config."
+      },
+      {
+        "file": "n8n/code/discoverySearch.js, scripts/build_cloud_workflows.py",
+        "change": "73.1-09 Task 3 follow-through (2026-09-18, executions 12666/12668/12669): the ZoomInfo ContactSearch contract this verdict describes needed one addition -- jobTitle must be under 500 chars (PFAPI0006), which the 42-title role vocabulary's naive OR-join (757 chars) violated. Added ZOOMINFO_JOBTITLE_MAX/capRoleTitles() (greedy stop-before-cap, applied inside buildRequest itself) plus per-rung search_diagnostics (status/error/total) on the ZoomInfo Search Rung1/Rung2 leaves, and an isAuthError-clears-cached-token path on 401 mirroring the enrich lane's existing precedent. Two disarmed redeploy+bounce+proof rounds confirmed the fix landed live (search_diagnostics.rung1.titles_used=28/titles_dropped=14) and is armed for the next real execution (GET /workflows/... staticData.global: {} confirms the stale token was cleared). Full record: 73.1-UAT.md section 5a."
       }
     ],
     "commit_scope": "73.1-09",
