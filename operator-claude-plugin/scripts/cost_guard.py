@@ -343,6 +343,112 @@ def suggestion_line(company_count, per_company_cap, rates: dict) -> dict:
     }
 
 
+def discovery_line(gap_company_count, per_company_cap, rates: dict) -> dict:
+    """Price a Phase 73.1 discovery round: search-only, one provider-priced search per
+    gap company per provider in DISCOVERY_SEARCH_RATE_KEYS, plus stage 2's existing
+    reveal ceiling (D-12/D-13/D-13a).
+
+    Zero gap companies is checked first, exactly like `research_line`'s and
+    `suggestion_line`'s "zero rows is a different kind of nothing" branch order --
+    readability before magnitude, no-rows before any rate is consulted.
+
+    Every provider search rate ships null until the D-12 plan-time probe measures it
+    (D-13): the whole-round `state` is `measured` only when EVERY provider's rate is
+    known, and `known` mirrors it -- one known plus two unknown is `unmeasured`,
+    because the total genuinely is. A `null` rate never renders as `$0` or `0 credits`;
+    it renders the word `unknown`, inheriting the same readability-before-magnitude
+    discipline `compare()` established (D-10).
+
+    Stage 2's ceiling reuses SUGGESTION_STAGE2_RATE_KEY -- the SAME contacts rate
+    `suggestion_line` already uses -- never a second literal for the same spend, and is
+    genuinely a ceiling: stage 2 can only reveal people discovery actually found.
+
+    `executions` is always the integer 1 (D-08): one POST per round carrying every
+    eligible company means exactly one n8n execution regardless of company count.
+    """
+    count = gap_company_count if isinstance(gap_company_count, int) and gap_company_count > 0 else 0
+
+    if count == 0:
+        return {
+            "gap_company_count": 0,
+            "per_company_cap": per_company_cap,
+            "providers": [],
+            "executions": 0,
+            "stage2_contact_ceiling": 0,
+            "stage2_credit_ceiling": None,
+            "state": "no_rows",
+            "known": False,
+            "line": "Provider discovery: no company is missing a named contact -- nothing to price.",
+        }
+
+    providers = []
+    provider_fragments = []
+    all_known = True
+    for provider, rate_key in DISCOVERY_SEARCH_RATE_KEYS.items():
+        entry = _rate_entry(rates, rate_key)
+        rate = entry.get("value")
+        if rate is None:
+            all_known = False
+            state = "unmeasured"
+            fragment = f"{provider}: unknown"
+        else:
+            state = "measured"
+            total = count * rate
+            fragment = f"{provider}: {count:g} × {rate:g} = {total:g} credits"
+        providers.append({
+            "provider": provider,
+            "rate_key": rate_key,
+            "rate": rate,
+            "unit": entry.get("unit"),
+            "confidence": entry.get("confidence"),
+            "citation": entry.get("citation"),
+            "state": state,
+            "line": fragment,
+        })
+        provider_fragments.append(fragment)
+
+    stage2_entry = _rate_entry(rates, SUGGESTION_STAGE2_RATE_KEY)
+    stage2_rate = stage2_entry.get("value")
+    stage2_contact_ceiling = count * per_company_cap
+    if stage2_rate is None:
+        stage2_credit_ceiling = None
+        stage2_part = (
+            f"stage-2 reveal ceiling: up to {stage2_contact_ceiling} contacts -- "
+            "credit cost not measured"
+        )
+    else:
+        stage2_credit_ceiling = stage2_contact_ceiling * stage2_rate
+        stage2_part = (
+            f"stage-2 reveal ceiling: up to {stage2_contact_ceiling} contacts, "
+            f"up to {stage2_credit_ceiling:g} Lusha credits"
+        )
+
+    state = "measured" if all_known else "unmeasured"
+
+    noun = "company" if count == 1 else "companies"
+    line = (
+        f"Provider discovery: {count} gap {noun} missing a named contact -- "
+        f"{'; '.join(provider_fragments)}; 1 n8n execution covers the whole round "
+        f"(D-08); {stage2_part}. Discovery is search-only: no HubSpot write, no "
+        "arming window opened (read-only lane, D-06). A provider whose search rate "
+        "is not yet measured proceeds now and reports its measured cost after the "
+        "round, overriding the usual states-cost-before-spending rule for that "
+        "provider only (D-13)."
+    )
+
+    return {
+        "gap_company_count": count,
+        "per_company_cap": per_company_cap,
+        "providers": providers,
+        "executions": 1,
+        "stage2_contact_ceiling": stage2_contact_ceiling,
+        "stage2_credit_ceiling": stage2_credit_ceiling,
+        "state": state,
+        "known": all_known,
+        "line": line,
+    }
+
+
 # --------------------------------------------------------------------------- balances
 
 
