@@ -72,6 +72,60 @@ test("a whitespace-only linkedin_url is not a present key and yields none", () =
   assert.equal(laneOf({ identity_keys: { linkedin_url: "   " } }), "none");
 });
 
+// --- mobilephone lane (73.1-06, D-16a/D-16a-i) -----------------------------------------------
+// Ranked between linkedin and name: email > linkedin_url > mobilephone > name > none.
+// `phone` is NEVER a laneOf rung — CREATE-only identity per D-16a-i (a landline is often a
+// shared company switchboard; an EQ match on it would update the wrong person).
+
+test("a mobilephone with no email and no linkedin_url selects mobilephone", () => {
+  assert.equal(laneOf({ identity_keys: { mobilephone: "+61400000000" } }), "mobilephone");
+});
+
+test("email and mobilephone both present selects email — email wins", () => {
+  assert.equal(
+    laneOf({ identity_keys: { email: "jane@example.com", mobilephone: "+61400000000" } }),
+    "email"
+  );
+});
+
+test("linkedin_url and mobilephone both present selects linkedin — mobilephone sits below linkedin", () => {
+  assert.equal(
+    laneOf({ identity_keys: { linkedin_url: "https://linkedin.com/in/x", mobilephone: "+61400000000" } }),
+    "linkedin"
+  );
+});
+
+test("object_id present with a mobilephone and no email selects fetch_by_id — unchanged order", () => {
+  assert.equal(
+    laneOf({ object_id: "123", identity_keys: { mobilephone: "+61400000000" } }),
+    "fetch_by_id"
+  );
+});
+
+test("mobilephone and lastName+companyName both present selects mobilephone — outranks the weak name pair", () => {
+  assert.equal(
+    laneOf({ identity_keys: {
+      mobilephone: "+61400000000", lastName: "Doe", companyName: "Gold Coast Turf Club",
+    } }),
+    "mobilephone"
+  );
+});
+
+test("a whitespace-only mobilephone is not a present key and yields none", () => {
+  assert.equal(laneOf({ identity_keys: { mobilephone: "   " } }), "none");
+});
+
+test("phone is never a laneOf rung — a phone-only row with a name falls through to the name lane (D-16a-i)", () => {
+  assert.equal(
+    laneOf({ identity_keys: { phone: "+61299998888", lastName: "Doe", companyName: "Gold Coast Turf Club" } }),
+    "name"
+  );
+});
+
+test("phone alone with no other identity key selects none — never a phone lane (D-16a-i)", () => {
+  assert.equal(laneOf({ identity_keys: { phone: "+61299998888" } }), "none");
+});
+
 // --- name lane -----------------------------------------------------------------------------
 
 test("lastName and companyName both present, no email/object_id, selects name", () => {
@@ -352,6 +406,59 @@ test("linkedin lane, a failed lookup, is unknown — never none (a linkedin-only
   const out = summarizeMatch({ lane: "linkedin", lookupFailed: true });
   assert.equal(out.tier, "unknown");
   assert.equal(out.auto, false);
+});
+
+// ============================================================================================
+// summarizeMatch({lane:"mobilephone", ...}) — 73.1-06, D-16a-i. A DEDICATED arm, sibling to
+// linkedin and never joined to it with `||` (Phase 61 REVIEW-C4: a shared arm would make a
+// future divergence invisible). `candidates` here are ALREADY-VERIFIED hits supplied by the
+// caller, not an unverified proposal.
+// ============================================================================================
+
+test("mobilephone lane, exactly one candidate, is high and auto, naming mobilephone", () => {
+  const out = summarizeMatch({ lane: "mobilephone", candidates: [{ hs_object_id: "1" }] });
+  assert.equal(out.tier, "high");
+  assert.equal(out.auto, true);
+  assert.match(out.reason, /mobilephone/i);
+  assert.deepEqual(out.candidates, []);
+});
+
+test("mobilephone lane, more than one candidate, is medium and never auto — carries the candidates, never a pick", () => {
+  const out = summarizeMatch({
+    lane: "mobilephone",
+    candidates: [{ hs_object_id: "1" }, { hs_object_id: "2" }],
+  });
+  assert.equal(out.tier, "medium");
+  assert.equal(out.auto, false);
+  assert.equal(out.candidates.length, 2);
+});
+
+test("mobilephone lane, zero candidates, is none — searched, no hit", () => {
+  const out = summarizeMatch({ lane: "mobilephone", candidates: [] });
+  assert.equal(out.tier, "none");
+  assert.equal(out.auto, false);
+  assert.match(out.reason, /no hit/i);
+});
+
+test("mobilephone lane, a failed lookup, is unknown — the failure arm runs first, unchanged", () => {
+  const out = summarizeMatch({ lane: "mobilephone", lookupFailed: true });
+  assert.equal(out.tier, "unknown");
+  assert.equal(out.auto, false);
+});
+
+test("the linkedin arm's three outcomes are byte-identical after the mobilephone arm was added", () => {
+  assert.deepEqual(summarizeMatch({ lane: "linkedin", candidates: [] }), {
+    tier: "none", auto: false, reason: "searched, no hit", candidates: [],
+  });
+  assert.deepEqual(summarizeMatch({ lane: "linkedin", candidates: [{ hs_object_id: "1" }] }), {
+    tier: "high", auto: true, reason: "matched by linkedin", candidates: [],
+  });
+  const twoUp = summarizeMatch({
+    lane: "linkedin", candidates: [{ hs_object_id: "1" }, { hs_object_id: "2" }],
+  });
+  assert.equal(twoUp.tier, "medium");
+  assert.equal(twoUp.auto, false);
+  assert.equal(twoUp.reason, "multiple verified linkedin matches — never a pick");
 });
 
 // ============================================================================================
