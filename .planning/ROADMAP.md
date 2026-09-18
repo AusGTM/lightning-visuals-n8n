@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 9/9 plans executed
+**Plans:** 11 plans (9 executed; 2 gap-closure plans added 2026-09-18 after `73.1-VERIFICATION.md` reported `gaps_found` on D-11 and D-11a)
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -606,6 +606,14 @@ Plans:
 **Wave 6** *(blocked on 73.1-08 — `autonomous: false`, two `blocking-human` gates)*
 
 - [x] 73.1-09-PLAN.md — the D-12 credit-spending probe and the operator's ruling, then the first live CREATE of the sixth workflow and one disarmed end-to-end proof (D-12, D-13, D-11b, D-06, D-14c)
+
+**Wave 7 — gap closure** *(from `73.1-VERIFICATION.md`, `gaps_found`: D-11 and D-11a FAILED)*
+
+- [ ] 73.1-10-PLAN.md — Gap 2: thread the round's `role_families` (already on the wire) through to rung 1, so the 500-char cap folds the operator's chosen subset instead of silently dropping D-11c's own four members (D-11a, D-11c)
+
+**Wave 8** *(blocked on 73.1-10 — one live send must carry both fixes)*
+
+- [ ] 73.1-11-PLAN.md — Gap 1: mint per execution on the discovery lane, offline evidence on whether a later mint invalidates an earlier token, then ONE disarmed live round (≤3 executions) proving D-11 and D-11a together (D-11, D-11a, D-11c)
 
 ### Phase 74: Code-review follow-ups from phase 73
 
