@@ -12347,7 +12347,17 @@ def build_suggest_discovery_cloud():
     zx, zy = x + 260, y - 160
     nodes.append(code_node("ZoomInfo Search Token Gate", _discovery_zoom_search_gate_js(), zx, zy))
     nodes.append(_if_bool_node("IF ZoomInfo Search Needs Mint", "zoom_needs_mint", zx + 200, zy))
-    nodes.append(_zoom_mint_node("ZoomInfo Search Mint", zx + 400, zy - 120))
+    zoom_search_mint_node = _zoom_mint_node("ZoomInfo Search Mint", zx + 400, zy - 120)
+    # CR-01 (73.1-REVIEW.md): this node has no batch_interval_ms, so an N-gap-company
+    # round with no executeOnce would fire N separate OAuth mint requests in one burst --
+    # and 73.1-TOKEN-REPLAY-VERDICT.json proved a later mint invalidates the earlier
+    # token outright, so all but the last-minted company's token would already be dead by
+    # the time Rung1 runs. executeOnce=true (an n8n node-level property, not a
+    # `parameters` key) makes this node mint exactly ONE token per execution regardless
+    # of how many gap companies are in the round; the carry merge below re-broadcasts
+    # that single token onto every row via combineAll (see its own comment).
+    zoom_search_mint_node["executeOnce"] = True
+    nodes.append(zoom_search_mint_node)
     nodes.append(code_node("ZoomInfo Search Cache Token",
                             _zoom_split_cache_js("ZoomInfo Search Token Gate"), zx + 600, zy - 120))
     nodes.append(code_node("ZoomInfo Search Rung1", _discovery_zoom_search_leaf_js("rung1"), zx + 800, zy))
@@ -12375,9 +12385,15 @@ def build_suggest_discovery_cloud():
     # exactly (carry_source is the gate's TRUE branch, source_out_idx=0 default);
     # `_zoom_split_cache_js`'s own docstring assumes it is fed the combined
     # {mint response, carried row} for exactly this reason.
+    # CR-01: executeOnce above means "ZoomInfo Search Mint" delivers exactly ONE item
+    # per execution, however many gap companies are in the round -- combineAll (a
+    # genuine 1-to-N cartesian broadcast, per splice_carry_merge_after's own docstring)
+    # re-attaches that single minted token to EVERY carried row, never pairing token i
+    # with row i positionally (combineByPosition would silently drop every row past the
+    # Mint node's own single output item).
     if_direct_edges = [("IF ZoomInfo Search Needs Mint", 0, "ZoomInfo Search Mint Carry Merge")]
     splice_carry_merge_after(nodes, conns, "ZoomInfo Search Mint", "IF ZoomInfo Search Needs Mint",
-                              merge_name="ZoomInfo Search Mint Carry Merge")
+                              merge_name="ZoomInfo Search Mint Carry Merge", combine_by="combineAll")
     conns["ZoomInfo Search Mint Carry Merge"] = {"main": [[{"node": "ZoomInfo Search Cache Token", "type": "main", "index": 0}]]}
 
     x += 220

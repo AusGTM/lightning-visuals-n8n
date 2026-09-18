@@ -137,7 +137,8 @@
         1320,
         20
       ],
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "executeOnce": true
     },
     {
       "parameters": {
@@ -230,7 +231,7 @@
       "parameters": {
         "mode": "combine",
         "numberInputs": 2,
-        "combineBy": "combineByPosition",
+        "combineBy": "combineAll",
         "options": {
           "clashHandling": {
             "values": {

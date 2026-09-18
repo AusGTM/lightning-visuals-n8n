@@ -183,6 +183,47 @@ test("73.1-10/D-11a: ZoomInfo Search Rung2 keeps an empty family map -- rung 2 s
   assert.match(rung2.parameters.jsCode, /const ROLE_FAMILY_MAP = \{\};/);
 });
 
+// ---- CR-01 (73.1-REVIEW.md) -------------------------------------------------------
+// Graph-structure fix: the mint must run once per execution regardless of item count,
+// and its single token must reach EVERY gap company's row, never just one. Modelled at
+// the merge-wiring level (the walker does not simulate n8n's real per-item HTTP burst
+// or ZoomInfo's own token-invalidation behaviour -- those are runtime facts recorded in
+// 73.1-TOKEN-REPLAY-VERDICT.json and CLAUDE.md, not reproducible offline). A stub that
+// hands back a DISTINCT token per call, fed a 2-gap-company round, is exactly the shape
+// the review asked for: if the graph regressed to positional pairing (or the mint fired
+// once per row), the two companies' carried tokens would disagree or one row would go
+// missing entirely -- this test would catch both.
+test("CR-01: ZoomInfo Search Mint executes once per execution and its token reaches every gap company", () => {
+  const wf = loadWf();
+  const mint = wf.nodes.find((n) => n.name === "ZoomInfo Search Mint");
+  assert.equal(mint.executeOnce, true,
+    "the mint node must be executeOnce -- one OAuth mint per execution, not one per row");
+  const carryMerge = wf.nodes.find((n) => n.name === "ZoomInfo Search Mint Carry Merge");
+  assert.equal(carryMerge.parameters.combineBy, "combineAll",
+    "the carry merge must broadcast the single minted token onto every row (cartesian), " +
+    "never pair token i with row i positionally");
+
+  let mintCalls = 0;
+  const req = { body: { run_id: "r", per_company_cap: 5, companies: [
+    { company_id: "1", num_associated_contacts: 0, gap: true, domain: "one.example.org" },
+    { company_id: "2", num_associated_contacts: 0, gap: true, domain: "two.example.org" },
+  ] } };
+  const { runData, trace } = run([req], {
+    httpStubs: {
+      // executeOnce means n8n runs this node's real request exactly once and returns
+      // exactly one output item, however many rows entered it -- a distinct token per
+      // CALL (not per input item) is what makes a positional/per-row regression visible.
+      "ZoomInfo Search Mint": () => { mintCalls += 1; return [{ access_token: `tok-${mintCalls}`, expires_in: 3600 }]; },
+    },
+  });
+  assert.deepEqual(starvedWithData(trace), [], "no Merge may fire with an unfilled input");
+  assert.equal(mintCalls, 1, "the mint stub must be invoked exactly once for this round");
+  const rung1Rows = nodeItems(runData, "ZoomInfo Search Rung1");
+  assert.equal(rung1Rows.length, 2, "both gap companies must reach Rung1, not just one");
+  const tokens = new Set(rung1Rows.map((r) => r.zoom_token));
+  assert.deepEqual([...tokens], ["tok-1"], "every row reaching Rung1 must carry the SAME minted token");
+});
+
 // ---- Task 2 -------------------------------------------------------------------------
 
 test("Task2/Test6: a gap company whose ZoomInfo rung-1 returns a person never reaches rung-2", () => {
