@@ -1140,6 +1140,11 @@ def test_open_grant_admits_a_new_grant_over_a_closed_one(
     closed = write_grant.close_grant(_open(granting_config, transport),
                                      write_grant.CLOSED_BATCH_COMPLETE)
 
+    # `_workflow_id_cache` is process-lifetime and was already populated by the open
+    # above resolving the same "enrichment" lane name; clear it or the second
+    # `plan_grant` below would skip its own workflow-list read and consume the queue
+    # one entry out of step (see the identical note at line ~438 in this file).
+    executions_client._workflow_id_cache.clear()
     transport2 = stub_module_transport_factory(_plan_reads())
     proposal = _proposal(granting_config, transport2)
 

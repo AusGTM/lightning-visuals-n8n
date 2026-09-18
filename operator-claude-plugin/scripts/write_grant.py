@@ -74,6 +74,10 @@ OPEN = "open"
 CLOSED = "closed"
 REFUSED = "refused"
 
+# D-15c: a stable marker on the second-open refusal's payload, so a skill or a test can
+# tell this refusal apart from every other reason `open_grant` says no.
+SECOND_GRANT_REFUSED = "second_grant_refused"
+
 # Lane name -> the n8n workflow NAME it arms. Names are respelled nowhere: n8n assigns ids
 # server-side, so a lane is resolved by name at plan time through the same resolver
 # `scheduled_arm.py` uses.
@@ -1293,7 +1297,7 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     }
 
 
-def open_grant(proposal, confirmation, config):
+def open_grant(proposal, confirmation, config, *, existing_grant=None):
     """Turn a PROPOSAL into an open grant. The only way a grant comes into existence.
 
     `confirmation` has NO default, so a caller that forgets it gets a TypeError rather
@@ -1305,6 +1309,16 @@ def open_grant(proposal, confirmation, config):
     The authority is re-checked here against the CONFIG, not against the proposal: a
     hand-built dict shaped like a proposal cannot open a grant on a backend whose admin
     never enabled write grants.
+
+    `existing_grant` (D-15c): pass the grant the caller is already holding, if any. When
+    it is a grant `dict` in `OPEN` state, opening is REFUSED, naming its `label` — the
+    UAT session opened three grants where the first already covered everything, and this
+    is the structural stop for that. A `CLOSED` (or absent) `existing_grant` is not an
+    open one, so opening proceeds normally. Defaults to `None` so every existing call
+    site is byte-identical in behaviour. Checked AFTER authority/confirmation (so an
+    unauthorised or unconfirmed caller still gets today's refusal) and BEFORE the
+    proposal-shape check (so a caller holding an open grant is told about it even when
+    their second proposal is malformed).
     """
     # Every refusal below carries the proposal's envelope when there is one, so an
     # operator who is refused still reads what the batch would have cost.
@@ -1321,6 +1335,15 @@ def open_grant(proposal, confirmation, config):
         return _refusal(
             "not confirmed — no grant was opened. To go ahead, confirm with an explicit "
             "yes after reading what the grant covers.", **shown)
+
+    if (isinstance(existing_grant, dict) and existing_grant.get("kind") == KIND
+            and existing_grant.get("state") == OPEN):
+        return _refusal(
+            f"grant {existing_grant.get('label')!r} is already open; it already covers "
+            f"the whole session (D-15a). Use covers() to check a send against it, or "
+            f"widen() to extend it to a new domain or id — a second grant cannot be "
+            f"opened while one is open.",
+            reason=SECOND_GRANT_REFUSED, **shown)
 
     if not isinstance(proposal, dict) or proposal.get("kind") != PROPOSAL_KIND:
         return _refusal(
@@ -1357,6 +1380,52 @@ def close_grant(grant, reason):
     closed["state"] = CLOSED
     closed["closed_reason"] = reason
     return closed
+
+
+def widen(grant, *, record_ids, record_domains, ceiling=None):
+    """Extend an OPEN grant's record set in place of opening a second grant (D-15b).
+
+    Returns a NEW grant dict — a deep copy, never a mutation, the same convention
+    `close_grant` uses — whose `record_ids`/`record_domains` are the order-stable
+    deduplicated union of the grant's existing sets and the new values, plus a
+    `statement` naming exactly what was added. Or returns a refusal.
+
+    Refuses when `grant` is not a `KIND` dict, when its `state` is not `OPEN`, and when
+    `ceiling` carries `CEILING_OVER` — the load-bearing case: a widened record set
+    projects more executions, and SAFE-01..05 requires a ceiling to stay a refusal in
+    code, not prose. `CEILING_UNKNOWN` and `CEILING_OK` both widen — D-57-02 is explicit
+    that an unknown verdict proceeds rather than refuses.
+
+    Takes no `lane` and no `workflow_id`, and must never gain one: a lane or workflow
+    mismatch is a scope question `covers()` already refuses on, and auto-widening one
+    would let a grant on one lane authorise arming another lane's workflow.
+    """
+    if not isinstance(grant, dict) or grant.get("kind") != KIND:
+        return _refusal("that is not a write grant, so it cannot be widened.")
+
+    if grant.get("state") != OPEN:
+        return _refusal(
+            f"this write grant is closed and cannot be widened. It closed because: "
+            f"{grant.get('closed_reason')!r}. Open a new grant to continue.")
+
+    if (ceiling or {}).get("verdict") == CEILING_OVER:
+        return _refusal(
+            "widening this grant would push the batch over the sampled monthly "
+            "execution ceiling — refused in code, not merely disclosed (SAFE-01..05).",
+            ceiling=ceiling)
+
+    old_ids = grant.get("record_ids") or []
+    old_domains = grant.get("record_domains") or []
+    added_ids = [v for v in _normalise(record_ids) if v not in old_ids]
+    added_domains = [v for v in _normalise(record_domains) if v not in old_domains]
+
+    widened = copy.deepcopy(grant)
+    widened["record_ids"] = old_ids + added_ids
+    widened["record_domains"] = old_domains + added_domains
+    widened["statement"] = (
+        f"widened grant {grant.get('label')!r} to add {len(added_ids)} id(s) "
+        f"{added_ids!r} and {len(added_domains)} domain(s) {added_domains!r}.")
+    return widened
 
 
 def covers(grant, *, lane=None, workflow_id, record_ids, record_domains):
@@ -1417,8 +1486,9 @@ def covers(grant, *, lane=None, workflow_id, record_ids, record_domains):
             f"these are outside the grant and were not authorized: "
             f"ids {outside_ids!r}, domains {outside_domains!r}. The grant covers "
             f"{len(grant.get('record_ids') or [])} id(s) and "
-            f"{len(grant.get('record_domains') or [])} domain(s), and widening it needs a "
-            f"new grant — a grant's record set is what bounds it (GRANT-03).",
+            f"{len(grant.get('record_domains') or [])} domain(s). Widen the open grant "
+            f"with widen() to add them — stated to you, not asked — rather than opening "
+            f"a second grant (D-15b amends GRANT-03's old bounding-by-new-grant rule).",
             outside_record_ids=outside_ids, outside_record_domains=outside_domains)
 
     return None
