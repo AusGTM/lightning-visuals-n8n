@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: "73.1"
 current_phase_name: Provider-backed contact discovery as source tier 2 (INSERTED)
 status: executing
-stopped_at: Completed 73.1-01-PLAN.md
-last_updated: "2026-09-18T01:21:06.673Z"
+stopped_at: Completed 73.1-02-PLAN.md
+last_updated: "2026-09-18T01:28:34.765Z"
 last_activity: 2026-09-18
 last_activity_desc: Phase 73.1 execution started
-state_head: 8915db09c652b465c4abda2a942ad565c523ad5c
+state_head: 428312c55c63b60565909baaa54486a86422f707
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 65
-  completed_plans: 57
+  completed_plans: 58
   percent: 17
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 73.1 (Provider-backed contact discovery as source tier 2 (INSERTED)) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9
 Status: Ready to execute
 Last activity: 2026-09-18 — Phase 73.1 execution started
 
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-18T01:21:06.449Z
-**Stopped at:** Completed 73.1-01-PLAN.md
+**Last session:** 2026-09-18T01:28:28.719Z
+**Stopped at:** Completed 73.1-02-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -684,6 +684,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 73 P06 | ~100min | 4 tasks | 13 files |
 | Phase 73 P07 | 7 min + operator gate | 3 tasks | 6 files |
 | Phase 73.1 P01 | 95min | 3 tasks | 7 files |
+| Phase 73.1 P02 | 12min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -875,6 +876,7 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 73]: Identity join replaces positional pairing for ingest create outcomes; alwaysOutputData (not a sentinel) fixes a downstream drain-timing race Task 3's own must-have missed — Found the drain race empirically while running pre-existing tests; alwaysOutputData reuses an already-established mechanism instead of adding a second producer
 - [Phase 73.1]: D-05 resolved by reuse: provider-discovered records will carry the SAME gated provenance.input literal plus source_tier: 2, so hold_weak_sources' fail-open guard needed zero code change.
 - [Phase 73.1]: D-01 consequence found and accepted: a website-less company's search fallback can no longer produce any sendable row, since rank 1 is unreachable with no company_url and rank 2 is never mintable from a matched host by construction.
+- [Phase 73.1]: D-11c closed: role_vocabulary.yaml v4 adds Executive Officer and Board Chair families, excluding Chairman/Chairperson (already in Chair) per the new duplicate-member guard. — Pickleball round 2026-09-18 dropped these two titles; classify_title's longest-wins tie-break must never depend on YAML order.
 
 ### Roadmap Evolution
 
