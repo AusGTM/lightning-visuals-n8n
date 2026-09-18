@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 6/9 plans executed
+**Plans:** 7/9 plans executed
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -597,7 +597,7 @@ Plans:
 
 **Wave 4** *(blocked on 73.1-06)*
 
-- [ ] 73.1-07-PLAN.md — the sixth cloud workflow: a read-only provider discovery lane, its three-provider waterfall with the two-rung role filter, and the response contract (D-06 … D-11b, D-09, D-12 search-only)
+- [x] 73.1-07-PLAN.md — the sixth cloud workflow: a read-only provider discovery lane, its three-provider waterfall with the two-rung role filter, and the response contract (D-06 … D-11b, D-09, D-12 search-only)
 
 **Wave 5** *(blocked on 73.1-07)*
 
