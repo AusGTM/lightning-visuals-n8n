@@ -574,13 +574,37 @@ Scope:
 
 Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different host (still a
 refusal per D-62-03); changing the email-domain partition rule.
-**Requirements**: TBD
+**Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 0 plans
+**Plans:** 9 plans
 
 Plans:
+**Wave 1** *(four parallel plans, no file overlap)*
 
-- [ ] TBD (run /gsd-plan-phase 73.1 to break down)
+- [ ] 73.1-01-PLAN.md — the re-tiering spine: the four-constant parity test RED then the allowlist renumber GREEN, the send gate under the new ranks, and provider provenance + one-person-not-two dedupe (D-01, D-02, D-03, D-04, D-05, D-05a)
+- [ ] 73.1-02-PLAN.md — the Executive Officer and Board Chair role families, and the guard that no member string appears under two labels (D-11c)
+- [ ] 73.1-03-PLAN.md — three honestly-unknown provider search rates and the discovery disclosure line: gap count, rate or unknown, one execution, stage-2 ceiling (D-13, D-13a)
+- [ ] 73.1-04-PLAN.md — one grant per session (refuse the second, widen the first within the ceiling) and the shared CRM-access / portal-pin block in all eleven skills (D-14a, D-14b, D-14d, D-15a, D-15b, D-15c, D-15d)
+
+**Wave 2** *(blocked on 73.1-01)*
+
+- [ ] 73.1-05-PLAN.md — identity widening: five `required_identity` groups across all three copies, a relaxed `hold_emailless`, and no email-domain judgement on a row with no email (D-16b, D-16c)
+
+**Wave 3** *(blocked on 73.1-04 and 73.1-05)*
+
+- [ ] 73.1-06-PLAN.md — the ingest lane's identity ladder (mobilephone single-hit, `phone` create-only) and the backend's own portal proof (D-16a, D-16a-i, D-16d, D-14c)
+
+**Wave 4** *(blocked on 73.1-06)*
+
+- [ ] 73.1-07-PLAN.md — the sixth cloud workflow: a read-only provider discovery lane, its three-provider waterfall with the two-rung role filter, and the response contract (D-06 … D-11b, D-09, D-12 search-only)
+
+**Wave 5** *(blocked on 73.1-07)*
+
+- [ ] 73.1-08-PLAN.md — the plugin side: the discovery client, the ladder-first gap set and one POST, the renumbered rank prose, the cost line, and the plugin release (D-07, D-08, D-09, D-10, D-13a, D-16d)
+
+**Wave 6** *(blocked on 73.1-08 — `autonomous: false`, two `blocking-human` gates)*
+
+- [ ] 73.1-09-PLAN.md — the D-12 credit-spending probe and the operator's ruling, then the first live CREATE of the sixth workflow and one disarmed end-to-end proof (D-12, D-13, D-11b, D-06, D-14c)
 
 ### Phase 74: Code-review follow-ups from phase 73
 
