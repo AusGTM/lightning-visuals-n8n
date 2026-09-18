@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 3/9 plans executed
+**Plans:** 4/9 plans executed
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -585,7 +585,7 @@ Plans:
 - [x] 73.1-01-PLAN.md — the re-tiering spine: the four-constant parity test RED then the allowlist renumber GREEN, the send gate under the new ranks, and provider provenance + one-person-not-two dedupe (D-01, D-02, D-03, D-04, D-05, D-05a)
 - [x] 73.1-02-PLAN.md — the Executive Officer and Board Chair role families, and the guard that no member string appears under two labels (D-11c)
 - [x] 73.1-03-PLAN.md — three honestly-unknown provider search rates and the discovery disclosure line: gap count, rate or unknown, one execution, stage-2 ceiling (D-13, D-13a)
-- [ ] 73.1-04-PLAN.md — one grant per session (refuse the second, widen the first within the ceiling) and the shared CRM-access / portal-pin block in all eleven skills (D-14a, D-14b, D-14d, D-15a, D-15b, D-15c, D-15d)
+- [x] 73.1-04-PLAN.md — one grant per session (refuse the second, widen the first within the ceiling) and the shared CRM-access / portal-pin block in all eleven skills (D-14a, D-14b, D-14d, D-15a, D-15b, D-15c, D-15d)
 
 **Wave 2** *(blocked on 73.1-01)*
 
