@@ -2800,12 +2800,19 @@ start) and AFTER-03 (full end-of-run report).
 > wf_suggest_discovery_cloud.json`, scoped single-workflow deploy), bounced, re-proved —
 > execution `12668` immediately surfaced defect (2): both rungs returned `401`, and runData
 > showed the token-mint nodes never ran — the leaf reused a token cached 27 minutes earlier
-> (by `12666`) that ZoomInfo had since rejected, with no `isAuthError`-clears-cache path
-> like the enrich lane's leaves already have. Fixed by mirroring that exact precedent
-> (`delete sd.zoominfo` on a 401, self-heals on the NEXT execution — a cloud split-code-node
-> cannot mint inline). Redeployed disarmed and bounced a second time; proof send 2
-> (execution `12669`) still read `401` (expected — the fix clears the cache for the run
-> that OWNS the 401, benefiting the next one, not itself), but a zero-cost read-only
+> (by `12666`), with no `isAuthError`-clears-cache path like the enrich lane's leaves
+> already have. **The 401's cause is NOT confirmed to be expiry** — decoding (read-only,
+> zero executions) the cached JWT's own `exp`/`iat` claims showed a 24-hour lifetime
+> (minted `11:53:18Z`, both rejections over 23h before its claimed expiry), which rules
+> out a TTL-underestimate bug specifically. The true cause (candidates: a ZoomInfo
+> scope/entitlement difference between the Enrich API and this lane's Search API, or
+> something else account-specific) is UNRESOLVED — the fix below recovers the token
+> lifecycle regardless of cause, but has not been confirmed to make `/contacts/search`
+> itself succeed. Fixed by mirroring the enrich lane's exact precedent (`delete
+> sd.zoominfo` on a 401, self-heals on the NEXT execution — a cloud split-code-node cannot
+> mint inline). Redeployed disarmed and bounced a second time; proof send 2 (execution
+> `12669`) still read `401` (expected — the fix clears the cache for the run that OWNS the
+> 401, benefiting the next one, not itself), but a zero-cost read-only
 > `GET /workflows/VJJBZ2oJ0079MSzG` confirmed `staticData.global: {}` — the stale token was
 > deleted exactly as the fix predicts, without spending a third live execution. **Nothing
 > armed throughout either round. No HubSpot record written.** Full record:
