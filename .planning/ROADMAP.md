@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 8/9 plans executed
+**Plans:** 9/9 plans executed
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -605,7 +605,7 @@ Plans:
 
 **Wave 6** *(blocked on 73.1-08 — `autonomous: false`, two `blocking-human` gates)*
 
-- [ ] 73.1-09-PLAN.md — the D-12 credit-spending probe and the operator's ruling, then the first live CREATE of the sixth workflow and one disarmed end-to-end proof (D-12, D-13, D-11b, D-06, D-14c)
+- [x] 73.1-09-PLAN.md — the D-12 credit-spending probe and the operator's ruling, then the first live CREATE of the sixth workflow and one disarmed end-to-end proof (D-12, D-13, D-11b, D-06, D-14c)
 
 ### Phase 74: Code-review follow-ups from phase 73
 
