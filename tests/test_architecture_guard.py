@@ -27,6 +27,8 @@ ACTIVE = [
     # Phase 30 Plan 02 — the synchronous review-decision endpoint.
     "wf_review_decision_cloud.json",
     "wf_scheduled_maintenance_cloud.json",
+    # Phase 73.1 Plan 07 (D-06) — the read-only provider discovery lane.
+    "wf_suggest_discovery_cloud.json",
 ]
 
 # Superseded Milestone-2 workflows. These are ONLY a trigger + a POST to the FastAPI

@@ -78,7 +78,12 @@ def _js(wf, name):
 # reads provider usage endpoints only, never a HubSpot endpoint, and performs zero writes.
 # It is excluded from the "every cloud workflow has a write node" vacuity assumption below
 # — asserted, not just skipped, so a write node landing there unnoticed would still fail.
-NO_WRITE_NODES_EXPECTED = {"wf_backend_status_cloud.json"}
+#
+# Phase 73.1 Plan 07 (D-06) — wf_suggest_discovery_cloud.json is the SAME shape: reads
+# provider search endpoints only, never a HubSpot endpoint. Its own generation-time
+# contract (assert_no_write_nodes in scripts/build_cloud_workflows.py) is the stronger,
+# earlier guarantee — this entry keeps THIS test's own assertion non-vacuous too.
+NO_WRITE_NODES_EXPECTED = {"wf_backend_status_cloud.json", "wf_suggest_discovery_cloud.json"}
 
 # Phase 44 Plan 01 (D-05/D-06) — the SJ-3 drain write is exempted from the generic
 # _writeSafetyAllows walk BY NAME, deliberately, because for this one node the walk
