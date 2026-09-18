@@ -139,23 +139,41 @@ def test_exactly_one_search_call_per_provider(monkeypatch):
 
 # --- Test 8 (round-1 correction): endpoints are DERIVED, not a second hardcoded copy ---
 
-def test_endpoints_match_js_source_of_truth_not_a_hardcoded_copy():
-    """DISCOVERY_ENDPOINTS must be DERIVED from n8n/code/discoverySearch.js's own
-    (corrected) constant, never a second hand-copied literal -- round 1 found the
-    original hardcoded copy wrong (ZoomInfo 400, Apollo 422, Lusha 404)."""
+def test_endpoints_zoominfo_derived_apollo_lusha_frozen_evidence_copies():
+    """ZoomInfo's endpoint must be DERIVED from n8n/code/discoverySearch.js's own
+    (shipped) constant -- round 1 found the original hardcoded copy wrong (ZoomInfo
+    400). Apollo and Lusha are no longer exported by that module at all (D-12 operator
+    ruling 2026-09-18 narrowed the shipped lane to ZoomInfo-only), so this probe holds
+    its own frozen, round-2-confirmed copies for them -- still all three URLs present,
+    same values as before the ruling."""
     assert probe_module.DISCOVERY_ENDPOINTS == {
         "zoominfo": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
         "apollo": "https://api.apollo.io/api/v1/mixed_people/api_search",
         "lusha": "https://api.lusha.com/prospecting/contact/search",
     }
+    # ZoomInfo's copy must still be DERIVED -- not just equal by coincidence.
+    import subprocess
+    result = subprocess.run(
+        ["node", "-e",
+         f"const m = require({json.dumps(str(probe_module._DISCOVERY_SEARCH_JS))}); "
+         "console.log(JSON.stringify(m.DISCOVERY_ENDPOINTS));"],
+        capture_output=True, text=True, timeout=10)
+    js_endpoints = json.loads(result.stdout)
+    assert js_endpoints == {"zoominfo": probe_module.DISCOVERY_ENDPOINTS["zoominfo"]}, (
+        "discoverySearch.js must export ZoomInfo ONLY -- if this fails, either the "
+        "shipped module regained a provider (update the probe's own retired-provider "
+        "copies) or the probe's derived value has drifted from the shipped one")
 
 
-# --- Test 9 (round-1 correction): request body/URL come from discoverySearch.js itself -
+# --- Test 9 (round-1 correction): ZoomInfo's request body/URL come from
+# discoverySearch.js itself; Apollo/Lusha are the probe's own frozen copies ------------
 
-def test_search_request_and_url_are_derived_from_discovery_search_js():
-    """The probe's per-provider request body and URL must come from
-    discoverySearch.js's own buildRequest/buildUrl -- never a second, driftable copy of
-    the (now-corrected) shape."""
+def test_search_request_and_url_zoominfo_derived_apollo_lusha_frozen():
+    """ZoomInfo's per-provider request body and URL must come from
+    discoverySearch.js's own buildRequest/buildUrl -- the shipped source of truth.
+    Apollo and Lusha are no longer exported by that module (D-12 ruling), so the probe
+    builds their bodies/URLs itself; this pins that the frozen copies still match the
+    round-2-confirmed shapes."""
     apollo_body = probe_module._search_request("apollo", "example.org")
     assert apollo_body["q_organization_domains_list"] == ["example.org"]
 
@@ -164,6 +182,47 @@ def test_search_request_and_url_are_derived_from_discovery_search_js():
 
     lusha_body = probe_module._search_request("lusha", "example.org")
     assert lusha_body["filters"]["companies"]["include"]["domains"] == ["example.org"]
+
+    apollo_url = probe_module._search_url("apollo", "example.org")
+    assert apollo_url == probe_module.DISCOVERY_ENDPOINTS["apollo"]
+    lusha_url = probe_module._search_url("lusha", "example.org")
+    assert lusha_url == probe_module.DISCOVERY_ENDPOINTS["lusha"]
+
+
+# --- Round 4 correction: reveal_fields_present must not false-positive on a provider's
+# own `has_*` flag key names ------------------------------------------------------------
+
+def test_apollo_has_email_flag_key_is_not_a_reveal_field(monkeypatch):
+    """Round 4 (2026-09-18, tennis.com.au) found Apollo's preview item carries
+    has_email/has_direct_phone FLAG keys, never a real email/phone value -- the OLD
+    substring check ('email' in blob) treated the flag key NAME itself as a reveal
+    field, a false positive. The fixed check reads exact value-bearing keys only."""
+    _set_all_creds(monkeypatch)
+    monkeypatch.setenv("ALLOW_DISCOVERY_PROBE", "true")
+    recorder = []
+    overrides = {"apollo": _FakeResponse(200, {"people": [
+        {"first_name": "A", "last_name_obfuscated": "B...", "title": "GM",
+         "has_email": True, "has_direct_phone": True}]})}
+    _default_transport(monkeypatch, recorder, search_status=overrides)
+
+    verdict = probe_module.run_probe(DOMAIN)
+    apollo = verdict["providers"]["apollo"]
+    assert apollo["people_returned"] is True
+    assert apollo["reveal_fields_present"] is False
+
+
+def test_a_real_reveal_value_is_still_detected(monkeypatch):
+    """The fixed exact-key check must still catch a GENUINE reveal field -- proving the
+    fix narrows the check, it does not blind it."""
+    _set_all_creds(monkeypatch)
+    monkeypatch.setenv("ALLOW_DISCOVERY_PROBE", "true")
+    recorder = []
+    overrides = {"apollo": _FakeResponse(200, {"people": [
+        {"first_name": "A", "last_name": "B", "title": "GM", "email": "a@example.org"}]})}
+    _default_transport(monkeypatch, recorder, search_status=overrides)
+
+    verdict = probe_module.run_probe(DOMAIN)
+    assert verdict["providers"]["apollo"]["reveal_fields_present"] is True
 
 
 # --- Test 2: opt-in gate — refuses with zero network calls ---------------------------

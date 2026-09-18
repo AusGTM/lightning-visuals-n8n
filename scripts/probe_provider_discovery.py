@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """scripts/probe_provider_discovery.py
 
-Phase 73.1 Plan 09 Task 1 (D-12/D-13) / Task 2 (round-1 correction) — one-shot,
-opt-in-guarded, credit-spending live probe answering the one question this phase could
-not answer offline: do the three [ASSUMED] provider search-by-role endpoints in
-n8n/code/discoverySearch.js actually exist on this account, and what does a search call
-cost?
+Phase 73.1 Plan 09 Task 1 (D-12/D-13) / Task 2 (round-1 correction, rounds 2-4 live) —
+one-shot, opt-in-guarded, credit-spending live probe answering the one question this
+phase could not answer offline: do the three [ASSUMED] provider search-by-role
+endpoints actually exist on this account, and what does a search call cost?
 
 Round 1 (2026-09-18, pickleballaustralia.org.au) found all three original endpoints
 wrong (ZoomInfo 400, Apollo 422 deprecated-route, Lusha 404) — see
 .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/
-73.1-D12-VERDICT.round1.json. This script now DERIVES its endpoints, request bodies and
-URLs from n8n/code/discoverySearch.js's own `DISCOVERY_ENDPOINTS`/`buildRequest`/
-`buildUrl` (via a short-lived `node -e` subprocess) instead of holding a second,
-hand-copied literal — that literal is exactly what round 1's failure traces back to.
+73.1-D12-VERDICT.round1.json. Rounds 2-4 confirmed the corrected shapes live against
+two domains (see 73.1-D12-VERDICT.json). The operator then ruled on D-12 (2026-09-18):
+"ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase.
+Full waterfall only used on enrich." n8n/code/discoverySearch.js is now ZoomInfo-only,
+shipping no Apollo/Lusha exports at all — so ZoomInfo alone is still DERIVED from that
+module's own `DISCOVERY_ENDPOINTS`/`buildRequest`/`buildUrl` (via a short-lived
+`node -e` subprocess), and this probe holds its OWN frozen copies of the retired
+Apollo/Lusha endpoint/body/URL shapes so it can still probe all three: this script is
+the evidence tool a FUTURE ruling would need, and D-12's ruling can be revisited.
 
 Reuses scripts/check_provider_credits.py's balance-read machinery (PROVIDER_REGISTRY,
 the per-provider `_CHECK` functions, the ZoomInfo token mint) rather than
@@ -88,25 +92,53 @@ def _node_eval(js_expr):
     return json.loads(result.stdout)
 
 
-# Derived from n8n/code/discoverySearch.js's own (round-1-corrected) constant -- never a
-# second, driftable literal.
-DISCOVERY_ENDPOINTS = _node_eval("m.DISCOVERY_ENDPOINTS")
+# ZoomInfo is derived from n8n/code/discoverySearch.js's own exports -- it is the ONLY
+# provider still in that module after the operator's D-12 ruling (2026-09-18,
+# "search-only": ZoomInfo retained, Apollo/Lusha dropped from the shipped discovery lane
+# -- see 73.1-D12-VERDICT.json's own `operator_ruling`/`consequences`). Apollo and Lusha
+# are no longer exported by discoverySearch.js at all, so this probe holds its OWN
+# frozen copies of their round-2-confirmed endpoint/body/URL below, independent of the
+# shipped module -- kept alive deliberately, because this probe is the evidence tool a
+# FUTURE ruling would need, and round 1's original "one source, no second copy"
+# argument stops applying the moment the production copy is retired.
+_RETIRED_PROVIDER_ENDPOINTS = {
+    "apollo": "https://api.apollo.io/api/v1/mixed_people/api_search",
+    "lusha": "https://api.lusha.com/prospecting/contact/search",
+}
+
+DISCOVERY_ENDPOINTS = {
+    "zoominfo": _node_eval("m.DISCOVERY_ENDPOINTS")["zoominfo"],
+    **_RETIRED_PROVIDER_ENDPOINTS,
+}
 
 
 def _search_request(provider, domain):
-    """The rung-2 (unfiltered) search body for `provider`, built by
-    n8n/code/discoverySearch.js's OWN buildRequest -- the probe tests bare endpoint
-    existence first, not the role-title filter."""
-    opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
-    return _node_eval(f"m.buildRequest({json.dumps(provider)}, {opts})")
+    """The rung-2 (unfiltered) search body for `provider`. ZoomInfo is built by
+    n8n/code/discoverySearch.js's OWN buildRequest -- the shipped module, the same
+    source of truth the production lane uses. Apollo and Lusha are no longer exported
+    by that module (D-12 narrowed it to ZoomInfo-only), so this probe builds their
+    (round-2-confirmed, frozen) bodies itself -- an evidence-only copy, not a second
+    source for anything shipped."""
+    if provider == "zoominfo":
+        opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
+        return _node_eval(f"m.buildRequest({json.dumps(provider)}, {opts})")
+    if provider == "apollo":
+        return {"q_organization_domains_list": [domain], "per_page": 10, "page": 1}
+    if provider == "lusha":
+        return {"filters": {"companies": {"include": {"domains": [domain]}}},
+                "pages": {"page": 0, "size": 10}}
+    raise ValueError(f"probe_provider_discovery._search_request: unknown provider {provider!r}")
 
 
 def _search_url(provider, domain):
-    """The URL to POST `_search_request`'s body to, built by discoverySearch.js's OWN
-    buildUrl -- ZoomInfo's pagination is a query-string parameter (round-1 correction),
-    not a body attribute; Apollo and Lusha are the bare endpoint."""
-    opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
-    return _node_eval(f"m.buildUrl({json.dumps(provider)}, {opts})")
+    """The URL to POST `_search_request`'s body to. ZoomInfo's pagination is a
+    query-string parameter, built by discoverySearch.js's own buildUrl (the shipped
+    source of truth); Apollo and Lusha are the bare (retired, evidence-only) endpoint --
+    no pagination correction needed since round 2 already confirmed the bare form."""
+    if provider == "zoominfo":
+        opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
+        return _node_eval(f"m.buildUrl({json.dumps(provider)}, {opts})")
+    return DISCOVERY_ENDPOINTS[provider]
 
 
 APOLLO_UNREADABLE_NOTE = (
@@ -146,8 +178,25 @@ def _safe_error_note(body):
     return None
 
 
+# EXACT value-bearing key names per provider -- never a substring scan of the whole
+# response blob. Round 4 (2026-09-18, tennis.com.au, 73.1-D12-VERDICT.json) found the
+# old substring check ('email' in blob / 'phone' in blob) a FALSE POSITIVE on Apollo:
+# its preview item carries flag KEYS `has_email`/`has_direct_phone` (booleans, never a
+# value), and the substring 'email'/'phone' matches those key NAMES even though no real
+# reveal field is present. ZoomInfo's and Lusha's preview items are ALSO all `has*`
+# flag keys (round 4 response_shape), so the same false-positive risk applies to them.
+_REVEAL_KEYS = {
+    "zoominfo": ("email", "directPhone", "mobilePhone", "phone", "supplementalEmail"),
+    "apollo": ("email", "phone_numbers", "mobile_phone", "direct_phone", "phone"),
+    "lusha": ("email", "emails", "phone", "phones", "mobilePhone"),
+}
+
+
 def _people_from_response(provider, body):
-    """(people_returned, reveal_fields_present) — never raises on a malformed body."""
+    """(people_returned, reveal_fields_present) — never raises on a malformed body.
+    `reveal_fields_present` checks EXACT keys in `_REVEAL_KEYS` against the first
+    returned item's own keys (or its `attributes` sub-object for ZoomInfo's JSON:API
+    shape) -- see `_REVEAL_KEYS`'s own comment for why this replaced a substring scan."""
     if not isinstance(body, dict):
         return False, False
     if provider == "zoominfo":
@@ -163,8 +212,9 @@ def _people_from_response(provider, body):
     items = items if isinstance(items, list) else []
     if not items:
         return False, False
-    blob = json.dumps(items)
-    reveal = any(k in blob for k in ("email", "phone", "mobilephone"))
+    first = items[0] if isinstance(items[0], dict) else {}
+    candidate = first.get("attributes") if isinstance(first.get("attributes"), dict) else first
+    reveal = any(k in candidate for k in _REVEAL_KEYS.get(provider, ()))
     return True, reveal
 
 
