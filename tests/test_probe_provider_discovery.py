@@ -1,12 +1,17 @@
 # tests/test_probe_provider_discovery.py
 #
-# Phase 73.1 Plan 09 Task 1 (D-12/D-13) — offline proof for
+# Phase 73.1 Plan 09 Task 1 (D-12/D-13) / Task 2 (round-1 correction) — offline proof for
 # scripts/probe_provider_discovery.py. Fully hermetic: no test in this file makes a
 # network call. Mirrors tests/test_check_provider_credits.py's monkeypatch-`requests`
 # pattern (same repo convention for a live-only utility's offline test).
 #
 # scripts/probe_provider_discovery.py is a LIVE-ONLY, credit-spending utility. It is never
 # invoked live here — every test below runs it against a stub transport.
+#
+# Round 1 (2026-09-18, pickleballaustralia.org.au) found all three original [ASSUMED]
+# endpoints wrong. The probe script now DERIVES its endpoints/bodies/URLs from
+# n8n/code/discoverySearch.js's own (corrected) exports instead of holding a second,
+# hand-copied literal — see 73.1-D12-VERDICT.round1.json for the recorded failures.
 import json
 
 import pytest
@@ -15,6 +20,14 @@ import requests
 import scripts.probe_provider_discovery as probe_module
 
 DOMAIN = "example-racing.example"
+
+
+def _base_url(url):
+    """Strip any query string -- ZoomInfo's corrected pagination rides `?page[size]=..`
+    on the URL itself (round-1 correction), so the URL actually POSTed no longer equals
+    `DISCOVERY_ENDPOINTS["zoominfo"]` verbatim. Apollo/Lusha are unaffected (no query
+    string), so this is a no-op for them."""
+    return url.split("?", 1)[0]
 
 
 class _FakeResponse:
@@ -72,8 +85,8 @@ def _default_transport(monkeypatch, recorder, *, apollo_403=True, search_status=
         if url == zi_usage_url:
             return _FakeResponse(200, {"data": [{"attributes": {"usage": [
                 {"limitType": "uniqueIdLimit", "usageRemaining": 500}]}}]})
-        if url in probe_module.DISCOVERY_ENDPOINTS.values():
-            return _response_for_search(url, search_status)
+        if _base_url(url) in probe_module.DISCOVERY_ENDPOINTS.values():
+            return _response_for_search(_base_url(url), search_status)
         return _FakeResponse(404, {"message": "unexpected GET in test stub"})
 
     def fake_post(url, headers=None, json=None, data=None, auth=None, timeout=None, **kwargs):
@@ -84,8 +97,8 @@ def _default_transport(monkeypatch, recorder, *, apollo_403=True, search_status=
             if apollo_403:
                 return _FakeResponse(403, {"message": "forbidden: not a master key"})
             return _FakeResponse(200, {"remaining": 42})
-        if url in probe_module.DISCOVERY_ENDPOINTS.values():
-            return _response_for_search(url, search_status)
+        if _base_url(url) in probe_module.DISCOVERY_ENDPOINTS.values():
+            return _response_for_search(_base_url(url), search_status)
         return _FakeResponse(404, {"message": "unexpected POST in test stub"})
 
     def _response_for_search(url, overrides):
@@ -117,11 +130,40 @@ def test_exactly_one_search_call_per_provider(monkeypatch):
 
     verdict = probe_module.run_probe(DOMAIN)
 
-    search_calls = [c for c in recorder if c[1] in probe_module.DISCOVERY_ENDPOINTS.values()]
+    search_calls = [c for c in recorder if _base_url(c[1]) in probe_module.DISCOVERY_ENDPOINTS.values()]
     assert len(search_calls) == 3
     for provider, url in probe_module.DISCOVERY_ENDPOINTS.items():
-        assert sum(1 for m, u in search_calls if u == url) == 1
+        assert sum(1 for m, u in search_calls if _base_url(u) == url) == 1
     assert set(verdict["providers"].keys()) == {"zoominfo", "apollo", "lusha"}
+
+
+# --- Test 8 (round-1 correction): endpoints are DERIVED, not a second hardcoded copy ---
+
+def test_endpoints_match_js_source_of_truth_not_a_hardcoded_copy():
+    """DISCOVERY_ENDPOINTS must be DERIVED from n8n/code/discoverySearch.js's own
+    (corrected) constant, never a second hand-copied literal -- round 1 found the
+    original hardcoded copy wrong (ZoomInfo 400, Apollo 422, Lusha 404)."""
+    assert probe_module.DISCOVERY_ENDPOINTS == {
+        "zoominfo": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
+        "apollo": "https://api.apollo.io/api/v1/mixed_people/api_search",
+        "lusha": "https://api.lusha.com/prospecting/contact/search",
+    }
+
+
+# --- Test 9 (round-1 correction): request body/URL come from discoverySearch.js itself -
+
+def test_search_request_and_url_are_derived_from_discovery_search_js():
+    """The probe's per-provider request body and URL must come from
+    discoverySearch.js's own buildRequest/buildUrl -- never a second, driftable copy of
+    the (now-corrected) shape."""
+    apollo_body = probe_module._search_request("apollo", "example.org")
+    assert apollo_body["q_organization_domains_list"] == ["example.org"]
+
+    zoominfo_url = probe_module._search_url("zoominfo", "example.org")
+    assert "page[size]" in zoominfo_url
+
+    lusha_body = probe_module._search_request("lusha", "example.org")
+    assert lusha_body["filters"]["companies"]["include"]["domains"] == ["example.org"]
 
 
 # --- Test 2: opt-in gate — refuses with zero network calls ---------------------------
