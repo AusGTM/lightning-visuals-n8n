@@ -27,12 +27,18 @@ this artifact globs `written_records*.json` and unions the matches (`load()`, be
 rather than opening one fixed path.
 
 Schema: `run_id`, `saved_at` (UTC isoformat), `entries` — a list, in chunk order, of
-`{chunk_index, object_type, action, hs_object_id, outcome, reason, row_id, association}`.
-`row_id` and `association` (57-02 Task 2, AFTER-01's join key) default to `None` when the
-response item does not supply them — an entry written before this widening reads back
-byte-unchanged and `.get("row_id")` on it is `None`, never an error and never a
-partial-trust guess (REVIEW-57-M10). The filename is `written_records-<run_id>.json`,
-resolved fresh on every call by `written_records_path`.
+`{chunk_index, object_type, action, hs_object_id, outcome, reason, row_id, association,
+source}`. `row_id` and `association` (57-02 Task 2, AFTER-01's join key) default to
+`None` when the response item does not supply them — an entry written before this
+widening reads back byte-unchanged and `.get("row_id")` on it is `None`, never an error
+and never a partial-trust guess (REVIEW-57-M10). `source` (73.1-04 Task 3, D-14b) is
+`SOURCE_LANE` (the plugin's own backend lanes) or `SOURCE_CONNECTOR` (a write made
+through an outside HubSpot tool once its portal is proven and the same session grant has
+cleared it). An entry written before `source` existed has no such key at all — there is
+no version marker on these documents — and `load()` backfills it as `SOURCE_LANE` on
+read, never on the stored document itself. The filename is
+`written_records-<run_id>.json`, resolved fresh on every call by
+`written_records_path`.
 
 `email` and every other contact PII field is DELIBERATELY EXCLUDED from an entry. An
 operator opens the record by id; this artifact does not need to become a second place
@@ -155,6 +161,17 @@ ALL_OUTCOMES = frozenset({
     WRITTEN, WRITE_ATTEMPTED, CREATED_ID_UNKNOWN, WRITTEN_ID_UNKNOWN,
     GATED, HELD, FAILED, NO_ACTION,
 })
+
+# 73.1-04 Task 3 (D-14b): the eighth entry key -- which PATH made this write. Every
+# existing call site is a plugin backend lane (`SOURCE_LANE`, the default); D-14b's
+# connector write, once its portal is proven and `write_grant.covers()` has cleared it,
+# is attributed as `SOURCE_CONNECTOR` instead. A closed vocabulary, following this
+# module's own `ALL_OUTCOMES` pattern exactly -- a value nobody can report on is not
+# recorded.
+SOURCE_LANE = "lane"
+SOURCE_CONNECTOR = "connector"
+
+ALL_SOURCES = frozenset({SOURCE_LANE, SOURCE_CONNECTOR})
 
 # An `action` in this set means the backend passed the row through its write gate.
 # Anything else — `write_blocked`, `proposed`, `needs_match_review`, `skip`, `review`,
@@ -305,11 +322,16 @@ def outcome_for_action(action, hs_object_id=None) -> str:
         return FAILED
 
 
-def classify_item(item) -> dict:
+def classify_item(item, *, source=SOURCE_LANE) -> dict:
     """One per-row n8n response item -> `{object_type, action, hs_object_id, outcome,
-    reason, row_id, association}`. `row_id`/`association` default to `None` when the
-    item carries neither — the join key AFTER-01 needs for exactly the held/gated rows
-    that never got an `hs_object_id` (57-02 Task 2). Pure, no I/O.
+    reason, row_id, association, source}`. `row_id`/`association` default to `None` when
+    the item carries neither — the join key AFTER-01 needs for exactly the held/gated
+    rows that never got an `hs_object_id` (57-02 Task 2). Pure, no I/O.
+
+    `source` (73.1-04 Task 3, D-14b) defaults to `SOURCE_LANE` — every existing call site
+    is byte-identical in behaviour. Raises `WrittenRecordsError` for a value outside
+    `ALL_SOURCES`, the same closed-vocabulary discipline `close_grant` uses for a close
+    reason nobody can report on.
 
     Raises `WrittenRecordsError` on a non-dict item — the flattening idiom documented at
     `chunking.py:93-96` must run first; a caller that indexes a raw, unflattened body is
@@ -335,6 +357,12 @@ def classify_item(item) -> dict:
             "skipping a shape it cannot classify is the exact defect FINDING 2 "
             "(53-WALK-RECORD.md, commit 9e603d6) recorded — this module fails loud "
             "instead."
+        )
+
+    if source not in ALL_SOURCES:
+        raise WrittenRecordsError(
+            f"{source!r} is not a source this system can report on. An entry's source "
+            f"is one of: {', '.join(sorted(ALL_SOURCES))}."
         )
 
     action = item.get("action")
@@ -365,6 +393,7 @@ def classify_item(item) -> dict:
         "reason": reason,
         "row_id": item.get("row_id"),
         "association": item.get("association"),
+        "source": source,
     }
 
     for key, value in entry.items():
@@ -378,11 +407,12 @@ def classify_item(item) -> dict:
     return entry
 
 
-def classify_review_item(item) -> dict:
-    """A review-decision item -> the SAME seven keys `classify_item` produces:
-    `{object_type, action, hs_object_id, outcome, reason, row_id, association}`. Pure, no
-    I/O; raises `WrittenRecordsError` on a non-dict item for the same fail-loud reason
-    `classify_item` does.
+def classify_review_item(item, *, source=SOURCE_LANE) -> dict:
+    """A review-decision item -> the SAME eight keys `classify_item` produces:
+    `{object_type, action, hs_object_id, outcome, reason, row_id, association, source}`.
+    Pure, no I/O; raises `WrittenRecordsError` on a non-dict item for the same fail-loud
+    reason `classify_item` does, and on a `source` outside `ALL_SOURCES` for the same
+    closed-vocabulary reason.
 
     `item` is NOT the raw endpoint response. The review endpoint's success return
     (`review_decision._post_decision`) carries exactly `available`, `reason`, `outcome`,
@@ -428,6 +458,12 @@ def classify_review_item(item) -> dict:
             "never accepts the raw endpoint response here."
         )
 
+    if source not in ALL_SOURCES:
+        raise WrittenRecordsError(
+            f"{source!r} is not a source this system can report on. An entry's source "
+            f"is one of: {', '.join(sorted(ALL_SOURCES))}."
+        )
+
     decision = str(item.get("decision") or "").strip().lower()
     if decision == "approve":
         action = "review_approve"
@@ -448,6 +484,7 @@ def classify_review_item(item) -> dict:
         "reason": None,
         "row_id": None,
         "association": None,
+        "source": source,
     }
 
     for key, value in entry.items():
@@ -486,6 +523,16 @@ def _entries_from_document(document):
     if any(not isinstance(entry, dict) for entry in entries):
         return None
     return entries
+
+
+def _with_default_source(entry):
+    """`entry`, with `source` backfilled to `SOURCE_LANE` when the stored dict has no
+    such key at all (73.1-04 Task 3) — a pre-change document, or one built by hand in a
+    test. Never mutates its input; returns a new dict when a default is applied, the
+    same dict otherwise."""
+    if "source" in entry:
+        return entry
+    return {**entry, "source": SOURCE_LANE}
 
 
 def _refuses_real_durable_write_under_pytest(target: Path) -> bool:
@@ -617,10 +664,14 @@ def load(path=None) -> list:
     single-file path, applied per file. Each returned entry is stamped with its own
     document's `run_id` so a unioned `chunk_index` from two different runs stays
     distinguishable.
+
+    A pre-73.1-04 entry has no `source` key at all — there is no version marker on
+    these durable documents, so backfilling `SOURCE_LANE` at READ time is the only
+    tolerance available. The stored document itself is never rewritten.
     """
     if path is not None:
         entries = _entries_from_document(_load_document(Path(path)))
-        return entries if entries is not None else []
+        return [_with_default_source(entry) for entry in entries] if entries is not None else []
 
     directory = durable_paths.resolve_state_path().parent
     try:
@@ -634,5 +685,7 @@ def load(path=None) -> list:
         entries = _entries_from_document(document)
         if entries is None:
             continue
-        unioned.extend({**entry, RUN_ID_FIELD: document.get(RUN_ID_FIELD)} for entry in entries)
+        unioned.extend(
+            {**_with_default_source(entry), RUN_ID_FIELD: document.get(RUN_ID_FIELD)}
+            for entry in entries)
     return unioned
