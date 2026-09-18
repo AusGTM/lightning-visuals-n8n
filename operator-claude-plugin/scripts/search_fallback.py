@@ -415,9 +415,9 @@ def hold_weak_sources(records, sendable, held):
     This is a SECOND, RECORDS-level pass and it leaves `partition_for_dispatch` untouched:
     D-5sd-01 forbids weakening that function's required `company_domains` argument or its
     suffix-trap refusal, and an optional keyword there would be a one-keyword bypass of
-    the operator's ruling. The two gates are INDEPENDENT and BOTH must hold -- a tier-3
-    person stays held however confidently the waterfall validated them, and a tier-2
-    person with no related email is still held by the pass before this one.
+    the operator's ruling. The two gates are INDEPENDENT and BOTH must hold -- a rank-3 or
+    rank-4 person stays held however confidently the waterfall validated them (D-01), and
+    a rank-2 person with no related email is still held by the pass before this one.
 
     Nothing here is written into a match verdict, so `match.tier` stays what
     `n8n/code/matchProposal.js::summarizeMatch` produces and
@@ -463,24 +463,39 @@ def hold_weak_sources(records, sendable, held):
 
         weak_ids.add(row_id)
         locator = provenance.get("locator")
-        if not isinstance(tier, bool) and isinstance(tier, int) and tier in KNOWN_TIERS:
-            # "rank", not "tier", in every OPERATOR-VISIBLE string: this reason lands in
-            # the round's step-9 report, and `tests/test_report_enrichment.py`'s D-10b
-            # guard bans the word `tier` from anything the operator is shown, because in
-            # this system that word means the ICP tier and nothing else. The internal
-            # vocabulary (`source_tier`, `STRONG_TIERS`) keeps the plan's naming; only
-            # what a human reads changes.
+        readable_known = (
+            not isinstance(tier, bool) and isinstance(tier, int) and tier in KNOWN_TIERS
+        )
+        # "rank", not "tier", in every OPERATOR-VISIBLE string below: these reasons land
+        # in the round's step-9 report, and `tests/test_report_enrichment.py`'s D-10b
+        # guard bans the word `tier` from anything the operator is shown, because in
+        # this system that word means the ICP tier and nothing else. The internal
+        # vocabulary (`source_tier`, `STRONG_TIERS`) keeps the plan's naming; only
+        # what a human reads changes.
+        if readable_known and tier == 3:
+            # D-01 (operator ruling 2026-09-18): rank 3 is LinkedIn specifically, and it
+            # was SENDABLE before this ruling -- say so, and say why it no longer is: a
+            # self-maintained profile is current about the person, but says nothing
+            # about THIS company's own record of them, which is exactly the claim
+            # provider discovery (rank 2) makes instead.
             reason = (
-                f"named by {locator} — a third-party source (source rank {tier}), not this "
-                f"company's own site or LinkedIn, so this person is held for you to "
-                f"judge rather than sent. An industry site can name someone "
-                f"historically: the person can be real and the enrichment confirmation "
-                f"genuine, and the role still stale (D-5sd-05)."
+                f"named by {locator} — a self-maintained LinkedIn profile (source rank "
+                f"3): current about the person, but silent on this company's own record "
+                f"of them, so this person is held for you to judge rather than sent. "
+                f"This rank was sendable before the 2026-09-18 operator ruling and is "
+                f"not any more (D-01)."
+            )
+        elif readable_known:
+            reason = (
+                f"named by {locator} — a third-party source (source rank {tier}), so "
+                f"this person is held for you to judge rather than sent. An industry "
+                f"site can name someone historically: the person can be real and the "
+                f"enrichment confirmation genuine, and the role still stale (D-5sd-05)."
             )
         else:
             reason = (
                 f"this record declares itself search-sourced (locator {locator}) but "
-                f"carries no readable source tier ({tier!r}) — held rather than sent, "
+                f"carries no readable source rank ({tier!r}) — held rather than sent, "
                 f"fail-closed."
             )
         merged_held.append({
