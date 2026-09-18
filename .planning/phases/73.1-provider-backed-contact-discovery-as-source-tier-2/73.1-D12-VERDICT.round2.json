@@ -1,0 +1,41 @@
+{
+  "probed_at": "2026-09-18T10:06:08.065712+00:00",
+  "probe_round": 2,
+  "domain": "pickleballaustralia.org.au",
+  "providers": {
+    "zoominfo": {
+      "provider": "zoominfo",
+      "endpoint": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
+      "status": 200,
+      "balance_before": 9352,
+      "balance_after": 9352,
+      "delta": 0,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": null
+    },
+    "apollo": {
+      "provider": "apollo",
+      "endpoint": "https://api.apollo.io/api/v1/mixed_people/api_search",
+      "status": 200,
+      "balance_before": null,
+      "balance_after": null,
+      "delta": null,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": "Apollo's usage endpoint returns per-endpoint rate limits, not a depleting credit pool (memory `provider-credit-check-endpoints`), and this account's non-master key reads 403 on it. Balance is UNREADABLE on this account -- any Apollo search cost can only come from vendor documentation, never a measured delta."
+    },
+    "lusha": {
+      "provider": "lusha",
+      "endpoint": "https://api.lusha.com/prospecting/contact/search",
+      "status": 201,
+      "balance_before": 3615,
+      "balance_after": 3615,
+      "delta": 0,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": null
+    }
+  },
+  "operator_ruling": null
+}

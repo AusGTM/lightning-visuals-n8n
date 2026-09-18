@@ -168,6 +168,29 @@ def _people_from_response(provider, body):
     return True, reveal
 
 
+def _response_shape(body):
+    """Redacted envelope description -- key names and list lengths only, never values.
+    Round 2 returned 2xx from all three providers with people_returned=False and no way
+    to tell 'nobody at this domain' from 'wrong envelope key'; this settles that."""
+    if not isinstance(body, dict):
+        return {"type": type(body).__name__}
+    shape = {"top_keys": sorted(body.keys())[:20], "lists": {}}
+    for k, v in body.items():
+        if isinstance(v, list):
+            entry = {"len": len(v)}
+            if v and isinstance(v[0], dict):
+                entry["item_keys"] = sorted(v[0].keys())[:25]
+                attrs = v[0].get("attributes")
+                if isinstance(attrs, dict):
+                    entry["attribute_keys"] = sorted(attrs.keys())[:25]
+            shape["lists"][k] = entry
+        elif isinstance(v, dict) and k in ("meta", "pagination", "page"):
+            shape[k] = {kk: vv for kk, vv in v.items() if isinstance(vv, (int, float, bool))}
+        elif isinstance(v, (int, float)) and k in ("total", "total_entries", "totalResults", "count"):
+            shape[k] = v
+    return shape
+
+
 def probe_provider(provider, domain):
     """Balance -> ONE search call -> balance again. Never loops or retries."""
     balance_before = credits_mod._CHECK[provider]()
@@ -204,6 +227,7 @@ def probe_provider(provider, domain):
             people, reveal = _people_from_response(provider, resp_body or {})
             result["people_returned"] = people
             result["reveal_fields_present"] = reveal
+            result["response_shape"] = _response_shape(resp_body)
         else:
             result["note"] = _safe_error_note(resp_body) or f"HTTP {r.status_code}, no parseable message"
     except Exception as exc:  # network error, timeout, etc — never crashes the probe
