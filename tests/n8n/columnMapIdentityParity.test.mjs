@@ -86,3 +86,44 @@ test("requiredIdentity() has no group beyond what the YAML configures (linkedin_
   // additive — the existing two groups are untouched.
   assert.equal(requiredIdentity({ linkedin_url: "https://linkedin.com/in/someone" }), true);
 });
+
+// =====================================================================================
+// Phase 73.1 Plan 05 (D-16b) — two name+number groups: [firstname, lastname, mobilephone]
+// and [firstname, lastname, phone]. Operator ruling: a BARE phone/mobilephone alone is
+// NOT identity, it only completes a name. Jen Ramamurthy (2026-09-18 pickleball round —
+// mobile plus a LinkedIn profile, no email) is the case that motivated this.
+// =====================================================================================
+
+test("Test 2: firstname + lastname + mobilephone (and nothing else) has identity", () => {
+  assert.equal(
+    requiredIdentity({ firstname: "Jen", lastname: "Ramamurthy", mobilephone: "0400 000 111" }),
+    true,
+  );
+});
+
+test("Test 3: firstname + lastname + phone (and nothing else) has identity", () => {
+  assert.equal(
+    requiredIdentity({ firstname: "Jen", lastname: "Ramamurthy", phone: "02 9000 0111" }),
+    true,
+  );
+});
+
+test("Test 4: a bare mobilephone or a bare phone alone is NOT identity", () => {
+  assert.equal(requiredIdentity({ mobilephone: "0400 000 111" }), false);
+  assert.equal(requiredIdentity({ phone: "02 9000 0111" }), false);
+});
+
+test("Test 5: firstname + mobilephone but no lastname has no identity — the group is all three keys or nothing", () => {
+  assert.equal(requiredIdentity({ firstname: "Jen", mobilephone: "0400 000 111" }), false);
+  assert.equal(requiredIdentity({ lastname: "Ramamurthy", mobilephone: "0400 000 111" }), false);
+});
+
+test("Test 6: the two plugin-side YAML copies are byte-identical in their required_identity block", () => {
+  const script =
+    "import json,yaml;" +
+    "a=yaml.safe_load(open('config/column_mapping.yaml'))['required_identity'];" +
+    "b=yaml.safe_load(open('operator-claude-plugin/config/column_mapping.yaml'))['required_identity'];" +
+    "print(json.dumps({'a': a, 'b': b}))";
+  const { a, b } = JSON.parse(execFileSync(PY, ["-c", script], { cwd: ROOT }).toString());
+  assert.deepEqual(a, b, "config/column_mapping.yaml and the plugin's copy must agree on required_identity");
+});
