@@ -12140,7 +12140,19 @@ for (const item of items) {
         body: JSON.stringify(reqBody),
       });
       status = 200;
-      total = (res && res.meta && res.meta.totalResults != null) ? res.meta.totalResults : null;
+      if (res && res.meta && res.meta.totalResults != null) {
+        total = res.meta.totalResults;
+      } else {
+        // 200 with no readable meta.totalResults is itself a diagnosis: the request
+        // reached ZoomInfo and got a response, but not the JSON:API shape normalizeResponse
+        // expects (a raw string, a differently-shaped body, ...). Record ONLY the shape
+        // (typeof / top-level key names), never the response content -- this is enough to
+        // tell "genuinely zero matches" apart from "response shape problem" without a
+        // second live call.
+        total = null;
+        error = "unexpected-shape:" + (res && typeof res === "object"
+          ? Object.keys(res).slice(0, 6).join(",") : typeof res);
+      }
     } catch (e) {
       const s = extractErrorStatus(e);
       status = Number.isFinite(s) ? s : "exception";
