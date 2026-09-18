@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: "73.1"
 current_phase_name: Provider-backed contact discovery as source tier 2 (INSERTED)
 status: executing
-stopped_at: Completed 73.1-10-PLAN.md
-last_updated: "2026-09-18T13:27:50.382Z"
+stopped_at: Completed 73.1-11-PLAN.md
+last_updated: "2026-09-18T13:58:11.547Z"
 last_activity: 2026-09-18
 last_activity_desc: Phase 73.1 execution started
-state_head: e1947232ace7e1ac2d2d1a3fd88a1eb7e3708b6d
+state_head: f6bd41a788e37e7ebe53d4d9a1345a226addf929
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 67
-  completed_plans: 66
+  completed_plans: 67
   percent: 17
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 73.1 (Provider-backed contact discovery as source tier 2 (INSERTED)) — EXECUTING
-Plan: 2 of 11
+Plan: 3 of 11
 Status: Ready to execute
 Last activity: 2026-09-18 — Phase 73.1 execution started
 
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-18T13:27:44.969Z
-**Stopped at:** Completed 73.1-10-PLAN.md
+**Last session:** 2026-09-18T13:57:50.602Z
+**Stopped at:** Completed 73.1-11-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -693,6 +693,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 73.1 P08 | 50min | 3 tasks | 12 files |
 | Phase 73.1 P09 | 55min | 3 tasks | 22 files |
 | Phase 73.1 P10 | 15min | 2 tasks | 5 files |
+| Phase 73.1 P11 | 24min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -899,6 +900,9 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 73.1]: D-12 operator ruling: discovery lane stays search-only, ZoomInfo retained, Apollo/Lusha dropped from search (full waterfall unchanged on enrich)
 - [Phase 73.1]: Sixth cloud workflow (LV Suggest Discovery) created live and proven disarmed with one execution; all six workflows confirmed active, v1, every HubSpot write-safety flag false
 - [Phase 73.1]: titlesForFamilies filters rung-1's ZoomInfo title search by the round's chosen role families, closing D-11a/D-11c.
+- [Phase 73.1]: 73.1-11: discovery lane's ZoomInfo token gate mints unconditionally every execution, reading no cross-run cache -- the enrich lane's cache is untouched (different call-volume tradeoff) — This lane runs exactly one execution per round (D-08); a cross-execution cache buys at most one free OAuth mint and in exchange carries the whole stale/rejected-token failure class behind the 12668/12669 401s.
+- [Phase 73.1]: 73.1-11: offline token-replay proved a later ZoomInfo mint invalidates the earlier token (prior_token_invalidated_by_later_mint=true); filed a kind:design todo for the enrich lane's cache rather than changing it — Plan's own explicit scope boundary said do not change the enrich lane in this task; its leaf already self-heals on the next run's 401.
+- [Phase 73.1]: 73.1-11: [Rule 1] execution 12670 returned an unanticipated 400 (not 200/401); applied the 401-branch's prescribed request-construction fix anyway per the plan's own reasoning, confirmed by execution 12671's live 200 -- D-11 and D-11a both closed live — The plan's own objective states "a malformed query string yields 400, not 401" -- an offline Python replay of the byte-identical request succeeded, isolating the defect to n8n's own httpRequest URL-embedded query string construction, not the account.
 
 ### Roadmap Evolution
 
