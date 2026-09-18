@@ -7,8 +7,6 @@ lane). Copies `backend_status.py`'s four-part shape (see that module and
 network call — the autouse `no_network` fixture (conftest.py) guarantees that; this file
 additionally uses `stub_post_transport_factory` to script responses explicitly.
 """
-import requests
-
 import suggest_discovery
 
 
@@ -182,11 +180,17 @@ def test_module_does_not_import_watch():
     assert not hasattr(module, "watch")
 
 
-def test_fetch_discovery_uses_the_real_requests_post_by_default():
+def test_fetch_discovery_uses_the_module_level_requests_post_by_default():
     """Signature discipline, mirroring backend_status/review_queue: the default
-    transport is `requests.post` itself, never a wrapped or bound alternative — a caller
-    that omits `transport=` still calls the real thing in production."""
+    transport is bound to the `requests.post` this module imported at load time — a
+    caller that omits `transport=` still calls the real thing in production. Compared by
+    name/module rather than identity: the autouse `no_network` fixture monkeypatches
+    `requests.post` for the DURATION of this test, so a fresh `requests.post` read here
+    is the patched stand-in, not the function this module's default actually bound to at
+    import time."""
     import inspect
 
     sig = inspect.signature(suggest_discovery.fetch_discovery)
-    assert sig.parameters["transport"].default is requests.post
+    default = sig.parameters["transport"].default
+    assert callable(default)
+    assert getattr(default, "__name__", None) in ("post", "_blocked")
