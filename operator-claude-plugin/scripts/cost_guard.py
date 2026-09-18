@@ -70,6 +70,16 @@ RESEARCH_RATE_KEY = "company_domain_research"
 SUGGESTION_RATE_KEY = "suggestion_stage1_discovery"
 SUGGESTION_STAGE2_RATE_KEY = "lusha_contacts_first_time_enrich"
 
+# Phase 73.1 discovery round (D-12/D-13/D-13a). One search-rate key per provider, all
+# shipping null until the D-12 plan-time probe measures them. Ordered in the D-11
+# waterfall's own order (enrichment.FULL_WATERFALL / config/provider_priority.yaml
+# default: zoominfo, apollo, lusha) -- not re-derived here, just mirrored.
+DISCOVERY_SEARCH_RATE_KEYS = {
+    "zoominfo": "zoominfo_contact_search",
+    "apollo": "apollo_people_search",
+    "lusha": "lusha_prospecting_search",
+}
+
 # The page-fetch axis that bounds ONE company's whole discovery ladder (D-62-14). This
 # is imported, never re-declared, so the two constants can never drift. NOTE: this is a
 # DIFFERENT axis from WEB_RESEARCH_MAX_SEARCHES (the backend research node's web_search
