@@ -1098,6 +1098,166 @@ def test_open_grant_refuses_anything_that_is_not_a_proposal(granting_config):
     assert "proposal" in result["detail"]
 
 
+# --- D-15c: a second open_grant while one is open is refused, naming it ------------------
+# --- D-15b: covers() sends a caller to widen() instead of a second grant ------------------
+
+def test_open_grant_with_existing_grant_none_behaves_exactly_as_today(
+        granting_config, stub_module_transport_factory):
+    """Task 1 Test 1: the new keyword defaults to None, so every existing call site is
+    byte-identical in behaviour."""
+    transport = stub_module_transport_factory(_plan_reads())
+    proposal = _proposal(granting_config, transport)
+
+    grant = write_grant.open_grant(proposal, "yes", granting_config, existing_grant=None)
+
+    assert grant["kind"] == write_grant.KIND
+    assert grant["state"] == write_grant.OPEN
+
+
+def test_open_grant_refuses_a_second_open_grant_by_name(
+        granting_config, stub_module_transport_factory):
+    """Task 1 Test 2 (D-15c): the structural stop for the UAT session's triple-open."""
+    transport = stub_module_transport_factory(_plan_reads())
+    open_one = _open(granting_config, transport)
+
+    transport2 = stub_module_transport_factory(_plan_reads())
+    second_proposal = _proposal(granting_config, transport2)
+
+    result = write_grant.open_grant(second_proposal, "yes", granting_config,
+                                    existing_grant=open_one)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert result.get("reason") == write_grant.SECOND_GRANT_REFUSED
+    assert open_one["label"] in result["detail"]
+    assert "already open" in result["detail"]
+    assert "covers" in result["detail"] or "widen" in result["detail"]
+
+
+def test_open_grant_admits_a_new_grant_over_a_closed_one(
+        granting_config, stub_module_transport_factory):
+    """Task 1 Test 3: a closed grant is not an open one."""
+    transport = stub_module_transport_factory(_plan_reads())
+    closed = write_grant.close_grant(_open(granting_config, transport),
+                                     write_grant.CLOSED_BATCH_COMPLETE)
+
+    transport2 = stub_module_transport_factory(_plan_reads())
+    proposal = _proposal(granting_config, transport2)
+
+    grant = write_grant.open_grant(proposal, "yes", granting_config, existing_grant=closed)
+
+    assert grant["kind"] == write_grant.KIND
+    assert grant["state"] == write_grant.OPEN
+
+
+def test_widen_unions_ids_and_domains_and_states_what_was_added(
+        granting_config, stub_module_transport_factory):
+    """Task 1 Test 4: order-stable deduplicated union, plus a statement naming the add."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=("known.example",))
+
+    widened = write_grant.widen(
+        grant, record_ids=[RECORD_ID, "99999"], record_domains=["known.example", "new.example"])
+
+    assert widened["record_ids"] == [RECORD_ID, "99999"]
+    assert widened["record_domains"] == ["known.example", "new.example"]
+    assert "99999" in widened["statement"]
+    assert "new.example" in widened["statement"]
+
+
+def test_widen_never_mutates_its_input_grant(granting_config, stub_module_transport_factory):
+    """Task 1 Test 5."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=("known.example",))
+    before_ids = grant["record_ids"]
+    before_domains = grant["record_domains"]
+
+    widened = write_grant.widen(grant, record_ids=["99999"], record_domains=["new.example"])
+
+    assert grant["record_ids"] == before_ids
+    assert grant["record_domains"] == before_domains
+    assert widened["record_ids"] is not grant["record_ids"]
+
+
+def test_widen_refuses_when_the_ceiling_is_over(granting_config, stub_module_transport_factory):
+    """Task 1 Test 6: SAFE-01..05 — a widened record set costs more executions, and the
+    ceiling stays a refusal in code, not prose."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=())
+
+    result = write_grant.widen(
+        grant, record_ids=["99999"], record_domains=[],
+        ceiling={"verdict": write_grant.CEILING_OVER})
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert "ceiling" in result["detail"].lower()
+
+
+def test_widen_proceeds_when_the_ceiling_is_unknown(
+        granting_config, stub_module_transport_factory):
+    """Task 1 Test 7: D-57-02 — an unknown verdict proceeds rather than refuses."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=())
+
+    result = write_grant.widen(
+        grant, record_ids=["99999"], record_domains=[],
+        ceiling={"verdict": write_grant.CEILING_UNKNOWN})
+
+    assert result["kind"] == write_grant.KIND
+    assert "99999" in result["record_ids"]
+
+
+def test_widen_refuses_a_grant_that_is_not_open(granting_config, stub_module_transport_factory):
+    """Task 1 Test 8, first half."""
+    transport = stub_module_transport_factory(_plan_reads())
+    closed = write_grant.close_grant(_open(granting_config, transport),
+                                     write_grant.CLOSED_REVOKED)
+
+    result = write_grant.widen(closed, record_ids=["99999"], record_domains=[])
+
+    assert result["outcome"] == write_grant.REFUSED
+
+
+def test_widen_accepts_no_lane_or_workflow_id(granting_config, stub_module_transport_factory):
+    """Task 1 Test 8, second half: widening is scoped to ids and domains only — a lane or
+    workflow mismatch is a different question and stays a hard covers() refusal."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=())
+
+    with pytest.raises(TypeError):
+        write_grant.widen(grant, record_ids=["99999"], record_domains=[],
+                          lane="enrichment")
+
+    with pytest.raises(TypeError):
+        write_grant.widen(grant, record_ids=["99999"], record_domains=[],
+                          workflow_id=WORKFLOW_ID)
+
+
+def test_covers_admits_a_widened_send(granting_config, stub_module_transport_factory):
+    """Task 1 Test 9."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=())
+
+    widened = write_grant.widen(grant, record_ids=["99999"], record_domains=["new.example"])
+
+    assert write_grant.covers(
+        widened, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=["99999"], record_domains=["new.example"]) is None
+
+
+def test_covers_outside_refusal_points_at_widen_not_a_new_grant(
+        granting_config, stub_module_transport_factory):
+    """D-15b amends GRANT-03's old 'widening it needs a new grant' text."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(), domains=("known.example",))
+
+    refusal = write_grant.covers(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[], record_domains=["unrelated.example"])
+
+    assert "widen" in refusal["detail"]
+    assert "needs a new grant" not in refusal["detail"]
+
+
 def test_the_grant_carries_what_it_covers(granting_config, stub_module_transport_factory):
     """GRANT-01: object types, the record set, whether creates are included, and the lanes
     it covers — all stated on the grant itself."""
