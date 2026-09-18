@@ -224,6 +224,19 @@ test("CR-01: ZoomInfo Search Mint executes once per execution and its token reac
   assert.deepEqual([...tokens], ["tok-1"], "every row reaching Rung1 must carry the SAME minted token");
 });
 
+// ---- WR-01 (73.1-REVIEW.md) --------------------------------------------------------
+test("WR-01: per_company_cap: 0 means search nobody -- not silently overridden to the default", () => {
+  const req = { body: { run_id: "r", companies: [
+    { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org", per_company_cap: 0 } ] } };
+  const { runData } = run([req]);
+  assert.equal(nodeItems(runData, "ZoomInfo Search Token Gate").length, 0,
+    "a company with per_company_cap: 0 must never enter the search lane");
+  const rows = nodeItems(runData, "Build Discovery Response");
+  const co = rows[0].companies.find((c) => c.company_id === "9");
+  assert.deepEqual(co.people, []);
+  assert.equal(co.search_diagnostics, null, "an excluded company never reached the search lane");
+});
+
 // ---- Task 2 -------------------------------------------------------------------------
 
 test("Task2/Test6: a gap company whose ZoomInfo rung-1 returns a person never reaches rung-2", () => {

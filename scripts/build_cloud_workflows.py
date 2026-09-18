@@ -12071,7 +12071,9 @@ ENRICH_DISCOVERY_WATERFALL_COMPLETE_JS = inline("discoverySearch.js") + r"""
 // contribution before reaching here.
 return $input.all().map((it) => {
   const row = it.json;
-  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;
+  // WR-01 (73.1-REVIEW.md): ?? not || -- per_company_cap: 0 means "search nobody",
+  // and 0 || DISCOVERY_PEOPLE_CAP would silently override that back to the default.
+  const cap = row.per_company_cap ?? DISCOVERY_PEOPLE_CAP;
   return { ...row, people: (row.people || []).slice(0, cap) };
 });
 """
@@ -12084,8 +12086,10 @@ def _discovery_provider_eligible_expr():
     check node (Claude's-discretion simplification recorded in the SUMMARY: one
     `_if_bool_expr_node` per hop testing eligibility as a whole, not a separate Enabled/
     Cap pair)."""
+    # WR-01 (73.1-REVIEW.md): ?? not || -- per_company_cap: 0 means "search nobody",
+    # and 0 || DISCOVERY_DEFAULT_CAP would silently override that back to the default.
     return ("$json.gap === true && !!$json.domain && "
-            f"(($json.people)||[]).length < ($json.per_company_cap || {DISCOVERY_DEFAULT_CAP})")
+            f"(($json.people)||[]).length < ($json.per_company_cap ?? {DISCOVERY_DEFAULT_CAP})")
 
 
 def _discovery_zoom_search_gate_js():
@@ -12252,7 +12256,9 @@ const DISCOVERY_SCRATCH_KEYS = [
 ];
 return $input.all().map((it) => {
   const row = it.json;
-  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;
+  // WR-01 (73.1-REVIEW.md): ?? not || -- per_company_cap: 0 means "search nobody",
+  // and 0 || DISCOVERY_PEOPLE_CAP would silently override that back to the default.
+  const cap = row.per_company_cap ?? DISCOVERY_PEOPLE_CAP;
   const found = (row._zoominfo_rung1_people || []).concat(row._zoominfo_rung2_people || []);
   const search_diagnostics = {
     rung1: {
