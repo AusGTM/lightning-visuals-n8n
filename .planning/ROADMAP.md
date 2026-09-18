@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 7/9 plans executed
+**Plans:** 8/9 plans executed
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -601,7 +601,7 @@ Plans:
 
 **Wave 5** *(blocked on 73.1-07)*
 
-- [ ] 73.1-08-PLAN.md — the plugin side: the discovery client, the ladder-first gap set and one POST, the renumbered rank prose, the cost line, and the plugin release (D-07, D-08, D-09, D-10, D-13a, D-16d)
+- [x] 73.1-08-PLAN.md — the plugin side: the discovery client, the ladder-first gap set and one POST, the renumbered rank prose, the cost line, and the plugin release (D-07, D-08, D-09, D-10, D-13a, D-16d)
 
 **Wave 6** *(blocked on 73.1-08 — `autonomous: false`, two `blocking-human` gates)*
 
