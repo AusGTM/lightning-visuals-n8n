@@ -98,17 +98,18 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
       3. a row in the held half never appears in the dispatch set (never validated)
       4. a ladder carrying a `refused` disposition NEVER reaches the search path, and
          produces no search-sourced record at all (D-5sd-04)
-      5. a clean-but-empty ladder DOES reach it, and its tier-2 person becomes sendable
-         only once the merge fills a related-domain email (D-5sd-01: both gates)
-      6. a tier-3 person is HELD despite the identically successful merge, with the
-         source URL in the reason (D-5sd-05: the two gates are independent)
+      5. a clean-but-empty ladder DOES reach it, and a person found via search on the
+         company's OWN host (rank 1) becomes sendable only once the merge fills a
+         related-domain email (D-01: both gates)
+      6. a rank-4 (industry/media) person is HELD despite the identically successful
+         merge, with the source URL in the reason (D-01: the two gates are independent)
     """
     company_refused = _company_row("refused-1", num_associated_contacts=0)
-    company_tier2 = _company_row("tier2-1", num_associated_contacts=0)
-    company_tier3 = _company_row("tier3-1", num_associated_contacts=0)
+    company_rank1 = _company_row("rank1-1", num_associated_contacts=0)
+    company_rank4 = _company_row("rank4-1", num_associated_contacts=0)
     company_with_contacts = _company_row("has-2", num_associated_contacts=3)
     company_rows = [
-        company_with_contacts, company_refused, company_tier2, company_tier3]
+        company_with_contacts, company_refused, company_rank1, company_rank4]
 
     verdicts = suggest_contacts.eligibility(company_rows)
     eligible = [
@@ -116,7 +117,7 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
         if verdict["verdict"] == suggest_contacts.ELIGIBLE
     ]
     # join 1, re-proven for this test's own fixtures
-    assert eligible == [company_refused, company_tier2, company_tier3]
+    assert eligible == [company_refused, company_rank1, company_rank4]
 
     vocabulary = role_classify.load_families()
     family_list = vocabulary["families"]
@@ -136,22 +137,24 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     attempts_by_row_id = {
         "refused-1": [_attempt("https://example-club.example/sitemap.xml", "empty"),
                       _attempt("https://example-club.example/wp-sitemap.xml", "refused")],
-        "tier2-1": [_attempt("https://example-club.example/sitemap.xml", "empty")],
-        "tier3-1": [_attempt("https://example-club.example/sitemap.xml", "empty")],
+        "rank1-1": [_attempt("https://example-club.example/sitemap.xml", "empty")],
+        "rank4-1": [_attempt("https://example-club.example/sitemap.xml", "empty")],
     }
-    # What the model's own web search transcribed, per company. Real allowlisted hosts:
-    # LinkedIn is tier 2, racenet.com.au is on the shipped tier-3 list.
+    # What the model's own web search transcribed, per company. `rank1-1`'s search
+    # turns up the company's OWN host under a path the sitemap missed (rank 1, computed
+    # from the company's own host -- never listed); `rank4-1`'s turns up
+    # racenet.com.au, on the shipped rank-4 industry/media list.
     search_results_by_row_id = {
-        "tier2-1": [{"url": "https://www.linkedin.com/in/jamie-fox"},
+        "rank1-1": [{"url": "https://example-club.example/about/committee"},
                     {"url": "https://random-blog.example/who-works-where"}],
-        "tier3-1": [{"url": "https://racenet.com.au/2019/committee"}],
+        "rank4-1": [{"url": "https://racenet.com.au/2019/committee"}],
     }
     people_by_row_id = {
-        "tier2-1": [
+        "rank1-1": [
             {"firstname": "Jamie", "lastname": "Fox", "jobtitle": FAMILY_LABEL},
             {"firstname": "Alex", "lastname": "Nguyen", "jobtitle": "Receptionist"},
         ],
-        "tier3-1": [{"firstname": "Robin", "lastname": "Lee", "jobtitle": FAMILY_LABEL}],
+        "rank4-1": [{"firstname": "Robin", "lastname": "Lee", "jobtitle": FAMILY_LABEL}],
     }
 
     records = []
@@ -221,13 +224,13 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
 
     # join 4, the other half: the refused company never reached the search path and
     # contributed no record at all.
-    assert searched_for == ["tier2-1", "tier3-1"]
+    assert searched_for == ["rank1-1", "rank4-1"]
     assert len(records) == 2
     assert {record["row"]["firstname"] for record in records} == {"Jamie", "Robin"}
     # join 2: the person select_people dropped never appears in a synthesised row
     assert dropped_names == {"Alex"}
     assert "Alex" not in {record["row"]["firstname"] for record in records}
-    assert [record["provenance"]["source_tier"] for record in records] == [2, 3]
+    assert [record["provenance"]["source_tier"] for record in records] == [1, 4]
 
     # The mint -- ONCE, over the whole accumulated batch, never per company.
     minted = suggest_contacts.mint_row_ids(records)
@@ -251,9 +254,9 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     assert held == []
 
     sendable, held = search_fallback.hold_weak_sources(rejoined, sendable, held)
-    # join 5: the tier-2 person survives BOTH gates.
+    # join 5: the rank-1 person (found via search, not the ladder) survives BOTH gates.
     assert [row["firstname"] for row in sendable] == ["Jamie"]
-    # join 6: the tier-3 person is held despite the same successful merge, and the
+    # join 6: the rank-4 person is held despite the same successful merge, and the
     # operator is given the source URL to judge for themselves.
     assert len(held) == 1
     assert held[0]["row"]["firstname"] == "Robin"
@@ -1215,7 +1218,7 @@ def test_step_9_decline_section_names_the_three_read_states():
 # so rank_results(..., None) can never accept a rank-1 entry.
 # =====================================================================================
 
-def test_a_website_less_company_reaches_the_search_fallback_and_is_linkedin_or_held():
+def test_a_website_less_company_reaches_the_search_fallback_and_is_always_held():
     """Drives a company whose recorded `website` cannot be its own site through the
     documented loop exactly as SKILL.md step 5's else-branch reads it, end to end:
 
@@ -1223,17 +1226,19 @@ def test_a_website_less_company_reaches_the_search_fallback_and_is_linkedin_or_h
          round builds the no-ladder walk literal and `next_candidates` (which would
          raise on this value) is never called.
       2. `round_outcome(walk)` routes it; `eligible_after_ladder([], ladder_built=False)`
-         admits it; `rank_results(results, None)` accepts LinkedIn at rank 2 and an
-         allowlisted third party at rank 3, with NO rank-1 entry.
+         admits it; `rank_results(results, None)` accepts LinkedIn at rank 3 and an
+         allowlisted third party at rank 4, with NO rank-1 and NO rank-2 entry -- rank 2
+         is stamped by the discovery adapter and can never be minted from a matched URL.
       3. `select_people` then `synthesise_rows(..., source_tier)` produce records whose
          row keys are a subset of firstname/lastname/company/jobtitle -- no website, no
          domain: the structural proof that a search-discovered domain is never written
          back.
       4. With the company ABSENT from `company_domains`, every row is held
          `company_domain_unknown` and `hold_weak_sources` adds nothing on top.
-      5. With the operator supplying that company's domain, the rank-2 person is
-         sendable and the rank-3 person is still held `search_source_not_strong` --
-         proving LinkedIn-or-held for this terminal.
+      5. With the operator supplying that company's domain, BOTH people are held
+         `search_source_not_strong` (D-01): with no company URL, rank 1 is unreachable
+         and rank 2 is never mintable from a URL at all, so a website-less company's
+         search fallback can never produce a sendable row -- ranks 3 and 4 are both held.
       6. The terminal `round_outcome(walk, rows, sendable, held, fallback)` returns
          `reentry == "none"`.
     """
@@ -1278,7 +1283,7 @@ def test_a_website_less_company_reaches_the_search_fallback_and_is_linkedin_or_h
     ]
     ranked = search_fallback.rank_results(results, plan["pasted_url"])
     assert plan["pasted_url"] is None  # the call really did pass None, not a fixed URL
-    assert [entry["tier"] for entry in ranked["accepted"]] == [2, 3]
+    assert [entry["tier"] for entry in ranked["accepted"]] == [3, 4]
 
     # --- 3: select_people + synthesise_rows, per accepted URL ------------------------
     people_by_url = {
@@ -1303,7 +1308,7 @@ def test_a_website_less_company_reaches_the_search_fallback_and_is_linkedin_or_h
         assert set(record["row"]) <= {"firstname", "lastname", "company", "jobtitle"}
         assert "website" not in record["row"]
         assert "domain" not in record["row"]
-    assert [record["provenance"]["source_tier"] for record in records] == [2, 3]
+    assert [record["provenance"]["source_tier"] for record in records] == [3, 4]
 
     # --- mint / stage-2 merge / rejoin (unchanged machinery) --------------------------
     minted = suggest_contacts.mint_row_ids(records)
@@ -1337,10 +1342,10 @@ def test_a_website_less_company_reaches_the_search_fallback_and_is_linkedin_or_h
     assert held == []
 
     sendable, held = search_fallback.hold_weak_sources(rejoined, sendable, held)
-    assert [row["firstname"] for row in sendable] == ["Jamie"]
-    assert len(held) == 1
-    assert held[0]["row"]["firstname"] == "Robin"
-    assert held[0]["reason_code"] == "search_source_not_strong"
+    assert sendable == []
+    assert len(held) == 2
+    assert {entry["row"]["firstname"] for entry in held} == {"Jamie", "Robin"}
+    assert {entry["reason_code"] for entry in held} == {"search_source_not_strong"}
 
     # --- 6: the terminal call never routes -------------------------------------------
     fallback_selection = {

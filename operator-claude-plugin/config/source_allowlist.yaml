@@ -4,19 +4,26 @@
 # D-5sd-02). When the sitemap ladder completes without finding a person, the round may
 # look elsewhere -- but only somewhere named here, in advance, in a diff a human read.
 #
-# THIS IS AN OPERATOR-CURATED STARTING SET, NOT A DERIVED OR VERIFIED ONE. Every tier-3
+# THIS IS AN OPERATOR-CURATED STARTING SET, NOT A DERIVED OR VERIFIED ONE. Every tier-4
 # host below is [ASSUMED]: proposed from domain knowledge of the Australian racing and
 # sport-media market, never verified live against the site itself. Curate it. Removing a
 # host is always safe (that source simply stops contributing); adding one admits a new
 # third-party voice, so add with the same care a code change gets.
 #
 # A host that matches NO tier is REJECTED outright -- not ranked last, not admitted with
-# a warning (D-5sd-02 tier 4). An unknown domain contributes nothing at all.
+# a warning (D-5sd-02). An unknown domain contributes nothing at all.
 #
-# The two tiers this file does NOT list, and why:
-#   tier 1 -- the company's OWN host. COMPUTED at rank time from the ladder's pasted URL,
+# Four ranks exist in this system (re-numbered by operator ruling 2026-09-18, D-01). This
+# file lists TWO of them; the other two are never listed here, and why:
+#   rank 1 -- the company's OWN host. COMPUTED at rank time from the ladder's pasted URL,
 #             so it can never be listed here; it differs per company.
-#   tier 4 -- the ABSENCE of a match. It is a rejection, not a bucket.
+#   rank 2 -- provider discovery (ZoomInfo/Apollo/Lusha people search). STAMPED by the
+#             discovery adapter, never matched by host -- `_tier_of` can never mint rank 2
+#             from a URL, because no host is ever listed at rank 2 in this file.
+#   rank 3 -- LinkedIn, listed below.
+#   rank 4 -- industry bodies and media, listed below.
+# The absence of a match on any of the above is a REJECTION (`_tier_of` returns
+# `(None, None)`), not a fifth bucket and not a fifth number.
 #
 # Matching is label-boundary, in `search_fallback._host_matches`: a host matches a listed
 # entry when it IS that entry or ends with `"." + entry`. So `au.linkedin.com` matches
@@ -27,21 +34,27 @@
 # is what that set decides) and IS a legitimate source of a person (which is what this
 # file decides). Two different questions about the same host, two correct answers.
 #
-# Tier 3 is admitted but NEVER sendable (D-5sd-05): an industry body or trade outlet
-# frequently names people historically -- a 2019 committee list, a race-day programme, an
-# archived media release -- so the person can be entirely real, the waterfall's
+# Ranks 3 AND 4 are admitted but NEVER sendable (D-01, extending D-5sd-05): an industry
+# body, trade outlet, or self-maintained LinkedIn profile can each name a person
+# historically -- a 2019 committee list, a race-day programme, an archived media release,
+# a profile nobody has updated -- so the person can be entirely real, the waterfall's
 # confirmation entirely successful, and the claim still stale. Those rows are collected,
 # ranked and shown, then held for the operator with the source URL in the reason.
+#
+# LinkedIn moved from sendable (rank 2) to held (rank 3) by operator ruling 2026-09-18
+# (D-01): a self-attested profile is current about the person, but says nothing about
+# THIS company's own record of them, which is exactly the claim provider discovery (the
+# new rank 2) makes instead.
 
-version: "lv-source-allowlist-v1"
+version: "lv-source-allowlist-v2"
 
 tiers:
-  - tier: 2
+  - tier: 3
     label: "LinkedIn"
     hosts:
       - linkedin.com          # Self-attested and current: a person maintains their own role there.
 
-  - tier: 3
+  - tier: 4
     label: "Racing/sport industry bodies and industry media"
     hosts:
       # Principal racing authorities and national codes.

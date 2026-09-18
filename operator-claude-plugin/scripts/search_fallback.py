@@ -55,11 +55,14 @@ MAX_FALLBACK_SEARCHES = 3
 SEARCH_INPUT = "suggest_contacts_web_search"
 LADDER_INPUT = "suggest_contacts_ladder"
 
-# D-5sd-05: "strong source" stops at tier 2. Tier 1 is the company's own host and tier 2
-# is LinkedIn -- both self-attested and current in a way a third-party mention is not.
+# D-01 (operator ruling 2026-09-18, extending D-5sd-05): "strong source" stops at rank 2.
+# Rank 1 is the company's own host and rank 2 is now provider discovery (ZoomInfo/Apollo/
+# Lusha people search) -- both first-party or provider-attested in a way a third-party
+# mention is not. LinkedIn moved OFF this tuple to rank 3 (self-attested, but silent on
+# this company's own record of the person) -- it was tier 2 and sendable before D-01.
 STRONG_TIERS = (1, 2)
-KNOWN_TIERS = (1, 2, 3)
-LISTED_TIERS = (2, 3)
+KNOWN_TIERS = (1, 2, 3, 4)
+LISTED_TIERS = (3, 4)
 
 SOURCE_TIER_HOLD_CODE = "search_source_not_strong"
 
@@ -93,11 +96,13 @@ def load_sources(path=None):
     function; refusing a missing or unparseable file BY NAME; and validating the document
     rather than returning something half-formed.
 
-    The document is `{"version", "tiers": [{"tier", "label", "hosts"}, ...]}`. Only tiers
-    2 and 3 may be listed: tier 1 is COMPUTED from the company's own host and differs per
-    company, and tier 4 is the ABSENCE of a match. A host in two tiers is refused rather
-    than silently resolved in file order, because file order is not a ranking decision
-    anyone made.
+    The document is `{"version", "tiers": [{"tier", "label", "hosts"}, ...]}`. Only ranks
+    3 and 4 may be listed (D-01): rank 1 is COMPUTED from the company's own host and
+    differs per company, and rank 2 is STAMPED by the discovery adapter and never matched
+    by host -- listing it here would let `_tier_of` mint it from a matched URL, which
+    would spoof the adapter-only rank. A host in two tiers is refused rather than
+    silently resolved in file order, because file order is not a ranking decision anyone
+    made.
     """
     import yaml
 
@@ -132,8 +137,9 @@ def load_sources(path=None):
         if isinstance(tier, bool) or tier not in LISTED_TIERS:
             raise SourceAllowlistError(
                 f"Source allowlist at {allowlist_path} lists tier {tier!r}; only "
-                f"{list(LISTED_TIERS)} may be listed. Tier 1 is computed from the "
-                f"company's own host and tier 4 is the absence of a match."
+                f"{list(LISTED_TIERS)} may be listed. Rank 1 is computed from the "
+                f"company's own host and rank 2 is stamped by the discovery adapter, "
+                f"never matched by host."
             )
         if not isinstance(entry.get("label"), str) or not entry["label"].strip():
             raise SourceAllowlistError(
@@ -277,7 +283,8 @@ def _host_matches(host, listed):
 
     Deliberately NOT `url_fallback.same_host`: that is a FETCH guard on
     attacker-influenceable sitemap content and refuses subdomains outright, so a search
-    hit on the company's own `board.example.com` would fall to tier 4 and be thrown away.
+    hit on the company's own `board.example.com` would be REJECTED outright rather than
+    ranked -- `_tier_of` returns `(None, None)` for it, a rejection, not a numbered rank.
     This is a SOURCE-RANKING question -- whose claim to trust -- and a company's own
     subdomain is the company. Same direction and same suffix trap as
     `suggest_contacts.email_domain_relation`.
@@ -289,8 +296,8 @@ def _tier_of(host, company_host, sources):
     """`(tier, label)` for `host`, or `(None, None)` when it is on no tier.
 
     The company's own host is checked FIRST, so a company that also appears on the
-    tier-3 allowlist (a racing authority searching for its own people) ranks its own site
-    tier 1 rather than demoting it to a third-party mention of itself.
+    rank-4 allowlist (a racing authority searching for its own people) ranks its own site
+    rank 1 rather than demoting it to a third-party mention of itself.
     """
     if _host_matches(host, company_host):
         return 1, "the company's own host"
@@ -323,8 +330,12 @@ def rank_results(results, company_url, sources=None, already_searched=0):
     becomes the empty string and `_host_matches` returns False for an empty listed host
     (`bool(listed)` guards it), so no result can be ranked 1 and nothing substitutes
     upward -- no logic change was needed here, this paragraph just names the consequence.
-    Such a round is LinkedIn-or-held by construction: only tier 2 and tier 3 remain
-    reachable, and D-5sd-05 still holds tier 3.
+    Rank 2 (provider discovery) is ALSO unreachable through this function regardless of
+    `company_url`: it is stamped by the discovery adapter and never listed in the
+    allowlist, so `_tier_of` can never mint it from a matched host. Such a round is
+    therefore LinkedIn-or-industry-or-held by construction: only rank 3 (LinkedIn) and
+    rank 4 (the industry allowlist) remain reachable via a matched host, and D-01 holds
+    both.
     """
     if sources is None:
         sources = load_sources()

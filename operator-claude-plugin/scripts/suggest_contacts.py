@@ -489,7 +489,7 @@ def agreed_cap(chosen_cap, grant_figures):
     return chosen_cap
 
 
-SEARCH_SOURCE_TIERS = (1, 2, 3)
+SEARCH_SOURCE_TIERS = (1, 2, 3, 4)
 
 
 def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=None):
@@ -501,14 +501,18 @@ def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=N
     the company's homepage; it is the fallback locator for a person the walk never
     folded (the search-fallback branch, and any hand-built person dict).
 
-    `source_tier` (quick task 260904-5sd, D-5sd-01/D-5sd-05) is how a person found
-    through the web-search fallback declares WHERE they came from. Omitted -- which is
-    every existing call site -- the provenance key SET is byte-identical to what it has
+    `source_tier` (quick task 260904-5sd, D-5sd-01/D-5sd-05; renumbered by D-01, operator
+    ruling 2026-09-18) is how a person found through the web-search fallback OR the
+    provider discovery lane declares WHERE they came from. Omitted -- which is every
+    existing ladder call site -- the provenance key SET is byte-identical to what it has
     always been: `{"input": "suggest_contacts_ladder", "locator": ...}`, no extra key --
     only the locator VALUE now varies per person (260911-anw, above). Passed, it must be
     one of `SEARCH_SOURCE_TIERS`, and the provenance becomes `{"input":
-    "suggest_contacts_web_search", "locator": ..., "source_tier": N}`. An unknown value
-    REFUSES, in the same register `per_company_cap` already uses: a
+    "suggest_contacts_web_search", "locator": ..., "source_tier": N}`. Under the current
+    numbering, rank 2 is provider discovery (stamped by the discovery adapter, never
+    derived from a URL -- the allowlist lists no tier-2 host at all), rank 3 is LinkedIn
+    and rank 4 is the renamed industry/media rank `search_fallback.rank_results` returns.
+    An unknown value REFUSES, in the same register `per_company_cap` already uses: a
     silent downgrade to the ladder provenance would make a third-party claim read as
     self-attested and bypass `search_fallback.hold_weak_sources` entirely.
 

@@ -888,7 +888,7 @@ def test_synthesise_rows_with_a_source_tier_declares_the_search_input_and_the_ti
     }
 
 
-@pytest.mark.parametrize("bad_tier", [True, "2", 0, 4, 9, 1.0])
+@pytest.mark.parametrize("bad_tier", [True, "2", 0, 5, 9, 1.0])
 def test_an_unknown_source_tier_refuses_rather_than_downgrading_to_a_ladder_provenance(
         bad_tier):
     """A silent downgrade to the ladder provenance would bypass the D-5sd-05 gate

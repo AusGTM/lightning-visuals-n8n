@@ -412,7 +412,7 @@ def test_the_shipped_allowlist_parses_through_load_sources():
     sources = load_sources()
     assert sources["tiers"]
     tiers = {entry["tier"] for entry in sources["tiers"]}
-    assert tiers == {2, 3}
+    assert tiers == {3, 4}
 
 
 def test_the_shipped_allowlist_ships_inside_the_plugin_package():
@@ -434,10 +434,11 @@ def test_every_shipped_host_is_a_bare_lowercase_dotted_host_appearing_in_one_tie
             seen[host] = entry["tier"]
 
 
-def test_linkedin_is_the_whole_of_tier_two():
+def test_linkedin_is_the_whole_of_tier_three():
+    """D-01 (operator ruling 2026-09-18): LinkedIn moved from rank 2 to rank 3."""
     sources = load_sources()
-    [tier_two] = [entry for entry in sources["tiers"] if entry["tier"] == 2]
-    assert tier_two["hosts"] == ["linkedin.com"]
+    [tier_three] = [entry for entry in sources["tiers"] if entry["tier"] == 3]
+    assert tier_three["hosts"] == ["linkedin.com"]
 
 
 def test_a_missing_allowlist_raises_a_named_error_rather_than_an_empty_list(tmp_path):
@@ -462,8 +463,8 @@ def test_a_host_listed_in_two_tiers_is_refused(tmp_path):
     path.write_text(
         "version: x\n"
         "tiers:\n"
-        "  - tier: 2\n    label: LinkedIn\n    hosts: [linkedin.com]\n"
-        "  - tier: 3\n    label: Media\n    hosts: [linkedin.com]\n",
+        "  - tier: 3\n    label: LinkedIn\n    hosts: [linkedin.com]\n"
+        "  - tier: 4\n    label: Media\n    hosts: [linkedin.com]\n",
         encoding="utf-8",
     )
     with pytest.raises(SourceAllowlistError) as excinfo:
@@ -471,10 +472,10 @@ def test_a_host_listed_in_two_tiers_is_refused(tmp_path):
     assert "linkedin.com" in str(excinfo.value)
 
 
-def test_a_tier_outside_two_and_three_is_refused(tmp_path):
-    """Tier 1 is COMPUTED from the company's own host and is never listed; tier 4 is the
-    ABSENCE of a match. A file that lists either is describing something this ranker does
-    not implement."""
+def test_a_tier_outside_three_and_four_is_refused(tmp_path):
+    """Rank 1 is COMPUTED from the company's own host and is never listed; rank 2 is
+    STAMPED by the discovery adapter and never matched by host. A file that lists either
+    is describing something this ranker does not implement (D-01)."""
     path = tmp_path / "tier1.yaml"
     path.write_text(
         "version: x\ntiers:\n  - tier: 1\n    label: Own host\n    hosts: [example.com]\n",
@@ -656,7 +657,7 @@ def test_the_cli_ranks_results_against_the_shipped_allowlist(tmp_path):
     )
     assert returncode == 0
     assert parsed["ok"] is True
-    assert [entry["tier"] for entry in parsed["accepted"]] == [1, 2]
+    assert [entry["tier"] for entry in parsed["accepted"]] == [1, 3]
     assert len(parsed["rejected"]) == 1
     assert "random-blog.example" in parsed["rejected"][0]["reason"]
 
@@ -719,7 +720,7 @@ def test_the_cli_no_ladder_rank_flag_succeeds_without_a_company_url(tmp_path):
     )
     assert returncode == 0
     assert parsed["ok"] is True
-    assert [entry["tier"] for entry in parsed["accepted"]] == [2]
+    assert [entry["tier"] for entry in parsed["accepted"]] == [3]
 
 
 def test_the_cli_rank_without_no_ladder_still_requires_company_url(tmp_path):
