@@ -403,6 +403,17 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    list or a cap; both are the same round-level `chosen_families`/`per_company_cap`
    already resolved above.
 
+   **The search itself is ZoomInfo only (D-12, operator ruling 2026-09-18).** ZoomInfo
+   is retained as the second-source provider; Apollo and Lusha are dropped for the
+   search phase, and the full waterfall is used only on enrich. A live probe
+   (73.1-D12-VERDICT.json) found why:
+   Apollo's search preview obfuscates the last name (`last_name_obfuscated`, never a
+   real surname), and Lusha's preview carries no name or title at all — a name needs a
+   second, paid `/enrich` call this lane does not make, and costs 1 credit per request
+   even on a zero-result round. ZoomInfo's preview alone carries a real name and title,
+   measured at 0 credits. Stage 2 below still enriches through the full
+   ZoomInfo → Apollo → Lusha waterfall, unchanged — this narrowing is search-only.
+
    Mint ONE run id for the whole round — `run_state.new_run_id()`, the sole existing
    mint point, never a fresh ad hoc id — and send ONE POST for the whole gap set through
    `suggest_discovery.fetch_discovery`, carrying EVERY eligible company (gap and
