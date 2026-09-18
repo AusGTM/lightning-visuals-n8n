@@ -117,6 +117,16 @@ with no `webhook_secret` still answers the backend status check, and over-refusi
 what PLUGIN-03 forbids. (Since D-70-10 a config with no `n8n_api_key` cannot upload
 contacts either — every send-capable lane needs it — so name that consequence plainly.)
 
+One of those optional settings is `hubspot_portal_id` (D-14c/D-14a). This check is
+network-free (this whole skill never makes a live call), so what you relay here is only
+whether the guard is ARMED — `hubspot_portal_id` is set — never the live comparison
+result, which needs a backend call and belongs to `/operator-claude-plugin:backend-status`.
+Setting it turns on a comparison against the n8n credential's own portal, read live by
+the backend. **This proves the n8n credential's portal only** — it is never a substitute
+for an outside HubSpot tool (the claude.ai connector, an MCP HubSpot server, the `hs`
+CLI) proving itself by its own lookup, which the portal rule above still requires every
+time.
+
 ## Step 3 — confirm
 
 When they say they have filled it in, run step 1 again. Report the result. If a value is

@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { walkWorkflow, starvedWithData } from "./lib/walkWorkflow.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WORKFLOW_PATH = path.join(ROOT, "n8n/wf_backend_status_cloud.json");
@@ -179,4 +180,82 @@ test("Build Credit Status: no emitted per-provider value carries any key beyond 
     assert.deepEqual(Object.keys(b).sort(), EXPECTED_KEYS, `unexpected keys on ${b.provider}`);
     assert.equal(JSON.stringify(b).indexOf("secret-account-id"), -1, "raw provider body must never leak");
   }
+});
+
+// --- 73.1-06 (D-14c/D-14a): "Build Status" -- the portalId field ----------------------
+//
+// A DIFFERENT node's jsCode than the rest of this file (`Build Status`, not `Build
+// Credit Status`) -- same `new Function` execution idiom, a minimal merged-item shape
+// covering only what this node itself reads (counts/health inputs default to absent,
+// which every earlier test in this file already proves degrades safely).
+
+function runBuildStatus(jsCode, merged) {
+  const $input = { first: () => ({ json: merged }) };
+  const $now = new Date("2026-09-18T00:00:00Z");
+  const fn = new Function("$input", "$json", "$node", "$now", "$today",
+    `"use strict";\n${jsCode}`);
+  const out = fn($input, undefined, {}, $now, $now) || [];
+  return (out[0] && out[0].json) || {};
+}
+
+test("Test 1: the backend-status response body carries a portalId field", () => {
+  const jsCode = loadJsCode("Build Status");
+  const body = runBuildStatus(jsCode, { hs_account_info_result: { portalId: 22617666 } });
+  assert.ok(Object.prototype.hasOwnProperty.call(body, "portalId"), "portalId key must be present");
+  assert.equal(body.portalId, 22617666);
+});
+
+test("Test 2: the account-info probe node uses onError: continueRegularOutput like every other probe on this chain", () => {
+  const wf = JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
+  const node = wf.nodes.find((n) => n.name === "HubSpot Account Info");
+  assert.ok(node, "HubSpot Account Info node must exist");
+  assert.equal(node.onError, "continueRegularOutput",
+    "a failing probe must pass an error item along the same single chain instead of stopping it");
+});
+
+test("Test 3: when the probe fails, portalId is present and null-valued, never absent", () => {
+  const jsCode = loadJsCode("Build Status");
+  // onError: continueRegularOutput puts a failed HTTP call's error shape INTO the item
+  // (the same mechanism every other probe on this chain relies on) -- never throws.
+  const failedShapes = [
+    { hs_account_info_result: { error: "FORBIDDEN", statusCode: 403 } },
+    { hs_account_info_result: { status: "error", message: "boom" } },
+    {}, // the probe node itself never ran at all
+  ];
+  for (const merged of failedShapes) {
+    const body = runBuildStatus(jsCode, merged);
+    assert.ok(Object.prototype.hasOwnProperty.call(body, "portalId"),
+      `portalId key must be present even on failure: ${JSON.stringify(merged)}`);
+    assert.equal(body.portalId, null,
+      `a failed/absent probe must report null, never a stale or guessed id: ${JSON.stringify(merged)}`);
+  }
+});
+
+// --- Test 7 (walker): the regenerated wf_backend_status_cloud.json walks clean under v1 ---
+
+test("Test 7: the regenerated wf_backend_status_cloud.json walks clean under v1 with the new node in the chain, and its Merge input contract holds", () => {
+  const wf = JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
+  assert.equal(wf.settings.executionOrder, "v1");
+  const { trace } = walkWorkflow(wf, {
+    triggerNode: "Status Webhook Trigger",
+    triggerItems: [{}],
+    httpStubs: {
+      "Lusha Usage": [{ credits: { total: 100, used: 10, remaining: 90 } }],
+      "Apollo Usage": [{ error: "API_INACCESSIBLE", message: "not authorized", statusCode: 403 }],
+      "ZoomInfo Usage Mint": [{ access_token: "tok", expires_in: 3600 }],
+      "HS Requested Search (Companies)": [{ total: 1, results: [] }],
+      "HS Review Search (Companies)": [{ total: 0, results: [] }],
+      "HS Requested Search (Contacts)": [{ total: 2, results: [] }],
+      "HS Review Search (Contacts)": [{ total: 0, results: [] }],
+      "HubSpot Account Info": [{ portalId: 22617666 }],
+    },
+    codeStubs: {
+      "ZoomInfo Usage": (items) => items.map(() => ({
+        data: [{ attributes: { usage: [
+          { limitType: "uniqueIdLimit", usageRemaining: 500, totalLimit: 1000 },
+        ] } }],
+      })),
+    },
+  });
+  assert.deepEqual(starvedWithData(trace), [], "no Merge on this straight-line chain may stall");
 });

@@ -11,7 +11,7 @@
   "_burn_rate_alarm_threshold_note": "The burn-rate alarm fires when the sampled execution rate, projected over 30 days, exceeds n8n_monthly_execution_allowance times this value. 1.0 is the default ceiling — the idle floor is roughly 4% of a 2,500/month plan, so any real anomaly clears it by an order of magnitude.",
   "dashboard_artifact_ttl_days": 30,
   "column_mapping_path": null,
-  "hubspot_portal_id": "<optional — your HubSpot portal id, used only to build a clickable record link in the review queue; without it the queue shows the raw record id>",
+  "hubspot_portal_id": "<optional — your HubSpot portal id. Two uses: (1) builds a clickable record link in the review queue, without it the queue shows the raw record id; (2) 73.1-06/D-14c — setting it turns ON a portal guard that compares it against the backend's own reported portal (the n8n credential's portal, read live by wf_backend_status_cloud's HubSpot Account Info probe) on every initialize/backend-status run. Leave unset and the guard simply does not run — it proves only the n8n credential's own portal, never an outside HubSpot tool's, which must always prove itself by its own lookup.>",
   "field_policy_path": null,
 
   "allow_write_grants": false,

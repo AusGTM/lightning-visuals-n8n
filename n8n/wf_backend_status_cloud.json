@@ -354,25 +354,31 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "return $input.all().map((it) => ({ json: { 'zoominfo_result': it.json } }));\n"
+        "method": "GET",
+        "url": "https://api.hubapi.com/account-info/v3/details",
+        "options": {
+          "timeout": 20000
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "c00210000-0000-4000-8000-000000000000",
-      "name": "Wrap ZoomInfo Usage Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "h00210000-0000-4000-8000-000000000000",
+      "name": "HubSpot Account Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        2860,
+        3080,
         300
-      ]
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/backendStatus.js \u2014 pure-JS null-safe extraction and credential-health\n// derivation for the `hubspot/backend-status` endpoint's full-health slice (Phase 27).\n//\n// Mirrors providerSelection.js exactly: no n8n globals, no require() of siblings, every\n// exported function total and non-throwing. Inlined into Code nodes via the builder's\n// inline() (Code nodes cannot require() siblings).\n//\n// extractSearchTotal(raw)\n//   -> number | null\n//   Reads a HubSpot CRM v3 search response's `.total` field. Every shape mismatch\n//   (non-object, missing field, non-numeric, boolean) yields null \u2014 a genuine numeric\n//   zero is the ONLY input that returns 0 (D-08: unknown is never zero).\n//\n// deriveSourceHealth(probe)\n//   -> { state: \"ok\" | \"refused\" | \"unknown\", status: number|null, reason: string|null }\n//   `probe` is `{configured, status, value}` for one credential-bearing source. A non-2xx\n//   status can NEVER produce \"ok\" (T-27-04); an unconfigured/unreachable source produces\n//   \"unknown\", distinct from \"refused\" (D-08 \u2014 an absent credential is not a refusal).\n//\n// buildStatusBody(parts)\n//   -> { counts: {...}, credential_health: [...], checked_at }\n//   Assembles the response, preserving `null` counts as JSON null (STATUS-06) \u2014 never 0,\n//   never an omitted key. Never throws; every malformed branch degrades to unknown/null.\n\nfunction extractSearchTotal(raw) {\n  if (!raw || typeof raw !== \"object\" || Array.isArray(raw)) return null;\n  const total = raw.total;\n  if (typeof total !== \"number\" || !Number.isFinite(total)) return null;\n  return total;\n}\n\nfunction deriveSourceHealth(probe) {\n  const p = probe && typeof probe === \"object\" ? probe : {};\n  const configured = p.configured === true;\n  const status = typeof p.status === \"number\" && Number.isFinite(p.status) ? p.status : null;\n\n  if (!configured) {\n    // No credential to probe with at all \u2014 cannot-tell, never \"refused\" (D-08).\n    return { state: \"unknown\", status: null, reason: \"not_configured\" };\n  }\n  if (status === null) {\n    // Configured but no usable status came back (timeout, not executed, malformed shape).\n    return { state: \"unknown\", status: null, reason: \"no_response\" };\n  }\n  if (status >= 200 && status < 300) {\n    if (p.value === null || p.value === undefined) {\n      // A 2xx with no usable value is still a \"can't tell,\" never a false \"ok\".\n      return { state: \"unknown\", status, reason: \"unrecognized_response_shape\" };\n    }\n    return { state: \"ok\", status, reason: null };\n  }\n  // Any non-2xx (401/403/429/5xx/...) is reachable-but-refused \u2014 never \"ok\".\n  return { state: \"refused\", status, reason: \"http_\" + status };\n}\n\nfunction buildStatusBody(parts) {\n  const safe = parts && typeof parts === \"object\" && parts !== null ? parts : {};\n  const counts = safe.counts && typeof safe.counts === \"object\" ? safe.counts : {};\n  const health = Array.isArray(safe.health) ? safe.health : [];\n\n  const normCount = (v) => (typeof v === \"number\" && Number.isFinite(v) ? v : null);\n\n  return {\n    counts: {\n      companies_requested_unresolved: normCount(counts.companies_requested_unresolved),\n      companies_awaiting_review: normCount(counts.companies_awaiting_review),\n      contacts_requested_unresolved: normCount(counts.contacts_requested_unresolved),\n      contacts_awaiting_review: normCount(counts.contacts_awaiting_review),\n    },\n    credential_health: health.map((h) => {\n      const entry = h && typeof h === \"object\" ? h : {};\n      const state = entry.state === \"ok\" || entry.state === \"refused\" ? entry.state : \"unknown\";\n      return {\n        source: typeof entry.source === \"string\" ? entry.source : \"unknown\",\n        state,\n        status: typeof entry.status === \"number\" ? entry.status : null,\n        reason: typeof entry.reason === \"string\" ? entry.reason : null,\n      };\n    }),\n    checked_at: typeof safe.checked_at === \"string\" ? safe.checked_at : new Date().toISOString(),\n  };\n}\n\n// --- n8n wrapper: Build Status (Phase 27 Plan 01) ---\n// Phase 70 Plan 04 (D-70-04): fed by \"HS Review Contacts Carry Merge\" \u2014 the merged item\n// carries `balances`/`checked_at` (from \"Build Credit Status\", never wrapped since it\n// seeded this leg of the chain rather than being a hop across it), three nested\n// `hs_*_result` search responses (wrapped by earlier hops in this straight-line chain),\n// and the LAST search's raw response unwrapped at top level. No by-name read.\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\n// A search node's own probe outcome IS its credential-health signal (Pitfall 1) \u2014\n// independent of whether any enrichment run happened recently.\nfunction searchProbe(raw) {\n  if (!raw) return { configured: true, status: null, value: null };\n  if (raw.error) return { configured: true, status: httpStatus(raw), value: null };\n  return { configured: true, status: 200, value: extractSearchTotal(raw) };\n}\n\nconst merged = ($input.first() && $input.first().json) || {};\nconst balances = Array.isArray(merged.balances) ? merged.balances : [];\nconst balanceByProvider = {};\nfor (const b of balances) balanceByProvider[b.provider] = b;\n\nconst companiesRequested = searchProbe(merged.hs_requested_companies_result);\nconst companiesReview = searchProbe(merged.hs_review_companies_result);\nconst contactsRequested = searchProbe(merged.hs_requested_contacts_result);\nconst contactsReview = searchProbe(merged);\n\nconst health = [\"lusha\", \"apollo\", \"zoominfo\"].map((provider) => {\n  const b = balanceByProvider[provider] || {};\n  return { source: provider,\n    ...deriveSourceHealth({ configured: b.configured === true, status: b.status, value: b.credits }) };\n});\n// HubSpot's own credential health: the requested-companies probe is the canonical\n// signal \u2014 same credential as all four searches, so a refusal there IS the HubSpot\n// credential-health finding (D-08).\nhealth.push({ source: \"hubspot\", ...deriveSourceHealth(companiesRequested) });\n\nconst body = buildStatusBody({\n  counts: {\n    companies_requested_unresolved: companiesRequested.value,\n    companies_awaiting_review: companiesReview.value,\n    contacts_requested_unresolved: contactsRequested.value,\n    contacts_awaiting_review: contactsReview.value,\n  },\n  health,\n  checked_at: merged.checked_at,\n});\n\nreturn [{ json: { ...body, balances } }];\n"
+        "jsCode": "return $input.all().map((it) => ({ json: { 'hs_account_info_result': it.json } }));\n"
       },
       "id": "c00220000-0000-4000-8000-000000000000",
-      "name": "Build Status",
+      "name": "Wrap HubSpot Account Info Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -382,15 +388,43 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'zoominfo_result': it.json } }));\n"
+      },
+      "id": "c00230000-0000-4000-8000-000000000000",
+      "name": "Wrap ZoomInfo Usage Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/backendStatus.js \u2014 pure-JS null-safe extraction and credential-health\n// derivation for the `hubspot/backend-status` endpoint's full-health slice (Phase 27).\n//\n// Mirrors providerSelection.js exactly: no n8n globals, no require() of siblings, every\n// exported function total and non-throwing. Inlined into Code nodes via the builder's\n// inline() (Code nodes cannot require() siblings).\n//\n// extractSearchTotal(raw)\n//   -> number | null\n//   Reads a HubSpot CRM v3 search response's `.total` field. Every shape mismatch\n//   (non-object, missing field, non-numeric, boolean) yields null \u2014 a genuine numeric\n//   zero is the ONLY input that returns 0 (D-08: unknown is never zero).\n//\n// deriveSourceHealth(probe)\n//   -> { state: \"ok\" | \"refused\" | \"unknown\", status: number|null, reason: string|null }\n//   `probe` is `{configured, status, value}` for one credential-bearing source. A non-2xx\n//   status can NEVER produce \"ok\" (T-27-04); an unconfigured/unreachable source produces\n//   \"unknown\", distinct from \"refused\" (D-08 \u2014 an absent credential is not a refusal).\n//\n// buildStatusBody(parts)\n//   -> { counts: {...}, credential_health: [...], checked_at }\n//   Assembles the response, preserving `null` counts as JSON null (STATUS-06) \u2014 never 0,\n//   never an omitted key. Never throws; every malformed branch degrades to unknown/null.\n\nfunction extractSearchTotal(raw) {\n  if (!raw || typeof raw !== \"object\" || Array.isArray(raw)) return null;\n  const total = raw.total;\n  if (typeof total !== \"number\" || !Number.isFinite(total)) return null;\n  return total;\n}\n\nfunction deriveSourceHealth(probe) {\n  const p = probe && typeof probe === \"object\" ? probe : {};\n  const configured = p.configured === true;\n  const status = typeof p.status === \"number\" && Number.isFinite(p.status) ? p.status : null;\n\n  if (!configured) {\n    // No credential to probe with at all \u2014 cannot-tell, never \"refused\" (D-08).\n    return { state: \"unknown\", status: null, reason: \"not_configured\" };\n  }\n  if (status === null) {\n    // Configured but no usable status came back (timeout, not executed, malformed shape).\n    return { state: \"unknown\", status: null, reason: \"no_response\" };\n  }\n  if (status >= 200 && status < 300) {\n    if (p.value === null || p.value === undefined) {\n      // A 2xx with no usable value is still a \"can't tell,\" never a false \"ok\".\n      return { state: \"unknown\", status, reason: \"unrecognized_response_shape\" };\n    }\n    return { state: \"ok\", status, reason: null };\n  }\n  // Any non-2xx (401/403/429/5xx/...) is reachable-but-refused \u2014 never \"ok\".\n  return { state: \"refused\", status, reason: \"http_\" + status };\n}\n\nfunction buildStatusBody(parts) {\n  const safe = parts && typeof parts === \"object\" && parts !== null ? parts : {};\n  const counts = safe.counts && typeof safe.counts === \"object\" ? safe.counts : {};\n  const health = Array.isArray(safe.health) ? safe.health : [];\n\n  const normCount = (v) => (typeof v === \"number\" && Number.isFinite(v) ? v : null);\n\n  return {\n    counts: {\n      companies_requested_unresolved: normCount(counts.companies_requested_unresolved),\n      companies_awaiting_review: normCount(counts.companies_awaiting_review),\n      contacts_requested_unresolved: normCount(counts.contacts_requested_unresolved),\n      contacts_awaiting_review: normCount(counts.contacts_awaiting_review),\n    },\n    credential_health: health.map((h) => {\n      const entry = h && typeof h === \"object\" ? h : {};\n      const state = entry.state === \"ok\" || entry.state === \"refused\" ? entry.state : \"unknown\";\n      return {\n        source: typeof entry.source === \"string\" ? entry.source : \"unknown\",\n        state,\n        status: typeof entry.status === \"number\" ? entry.status : null,\n        reason: typeof entry.reason === \"string\" ? entry.reason : null,\n      };\n    }),\n    checked_at: typeof safe.checked_at === \"string\" ? safe.checked_at : new Date().toISOString(),\n  };\n}\n\n// --- n8n wrapper: Build Status (Phase 27 Plan 01) ---\n// Phase 70 Plan 04 (D-70-04): fed by \"HubSpot Account Info Carry Merge\" (73.1-06 added\n// this hop after \"HS Review Contacts Carry Merge\") \u2014 the merged item carries\n// `balances`/`checked_at` (from \"Build Credit Status\", never wrapped since it seeded\n// this leg of the chain rather than being a hop across it), three nested `hs_*_result`\n// search responses (wrapped by earlier hops in this straight-line chain), the\n// requested-review-contacts search's raw response unwrapped at top level, and (73.1-06)\n// `hs_account_info_result`, the account-info probe's own wrapped response. No by-name\n// read.\n// 73.1-06 (D-14c): `portalId` is a top-level field on the final body, never omitted \u2014\n// the id when the probe succeeded, `null` when it did not (a failed probe and an\n// absent key must not read the same to the plugin). Read from `hs_account_info_result`\n// only; never treated as a HubSpot-credential-health signal the way the other four\n// probes are (this endpoint answers \"which portal\", not \"is this credential healthy\" \u2014\n// D-14a's own boundary: this proves the n8n credential's portal only, nothing else).\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\n// A search node's own probe outcome IS its credential-health signal (Pitfall 1) \u2014\n// independent of whether any enrichment run happened recently.\nfunction searchProbe(raw) {\n  if (!raw) return { configured: true, status: null, value: null };\n  if (raw.error) return { configured: true, status: httpStatus(raw), value: null };\n  return { configured: true, status: 200, value: extractSearchTotal(raw) };\n}\n\nconst merged = ($input.first() && $input.first().json) || {};\nconst balances = Array.isArray(merged.balances) ? merged.balances : [];\nconst balanceByProvider = {};\nfor (const b of balances) balanceByProvider[b.provider] = b;\n\nconst companiesRequested = searchProbe(merged.hs_requested_companies_result);\nconst companiesReview = searchProbe(merged.hs_review_companies_result);\nconst contactsRequested = searchProbe(merged.hs_requested_contacts_result);\nconst contactsReview = searchProbe(merged);\n\nconst health = [\"lusha\", \"apollo\", \"zoominfo\"].map((provider) => {\n  const b = balanceByProvider[provider] || {};\n  return { source: provider,\n    ...deriveSourceHealth({ configured: b.configured === true, status: b.status, value: b.credits }) };\n});\n// HubSpot's own credential health: the requested-companies probe is the canonical\n// signal \u2014 same credential as all four searches, so a refusal there IS the HubSpot\n// credential-health finding (D-08).\nhealth.push({ source: \"hubspot\", ...deriveSourceHealth(companiesRequested) });\n\nconst body = buildStatusBody({\n  counts: {\n    companies_requested_unresolved: companiesRequested.value,\n    companies_awaiting_review: companiesReview.value,\n    contacts_requested_unresolved: contactsRequested.value,\n    contacts_awaiting_review: contactsReview.value,\n  },\n  health,\n  checked_at: merged.checked_at,\n});\n\n// 73.1-06 (D-14c): never omit the key -- an absent key and an unknown portal must not\n// read the same to the plugin.\nconst accountInfo = merged.hs_account_info_result;\nconst portalId = (accountInfo && !accountInfo.error && accountInfo.status !== \"error\"\n                  && accountInfo.portalId != null) ? accountInfo.portalId : null;\n\nreturn [{ json: { ...body, balances, portalId } }];\n"
+      },
+      "id": "c00240000-0000-4000-8000-000000000000",
+      "name": "Build Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "respondWith": "allIncomingItems",
         "options": {}
       },
-      "id": "rw00230000-0000-4000-8000-000000000000",
+      "id": "rw00250000-0000-4000-8000-000000000000",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        3300,
+        3520,
         300
       ]
     },
@@ -407,7 +441,7 @@
           }
         }
       },
-      "id": "m00240000-0000-4000-8000-000000000000",
+      "id": "m00260000-0000-4000-8000-000000000000",
       "name": "Lusha Usage Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -429,7 +463,7 @@
           }
         }
       },
-      "id": "m00250000-0000-4000-8000-000000000000",
+      "id": "m00270000-0000-4000-8000-000000000000",
       "name": "Apollo Usage Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -451,12 +485,12 @@
           }
         }
       },
-      "id": "m00260000-0000-4000-8000-000000000000",
+      "id": "m00280000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Usage Result Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        2970,
+        3190,
         300
       ]
     },
@@ -473,7 +507,7 @@
           }
         }
       },
-      "id": "m00270000-0000-4000-8000-000000000000",
+      "id": "m00290000-0000-4000-8000-000000000000",
       "name": "HS Requested Companies Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -495,7 +529,7 @@
           }
         }
       },
-      "id": "m00280000-0000-4000-8000-000000000000",
+      "id": "m00300000-0000-4000-8000-000000000000",
       "name": "HS Review Companies Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -517,7 +551,7 @@
           }
         }
       },
-      "id": "m00290000-0000-4000-8000-000000000000",
+      "id": "m00310000-0000-4000-8000-000000000000",
       "name": "HS Requested Contacts Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -539,7 +573,7 @@
           }
         }
       },
-      "id": "m00300000-0000-4000-8000-000000000000",
+      "id": "m00320000-0000-4000-8000-000000000000",
       "name": "HS Review Contacts Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -550,16 +584,38 @@
     },
     {
       "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00330000-0000-4000-8000-000000000000",
+      "name": "HubSpot Account Info Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3190,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "content": "## LV Backend Status \u2014 full health (Phase 25 Plan 02 + Phase 27 Plan 01, D-14)\n`hubspot/backend-status`: three provider usage probes, then four HubSpot count searches, all run SEQUENTIALLY (never fanned out) so every probe \u2014 provider AND HubSpot alike \u2014 has completed before the single `Respond to Webhook` fires.\n\nAn unreadable balance (Apollo's non-master key 403s by design on this account) renders as an explicit `unreadable: true` / `credits: null` marker, never as zero (D-10/D-08). The two HubSpot counts (requested-unresolved, awaiting-review) are reported for companies AND contacts; a count the backend could not read is `null`, never `0` (STATUS-06). Reads only \u2014 zero write nodes anywhere in this chain.\n\n**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` credential the enrichment trigger uses \u2014 one operator secret works against both endpoints with no new provisioning.",
         "height": 320,
         "width": 520
       },
-      "id": "s00310000-0000-4000-8000-000000000000",
+      "id": "s00340000-0000-4000-8000-000000000000",
       "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3300,
+        3520,
         560
       ]
     }
@@ -796,6 +852,28 @@
         ]
       ]
     },
+    "HubSpot Account Info": {
+      "main": [
+        [
+          {
+            "node": "Wrap HubSpot Account Info Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap HubSpot Account Info Result": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Account Info Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Build Status": {
       "main": [
         [
@@ -905,6 +983,22 @@
       ]
     },
     "HS Review Contacts Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Account Info",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Account Info Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HubSpot Account Info Carry Merge": {
       "main": [
         [
           {

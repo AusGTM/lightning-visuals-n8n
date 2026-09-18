@@ -267,6 +267,45 @@ def describe_target(cfg: dict) -> str:
     return f"{cfg['n8n_url'].rstrip('/')}/{WEBHOOK_PATH}"
 
 
+# 73.1-06 (D-14c/D-14a). Pure comparison -- never fetches anything itself, never raises.
+# `hubspot_portal_id` stays OPTIONAL in operator.local.json: the guard runs only when
+# the operator set it. Proves ONLY the n8n CREDENTIAL's own portal -- an outside
+# HubSpot tool must never be allowed to trust this answer; it still proves itself by
+# its own lookup (D-14a).
+PORTAL_NOT_CHECKED = "not-checked"
+PORTAL_UNKNOWN = "unknown"
+PORTAL_MATCHED = "matched"
+PORTAL_MISMATCHED = "mismatched"
+
+
+def compare_portal(cfg: dict, backend_portal_id) -> dict:
+    """Compares `cfg["hubspot_portal_id"]` (operator-set, optional) against the
+    backend's own reported `portalId` (from wf_backend_status_cloud's `HubSpot Account
+    Info` probe, D-14c). Three verdicts, never a fourth:
+
+    - not-checked: `hubspot_portal_id` is unset -- the guard did not run at all.
+    - unknown: the operator set a value, but the backend's own portalId came back null
+      (the probe failed or never ran) -- never read as a match or a mismatch.
+    - matched / mismatched: both ids are present; mismatched names BOTH ids.
+    """
+    configured = (cfg or {}).get("hubspot_portal_id")
+    if not configured:
+        return {"verdict": PORTAL_NOT_CHECKED,
+                "message": "hubspot_portal_id is not set — the portal guard did not run."}
+    if backend_portal_id is None:
+        return {"verdict": PORTAL_UNKNOWN,
+                "message": "the backend could not report its own portal (probe failed or "
+                           "never ran) — this proves nothing about hubspot_portal_id "
+                           f"{configured!r}."}
+    if str(configured) == str(backend_portal_id):
+        return {"verdict": PORTAL_MATCHED,
+                "message": f"configured hubspot_portal_id {configured!r} matches the n8n "
+                           "credential's own portal."}
+    return {"verdict": PORTAL_MISMATCHED,
+            "message": f"configured hubspot_portal_id {configured!r} does not match the "
+                       f"n8n credential's own portal {backend_portal_id!r}."}
+
+
 if __name__ == "__main__":
     # The contact-upload lane's preflight. It reports SEND-READINESS rather than refusing:
     # previewing needs no secret and is genuinely useful without one (the same reasoning

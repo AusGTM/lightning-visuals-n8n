@@ -56,6 +56,18 @@ REPORTABLE_SETTINGS = {
         "letting an operator open a write grant (live HubSpot writes for a named batch)",
         config_gate.write_grants_enabled,
     ),
+    # 73.1-06 (D-14c/D-14a). This is network-free by design (this whole script's own
+    # docstring) — "enabled" here means the guard is ARMED (hubspot_portal_id is set),
+    # never the live comparison result itself, which needs a backend call and belongs
+    # to /operator-claude-plugin:backend-status. Proves ONLY the n8n credential's own
+    # portal, never an outside HubSpot tool's — that tool proves itself by its own
+    # lookup (D-14a) and must never be allowed to trust this answer.
+    "hubspot_portal_id": (
+        "comparing your configured HubSpot portal id against the n8n credential's own "
+        "portal, read live via backend-status — proves the n8n credential's portal "
+        "only, never an outside HubSpot tool's",
+        lambda cfg: bool((cfg or {}).get("hubspot_portal_id")),
+    ),
 }
 
 STATUS_READY = "ready"

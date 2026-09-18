@@ -70,12 +70,14 @@ test("the review responder's inbound edge count is unchanged from before this ta
   assert.deepEqual(inbound, ["Build Review Response"]);
 });
 
-test("backend-status has 7 carry-merge nodes (Phase 70 Plan 04, D-70-04)", () => {
+test("backend-status has 8 carry-merge nodes (Phase 70 Plan 04, D-70-04; 73.1-06, D-14c)", () => {
   // Was zero at Plan 03 Task 3 time; Plan 04 threaded a carry merge across every HTTP
   // hop in this workflow's two straight-line chains (credit probes, HubSpot counts).
+  // 73.1-06 (D-14c) adds an EIGHTH: "HubSpot Account Info Carry Merge", joining the
+  // new portal-proof probe onto the same straight-line HubSpot-counts chain.
   const wf = loadWorkflow(path.join(ROOT, "n8n", "wf_backend_status_cloud.json"));
   const merges = wf.nodes.filter((n) => n.type === "n8n-nodes-base.merge");
-  assert.equal(merges.length, 7);
+  assert.equal(merges.length, 8);
 });
 
 // =============================================================================================

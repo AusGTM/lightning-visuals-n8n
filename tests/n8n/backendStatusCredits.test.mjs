@@ -32,6 +32,8 @@ function httpStubs() {
     "HS Review Search (Companies)": [{ total: 2, results: [] }],
     "HS Requested Search (Contacts)": [{ total: 11, results: [] }],
     "HS Review Search (Contacts)": [{ total: 3, results: [] }],
+    // 73.1-06 (D-14c): the portal-proof probe joining this same chain.
+    "HubSpot Account Info": [{ portalId: 22617666 }],
   };
 }
 

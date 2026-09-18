@@ -83,11 +83,19 @@ def render_backend_status(result) -> dict:
             "credential_health": [],
             "balances": [],
             "checked_at": UNKNOWN,
+            # 73.1-06 (D-14c): an unreachable backend can prove nothing about its
+            # portal either -- raw None, never coerced through render() (config_gate.
+            # compare_portal needs the real id/None distinction, not the word
+            # "unknown").
+            "portal_id": None,
         }
 
     counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
     health = data.get("credential_health") if isinstance(data.get("credential_health"), list) else []
     balances = data.get("balances") if isinstance(data.get("balances"), list) else []
+    portal_id = data.get("portalId")
+    if not isinstance(portal_id, (int, str)):
+        portal_id = None
 
     return {
         "available": True,
@@ -102,6 +110,9 @@ def render_backend_status(result) -> dict:
             for balance in balances
         ],
         "checked_at": render(data.get("checked_at")),
+        # 73.1-06 (D-14c): raw, un-rendered -- the n8n credential's own portal, as
+        # reported live by wf_backend_status_cloud's HubSpot Account Info probe.
+        "portal_id": portal_id,
     }
 
 
@@ -183,14 +194,22 @@ def describe_all(config: dict, transport=requests.get, now=None) -> dict:
     return {"readable": True, "workflows": described}
 
 
+def _with_portal_check(config: dict, backend: dict) -> dict:
+    """73.1-06 (D-14c/D-14a): attaches `config_gate.compare_portal`'s verdict to an
+    already-rendered `backend` mapping. Never a fourth place computing this — one
+    comparison, read by both `full_report` and `status_report`."""
+    backend["portal_check"] = config_gate.compare_portal(config, backend.get("portal_id"))
+    return backend
+
+
 def full_report(config: dict, get_transport=requests.get,
                 post_transport=requests.post, now=None) -> dict:
     """The whole picture: every workflow, plus the half only the backend can supply."""
     config_gate.require_capability(config, "status")
     return {
         "workflows": describe_all(config, transport=get_transport, now=now),
-        "backend": render_backend_status(
-            backend_status.fetch_backend_status(config, transport=post_transport)),
+        "backend": _with_portal_check(config, render_backend_status(
+            backend_status.fetch_backend_status(config, transport=post_transport))),
     }
 
 
@@ -206,8 +225,8 @@ def status_report(config: dict, workflow_id, get_transport=requests.get,
     config_gate.require_capability(config, "status")
     return {
         "workflow": describe_workflow(config, workflow_id, transport=get_transport),
-        "backend": render_backend_status(
-            backend_status.fetch_backend_status(config, transport=post_transport)),
+        "backend": _with_portal_check(config, render_backend_status(
+            backend_status.fetch_backend_status(config, transport=post_transport))),
     }
 
 

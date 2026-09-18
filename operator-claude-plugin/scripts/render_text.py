@@ -176,6 +176,22 @@ def render_sources(backend) -> str:
     return "\n".join(lines)
 
 
+def render_portal_check(backend) -> str:
+    """73.1-06 (D-14c/D-14a). Silent when `hubspot_portal_id` is unset (`not-checked`
+    verdict) — the guard did not run, and a line about a check nobody armed would read
+    as a claim. Otherwise states BOTH what the check does and does not prove: it proves
+    the N8N CREDENTIAL's portal only. An outside HubSpot tool still proves ITSELF by
+    its own lookup (D-14a) and must never be allowed to trust this answer."""
+    backend = backend if isinstance(backend, dict) else {}
+    check = backend.get("portal_check") if isinstance(backend.get("portal_check"), dict) else {}
+    verdict = check.get("verdict")
+    if verdict in (None, "not-checked"):
+        return ""
+    return ("Portal check: " + status.render(check.get("message")) +
+            " This proves the n8n credential's portal only — an outside HubSpot tool "
+            "must still prove itself by its own lookup.")
+
+
 def render_report(report) -> str:
     """The whole answer, in one piece of text."""
     report = report if isinstance(report, dict) else {}
@@ -193,6 +209,9 @@ def render_report(report) -> str:
 
     blocks.append(render_records_needing_a_human(backend))
     blocks.append(render_sources(backend))
+    portal_line = render_portal_check(backend)
+    if portal_line:
+        blocks.append(portal_line)
     blocks.append("This is a read-only check. Nothing here was switched on or off, "
                   "started, stopped, or written to any record.")
     return "\n\n".join(blocks)

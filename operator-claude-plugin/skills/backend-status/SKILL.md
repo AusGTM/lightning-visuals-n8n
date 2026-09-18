@@ -110,6 +110,15 @@ housekeeping, not an answer to their question.
    - **A wedged run's threshold is a convention, not a measurement.** The output states
      both the run's age and the threshold for exactly that reason. If a job legitimately
      takes longer than the threshold, say so rather than presenting the verdict as fact.
+   - **Portal check (D-14c/D-14a), when `hubspot_portal_id` is set.** The backend reads
+     the HubSpot account with the n8n credential and reports which portal it is on
+     (`wf_backend_status_cloud`'s `HubSpot Account Info` probe). A "Portal check" line
+     appears only when the operator has set `hubspot_portal_id` — an unset value means
+     the guard did not run, not that the portal is fine. **This proves the n8n
+     credential's portal only.** Any OTHER HubSpot tool used this session — the
+     claude.ai connector, an MCP HubSpot server, the `hs` CLI — must still prove ITSELF
+     by its own lookup (D-14a, the portal rule above); this check's result must never be
+     used to skip that.
 
 3. **When a workflow's last run failed, report the cause.** `render_text.py` already
    fetches that one execution's detail and prints the translated cause, because the

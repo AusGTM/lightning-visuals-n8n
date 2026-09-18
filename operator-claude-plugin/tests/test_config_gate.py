@@ -9,7 +9,10 @@ import stat
 
 import pytest
 
-from config_gate import ConfigError, describe_target, load_config, require_capability
+from config_gate import (
+    ConfigError, compare_portal, describe_target, load_config, require_capability,
+    PORTAL_MATCHED, PORTAL_MISMATCHED, PORTAL_NOT_CHECKED, PORTAL_UNKNOWN,
+)
 
 
 def test_missing_file_names_the_file_and_points_at_the_example(tmp_path):
@@ -446,3 +449,36 @@ def test_skill_documents_the_can_send_contract():
     # not be invited to consent to a send that will be refused.
     assert "do not ask for this send at all" in skill, \
         "an operator who cannot send must not be invited to consent to one"
+
+
+# --- 73.1-06 (D-14c/D-14a): compare_portal -- pure, three verdicts, never a fourth ------
+
+def test_compare_portal_not_checked_when_hubspot_portal_id_is_unset():  # Test 4
+    for cfg in ({}, {"hubspot_portal_id": None}, {"hubspot_portal_id": ""}):
+        result = compare_portal(cfg, 22617666)
+        assert result["verdict"] == PORTAL_NOT_CHECKED
+        assert "not set" in result["message"]
+
+
+def test_compare_portal_matching_ids_return_matched():  # Test 5
+    result = compare_portal({"hubspot_portal_id": 22617666}, 22617666)
+    assert result["verdict"] == PORTAL_MATCHED
+
+    # int vs string must still match -- config JSON and the live n8n read may not agree
+    # on type, and a type mismatch must never read as a portal mismatch.
+    result_str = compare_portal({"hubspot_portal_id": "22617666"}, 22617666)
+    assert result_str["verdict"] == PORTAL_MATCHED
+
+
+def test_compare_portal_differing_ids_return_mismatch_naming_both_ids():  # Test 5
+    result = compare_portal({"hubspot_portal_id": 11111111}, 22617666)
+    assert result["verdict"] == PORTAL_MISMATCHED
+    assert "11111111" in result["message"]
+    assert "22617666" in result["message"]
+
+
+def test_compare_portal_null_backend_portal_id_is_unknown_never_match_or_mismatch():  # Test 6
+    result = compare_portal({"hubspot_portal_id": 22617666}, None)
+    assert result["verdict"] == PORTAL_UNKNOWN
+    assert result["verdict"] != PORTAL_MATCHED
+    assert result["verdict"] != PORTAL_MISMATCHED
