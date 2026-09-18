@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 11 plans (9 executed; 2 gap-closure plans added 2026-09-18 after `73.1-VERIFICATION.md` reported `gaps_found` on D-11 and D-11a)
+**Plans:** 10/11 plans executed (9 executed; 2 gap-closure plans added 2026-09-18 after `73.1-VERIFICATION.md` reported `gaps_found` on D-11 and D-11a)
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -609,7 +609,7 @@ Plans:
 
 **Wave 7 — gap closure** *(from `73.1-VERIFICATION.md`, `gaps_found`: D-11 and D-11a FAILED)*
 
-- [ ] 73.1-10-PLAN.md — Gap 2: thread the round's `role_families` (already on the wire) through to rung 1, so the 500-char cap folds the operator's chosen subset instead of silently dropping D-11c's own four members (D-11a, D-11c)
+- [x] 73.1-10-PLAN.md — Gap 2: thread the round's `role_families` (already on the wire) through to rung 1, so the 500-char cap folds the operator's chosen subset instead of silently dropping D-11c's own four members (D-11a, D-11c)
 
 **Wave 8** *(blocked on 73.1-10 — one live send must carry both fixes)*
 
