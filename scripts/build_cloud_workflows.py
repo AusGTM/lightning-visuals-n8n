@@ -255,9 +255,14 @@ return out;
 NORMALIZE_PHONE = inline("normalizePhone.js") + r"""
 
 // --- n8n wrapper: AU-heuristic phone -> E.164 (null => review) ---
+// 73.1-06 (D-16a): mobilephone_normalized is the value the new mobilephone search
+// rung filters on and re-verifies hits against (INGEST_ADAPT_MOBILEPHONE_SEARCH,
+// below) -- MERGE_CONTACTS' own candidate.mobilephone still reads the raw row.mobile
+// phone for the HubSpot write, unchanged; this field is search-only.
 return $input.all().map((it) => {
   const row = it.json;
-  return { json: { ...row, phone_normalized: normalizePhoneAU(row.phone) } };
+  return { json: { ...row, phone_normalized: normalizePhoneAU(row.phone),
+                   mobilephone_normalized: normalizePhoneAU(row.mobilephone) } };
 });
 """
 
@@ -440,6 +445,67 @@ return $input.all().map((it, i) => {
   }
   const identity = resolveIdentity(row, row.searchResultsByKey || {});
   return { json: { ...row, _ingest_seq: i, identity } };
+});
+"""
+
+# ---- 73.1-06 (D-16a): the ingest lane's own linkedin_url/mobilephone match rungs ----
+#
+# Both adapters share the SAME shape as ADAPT_SEARCH_RESULTS' email branch (BUG 22b:
+# never trust the search filter alone, re-verify by value) and Phase 72's existingRecord
+# stamp (D-72-06, so MERGE_CONTACTS' non-clobber gate has something real to gate an
+# UPDATE against) -- simpler than the enrichment lane's ENRICH_ADAPT_LINKEDIN_SEARCH
+# (a single EQ, per D-16a's own text, not a multi-property/multi-variant search), and
+# feeding resolveIdentity()'s EXISTING searchResultsByKey contract rather than a second
+# cardinality engine (matchProposal.js's `laneOf`/`summarizeMatch` serve the ENRICHMENT
+# lane's different, `lane`-keyed row shape -- this ingest lane's single identity
+# authority stays resolveIdentity(), never two competing 0/1/>1 implementations).
+INGEST_ADAPT_LINKEDIN_SEARCH = inline("resolveIdentity.js") + r"""
+
+// --- n8n wrapper: adapt "HubSpot Linkedin Search" -> searchResultsByKey.linkedin_url ---
+return $input.all().map((it) => {
+  const merged = it.json;
+  const failed = !!merged.error || merged.status === "error";
+  const wanted = canonicalizeLinkedin(merged.linkedin_url);
+  const results = Array.isArray(merged.results) ? merged.results : [];
+  const hits = (failed || !wanted) ? [] : results.filter((c) =>
+    c && c.id && canonicalizeLinkedin(c.properties && c.properties.hs_linkedin_url) === wanted);
+  const ids = hits.map((c) => String(c.id));
+  const srk = { ...(merged.searchResultsByKey || {}) };
+  if (wanted) srk.linkedin_url = ids;
+  let existingRecord = merged.existingRecord || {};
+  if (!failed && ids.length === 1) {
+    existingRecord = { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) };
+  }
+  const rest = { ...merged };
+  delete rest.results; delete rest.total; delete rest.error; delete rest.status;
+  return { json: { ...rest, searchResultsByKey: srk, existingRecord,
+                   lookup_failed: merged.lookup_failed === true || failed } };
+});
+"""
+
+INGEST_ADAPT_MOBILEPHONE_SEARCH = inline("normalizePhone.js") + r"""
+
+// --- n8n wrapper: adapt "HubSpot Mobilephone Search" -> searchResultsByKey.mobilephone ---
+// D-16a-i: single-hit only, decided by resolveIdentity() reading the ids array below --
+// this adapter never decides 0/1/>1 itself, only supplies the verified hit list.
+return $input.all().map((it) => {
+  const merged = it.json;
+  const failed = !!merged.error || merged.status === "error";
+  const wanted = merged.mobilephone_normalized || normalizePhoneAU(merged.mobilephone);
+  const results = Array.isArray(merged.results) ? merged.results : [];
+  const hits = (failed || !wanted) ? [] : results.filter((c) =>
+    c && c.id && normalizePhoneAU(c.properties && c.properties.mobilephone) === wanted);
+  const ids = hits.map((c) => String(c.id));
+  const srk = { ...(merged.searchResultsByKey || {}) };
+  if (wanted) srk.mobilephone = ids;
+  let existingRecord = merged.existingRecord || {};
+  if (!failed && ids.length === 1) {
+    existingRecord = { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) };
+  }
+  const rest = { ...merged };
+  delete rest.results; delete rest.total; delete rest.error; delete rest.status;
+  return { json: { ...rest, searchResultsByKey: srk, existingRecord,
+                   lookup_failed: merged.lookup_failed === true || failed } };
 });
 """
 
@@ -902,6 +968,9 @@ return decided.map((row) => {
     association: (fail || (block && association === "associated")) ? "not_confirmed" : association,
     reason: (fail && fail.reason) || (block && block.write_blocked_reason) || row.reason || null,
     email_status: row.email_status || null,
+    // 73.1-06 (D-16d): `row` here is the decided snapshot -- "Decide Action" already
+    // stamped `resolved_by` on it, so this is a straight carry, never a re-derivation.
+    resolved_by: row.resolved_by ?? null,
     // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`
     // pre-write. Closes the join for every lane whose rows carry `row_id` into the
     // backend. Does NOT close it for the pair pipeline's FINAL ingest dispatch —
@@ -957,6 +1026,25 @@ function _sortedForStringify(v) {
   return v;
 }
 function _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }
+// 73.1-06 (D-16d): names which identity rung resolved a row, using the SAME
+// vocabulary matchProposal.js's laneOf() returns (email/linkedin/mobilephone/name) so
+// the two never diverge -- one exception, "phone": resolveIdentity() never gives
+// `phone` a laneOf-style rung at all (D-16a-i: it is CREATE-only, never searched), so
+// a phone-admitted create is reported under its own real key name instead of a
+// laneOf value that does not exist for it.
+const MATCH_KEY_TO_LANE = { email: "email", linkedin_url: "linkedin",
+                            mobilephone: "mobilephone", phone_lastname: "name",
+                            name_company: "name" };
+function _resolvedBy(row, id) {
+  if (id.match_key) return MATCH_KEY_TO_LANE[id.match_key] || id.match_key;
+  if (id.outcome === "net_new") {
+    if (row.email_normalized || row.email) return "email";
+    if (row.linkedin_url) return "linkedin";
+    if (row.mobilephone) return "mobilephone";
+    if (row.phone) return "phone";
+  }
+  return null;
+}
 function _buildContactPatch(merge) {
   if (!merge) return {};
   const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
@@ -1023,6 +1111,18 @@ return $input.all().map((it) => {
     if (row.email) properties.email = row.email;
     if (row.firstname) properties.firstname = row.firstname;
     if (row.lastname) properties.lastname = row.lastname;
+    // 73.1-06 (D-16a-i Test 6): unlike email/firstname/lastname above, `phone` and
+    // `mobilephone` are DELIBERATELY NOT seeded here -- both already reach a create's
+    // `properties` through the ordinary non-clobber merge engine above (`candidate.phone`/
+    // `candidate.mobilephone` in MERGE_CONTACTS, gated by mergeContacts()'s own
+    // fill_blank_only confidence threshold against a genuinely blank existingRecord).
+    // A BUG-19-style unconditional seed here would bypass that gate entirely and force
+    // a needs_review-confidence value onto the create body regardless of the merge
+    // decision -- exactly the defect ingestWidenedFieldsFlow.test.mjs's D-72-22
+    // negative case guards against. `phone`'s csv confidence (80) already meets its own
+    // policy threshold (80) so a phone-admitted create's value promotes normally;
+    // `mobilephone`'s higher threshold (85) is the documented D-72-22 gap a
+    // source_by_field override closes, unrelated to this plan.
     // 37-CONTEXT.md §13(b) / operator's option-b ruling (resolves 37-07's checkpoint):
     // stamp the poller's work-queue flag so a freshly created contact is swept by the
     // already-deployed scheduled poller (daily cadence since 2026-08-10) with no further operator action. This
@@ -1062,6 +1162,9 @@ return $input.all().map((it) => {
     hs_object_id: id.contact_id || null,
     reason: company_hold || identity_reason || row.reject_reason || null,
     email_status: row.email_status || null,
+    // 73.1-06 (D-16d): one field naming the identity rung that resolved this row, so
+    // "Build Ingest Response" can report it -- see _resolvedBy's own comment above.
+    resolved_by: _resolvedBy(row, id),
     // The association lane's row context (2026-08-25). `company_id` is what Build
     // Association Request joins on; `email` makes a created row identifiable in the
     // synchronous response before HubSpot has minted its id.
@@ -1456,14 +1559,78 @@ return [{ json: { run_id: item.run_id ?? null, accepted: true, row_ids: [] } }];
     decide_action_js = (_write_safety_const("ALLOW_HUBSPOT_CREATE") + "\n"
                         + WRITE_REQUEST_JS + DECIDE_CLOUD)
     resolve_identity_pos = None
+    adapt_search_results_pos = None
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),
                      ("Build Company Link", BUILD_COMPANY_LINK)]:
         x += 220
         nodes.append(code_node(name, js, x, y))
+        if name == "Adapt Search Results":
+            adapt_search_results_pos = (x, y)
         if name == "Resolve Identity":
             resolve_identity_pos = (x, y)
+
+    # 73.1-06 (D-16a/D-16a-i): the identity ladder's two new rungs -- linkedin_url,
+    # then mobilephone -- spliced between "Adapt Search Results" and "Resolve
+    # Identity". Each rung is the enrichment lane's own "IF Linkedin Searchable" ->
+    # "HubSpot <X> Search" -> "Adapt <X> Search" idiom (build_enrichment_cloud, search
+    # those three node names), simplified to a single EQ filter per D-16a's own text
+    # (no multi-property/multi-variant search -- that is the enrichment lane's own,
+    # richer job) and reusing resolveIdentity()'s EXISTING single-hit/ambiguous/
+    # fall-through contract (already implements D-16a-i's cardinality rule for
+    # linkedin_url; extended to mobilephone in n8n/code/resolveIdentity.js +
+    # src/identity.py, this same plan) rather than a second, competing cardinality
+    # engine in matchProposal.js -- ONE authority for the outcome, not two (the exact
+    # REVIEW-C4 principle Task 1's own matchProposal.js comment states, applied here in
+    # the other direction). `phone` (a landline) is DELIBERATELY never given a rung
+    # here (D-16a-i) -- see resolveIdentity.js's own comment for why.
+    asx, asy = adapt_search_results_pos
+    lby = asy + 460  # a distinct row below the main lane, mirroring the "IF Has
+                     # Contact Id" subgraph's own offset-row convention
+    lx = asx + 40
+    nodes.append(_if_bool_expr_node(
+        "IF Linkedin Searchable",
+        '!($json.email_normalized || $json.email) && !!($json.linkedin_url)',
+        lx, lby,
+    ))
+    lx += 220
+    nodes.append(_http_node(
+        "HubSpot Linkedin Search",
+        "https://api.hubapi.com/crm/v3/objects/contacts/search", lx, lby,
+        auth="hubspot",
+        json_body=("={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "
+                   "\"hs_linkedin_url\", operator: \"EQ\", value: ($json.linkedin_url || "
+                   "\"no-linkedin-url.invalid\") } ] } ], "
+                   "properties: [\"firstname\", \"lastname\", \"email\", \"jobtitle\", "
+                   "\"phone\", \"mobilephone\", \"lv_linkedin_url\", \"hs_linkedin_url\", "
+                   "\"hs_object_id\"], limit: 10 }) }}"),
+        batch_interval_ms=_INGEST_SEARCH_BATCH_INTERVAL_MS,
+    ))
+    lx += 220
+    nodes.append(code_node("Adapt Linkedin Search", INGEST_ADAPT_LINKEDIN_SEARCH, lx, lby))
+
+    lx += 220
+    nodes.append(_if_bool_expr_node(
+        "IF Mobilephone Searchable",
+        '!($json.email_normalized || $json.email) && !!($json.mobilephone)',
+        lx, lby,
+    ))
+    lx += 220
+    nodes.append(_http_node(
+        "HubSpot Mobilephone Search",
+        "https://api.hubapi.com/crm/v3/objects/contacts/search", lx, lby,
+        auth="hubspot",
+        json_body=("={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "
+                   "\"mobilephone\", operator: \"EQ\", value: ($json.mobilephone_normalized "
+                   "|| $json.mobilephone || \"no-mobilephone.invalid\") } ] } ], "
+                   "properties: [\"firstname\", \"lastname\", \"email\", \"jobtitle\", "
+                   "\"phone\", \"mobilephone\", \"lv_linkedin_url\", \"hs_linkedin_url\", "
+                   "\"hs_object_id\"], limit: 10 }) }}"),
+        batch_interval_ms=_INGEST_SEARCH_BATCH_INTERVAL_MS,
+    ))
+    lx += 220
+    nodes.append(code_node("Adapt Mobilephone Search", INGEST_ADAPT_MOBILEPHONE_SEARCH, lx, lby))
 
     # Phase 72 Plan 04 (D-72-06/07): the recency gate needs the existing value's OWN
     # HubSpot property-history timestamp, which the search endpoint every OTHER lookup
@@ -1679,6 +1846,68 @@ return anyNonWrite ? [] : [{}];
         "Normalize Phone", "Build Verify Batch", "Verify Emails (batch)", "Apply Email",
         "HubSpot Search by Email", "Adapt Search Results", "Resolve Identity",
     ])
+
+    # 73.1-06 (D-16a): splice the linkedin_url, then mobilephone, match rungs between
+    # "Adapt Search Results" and "Resolve Identity" -- overrides the naive straight-
+    # chain edge the base `chain()` call above just set, then reconverges each gate's
+    # two lanes via splice_merge_before + a starved-lane sentinel (Phase 70 idiom,
+    # CLAUDE.md §13.0.3): under v1 a Merge whose input never receives a delivery never
+    # fires and its downstream terminates silently reporting success, so a row-set-wide
+    # sentinel guards the batch-all-one-way case for both new rungs (a batch with zero
+    # linkedin_url rows, or zero mobilephone rows).
+    conns["Adapt Search Results"] = {
+        "main": [[{"node": "IF Linkedin Searchable", "type": "main", "index": 0}]]}
+    conns["IF Linkedin Searchable"] = {"main": [
+        [{"node": "HubSpot Linkedin Search", "type": "main", "index": 0}],     # true: search
+        [{"node": "IF Mobilephone Searchable", "type": "main", "index": 0}],   # false: skip
+    ]}
+    conns["HubSpot Linkedin Search"] = {
+        "main": [[{"node": "Adapt Linkedin Search", "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "HubSpot Linkedin Search", "IF Linkedin Searchable",
+                             merge_name="HubSpot Linkedin Search Carry Merge")
+    conns["Adapt Linkedin Search"] = {
+        "main": [[{"node": "IF Mobilephone Searchable", "type": "main", "index": 0}]]}
+    linkedin_merge = splice_merge_before(nodes, conns, "IF Mobilephone Searchable",
+                                         merge_name="Linkedin Search Merge")
+    linkedin_idx = _merge_input_index(conns, "Adapt Linkedin Search", linkedin_merge)
+    _add_starved_lane_sentinel(
+        nodes, conns, "Linkedin Search Sentinel", "Adapt Search Results",
+        'return rows.some((r) => r && !(r.email_normalized || r.email) && r.linkedin_url) '
+        '? [] : [{}];',
+        [(linkedin_merge, linkedin_idx)], lx, lby - 300,
+    )
+
+    conns["IF Mobilephone Searchable"] = {"main": [
+        [{"node": "HubSpot Mobilephone Search", "type": "main", "index": 0}],  # true: search
+        [{"node": "Resolve Identity", "type": "main", "index": 0}],            # false: skip
+    ]}
+    conns["HubSpot Mobilephone Search"] = {
+        "main": [[{"node": "Adapt Mobilephone Search", "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, "HubSpot Mobilephone Search", "IF Mobilephone Searchable",
+                             merge_name="HubSpot Mobilephone Search Carry Merge")
+    conns["Adapt Mobilephone Search"] = {
+        "main": [[{"node": "Resolve Identity", "type": "main", "index": 0}]]}
+    mobilephone_merge = splice_merge_before(nodes, conns, "Resolve Identity",
+                                            merge_name="Mobilephone Search Merge")
+    mobilephone_idx = _merge_input_index(conns, "Adapt Mobilephone Search", mobilephone_merge)
+    _add_starved_lane_sentinel(
+        nodes, conns, "Mobilephone Search Sentinel", "Adapt Search Results",
+        'return rows.some((r) => r && !(r.email_normalized || r.email) && r.mobilephone) '
+        '? [] : [{}];',
+        [(mobilephone_merge, mobilephone_idx)], lx, lby + 300,
+    )
+    # D-70-20: no routing IF may have a direct edge to a Merge input (this repo has
+    # never observed whether the live engine treats an IF's own empty branch as a
+    # delivery the way it does a Code node's empty output) — retarget all four direct
+    # IF-to-Merge edges the splices above just created, mirroring "IF Has Contact Id"'s
+    # own retargeting immediately below this block.
+    _retarget_all_if_direct_edges(nodes, conns, [
+        ("IF Linkedin Searchable", 0, "HubSpot Linkedin Search Carry Merge"),
+        ("IF Linkedin Searchable", 1, linkedin_merge),
+        ("IF Mobilephone Searchable", 0, "HubSpot Mobilephone Search Carry Merge"),
+        ("IF Mobilephone Searchable", 1, mobilephone_merge),
+    ], lx, lby - 500)
+
     # Phase 72 Plan 04 (D-72-06/07): "Resolve Identity" no longer feeds "Merge Contacts"
     # directly — it fans through "IF Has Contact Id" first, so a matched row's history
     # hop can run before the two lanes reconverge (splice_merge_before, below).
@@ -8945,11 +9174,20 @@ return [{ json: { balances, checked_at: new Date().toISOString() } }];
 ENRICH_STATUS_BUILD_STATUS = inline("backendStatus.js") + r"""
 
 // --- n8n wrapper: Build Status (Phase 27 Plan 01) ---
-// Phase 70 Plan 04 (D-70-04): fed by "HS Review Contacts Carry Merge" — the merged item
-// carries `balances`/`checked_at` (from "Build Credit Status", never wrapped since it
-// seeded this leg of the chain rather than being a hop across it), three nested
-// `hs_*_result` search responses (wrapped by earlier hops in this straight-line chain),
-// and the LAST search's raw response unwrapped at top level. No by-name read.
+// Phase 70 Plan 04 (D-70-04): fed by "HubSpot Account Info Carry Merge" (73.1-06 added
+// this hop after "HS Review Contacts Carry Merge") — the merged item carries
+// `balances`/`checked_at` (from "Build Credit Status", never wrapped since it seeded
+// this leg of the chain rather than being a hop across it), three nested `hs_*_result`
+// search responses (wrapped by earlier hops in this straight-line chain), the
+// requested-review-contacts search's raw response unwrapped at top level, and (73.1-06)
+// `hs_account_info_result`, the account-info probe's own wrapped response. No by-name
+// read.
+// 73.1-06 (D-14c): `portalId` is a top-level field on the final body, never omitted —
+// the id when the probe succeeded, `null` when it did not (a failed probe and an
+// absent key must not read the same to the plugin). Read from `hs_account_info_result`
+// only; never treated as a HubSpot-credential-health signal the way the other four
+// probes are (this endpoint answers "which portal", not "is this credential healthy" —
+// D-14a's own boundary: this proves the n8n credential's portal only, nothing else).
 function httpStatus(raw) {
   if (!raw) return null;
   const candidates = [raw.statusCode, raw.httpCode, raw.status,
@@ -9001,7 +9239,13 @@ const body = buildStatusBody({
   checked_at: merged.checked_at,
 });
 
-return [{ json: { ...body, balances } }];
+// 73.1-06 (D-14c): never omit the key -- an absent key and an unknown portal must not
+// read the same to the plugin.
+const accountInfo = merged.hs_account_info_result;
+const portalId = (accountInfo && !accountInfo.error && accountInfo.status !== "error"
+                  && accountInfo.portalId != null) ? accountInfo.portalId : null;
+
+return [{ json: { ...body, balances, portalId } }];
 """
 
 
@@ -9126,6 +9370,25 @@ def build_backend_status_cloud():
         filter_groups=AWAITING_REVIEW_GROUPS, properties_csv="hs_object_id", limit=1)
     nodes.append(hs_review_ct)
 
+    # 73.1-06 (D-14c): proves which HubSpot portal the n8n credential itself is bound
+    # to. Verified live 2026-09-18 -- GET /account-info/v3/details returned 200 with
+    # `portalId: 22617666` -- so this endpoint and its `portalId` field are
+    # [observed live]. The claim that the n8n-SIDE credential (a different app
+    # registration from the local token that ran that probe) carries the
+    # `account-info` scope at all stays [documented] only, settled by the operator's
+    # disarmed live proof at the end of this phase, not here. Placed on the existing
+    # chain, never a fan-out (D-14's own straight-line discipline) -- same bound
+    # HubSpot credential the four count searches above already use, `onError:
+    # continueRegularOutput` so a 403 on the scope passes an error item along rather
+    # than stopping the status read, and reads nothing off its incoming item (GET, no
+    # body).
+    x += 220
+    nodes.append(_http_node(
+        "HubSpot Account Info", "https://api.hubapi.com/account-info/v3/details",
+        x, y, auth="hubspot", method="GET"))
+    nodes.append(code_node("Wrap HubSpot Account Info Result",
+                            _wrap_provider_result_js("hs_account_info_result"), x, y))
+
     # Phase 70 Plan 04 (D-70-04): nests the raw ZoomInfo response under its own key too
     # (was left unwrapped at top level, which made a genuinely-never-executed probe
     # indistinguishable from "ran, but the merged item itself has no `.data[...]`
@@ -9155,6 +9418,7 @@ def build_backend_status_cloud():
         hs_review_co["name"], "Wrap HS Review Companies Result",
         hs_req_ct["name"], "Wrap HS Requested Contacts Result",
         hs_review_ct["name"],
+        "HubSpot Account Info", "Wrap HubSpot Account Info Result",
         "Build Status", "Respond to Webhook",
     ]))
     # Phase 70 Plan 04 (D-70-04): re-attaches each hop's row across the chain — carry_source
@@ -9195,6 +9459,12 @@ def build_backend_status_cloud():
     splice_carry_merge_after(nodes, conns, "HS Review Search (Contacts)",
                               "HS Requested Contacts Carry Merge",
                               merge_name="HS Review Contacts Carry Merge")
+    # 73.1-06 (D-14c): carry_source is "HS Review Contacts Carry Merge" -- the item
+    # that now feeds "HubSpot Account Info" after the chain edit above re-pointed "HS
+    # Review Search (Contacts)"'s own single edge through it.
+    splice_carry_merge_after(nodes, conns, "Wrap HubSpot Account Info Result",
+                              "HS Review Contacts Carry Merge",
+                              merge_name="HubSpot Account Info Carry Merge")
 
     notes = [{
         "content": (
@@ -11977,6 +12247,26 @@ _MERGE_MULTI_PRODUCER_TOLERANT = {
         "exclusive by construction (the sentinel fires only when no row has a "
         "resolved contact_id, exactly when the real producer's own branch never "
         "runs). Added by Phase 72 Plan 04; no v1 recording exists for this merge yet."
+    ),
+    # 73.1-06 (D-16a): two new merges, added by this plan — NOT covered by the
+    # 2026-09-11 census (it postdates it). Same D-70-23 mechanism as "Contact History
+    # Merge" above: each gated sentinel fires [{}] only when NO row in the batch has a
+    # usable linkedin_url/mobilephone (and no email), exactly when the real producer's
+    # own IF-true branch never runs at all — mutually exclusive by construction. No v1
+    # recording exists for either merge yet.
+    ("LV Contact Ingest (Cloud template)", "Linkedin Search Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer ('Adapt "
+        "Linkedin Search'), mutually exclusive by construction (the sentinel fires "
+        "only when no row in the batch has a usable linkedin_url with no email, "
+        "exactly when the real producer's own branch never runs). Added by 73.1-06; "
+        "no v1 recording exists for this merge yet."
+    ),
+    ("LV Contact Ingest (Cloud template)", "Mobilephone Search Merge"): (
+        "D-70-23 gated sentinel shares this input with its real producer ('Adapt "
+        "Mobilephone Search'), mutually exclusive by construction (the sentinel "
+        "fires only when no row in the batch has a usable mobilephone with no "
+        "email, exactly when the real producer's own branch never runs). Added by "
+        "73.1-06; no v1 recording exists for this merge yet."
     ),
 
     # Local-LIVE and review-decision entries — no v1 recording exists for these

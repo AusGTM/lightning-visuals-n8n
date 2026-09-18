@@ -111,6 +111,7 @@ print(json.dumps({"outcome": r.outcome, "contact_id": r.contact_id,
 // to HubSpot property names) — untouched.
 function toCanned(searchMap) {
   const propOf = { email: "email", linkedin_url: "lv_linkedin_url",
+                   mobilephone: "mobilephone",
                    phone_lastname: "phone", name_company: "firstname" };
   const canned = {};
   for (const [k, ids] of Object.entries(searchMap)) {
@@ -157,8 +158,23 @@ const IDENTITY_CASES = [
   { name: "no-email phone+lastname hit -> ambiguous (NOT match/net_new)",
     row: { phone: "0412 345 678", lastname: "Baker" }, search: { phone_lastname: ["900"] },
     expect: { outcome: "ambiguous", match_key: "phone_lastname", contact_id: null } },
-  { name: "no-email no-hit -> ambiguous, NEVER net_new",
+  // 73.1-06 (D-16a/D-16a-i): mobilephone is a new STRONG key, single-hit only.
+  { name: "no-email mobilephone single hit -> match",
+    row: { mobilephone: "0412 345 678" }, search: { mobilephone: ["601"] },
+    expect: { outcome: "match", contact_id: "601", match_key: "mobilephone" } },
+  { name: "no-email mobilephone multi hit -> ambiguous, never a pick",
+    row: { mobilephone: "0412 345 678" }, search: { mobilephone: ["601", "602"] },
+    expect: { outcome: "ambiguous", match_key: "mobilephone", contact_id: null } },
+  { name: "no-email mobilephone zero hits -> net_new (D-16a: no match creates)",
+    row: { mobilephone: "0412 345 678" }, search: {},
+    expect: { outcome: "net_new", match_key: null, contact_id: null } },
+  // 73.1-06, D-16a-i: `phone` amends the old hard rule -- it is CREATE-only identity,
+  // so a phone+lastname row with zero hits now becomes net_new, not ambiguous.
+  { name: "no-email phone+lastname zero hits -> net_new (phone is create-only, D-16a-i)",
     row: { phone: "0412 345 678", lastname: "Baker" }, search: {},
+    expect: { outcome: "net_new", match_key: null, contact_id: null } },
+  { name: "bare name+company zero hits -> STILL ambiguous, NEVER net_new (unchanged)",
+    row: { firstname: "Dave", lastname: "Nguyen", company: "Acme" }, search: {},
     expect: { outcome: "ambiguous", reason: "no email, insufficient identity" } },
   { name: "invalid email -> treated as no-email -> ambiguous",
     row: { email: "not-an-email" }, search: {},
@@ -172,8 +188,14 @@ test("resolveIdentity: expected outcomes + no-email-never-net_new hard rule", ()
       assert.deepEqual(r[k], v, `${c.name}: ${k}`);
     }
     assert.notEqual(r.outcome, undefined);
-    if (!c.row.email || normalizeEmailBasic(c.row.email) === null) {
-      assert.notEqual(r.outcome, "net_new", `${c.name}: no valid email must never be net_new`);
+    // 73.1-06 (D-16a/D-16a-i): the hard rule is now AMENDED, not absolute -- a row
+    // carrying linkedin_url/mobilephone/phone CAN become net_new with no email. Only
+    // a row with NONE of those three (bare name+company, or nothing at all) must
+    // never be net_new.
+    const hasAlternateIdentity = !!(c.row.linkedin_url || c.row.mobilephone || c.row.phone);
+    const noValidEmail = !c.row.email || normalizeEmailBasic(c.row.email) === null;
+    if (noValidEmail && !hasAlternateIdentity) {
+      assert.notEqual(r.outcome, "net_new", `${c.name}: no email and no alternate identity must never be net_new`);
     }
   }
 });

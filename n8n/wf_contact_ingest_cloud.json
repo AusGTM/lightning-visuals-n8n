@@ -107,7 +107,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// normalizePhone(raw, region) \u2014 region-aware E.164 normalizer.\n//\n// Still NOT libphonenumber (n8n Code nodes can't require npm), but deterministic and\n// keyed off the ISO2 country the PROVIDERS already return (Lusha location.country_iso2,\n// Apollo person country, etc.) instead of guessing. Rules, in order:\n//   1. Already `+E.164` -> trust and keep (digits 6-15).\n//   2. Known region -> prepend that country's calling code (stripping a trunk 0 for\n//      AU/NZ/GB/IE, a leading 1 for US/CA), gated by a per-country NSN-length sanity check.\n//   3. Unknown/absent region -> fall back to normalizePhoneAU (AU heuristic). A non-AU\n//      national number then returns null -> the caller drops it (never a bad write).\n// The NSN-length gate is a sanity filter, not full validation; swap for a phone API when\n// global precision matters (same external-call pattern as the email verifier).\nconst CALLING_CODE = { AU: \"61\", NZ: \"64\", US: \"1\", CA: \"1\", GB: \"44\", IE: \"353\", IN: \"91\", SG: \"65\" };\nconst NSN_LEN = { \"61\": [9], \"64\": [8, 9], \"1\": [10], \"44\": [9, 10], \"353\": [9], \"91\": [10], \"65\": [8] };\nconst TRUNK_REGIONS = /^(AU|NZ|GB|IE)$/;\n\nfunction _nsnOk(cc, nsn) {\n  const lens = NSN_LEN[cc];\n  return lens ? lens.includes(nsn.length) : (nsn.length >= 6 && nsn.length <= 14);\n}\n\nfunction normalizePhone(raw, region) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n  if (s.startsWith(\"+\")) {\n    const d = s.slice(1);\n    return /^\\d{6,15}$/.test(d) ? \"+\" + d : null;\n  }\n  if (!/^\\d+$/.test(s)) return null;\n  const r = String(region || \"\").toUpperCase();\n  const cc = CALLING_CODE[r];\n  if (!cc) return normalizePhoneAU(s); // unknown region -> AU heuristic (non-AU -> null)\n  if (s.startsWith(cc) && _nsnOk(cc, s.slice(cc.length))) return \"+\" + s; // already has CC\n  let nsn = s;\n  if (TRUNK_REGIONS.test(r) && nsn.startsWith(\"0\")) nsn = nsn.slice(1);          // trunk 0\n  if (cc === \"1\" && nsn.length === 11 && nsn.startsWith(\"1\")) nsn = nsn.slice(1); // US/CA leading 1\n  return _nsnOk(cc, nsn) ? \"+\" + cc + nsn : null;\n}\n\n// --- n8n wrapper: AU-heuristic phone -> E.164 (null => review) ---\nreturn $input.all().map((it) => {\n  const row = it.json;\n  return { json: { ...row, phone_normalized: normalizePhoneAU(row.phone) } };\n});\n"
+        "jsCode": "// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// normalizePhone(raw, region) \u2014 region-aware E.164 normalizer.\n//\n// Still NOT libphonenumber (n8n Code nodes can't require npm), but deterministic and\n// keyed off the ISO2 country the PROVIDERS already return (Lusha location.country_iso2,\n// Apollo person country, etc.) instead of guessing. Rules, in order:\n//   1. Already `+E.164` -> trust and keep (digits 6-15).\n//   2. Known region -> prepend that country's calling code (stripping a trunk 0 for\n//      AU/NZ/GB/IE, a leading 1 for US/CA), gated by a per-country NSN-length sanity check.\n//   3. Unknown/absent region -> fall back to normalizePhoneAU (AU heuristic). A non-AU\n//      national number then returns null -> the caller drops it (never a bad write).\n// The NSN-length gate is a sanity filter, not full validation; swap for a phone API when\n// global precision matters (same external-call pattern as the email verifier).\nconst CALLING_CODE = { AU: \"61\", NZ: \"64\", US: \"1\", CA: \"1\", GB: \"44\", IE: \"353\", IN: \"91\", SG: \"65\" };\nconst NSN_LEN = { \"61\": [9], \"64\": [8, 9], \"1\": [10], \"44\": [9, 10], \"353\": [9], \"91\": [10], \"65\": [8] };\nconst TRUNK_REGIONS = /^(AU|NZ|GB|IE)$/;\n\nfunction _nsnOk(cc, nsn) {\n  const lens = NSN_LEN[cc];\n  return lens ? lens.includes(nsn.length) : (nsn.length >= 6 && nsn.length <= 14);\n}\n\nfunction normalizePhone(raw, region) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n  if (s.startsWith(\"+\")) {\n    const d = s.slice(1);\n    return /^\\d{6,15}$/.test(d) ? \"+\" + d : null;\n  }\n  if (!/^\\d+$/.test(s)) return null;\n  const r = String(region || \"\").toUpperCase();\n  const cc = CALLING_CODE[r];\n  if (!cc) return normalizePhoneAU(s); // unknown region -> AU heuristic (non-AU -> null)\n  if (s.startsWith(cc) && _nsnOk(cc, s.slice(cc.length))) return \"+\" + s; // already has CC\n  let nsn = s;\n  if (TRUNK_REGIONS.test(r) && nsn.startsWith(\"0\")) nsn = nsn.slice(1);          // trunk 0\n  if (cc === \"1\" && nsn.length === 11 && nsn.startsWith(\"1\")) nsn = nsn.slice(1); // US/CA leading 1\n  return _nsnOk(cc, nsn) ? \"+\" + cc + nsn : null;\n}\n\n// --- n8n wrapper: AU-heuristic phone -> E.164 (null => review) ---\n// 73.1-06 (D-16a): mobilephone_normalized is the value the new mobilephone search\n// rung filters on and re-verifies hits against (INGEST_ADAPT_MOBILEPHONE_SEARCH,\n// below) -- MERGE_CONTACTS' own candidate.mobilephone still reads the raw row.mobile\n// phone for the HubSpot write, unchanged; this field is search-only.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  return { json: { ...row, phone_normalized: normalizePhoneAU(row.phone),\n                   mobilephone_normalized: normalizePhoneAU(row.mobilephone) } };\n});\n"
       },
       "id": "c00080000-0000-4000-8000-000000000000",
       "name": "Normalize Phone",
@@ -213,7 +213,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// normalizeEmail.js \u2014 pure-JS email normalization for n8n Code nodes.\n//\n// normalizeEmailBasic does a BASIC syntactic check + trim/lowercase only. The\n// authoritative validation is the external rapid-email-verifier API downstream;\n// applyEmailVerification maps that verifier's response onto the row. This mirrors\n// src/normalizer.py normalize_email closely enough for identity/dedupe parity:\n// obviously-malformed -> null, otherwise trimmed+lowercased.\n\nfunction normalizeEmailBasic(raw) {\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === \"\") return null;\n  // Basic shape: local@domain.tld, no spaces, one @, a dotted domain.\n  // Deliberately conservative \u2014 the verifier API is the real authority.\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)) return null;\n  return s;\n}\n\n// Map a rapid-email-verifier result onto the row. `verifierResult` shape:\n//   { status: \"VALID\"|\"PROBABLY_VALID\"|\"INVALID_FORMAT\"|\"INVALID_DOMAIN\"|\"DISPOSABLE\",\n//     aliasOf?: \"canonical@example.com\" }\n// Returns the fields to merge onto the row.\nfunction applyEmailVerification(row, verifierResult) {\n  const status = (verifierResult && verifierResult.status) || \"INVALID_FORMAT\";\n  const alias = verifierResult && verifierResult.aliasOf;\n  const raw = row ? row.email : undefined;\n\n  // aliasOf is the canonical address when the verifier resolved one.\n  const canonical = alias\n    ? normalizeEmailBasic(alias)\n    : normalizeEmailBasic(raw);\n\n  const valid = status === \"VALID\" || status === \"PROBABLY_VALID\";\n\n  return {\n    email_normalized: valid ? canonical : normalizeEmailBasic(raw),\n    email_valid: valid,\n    email_status: status,\n    needs_review_reason: valid ? null : `email verifier: ${status}`,\n  };\n}\n\n// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// normalizePhone(raw, region) \u2014 region-aware E.164 normalizer.\n//\n// Still NOT libphonenumber (n8n Code nodes can't require npm), but deterministic and\n// keyed off the ISO2 country the PROVIDERS already return (Lusha location.country_iso2,\n// Apollo person country, etc.) instead of guessing. Rules, in order:\n//   1. Already `+E.164` -> trust and keep (digits 6-15).\n//   2. Known region -> prepend that country's calling code (stripping a trunk 0 for\n//      AU/NZ/GB/IE, a leading 1 for US/CA), gated by a per-country NSN-length sanity check.\n//   3. Unknown/absent region -> fall back to normalizePhoneAU (AU heuristic). A non-AU\n//      national number then returns null -> the caller drops it (never a bad write).\n// The NSN-length gate is a sanity filter, not full validation; swap for a phone API when\n// global precision matters (same external-call pattern as the email verifier).\nconst CALLING_CODE = { AU: \"61\", NZ: \"64\", US: \"1\", CA: \"1\", GB: \"44\", IE: \"353\", IN: \"91\", SG: \"65\" };\nconst NSN_LEN = { \"61\": [9], \"64\": [8, 9], \"1\": [10], \"44\": [9, 10], \"353\": [9], \"91\": [10], \"65\": [8] };\nconst TRUNK_REGIONS = /^(AU|NZ|GB|IE)$/;\n\nfunction _nsnOk(cc, nsn) {\n  const lens = NSN_LEN[cc];\n  return lens ? lens.includes(nsn.length) : (nsn.length >= 6 && nsn.length <= 14);\n}\n\nfunction normalizePhone(raw, region) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n  if (s.startsWith(\"+\")) {\n    const d = s.slice(1);\n    return /^\\d{6,15}$/.test(d) ? \"+\" + d : null;\n  }\n  if (!/^\\d+$/.test(s)) return null;\n  const r = String(region || \"\").toUpperCase();\n  const cc = CALLING_CODE[r];\n  if (!cc) return normalizePhoneAU(s); // unknown region -> AU heuristic (non-AU -> null)\n  if (s.startsWith(cc) && _nsnOk(cc, s.slice(cc.length))) return \"+\" + s; // already has CC\n  let nsn = s;\n  if (TRUNK_REGIONS.test(r) && nsn.startsWith(\"0\")) nsn = nsn.slice(1);          // trunk 0\n  if (cc === \"1\" && nsn.length === 11 && nsn.startsWith(\"1\")) nsn = nsn.slice(1); // US/CA leading 1\n  return _nsnOk(cc, nsn) ? \"+\" + cc + nsn : null;\n}\n\n// resolveIdentity.js \u2014 pure-JS contact identity resolver for n8n Code nodes.\n//\n// Mirrors src/identity.py resolve_identity EXACTLY, including the core safety rule:\n// a row with no valid email can NEVER be net_new. Auto-match only on STRONG keys\n// (email / linkedin_url); every weak-key hit routes to ambiguous (needs_review).\n//\n// PURE: the actual HubSpot searches happen upstream in an n8n HubSpot node. This\n// function receives their results pre-fetched as `searchResultsByKey`, a map keyed\n// by the search/match name -> array of candidate ids:\n//   { email:[ids], linkedin_url:[ids], phone_lastname:[ids], name_company:[ids] }\n// A missing key is treated as zero hits.\n\n\n// Deterministic LinkedIn key \u2014 mirrors identity.canonicalize_linkedin.\nfunction canonicalizeLinkedin(url) {\n  if (!url) return null;\n  let s = String(url).trim();\n  if (s === \"\") return null;\n  if (!s.includes(\"//\")) s = \"https://\" + s;\n  let scheme = \"\", rest = s;\n  const schemeIdx = s.indexOf(\"//\");\n  if (schemeIdx > 0) {\n    scheme = s.slice(0, schemeIdx - 1); // drop the ':' before '//'\n    rest = s.slice(schemeIdx + 2);\n  } else {\n    rest = s.slice(schemeIdx + 2);\n  }\n  // rest = host[/path][?query][#frag]\n  let host = rest, path = \"\";\n  const slash = rest.indexOf(\"/\");\n  if (slash >= 0) {\n    host = rest.slice(0, slash);\n    path = rest.slice(slash);\n  }\n  // drop query/fragment\n  path = path.split(\"?\")[0].split(\"#\")[0];\n  if (path.endsWith(\"/\")) path = path.slice(0, -1);\n  return scheme.toLowerCase() + \"://\" + host.toLowerCase() + path;\n}\n\nfunction _ids(searchResultsByKey, key) {\n  const v = searchResultsByKey && searchResultsByKey[key];\n  return Array.isArray(v) ? v.map(String) : [];\n}\n\nfunction resolveIdentity(row, searchResultsByKey) {\n  row = row || {};\n  searchResultsByKey = searchResultsByKey || {};\n\n  const email = normalizeEmailBasic(row.email); // null if absent OR malformed\n  const linkedin = canonicalizeLinkedin(row.linkedin_url);\n  const phone = normalizePhoneAU(row.phone);\n  const firstname = String(row.firstname || \"\").trim();\n  const lastname = String(row.lastname || \"\").trim();\n  const company = String(row.company || \"\").trim();\n\n  // 1. Email (STRONG). A valid email is the ONLY route to net_new.\n  if (email) {\n    const ids = _ids(searchResultsByKey, \"email\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"email\",\n               candidate_ids: ids, reason: \"single email match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"email\",\n               candidate_ids: ids, reason: \"multiple email matches\" };\n    }\n    return { outcome: \"net_new\", contact_id: null, match_key: null,\n             candidate_ids: [], reason: \"valid email, no existing match\" };\n  }\n\n  // 2. No valid email past here. LinkedIn (STRONG).\n  if (linkedin) {\n    const ids = _ids(searchResultsByKey, \"linkedin_url\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"single linkedin match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"multiple linkedin matches\" };\n    }\n    // 0 hits -> fall through to weak keys.\n  }\n\n  // 3. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).\n  if (phone && lastname) {\n    const ids = _ids(searchResultsByKey, \"phone_lastname\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"phone_lastname\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  if (firstname && lastname && company) {\n    const ids = _ids(searchResultsByKey, \"name_company\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"name_company\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  // 4. HARD SAFETY RULE: no valid email AND no confident match AND no weak-key\n  // candidate -> ambiguous, NEVER net_new.\n  return { outcome: \"ambiguous\", contact_id: null, match_key: null,\n           candidate_ids: [], reason: \"no email, insufficient identity\" };\n}\n\n// --- n8n wrapper: strong-key auto-match, weak keys -> review, no-email never net_new ---\n// _ingest_seq (Phase 72 Plan 04): stamped here, the single node that sees every row in\n// one run before the Contact History split. Append-mode Merge concatenates lane 0 then\n// lane 1, reordering rows; MERGE_CONTACTS sorts on this ordinal to restore original order\n// before anything downstream (company search, associations) that assumes row order.\nreturn $input.all().map((it, i) => {\n  const row = it.json;\n  if (row.reject) {\n    return { json: { ...row, _ingest_seq: i, identity: { outcome: \"rejected\", contact_id: null,\n      match_key: null, candidate_ids: [], reason: row.reject_reason || \"missing identity\" } } };\n  }\n  const identity = resolveIdentity(row, row.searchResultsByKey || {});\n  return { json: { ...row, _ingest_seq: i, identity } };\n});\n"
+        "jsCode": "// normalizeEmail.js \u2014 pure-JS email normalization for n8n Code nodes.\n//\n// normalizeEmailBasic does a BASIC syntactic check + trim/lowercase only. The\n// authoritative validation is the external rapid-email-verifier API downstream;\n// applyEmailVerification maps that verifier's response onto the row. This mirrors\n// src/normalizer.py normalize_email closely enough for identity/dedupe parity:\n// obviously-malformed -> null, otherwise trimmed+lowercased.\n\nfunction normalizeEmailBasic(raw) {\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === \"\") return null;\n  // Basic shape: local@domain.tld, no spaces, one @, a dotted domain.\n  // Deliberately conservative \u2014 the verifier API is the real authority.\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)) return null;\n  return s;\n}\n\n// Map a rapid-email-verifier result onto the row. `verifierResult` shape:\n//   { status: \"VALID\"|\"PROBABLY_VALID\"|\"INVALID_FORMAT\"|\"INVALID_DOMAIN\"|\"DISPOSABLE\",\n//     aliasOf?: \"canonical@example.com\" }\n// Returns the fields to merge onto the row.\nfunction applyEmailVerification(row, verifierResult) {\n  const status = (verifierResult && verifierResult.status) || \"INVALID_FORMAT\";\n  const alias = verifierResult && verifierResult.aliasOf;\n  const raw = row ? row.email : undefined;\n\n  // aliasOf is the canonical address when the verifier resolved one.\n  const canonical = alias\n    ? normalizeEmailBasic(alias)\n    : normalizeEmailBasic(raw);\n\n  const valid = status === \"VALID\" || status === \"PROBABLY_VALID\";\n\n  return {\n    email_normalized: valid ? canonical : normalizeEmailBasic(raw),\n    email_valid: valid,\n    email_status: status,\n    needs_review_reason: valid ? null : `email verifier: ${status}`,\n  };\n}\n\n// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// normalizePhone(raw, region) \u2014 region-aware E.164 normalizer.\n//\n// Still NOT libphonenumber (n8n Code nodes can't require npm), but deterministic and\n// keyed off the ISO2 country the PROVIDERS already return (Lusha location.country_iso2,\n// Apollo person country, etc.) instead of guessing. Rules, in order:\n//   1. Already `+E.164` -> trust and keep (digits 6-15).\n//   2. Known region -> prepend that country's calling code (stripping a trunk 0 for\n//      AU/NZ/GB/IE, a leading 1 for US/CA), gated by a per-country NSN-length sanity check.\n//   3. Unknown/absent region -> fall back to normalizePhoneAU (AU heuristic). A non-AU\n//      national number then returns null -> the caller drops it (never a bad write).\n// The NSN-length gate is a sanity filter, not full validation; swap for a phone API when\n// global precision matters (same external-call pattern as the email verifier).\nconst CALLING_CODE = { AU: \"61\", NZ: \"64\", US: \"1\", CA: \"1\", GB: \"44\", IE: \"353\", IN: \"91\", SG: \"65\" };\nconst NSN_LEN = { \"61\": [9], \"64\": [8, 9], \"1\": [10], \"44\": [9, 10], \"353\": [9], \"91\": [10], \"65\": [8] };\nconst TRUNK_REGIONS = /^(AU|NZ|GB|IE)$/;\n\nfunction _nsnOk(cc, nsn) {\n  const lens = NSN_LEN[cc];\n  return lens ? lens.includes(nsn.length) : (nsn.length >= 6 && nsn.length <= 14);\n}\n\nfunction normalizePhone(raw, region) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n  if (s.startsWith(\"+\")) {\n    const d = s.slice(1);\n    return /^\\d{6,15}$/.test(d) ? \"+\" + d : null;\n  }\n  if (!/^\\d+$/.test(s)) return null;\n  const r = String(region || \"\").toUpperCase();\n  const cc = CALLING_CODE[r];\n  if (!cc) return normalizePhoneAU(s); // unknown region -> AU heuristic (non-AU -> null)\n  if (s.startsWith(cc) && _nsnOk(cc, s.slice(cc.length))) return \"+\" + s; // already has CC\n  let nsn = s;\n  if (TRUNK_REGIONS.test(r) && nsn.startsWith(\"0\")) nsn = nsn.slice(1);          // trunk 0\n  if (cc === \"1\" && nsn.length === 11 && nsn.startsWith(\"1\")) nsn = nsn.slice(1); // US/CA leading 1\n  return _nsnOk(cc, nsn) ? \"+\" + cc + nsn : null;\n}\n\n// resolveIdentity.js \u2014 pure-JS contact identity resolver for n8n Code nodes.\n//\n// Mirrors src/identity.py resolve_identity EXACTLY, including the core safety rule:\n// a row with no valid email can NEVER be net_new. Auto-match only on STRONG keys\n// (email / linkedin_url); every weak-key hit routes to ambiguous (needs_review).\n//\n// PURE: the actual HubSpot searches happen upstream in an n8n HubSpot node. This\n// function receives their results pre-fetched as `searchResultsByKey`, a map keyed\n// by the search/match name -> array of candidate ids:\n//   { email:[ids], linkedin_url:[ids], phone_lastname:[ids], name_company:[ids] }\n// A missing key is treated as zero hits.\n\n\n// Deterministic LinkedIn key \u2014 mirrors identity.canonicalize_linkedin.\nfunction canonicalizeLinkedin(url) {\n  if (!url) return null;\n  let s = String(url).trim();\n  if (s === \"\") return null;\n  if (!s.includes(\"//\")) s = \"https://\" + s;\n  let scheme = \"\", rest = s;\n  const schemeIdx = s.indexOf(\"//\");\n  if (schemeIdx > 0) {\n    scheme = s.slice(0, schemeIdx - 1); // drop the ':' before '//'\n    rest = s.slice(schemeIdx + 2);\n  } else {\n    rest = s.slice(schemeIdx + 2);\n  }\n  // rest = host[/path][?query][#frag]\n  let host = rest, path = \"\";\n  const slash = rest.indexOf(\"/\");\n  if (slash >= 0) {\n    host = rest.slice(0, slash);\n    path = rest.slice(slash);\n  }\n  // drop query/fragment\n  path = path.split(\"?\")[0].split(\"#\")[0];\n  if (path.endsWith(\"/\")) path = path.slice(0, -1);\n  return scheme.toLowerCase() + \"://\" + host.toLowerCase() + path;\n}\n\nfunction _ids(searchResultsByKey, key) {\n  const v = searchResultsByKey && searchResultsByKey[key];\n  return Array.isArray(v) ? v.map(String) : [];\n}\n\nfunction resolveIdentity(row, searchResultsByKey) {\n  row = row || {};\n  searchResultsByKey = searchResultsByKey || {};\n\n  const email = normalizeEmailBasic(row.email); // null if absent OR malformed\n  const linkedin = canonicalizeLinkedin(row.linkedin_url);\n  // 73.1-06 (D-16a/D-16a-i): mobilephone is a STRONG key, single-hit only -- kept\n  // deliberately distinct from `phone` below, which is NEVER searched (D-16a-i: a\n  // landline is often a company switchboard shared by every contact there).\n  const mobilephone = normalizePhoneAU(row.mobilephone);\n  const phone = normalizePhoneAU(row.phone);\n  const firstname = String(row.firstname || \"\").trim();\n  const lastname = String(row.lastname || \"\").trim();\n  const company = String(row.company || \"\").trim();\n\n  // 1. Email (STRONG). A valid email is the ONLY route to net_new.\n  if (email) {\n    const ids = _ids(searchResultsByKey, \"email\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"email\",\n               candidate_ids: ids, reason: \"single email match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"email\",\n               candidate_ids: ids, reason: \"multiple email matches\" };\n    }\n    return { outcome: \"net_new\", contact_id: null, match_key: null,\n             candidate_ids: [], reason: \"valid email, no existing match\" };\n  }\n\n  // 2. No valid email past here. LinkedIn (STRONG).\n  if (linkedin) {\n    const ids = _ids(searchResultsByKey, \"linkedin_url\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"single linkedin match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"multiple linkedin matches\" };\n    }\n    // 0 hits -> fall through.\n  }\n\n  // 3. No match on email/linkedin past here. Mobilephone (STRONG, 73.1-06 D-16a-i):\n  // single-hit only, exactly the same shape as the linkedin branch above -- more than\n  // one hit is ambiguous, never a pick.\n  if (mobilephone) {\n    const ids = _ids(searchResultsByKey, \"mobilephone\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"mobilephone\",\n               candidate_ids: ids, reason: \"single mobilephone match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"mobilephone\",\n               candidate_ids: ids, reason: \"multiple mobilephone matches\" };\n    }\n    // 0 hits -> fall through to weak keys.\n  }\n\n  // 4. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).\n  if (phone && lastname) {\n    const ids = _ids(searchResultsByKey, \"phone_lastname\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"phone_lastname\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  if (firstname && lastname && company) {\n    const ids = _ids(searchResultsByKey, \"name_company\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"name_company\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  // 5. 73.1-06 (D-16a/D-16a-i, operator ruling): linkedin_url or mobilephone (both\n  // searched above with zero hits, or absent) or phone (D-16a-i -- CREATE-only\n  // identity, NEVER searched as a match rung: a landline is often a company\n  // switchboard shared by every contact there, and an EQ match on it would update the\n  // wrong person) is a genuinely NEW contact, not an unresolved ambiguity. Scoped to\n  // exactly these three keys: a bare name+company row (none of the three present)\n  // falls through to the unchanged hard-safety rule below, exactly as before this\n  // change -- the weak name_company lane stays \"never auto-create\" on purpose.\n  if (linkedin || mobilephone || phone) {\n    return { outcome: \"net_new\", contact_id: null, match_key: null, candidate_ids: [],\n             reason: \"no email, no match on linkedin/mobilephone -- new contact\" };\n  }\n\n  // 6. HARD SAFETY RULE (bare name+company, or no identity at all): no valid email\n  // AND no confident strong-key match AND no weak-key candidate AND none of\n  // linkedin_url/mobilephone/phone -> ambiguous, NEVER net_new.\n  return { outcome: \"ambiguous\", contact_id: null, match_key: null,\n           candidate_ids: [], reason: \"no email, insufficient identity\" };\n}\n\n// --- n8n wrapper: strong-key auto-match, weak keys -> review, no-email never net_new ---\n// _ingest_seq (Phase 72 Plan 04): stamped here, the single node that sees every row in\n// one run before the Contact History split. Append-mode Merge concatenates lane 0 then\n// lane 1, reordering rows; MERGE_CONTACTS sorts on this ordinal to restore original order\n// before anything downstream (company search, associations) that assumes row order.\nreturn $input.all().map((it, i) => {\n  const row = it.json;\n  if (row.reject) {\n    return { json: { ...row, _ingest_seq: i, identity: { outcome: \"rejected\", contact_id: null,\n      match_key: null, candidate_ids: [], reason: row.reject_reason || \"missing identity\" } } };\n  }\n  const identity = resolveIdentity(row, row.searchResultsByKey || {});\n  return { json: { ...row, _ingest_seq: i, identity } };\n});\n"
       },
       "id": "c00140000-0000-4000-8000-000000000000",
       "name": "Resolve Identity",
@@ -264,7 +264,7 @@
           "conditions": [
             {
               "id": "i00170000-0000-4000-8000-000000000000",
-              "leftValue": "={{ !!($json.identity && $json.identity.contact_id) }}",
+              "leftValue": "={{ !($json.email_normalized || $json.email) && !!($json.linkedin_url) }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -275,6 +275,154 @@
         }
       },
       "id": "if00180000-0000-4000-8000-000000000000",
+      "name": "IF Linkedin Searchable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 400
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_linkedin_url\", operator: \"EQ\", value: ($json.linkedin_url || \"no-linkedin-url.invalid\") } ] } ], properties: [\"firstname\", \"lastname\", \"email\", \"jobtitle\", \"phone\", \"mobilephone\", \"lv_linkedin_url\", \"hs_linkedin_url\", \"hs_object_id\"], limit: 10 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00190000-0000-4000-8000-000000000000",
+      "name": "HubSpot Linkedin Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        760
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// resolveIdentity.js \u2014 pure-JS contact identity resolver for n8n Code nodes.\n//\n// Mirrors src/identity.py resolve_identity EXACTLY, including the core safety rule:\n// a row with no valid email can NEVER be net_new. Auto-match only on STRONG keys\n// (email / linkedin_url); every weak-key hit routes to ambiguous (needs_review).\n//\n// PURE: the actual HubSpot searches happen upstream in an n8n HubSpot node. This\n// function receives their results pre-fetched as `searchResultsByKey`, a map keyed\n// by the search/match name -> array of candidate ids:\n//   { email:[ids], linkedin_url:[ids], phone_lastname:[ids], name_company:[ids] }\n// A missing key is treated as zero hits.\n\n\n// Deterministic LinkedIn key \u2014 mirrors identity.canonicalize_linkedin.\nfunction canonicalizeLinkedin(url) {\n  if (!url) return null;\n  let s = String(url).trim();\n  if (s === \"\") return null;\n  if (!s.includes(\"//\")) s = \"https://\" + s;\n  let scheme = \"\", rest = s;\n  const schemeIdx = s.indexOf(\"//\");\n  if (schemeIdx > 0) {\n    scheme = s.slice(0, schemeIdx - 1); // drop the ':' before '//'\n    rest = s.slice(schemeIdx + 2);\n  } else {\n    rest = s.slice(schemeIdx + 2);\n  }\n  // rest = host[/path][?query][#frag]\n  let host = rest, path = \"\";\n  const slash = rest.indexOf(\"/\");\n  if (slash >= 0) {\n    host = rest.slice(0, slash);\n    path = rest.slice(slash);\n  }\n  // drop query/fragment\n  path = path.split(\"?\")[0].split(\"#\")[0];\n  if (path.endsWith(\"/\")) path = path.slice(0, -1);\n  return scheme.toLowerCase() + \"://\" + host.toLowerCase() + path;\n}\n\nfunction _ids(searchResultsByKey, key) {\n  const v = searchResultsByKey && searchResultsByKey[key];\n  return Array.isArray(v) ? v.map(String) : [];\n}\n\nfunction resolveIdentity(row, searchResultsByKey) {\n  row = row || {};\n  searchResultsByKey = searchResultsByKey || {};\n\n  const email = normalizeEmailBasic(row.email); // null if absent OR malformed\n  const linkedin = canonicalizeLinkedin(row.linkedin_url);\n  // 73.1-06 (D-16a/D-16a-i): mobilephone is a STRONG key, single-hit only -- kept\n  // deliberately distinct from `phone` below, which is NEVER searched (D-16a-i: a\n  // landline is often a company switchboard shared by every contact there).\n  const mobilephone = normalizePhoneAU(row.mobilephone);\n  const phone = normalizePhoneAU(row.phone);\n  const firstname = String(row.firstname || \"\").trim();\n  const lastname = String(row.lastname || \"\").trim();\n  const company = String(row.company || \"\").trim();\n\n  // 1. Email (STRONG). A valid email is the ONLY route to net_new.\n  if (email) {\n    const ids = _ids(searchResultsByKey, \"email\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"email\",\n               candidate_ids: ids, reason: \"single email match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"email\",\n               candidate_ids: ids, reason: \"multiple email matches\" };\n    }\n    return { outcome: \"net_new\", contact_id: null, match_key: null,\n             candidate_ids: [], reason: \"valid email, no existing match\" };\n  }\n\n  // 2. No valid email past here. LinkedIn (STRONG).\n  if (linkedin) {\n    const ids = _ids(searchResultsByKey, \"linkedin_url\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"single linkedin match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"multiple linkedin matches\" };\n    }\n    // 0 hits -> fall through.\n  }\n\n  // 3. No match on email/linkedin past here. Mobilephone (STRONG, 73.1-06 D-16a-i):\n  // single-hit only, exactly the same shape as the linkedin branch above -- more than\n  // one hit is ambiguous, never a pick.\n  if (mobilephone) {\n    const ids = _ids(searchResultsByKey, \"mobilephone\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"mobilephone\",\n               candidate_ids: ids, reason: \"single mobilephone match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"mobilephone\",\n               candidate_ids: ids, reason: \"multiple mobilephone matches\" };\n    }\n    // 0 hits -> fall through to weak keys.\n  }\n\n  // 4. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).\n  if (phone && lastname) {\n    const ids = _ids(searchResultsByKey, \"phone_lastname\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"phone_lastname\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  if (firstname && lastname && company) {\n    const ids = _ids(searchResultsByKey, \"name_company\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"name_company\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  // 5. 73.1-06 (D-16a/D-16a-i, operator ruling): linkedin_url or mobilephone (both\n  // searched above with zero hits, or absent) or phone (D-16a-i -- CREATE-only\n  // identity, NEVER searched as a match rung: a landline is often a company\n  // switchboard shared by every contact there, and an EQ match on it would update the\n  // wrong person) is a genuinely NEW contact, not an unresolved ambiguity. Scoped to\n  // exactly these three keys: a bare name+company row (none of the three present)\n  // falls through to the unchanged hard-safety rule below, exactly as before this\n  // change -- the weak name_company lane stays \"never auto-create\" on purpose.\n  if (linkedin || mobilephone || phone) {\n    return { outcome: \"net_new\", contact_id: null, match_key: null, candidate_ids: [],\n             reason: \"no email, no match on linkedin/mobilephone -- new contact\" };\n  }\n\n  // 6. HARD SAFETY RULE (bare name+company, or no identity at all): no valid email\n  // AND no confident strong-key match AND no weak-key candidate AND none of\n  // linkedin_url/mobilephone/phone -> ambiguous, NEVER net_new.\n  return { outcome: \"ambiguous\", contact_id: null, match_key: null,\n           candidate_ids: [], reason: \"no email, insufficient identity\" };\n}\n\n// --- n8n wrapper: adapt \"HubSpot Linkedin Search\" -> searchResultsByKey.linkedin_url ---\nreturn $input.all().map((it) => {\n  const merged = it.json;\n  const failed = !!merged.error || merged.status === \"error\";\n  const wanted = canonicalizeLinkedin(merged.linkedin_url);\n  const results = Array.isArray(merged.results) ? merged.results : [];\n  const hits = (failed || !wanted) ? [] : results.filter((c) =>\n    c && c.id && canonicalizeLinkedin(c.properties && c.properties.hs_linkedin_url) === wanted);\n  const ids = hits.map((c) => String(c.id));\n  const srk = { ...(merged.searchResultsByKey || {}) };\n  if (wanted) srk.linkedin_url = ids;\n  let existingRecord = merged.existingRecord || {};\n  if (!failed && ids.length === 1) {\n    existingRecord = { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) };\n  }\n  const rest = { ...merged };\n  delete rest.results; delete rest.total; delete rest.error; delete rest.status;\n  return { json: { ...rest, searchResultsByKey: srk, existingRecord,\n                   lookup_failed: merged.lookup_failed === true || failed } };\n});\n"
+      },
+      "id": "c00200000-0000-4000-8000-000000000000",
+      "name": "Adapt Linkedin Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00210000-0000-4000-8000-000000000000",
+              "leftValue": "={{ !($json.email_normalized || $json.email) && !!($json.mobilephone) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00220000-0000-4000-8000-000000000000",
+      "name": "IF Mobilephone Searchable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 400
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"mobilephone\", operator: \"EQ\", value: ($json.mobilephone_normalized || $json.mobilephone || \"no-mobilephone.invalid\") } ] } ], properties: [\"firstname\", \"lastname\", \"email\", \"jobtitle\", \"phone\", \"mobilephone\", \"lv_linkedin_url\", \"hs_linkedin_url\", \"hs_object_id\"], limit: 10 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00230000-0000-4000-8000-000000000000",
+      "name": "HubSpot Mobilephone Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        760
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// normalizePhone(raw, region) \u2014 region-aware E.164 normalizer.\n//\n// Still NOT libphonenumber (n8n Code nodes can't require npm), but deterministic and\n// keyed off the ISO2 country the PROVIDERS already return (Lusha location.country_iso2,\n// Apollo person country, etc.) instead of guessing. Rules, in order:\n//   1. Already `+E.164` -> trust and keep (digits 6-15).\n//   2. Known region -> prepend that country's calling code (stripping a trunk 0 for\n//      AU/NZ/GB/IE, a leading 1 for US/CA), gated by a per-country NSN-length sanity check.\n//   3. Unknown/absent region -> fall back to normalizePhoneAU (AU heuristic). A non-AU\n//      national number then returns null -> the caller drops it (never a bad write).\n// The NSN-length gate is a sanity filter, not full validation; swap for a phone API when\n// global precision matters (same external-call pattern as the email verifier).\nconst CALLING_CODE = { AU: \"61\", NZ: \"64\", US: \"1\", CA: \"1\", GB: \"44\", IE: \"353\", IN: \"91\", SG: \"65\" };\nconst NSN_LEN = { \"61\": [9], \"64\": [8, 9], \"1\": [10], \"44\": [9, 10], \"353\": [9], \"91\": [10], \"65\": [8] };\nconst TRUNK_REGIONS = /^(AU|NZ|GB|IE)$/;\n\nfunction _nsnOk(cc, nsn) {\n  const lens = NSN_LEN[cc];\n  return lens ? lens.includes(nsn.length) : (nsn.length >= 6 && nsn.length <= 14);\n}\n\nfunction normalizePhone(raw, region) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n  if (s.startsWith(\"+\")) {\n    const d = s.slice(1);\n    return /^\\d{6,15}$/.test(d) ? \"+\" + d : null;\n  }\n  if (!/^\\d+$/.test(s)) return null;\n  const r = String(region || \"\").toUpperCase();\n  const cc = CALLING_CODE[r];\n  if (!cc) return normalizePhoneAU(s); // unknown region -> AU heuristic (non-AU -> null)\n  if (s.startsWith(cc) && _nsnOk(cc, s.slice(cc.length))) return \"+\" + s; // already has CC\n  let nsn = s;\n  if (TRUNK_REGIONS.test(r) && nsn.startsWith(\"0\")) nsn = nsn.slice(1);          // trunk 0\n  if (cc === \"1\" && nsn.length === 11 && nsn.startsWith(\"1\")) nsn = nsn.slice(1); // US/CA leading 1\n  return _nsnOk(cc, nsn) ? \"+\" + cc + nsn : null;\n}\n\n// --- n8n wrapper: adapt \"HubSpot Mobilephone Search\" -> searchResultsByKey.mobilephone ---\n// D-16a-i: single-hit only, decided by resolveIdentity() reading the ids array below --\n// this adapter never decides 0/1/>1 itself, only supplies the verified hit list.\nreturn $input.all().map((it) => {\n  const merged = it.json;\n  const failed = !!merged.error || merged.status === \"error\";\n  const wanted = merged.mobilephone_normalized || normalizePhoneAU(merged.mobilephone);\n  const results = Array.isArray(merged.results) ? merged.results : [];\n  const hits = (failed || !wanted) ? [] : results.filter((c) =>\n    c && c.id && normalizePhoneAU(c.properties && c.properties.mobilephone) === wanted);\n  const ids = hits.map((c) => String(c.id));\n  const srk = { ...(merged.searchResultsByKey || {}) };\n  if (wanted) srk.mobilephone = ids;\n  let existingRecord = merged.existingRecord || {};\n  if (!failed && ids.length === 1) {\n    existingRecord = { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) };\n  }\n  const rest = { ...merged };\n  delete rest.results; delete rest.total; delete rest.error; delete rest.status;\n  return { json: { ...rest, searchResultsByKey: srk, existingRecord,\n                   lookup_failed: merged.lookup_failed === true || failed } };\n});\n"
+      },
+      "id": "c00240000-0000-4000-8000-000000000000",
+      "name": "Adapt Mobilephone Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00250000-0000-4000-8000-000000000000",
+              "leftValue": "={{ !!($json.identity && $json.identity.contact_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00260000-0000-4000-8000-000000000000",
       "name": "IF Has Contact Id",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -293,7 +441,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00190000-0000-4000-8000-000000000000",
+      "id": "h00270000-0000-4000-8000-000000000000",
       "name": "HubSpot Contact History",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -308,7 +456,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Adapt Contact History -- Phase 72 Plan 04 (D-72-07).\n// splice_carry_merge_after's combineByPosition pairs the raw HubSpot GET response\n// (input 0) with this row (input 1) into ONE flat object, row-fields-last -- exactly\n// the shape ADAPT_SEARCH_RESULTS's own carry merge produces. Turns the response's\n// propertiesWithHistory into a flat historyByField map (field name -> newest\n// versions[].timestamp), tolerating an absent/error response by emitting NO key at\n// all -- a row that never reaches this node (net_new/unmatched) never carries\n// historyByField either, which is the pre-72 \"unknown freshness\" degrade by\n// construction. HubSpot's own contract: propertiesWithHistory[field] is an ARRAY of\n// version objects ({value, timestamp, ...}); this reads the MAX timestamp across the\n// array rather than assuming any particular order.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const historyByField = {};\n  if (!row.error && row.status !== \"error\" && row.propertiesWithHistory &&\n      typeof row.propertiesWithHistory === \"object\") {\n    for (const [field, versions] of Object.entries(row.propertiesWithHistory)) {\n      if (!Array.isArray(versions) || versions.length === 0) continue;\n      let newest = null;\n      for (const v of versions) {\n        const ts = v && v.timestamp;\n        if (!ts) continue;\n        const parsed = Date.parse(ts);\n        if (Number.isNaN(parsed)) continue;\n        if (newest === null || parsed > Date.parse(newest)) newest = ts;\n      }\n      if (newest) historyByField[field] = newest;\n    }\n  }\n  const rest = { ...row };\n  delete rest.id; delete rest.properties; delete rest.propertiesWithHistory;\n  delete rest.archived; delete rest.createdAt; delete rest.updatedAt;\n  delete rest.error; delete rest.status;\n  return { json: { ...rest, historyByField } };\n});\n"
       },
-      "id": "c00200000-0000-4000-8000-000000000000",
+      "id": "c00280000-0000-4000-8000-000000000000",
       "name": "Adapt Contact History",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -336,7 +484,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00210000-0000-4000-8000-000000000000",
+      "id": "h00290000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Search by Domain",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -351,7 +499,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Stash Domain Search \u2014 see build_cloud_workflows.py's own\n// comment at this node's call site for why the domain search's response is nested\n// rather than left at the top level.\nreturn $input.all().map((it) => {\n  const { results, total, error, ...row } = it.json;\n  return { json: { ...row, _company_domain_search: { results, total, error } } };\n});\n"
       },
-      "id": "c00220000-0000-4000-8000-000000000000",
+      "id": "c00300000-0000-4000-8000-000000000000",
       "name": "Stash Domain Search",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -379,7 +527,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00230000-0000-4000-8000-000000000000",
+      "id": "h00310000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Search by Name",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -394,7 +542,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// companyLink.js \u2014 contact -> company resolution for the ingest lane.\n//\n// A contact must never land in HubSpot unassociated (operator ruling, 2026-08-25). This\n// module answers ONE question per row: which company record does this contact belong to?\n// It resolves, it never creates \u2014 an unresolved row is HELD for review, because a junk\n// company shell is worse than a held row, and an existing company must never be\n// duplicated (the company lane already dedupes on `domain`; this keeps ingest honest to\n// the same anchor).\n//\n// Resolution order, strongest first:\n//   1. manual  \u2014 the operator named the company id on the row itself (`company_id`).\n//   2. domain  \u2014 the contact's email domain matched a company's `domain` EXACTLY.\n//   3. name    \u2014 the row's company name matched a company's `name` EXACTLY.\n//\n// ponytail: name matching is exact-EQ only. CONTAINS_TOKEN would raise the hit rate and\n// mis-associate \"Racing Victoria\" onto \"Racing Victoria Foundation\" \u2014 a wrong association\n// is silent and worse than the hold lane it would bypass. Upgrade path if hit rate hurts:\n// a candidate-list return the operator confirms, the way preingest confirms matches.\n//\n// NO npm, dependency-free \u2014 this module is inline()'d verbatim into n8n Code nodes.\n\n// Free/consumer mail domains: an @gmail.com address says nothing about the employer, and\n// searching companies for domain=\"gmail.com\" would associate every such contact onto one\n// arbitrary record. AU ISP domains included \u2014 they are the local shape of the same trap.\nconst FREEMAIL_DOMAINS = new Set([\n  \"gmail.com\", \"googlemail.com\", \"outlook.com\", \"outlook.com.au\", \"hotmail.com\",\n  \"hotmail.com.au\", \"live.com\", \"live.com.au\", \"msn.com\", \"yahoo.com\", \"yahoo.com.au\",\n  \"ymail.com\", \"icloud.com\", \"me.com\", \"mac.com\", \"aol.com\", \"protonmail.com\", \"proton.me\",\n  \"gmx.com\", \"mail.com\", \"zoho.com\",\n  // AU consumer ISPs\n  \"bigpond.com\", \"bigpond.net.au\", \"bigpond.com.au\", \"optusnet.com.au\", \"iinet.net.au\",\n  \"tpg.com.au\", \"internode.on.net\", \"westnet.com.au\", \"dodo.com.au\", \"iprimus.com.au\",\n  \"exemail.com.au\", \"ozemail.com.au\",\n]);\n\n// Hosts that are somebody's PROFILE PAGE, never a company's own domain. Found live\n// 2026-08-25 during the Phase 53 operator walk: an operator with only a LinkedIn URL is the\n// normal case, and the naive host extraction turned\n// `linkedin.com/company/futsal-australia` into the domain `linkedin.com`. That would search\n// HubSpot for domain=linkedin.com, find nothing, create a company whose domain IS\n// linkedin.com \u2014 and then every later LinkedIn-sourced company would MATCH that one poisoned\n// record. One bad row swallowing every future company, silently.\n//\n// These are not the same thing as FREEMAIL_DOMAINS (a personal mailbox); they are hosts where\n// a URL identifies a page ABOUT a company rather than the company's own site. Both are\n// unusable as a company domain, for different reasons, so both are refused here.\nconst NOT_A_COMPANY_DOMAIN = new Set([\n  \"linkedin.com\", \"lnkd.in\", \"facebook.com\", \"fb.com\", \"instagram.com\", \"twitter.com\",\n  \"x.com\", \"youtube.com\", \"youtu.be\", \"tiktok.com\", \"threads.net\", \"medium.com\",\n  \"crunchbase.com\", \"wikipedia.org\", \"en.wikipedia.org\", \"bloomberg.com\", \"zoominfo.com\",\n  \"apollo.io\", \"abn.business.gov.au\", \"linktr.ee\", \"about.me\", \"sites.google.com\",\n  \"wixsite.com\", \"squarespace.com\", \"godaddysites.com\",\n]);\n\n// Same normalisation the companies lane's Build Company Identity applies, so a domain\n// resolved here and a domain the company lane stored are the same string. Returns null for\n// anything that cannot BE a company domain \u2014 the caller then falls through to the exact-name\n// match rather than resolving against a host that identifies no company.\nfunction cleanCompanyDomain(raw) {\n  if (!raw) return null;\n  let d = String(raw).trim().toLowerCase();\n  d = d.replace(/^https?:\\/\\//, \"\").replace(/^www\\./, \"\").split(\"/\")[0].split(\"?\")[0];\n  if (!d) return null;\n  if (NOT_A_COMPANY_DOMAIN.has(d)) return null;\n  if (FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction emailDomain(email) {\n  const e = String(email || \"\").trim().toLowerCase();\n  if (!e || e.indexOf(\"@\") === -1) return null;\n  const d = e.split(\"@\").pop();\n  return d || null;\n}\n\n// The domain to search companies by, or null when the row gives no usable one.\n// An explicit column wins; otherwise the email domain, unless it is freemail.\nfunction companyDomainForRow(row) {\n  const explicit = cleanCompanyDomain((row || {}).company_domain || (row || {}).website);\n  if (explicit) return explicit;\n  const d = emailDomain((row || {}).email_normalized || (row || {}).email);\n  if (!d || FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction companyNameForRow(row) {\n  const n = String(((row || {}).company) || \"\").trim();\n  return n || null;\n}\n\n// HubSpot CRM v3 search envelope -> [{id, properties}]. Tolerates an error item (the\n// search nodes run with onError: continueRegularOutput) by returning [].\nfunction searchResults(response) {\n  const res = (response && response.json) || response || {};\n  if (res.error || (res.json && res.json.error)) return [];\n  const results = res.results;\n  if (!Array.isArray(results)) return [];\n  return results.filter((r) => r && r.id);\n}\n\nfunction domainMatchId(response, domain) {\n  if (!domain) return null;\n  const wanted = String(domain).toLowerCase();\n  for (const r of searchResults(response)) {\n    const got = cleanCompanyDomain((r.properties || {}).domain);\n    if (got && got === wanted) return String(r.id);\n  }\n  return null;\n}\n\nfunction nameMatchId(response, name) {\n  if (!name) return null;\n  const wanted = String(name).trim().toLowerCase();\n  const hits = searchResults(response).filter(\n    (r) => String((r.properties || {}).name || \"\").trim().toLowerCase() === wanted\n  );\n  // Two companies with the identical name is an ambiguity, not a match \u2014 hold it.\n  if (hits.length !== 1) return null;\n  return String(hits[0].id);\n}\n\n// The one entry point the n8n node calls. `row` is the ingest row; the two responses are\n// the domain-search and name-search HTTP node outputs for THAT row.\nfunction resolveCompanyLink(row, domainResponse, nameResponse) {\n  const company_domain = companyDomainForRow(row);\n  const company_name = companyNameForRow(row);\n  const manual = String(((row || {}).company_id) || \"\").trim();\n  if (manual) {\n    return {\n      company_id: manual,\n      company_match: \"manual\",\n      company_domain,\n      company_name,\n      company_hold_reason: null,\n    };\n  }\n  const byDomain = domainMatchId(domainResponse, company_domain);\n  if (byDomain) {\n    return { company_id: byDomain, company_match: \"domain\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  const byName = nameMatchId(nameResponse, company_name);\n  if (byName) {\n    return { company_id: byName, company_match: \"name\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  let reason;\n  if (!company_domain && !company_name) {\n    reason = \"no company domain or name on the row \u2014 nothing to match a company on\";\n  } else {\n    const tried = [];\n    if (company_domain) tried.push(\"domain \" + company_domain);\n    if (company_name) tried.push(\"name \\\"\" + company_name + \"\\\"\");\n    reason = \"no company in HubSpot matched \" + tried.join(\" or \") +\n             \" \u2014 create or enrich the company first, or name its record id on the row\";\n  }\n  return { company_id: null, company_match: null, company_domain, company_name,\n           company_hold_reason: reason };\n}\n\n// v4 default association: HubSpot-defined contact->company, idempotent, no body.\nfunction associationUrl(contactId, companyId) {\n  if (!contactId || !companyId) return null;\n  return \"https://api.hubapi.com/crm/v4/objects/contacts/\" + String(contactId) +\n         \"/associations/default/companies/\" + String(companyId);\n}\n\n// --- n8n wrapper: resolve each row's company id from the two searches ---\n// Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now the carry\n// merge spliced after \"HubSpot Company Search by Name\" \u2014 every $input item already\n// carries the row's own fields, the NAME search's response at the top level\n// (results/total/error), and the DOMAIN search's response nested under\n// `_company_domain_search` (\"Stash Domain Search\" put it there for exactly this\n// reason). No $() lookup, no index alignment against a separately-fetched list.\nreturn $input.all().map((it) => {\n  const { results, total, error, _company_domain_search, ...row } = it.json;\n  const byName = { results, total, ...(error !== undefined ? { error } : {}) };\n  const byDomain = _company_domain_search || {};\n  const link = resolveCompanyLink(row, byDomain, byName);\n  return { json: { ...row, ...link } };\n});\n"
       },
-      "id": "c00240000-0000-4000-8000-000000000000",
+      "id": "c00320000-0000-4000-8000-000000000000",
       "name": "Adapt Company Link",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -406,9 +554,9 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_CREATE = \"false\";\n\nfunction _buildWriteRequest(action, hsObjectId, domain, email) {\n  var d = domain || null;\n  if (!d && action === \"create\" && email && String(email).indexOf(\"@\") !== -1) {\n    d = String(email).split(\"@\").pop().toLowerCase();\n  }\n  return { action: action, hs_object_id: hsObjectId || null, domain: d, email: email || null };\n}\n// Decide Action \u2014 CLOUD variant.\n// Computes action + the HubSpot property patch, then the IF nodes route to the\n// real HubSpot update/create (gated) / Set review nodes.\n// Phase 15: this is the SINGLE serialization point for the provenance blob \u2014 the\n// stamper (mergeContacts.js) returns the parsed provenance object, never a string.\nfunction _sortedForStringify(v) {\n  if (Array.isArray(v)) return v.map(_sortedForStringify);\n  if (v !== null && typeof v === \"object\") {\n    const out = {};\n    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);\n    return out;\n  }\n  return v;\n}\nfunction _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }\nfunction _buildContactPatch(merge) {\n  if (!merge) return {};\n  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };\n  if (merge.provenance && Object.keys(merge.provenance).length) {\n    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);\n  }\n  return patch;\n}\n\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  // D-16/D-16a/D-16b: this used to read row.allow_create, a field seeded on the webhook\n  // item at Set Config \u2014 but Extract From File emits fresh items parsed from the binary\n  // CSV, so nothing seeded upstream of it survives to here (BUG 12/BUG 21 row-loss\n  // family). The sole authority is the baked ALLOW_HUBSPOT_CREATE constant this node\n  // declares (composed at the build site, prepended ahead of this jsCode) \u2014 the SAME\n  // overlayable constant HubSpot Create Write Gate downstream already reads, so arming\n  // creation here still requires that gate's allowlist too. Not OR'd with a row value.\n  const allow_create = String(ALLOW_HUBSPOT_CREATE).toLowerCase() === \"true\";\n  const properties = _buildContactPatch(row.merge);\n  let action;\n  if (outcome === \"match\") action = \"update\";\n  else if (outcome === \"net_new\") action = allow_create ? \"create\" : \"review\";\n  else if (outcome === \"ambiguous\") action = \"review\";\n  else action = \"skip\";\n  // Fail-closed, mirroring the enrichment lanes' lookup_failed -> never-create override:\n  // a \"net_new\" produced by a FAILED search is not a new contact, it is an unknown.\n  if (row.lookup_failed === true && action === \"create\") action = \"review\";\n  // Operator ruling 2026-08-25: a contact must ALWAYS be associated with a company. A\n  // create with no resolved company is HELD, not landed \u2014 an orphan contact is silent\n  // and permanent, a held row is visible and one operator answer away (name the company\n  // record id on the row, or create/enrich the company first). Creates only: an update\n  // targets a record that already exists and may already carry an association this lane\n  // cannot see, so holding it would block ordinary enrichment for no gain.\n  let company_hold = null;\n  if (action === \"create\" && !row.company_id) {\n    action = \"review\";\n    company_hold = row.company_hold_reason || \"no company matched this contact\";\n  }\n  // F-A4 (uat-stress-2026-09-15, execution 12429): a batch-wide HubSpot search failure\n  // (`lookup_failed`, stamped by \"Adapt Search Results\" when ANY row's email search\n  // 429s/errors \u2014 Phase 36 Finding B's deliberate whole-batch scope) makes a genuine\n  // \"valid email, zero hits\" indistinguishable from \"the search never actually ran\".\n  // Overriding ONLY the `net_new` outcome (resolveIdentity's SOLE `net_new` return is\n  // reason \"valid email, no existing match\" \u2014 matching on `outcome` instead of that\n  // literal string survives a future reword of resolveIdentity's text): it is the ONE\n  // outcome a failed search can silently manufacture (a real match/multi-match found an\n  // actual hit a 429 can't invent; an emailless row never issues this search at all, so\n  // its own \"no email, insufficient identity\" reason is untouched). `company_hold`\n  // (above) can never fire in this same branch \u2014 a net_new row only reaches the\n  // company_hold check with `action === \"create\"`, and the lookup_failed guard two\n  // lines above it already downgraded `create` to `review` first \u2014 so this override is\n  // never shadowed by a company-resolution reason.\n  let identity_reason = id.reason;\n  if (row.lookup_failed === true && id.outcome === \"net_new\") {\n    identity_reason = \"lookup failed (HubSpot search unavailable/rate-limited) \u2014 held, not matched\";\n  }\n  if (action === \"create\") {\n    // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without\n    // this seed writes a record the by-email search can never find again \u2014 and the next\n    // run creates another. Create branch ONLY; on update this would be a clobber.\n    if (row.email) properties.email = row.email;\n    if (row.firstname) properties.firstname = row.firstname;\n    if (row.lastname) properties.lastname = row.lastname;\n    // 37-CONTEXT.md \u00a713(b) / operator's option-b ruling (resolves 37-07's checkpoint):\n    // stamp the poller's work-queue flag so a freshly created contact is swept by the\n    // already-deployed scheduled poller (daily cadence since 2026-08-10) with no further operator action. This\n    // is a work-queue flag the poller searches for, NOT a write gate \u2014 it grants no\n    // permission and opens no write path (ALLOW_HUBSPOT_CREATE above already gates this\n    // whole branch). Create branch ONLY for the same reason the identity seeds above are:\n    // an update targets a record whose enrichment state the operator may already have\n    // curated, and re-flagging it would re-queue work that was deliberately finished.\n    properties.lv_enrichment_requested = \"true\";\n  }\n  // F12 (uat-batch-review-row-reads-failed, execution 12181): \"HubSpot Update Write\n  // Gate\" (downstream, spliced by splice_write_gates) filters its input to nothing\n  // when the allowlist refuses a row \u2014 a Code node emitting [] never fires its own\n  // outgoing connection (the same \"wave dropping\" semantics as \"IF Company Skip\"'s\n  // Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the pre-write refusal PRECHECK that\n  // used to sit here \u2014 a second copy of `_writeSafetyAllows`, added 2026-09-09 after\n  // execution 12181 reported Greg Purcell's blocked update as if it had landed \u2014 is\n  // GONE. It predicted the gate's verdict instead of reporting it, which is a copy that\n  // can disagree (its own comment admitted as much: create rows were deliberately left\n  // uncovered precisely because reproducing the create gate's email-domain derivation\n  // here risked a false \"write_blocked\"). The row's outcome of record is now the write\n  // node's own output: \"HubSpot Update/Create Write Gate\" EMITS a refused row (D-70-14)\n  // carrying `action: \"write_blocked\"` and a reason, and \"Build Ingest Response\"\n  // overlays that verdict onto the decided snapshot. Create rows are covered by\n  // construction, closing the follow-up the precheck filed\n  // (.planning/todos/pending/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md).\n  return { json: {\n    action,\n    outcome,\n    // BUG 16: this lane historically emitted only `contact_id`, while the write nodes and\n    // the write-safety gates spliced in Phase 16.10 both read `hs_object_id` \u2014 so the\n    // gates evaluated _writeSafetyAllows(action, null, null) and denied unconditionally,\n    // whatever the allowlist said. Emitting both converges this lane on the same row\n    // contract the enrichment lane uses. `contact_id` is retained: Resolve Identity and\n    // the response path still read it.\n    contact_id: id.contact_id || null,\n    hs_object_id: id.contact_id || null,\n    reason: company_hold || identity_reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    // The association lane's row context (2026-08-25). `company_id` is what Build\n    // Association Request joins on; `email` makes a created row identifiable in the\n    // synchronous response before HubSpot has minted its id.\n    email: row.email_normalized || row.email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    company_domain: row.company_domain || null,\n    // F11 (uat-batch-review-row-reads-failed, execution 12181): \"HubSpot Update Write\n    // Gate\" (spliced in front of \"HubSpot Update\" by splice_write_gates, action\n    // \"enrich\") reads a row's domain as `identity_keys.domain || json.domain` \u2014 neither\n    // of which this lane ever emitted, so a domain-only TEST_RECORD_DOMAINS allowlist\n    // could never admit an update (Greg Purcell, execution 12181: gate emitted 0 items,\n    // HubSpot Update never ran). Same class of gap as BUG 24 (Review Search omitting\n    // `domain`) \u2014 fixed the same way: populate the field the gate already reads, not\n    // the shared gate itself (widening the gate's fallback logic would also reach the\n    // scheduled-maintenance \"enrich\" call sites, an unreviewed scope change). Scoped to\n    // NON-create actions only: \"HubSpot Create Write Gate\" already derives its own\n    // allowlist domain from the row's email (BUG 27) when no `domain` is present, and a\n    // create's `company_domain` is the ASSOCIATED company, not necessarily the\n    // contact's own email domain \u2014 populating `domain` there too would silently change\n    // which domain the create gate checks (caught live by\n    // contactCreateGateFlow.test.mjs's BUG 27 regression).\n    domain: action !== \"create\" ? (row.company_domain || null) : null,\n    // D-70-12 (Phase 70 Plan 05 Task 1): the canonical shape \"HubSpot Update Write\n    // Gate\"/\"HubSpot Create Write Gate\" now read EXCLUSIVELY \u2014 same action/id/domain\n    // values the fields above already computed for the (now-deleted) fallback ladder,\n    // stamped once through the shared helper rather than re-derived at the gate.\n    write_request: _buildWriteRequest(\n      action, id.contact_id || null,\n      action !== \"create\" ? (row.company_domain || null) : null,\n      row.email_normalized || row.email || null\n    ),\n    properties\n  }};\n});\n"
+        "jsCode": "const ALLOW_HUBSPOT_CREATE = \"false\";\n\nfunction _buildWriteRequest(action, hsObjectId, domain, email) {\n  var d = domain || null;\n  if (!d && action === \"create\" && email && String(email).indexOf(\"@\") !== -1) {\n    d = String(email).split(\"@\").pop().toLowerCase();\n  }\n  return { action: action, hs_object_id: hsObjectId || null, domain: d, email: email || null };\n}\n// Decide Action \u2014 CLOUD variant.\n// Computes action + the HubSpot property patch, then the IF nodes route to the\n// real HubSpot update/create (gated) / Set review nodes.\n// Phase 15: this is the SINGLE serialization point for the provenance blob \u2014 the\n// stamper (mergeContacts.js) returns the parsed provenance object, never a string.\nfunction _sortedForStringify(v) {\n  if (Array.isArray(v)) return v.map(_sortedForStringify);\n  if (v !== null && typeof v === \"object\") {\n    const out = {};\n    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);\n    return out;\n  }\n  return v;\n}\nfunction _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }\n// 73.1-06 (D-16d): names which identity rung resolved a row, using the SAME\n// vocabulary matchProposal.js's laneOf() returns (email/linkedin/mobilephone/name) so\n// the two never diverge -- one exception, \"phone\": resolveIdentity() never gives\n// `phone` a laneOf-style rung at all (D-16a-i: it is CREATE-only, never searched), so\n// a phone-admitted create is reported under its own real key name instead of a\n// laneOf value that does not exist for it.\nconst MATCH_KEY_TO_LANE = { email: \"email\", linkedin_url: \"linkedin\",\n                            mobilephone: \"mobilephone\", phone_lastname: \"name\",\n                            name_company: \"name\" };\nfunction _resolvedBy(row, id) {\n  if (id.match_key) return MATCH_KEY_TO_LANE[id.match_key] || id.match_key;\n  if (id.outcome === \"net_new\") {\n    if (row.email_normalized || row.email) return \"email\";\n    if (row.linkedin_url) return \"linkedin\";\n    if (row.mobilephone) return \"mobilephone\";\n    if (row.phone) return \"phone\";\n  }\n  return null;\n}\nfunction _buildContactPatch(merge) {\n  if (!merge) return {};\n  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };\n  if (merge.provenance && Object.keys(merge.provenance).length) {\n    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);\n  }\n  return patch;\n}\n\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  // D-16/D-16a/D-16b: this used to read row.allow_create, a field seeded on the webhook\n  // item at Set Config \u2014 but Extract From File emits fresh items parsed from the binary\n  // CSV, so nothing seeded upstream of it survives to here (BUG 12/BUG 21 row-loss\n  // family). The sole authority is the baked ALLOW_HUBSPOT_CREATE constant this node\n  // declares (composed at the build site, prepended ahead of this jsCode) \u2014 the SAME\n  // overlayable constant HubSpot Create Write Gate downstream already reads, so arming\n  // creation here still requires that gate's allowlist too. Not OR'd with a row value.\n  const allow_create = String(ALLOW_HUBSPOT_CREATE).toLowerCase() === \"true\";\n  const properties = _buildContactPatch(row.merge);\n  let action;\n  if (outcome === \"match\") action = \"update\";\n  else if (outcome === \"net_new\") action = allow_create ? \"create\" : \"review\";\n  else if (outcome === \"ambiguous\") action = \"review\";\n  else action = \"skip\";\n  // Fail-closed, mirroring the enrichment lanes' lookup_failed -> never-create override:\n  // a \"net_new\" produced by a FAILED search is not a new contact, it is an unknown.\n  if (row.lookup_failed === true && action === \"create\") action = \"review\";\n  // Operator ruling 2026-08-25: a contact must ALWAYS be associated with a company. A\n  // create with no resolved company is HELD, not landed \u2014 an orphan contact is silent\n  // and permanent, a held row is visible and one operator answer away (name the company\n  // record id on the row, or create/enrich the company first). Creates only: an update\n  // targets a record that already exists and may already carry an association this lane\n  // cannot see, so holding it would block ordinary enrichment for no gain.\n  let company_hold = null;\n  if (action === \"create\" && !row.company_id) {\n    action = \"review\";\n    company_hold = row.company_hold_reason || \"no company matched this contact\";\n  }\n  // F-A4 (uat-stress-2026-09-15, execution 12429): a batch-wide HubSpot search failure\n  // (`lookup_failed`, stamped by \"Adapt Search Results\" when ANY row's email search\n  // 429s/errors \u2014 Phase 36 Finding B's deliberate whole-batch scope) makes a genuine\n  // \"valid email, zero hits\" indistinguishable from \"the search never actually ran\".\n  // Overriding ONLY the `net_new` outcome (resolveIdentity's SOLE `net_new` return is\n  // reason \"valid email, no existing match\" \u2014 matching on `outcome` instead of that\n  // literal string survives a future reword of resolveIdentity's text): it is the ONE\n  // outcome a failed search can silently manufacture (a real match/multi-match found an\n  // actual hit a 429 can't invent; an emailless row never issues this search at all, so\n  // its own \"no email, insufficient identity\" reason is untouched). `company_hold`\n  // (above) can never fire in this same branch \u2014 a net_new row only reaches the\n  // company_hold check with `action === \"create\"`, and the lookup_failed guard two\n  // lines above it already downgraded `create` to `review` first \u2014 so this override is\n  // never shadowed by a company-resolution reason.\n  let identity_reason = id.reason;\n  if (row.lookup_failed === true && id.outcome === \"net_new\") {\n    identity_reason = \"lookup failed (HubSpot search unavailable/rate-limited) \u2014 held, not matched\";\n  }\n  if (action === \"create\") {\n    // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without\n    // this seed writes a record the by-email search can never find again \u2014 and the next\n    // run creates another. Create branch ONLY; on update this would be a clobber.\n    if (row.email) properties.email = row.email;\n    if (row.firstname) properties.firstname = row.firstname;\n    if (row.lastname) properties.lastname = row.lastname;\n    // 73.1-06 (D-16a-i Test 6): unlike email/firstname/lastname above, `phone` and\n    // `mobilephone` are DELIBERATELY NOT seeded here -- both already reach a create's\n    // `properties` through the ordinary non-clobber merge engine above (`candidate.phone`/\n    // `candidate.mobilephone` in MERGE_CONTACTS, gated by mergeContacts()'s own\n    // fill_blank_only confidence threshold against a genuinely blank existingRecord).\n    // A BUG-19-style unconditional seed here would bypass that gate entirely and force\n    // a needs_review-confidence value onto the create body regardless of the merge\n    // decision -- exactly the defect ingestWidenedFieldsFlow.test.mjs's D-72-22\n    // negative case guards against. `phone`'s csv confidence (80) already meets its own\n    // policy threshold (80) so a phone-admitted create's value promotes normally;\n    // `mobilephone`'s higher threshold (85) is the documented D-72-22 gap a\n    // source_by_field override closes, unrelated to this plan.\n    // 37-CONTEXT.md \u00a713(b) / operator's option-b ruling (resolves 37-07's checkpoint):\n    // stamp the poller's work-queue flag so a freshly created contact is swept by the\n    // already-deployed scheduled poller (daily cadence since 2026-08-10) with no further operator action. This\n    // is a work-queue flag the poller searches for, NOT a write gate \u2014 it grants no\n    // permission and opens no write path (ALLOW_HUBSPOT_CREATE above already gates this\n    // whole branch). Create branch ONLY for the same reason the identity seeds above are:\n    // an update targets a record whose enrichment state the operator may already have\n    // curated, and re-flagging it would re-queue work that was deliberately finished.\n    properties.lv_enrichment_requested = \"true\";\n  }\n  // F12 (uat-batch-review-row-reads-failed, execution 12181): \"HubSpot Update Write\n  // Gate\" (downstream, spliced by splice_write_gates) filters its input to nothing\n  // when the allowlist refuses a row \u2014 a Code node emitting [] never fires its own\n  // outgoing connection (the same \"wave dropping\" semantics as \"IF Company Skip\"'s\n  // Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the pre-write refusal PRECHECK that\n  // used to sit here \u2014 a second copy of `_writeSafetyAllows`, added 2026-09-09 after\n  // execution 12181 reported Greg Purcell's blocked update as if it had landed \u2014 is\n  // GONE. It predicted the gate's verdict instead of reporting it, which is a copy that\n  // can disagree (its own comment admitted as much: create rows were deliberately left\n  // uncovered precisely because reproducing the create gate's email-domain derivation\n  // here risked a false \"write_blocked\"). The row's outcome of record is now the write\n  // node's own output: \"HubSpot Update/Create Write Gate\" EMITS a refused row (D-70-14)\n  // carrying `action: \"write_blocked\"` and a reason, and \"Build Ingest Response\"\n  // overlays that verdict onto the decided snapshot. Create rows are covered by\n  // construction, closing the follow-up the precheck filed\n  // (.planning/todos/pending/2026-09-09-ingest-create-row-has-no-write-blocked-precheck.md).\n  return { json: {\n    action,\n    outcome,\n    // BUG 16: this lane historically emitted only `contact_id`, while the write nodes and\n    // the write-safety gates spliced in Phase 16.10 both read `hs_object_id` \u2014 so the\n    // gates evaluated _writeSafetyAllows(action, null, null) and denied unconditionally,\n    // whatever the allowlist said. Emitting both converges this lane on the same row\n    // contract the enrichment lane uses. `contact_id` is retained: Resolve Identity and\n    // the response path still read it.\n    contact_id: id.contact_id || null,\n    hs_object_id: id.contact_id || null,\n    reason: company_hold || identity_reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    // 73.1-06 (D-16d): one field naming the identity rung that resolved this row, so\n    // \"Build Ingest Response\" can report it -- see _resolvedBy's own comment above.\n    resolved_by: _resolvedBy(row, id),\n    // The association lane's row context (2026-08-25). `company_id` is what Build\n    // Association Request joins on; `email` makes a created row identifiable in the\n    // synchronous response before HubSpot has minted its id.\n    email: row.email_normalized || row.email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    company_domain: row.company_domain || null,\n    // F11 (uat-batch-review-row-reads-failed, execution 12181): \"HubSpot Update Write\n    // Gate\" (spliced in front of \"HubSpot Update\" by splice_write_gates, action\n    // \"enrich\") reads a row's domain as `identity_keys.domain || json.domain` \u2014 neither\n    // of which this lane ever emitted, so a domain-only TEST_RECORD_DOMAINS allowlist\n    // could never admit an update (Greg Purcell, execution 12181: gate emitted 0 items,\n    // HubSpot Update never ran). Same class of gap as BUG 24 (Review Search omitting\n    // `domain`) \u2014 fixed the same way: populate the field the gate already reads, not\n    // the shared gate itself (widening the gate's fallback logic would also reach the\n    // scheduled-maintenance \"enrich\" call sites, an unreviewed scope change). Scoped to\n    // NON-create actions only: \"HubSpot Create Write Gate\" already derives its own\n    // allowlist domain from the row's email (BUG 27) when no `domain` is present, and a\n    // create's `company_domain` is the ASSOCIATED company, not necessarily the\n    // contact's own email domain \u2014 populating `domain` there too would silently change\n    // which domain the create gate checks (caught live by\n    // contactCreateGateFlow.test.mjs's BUG 27 regression).\n    domain: action !== \"create\" ? (row.company_domain || null) : null,\n    // D-70-12 (Phase 70 Plan 05 Task 1): the canonical shape \"HubSpot Update Write\n    // Gate\"/\"HubSpot Create Write Gate\" now read EXCLUSIVELY \u2014 same action/id/domain\n    // values the fields above already computed for the (now-deleted) fallback ladder,\n    // stamped once through the shared helper rather than re-derived at the gate.\n    write_request: _buildWriteRequest(\n      action, id.contact_id || null,\n      action !== \"create\" ? (row.company_domain || null) : null,\n      row.email_normalized || row.email || null\n    ),\n    properties\n  }};\n});\n"
       },
-      "id": "c00250000-0000-4000-8000-000000000000",
+      "id": "c00330000-0000-4000-8000-000000000000",
       "name": "Decide Action",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -422,7 +570,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Decide Action Snapshot \u2014 see build_cloud_workflows.py's\n// own comment at this node's call site.\nreturn $input.all().map((it) => ({ json: { ...it.json, _decided_snapshot: true } }));\n"
       },
-      "id": "c00260000-0000-4000-8000-000000000000",
+      "id": "c00340000-0000-4000-8000-000000000000",
       "name": "Decide Action Snapshot",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -442,7 +590,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00270000-0000-4000-8000-000000000000",
+              "id": "i00350000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.action }}",
               "rightValue": "update",
               "operator": {
@@ -453,7 +601,7 @@
           ]
         }
       },
-      "id": "if00280000-0000-4000-8000-000000000000",
+      "id": "if00360000-0000-4000-8000-000000000000",
       "name": "IF Update",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -475,7 +623,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00290000-0000-4000-8000-000000000000",
+      "id": "h00370000-0000-4000-8000-000000000000",
       "name": "HubSpot Update",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -495,7 +643,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00300000-0000-4000-8000-000000000000",
+              "id": "i00380000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.action }}",
               "rightValue": "create",
               "operator": {
@@ -506,7 +654,7 @@
           ]
         }
       },
-      "id": "if00310000-0000-4000-8000-000000000000",
+      "id": "if00390000-0000-4000-8000-000000000000",
       "name": "IF Create",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -528,7 +676,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00320000-0000-4000-8000-000000000000",
+      "id": "h00400000-0000-4000-8000-000000000000",
       "name": "HubSpot Create",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -544,7 +692,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Set Review \u2014 the review lane's own contribution to \"Ingest Merge Response\".\n// IF nodes only route; every item reaching here still carries Decide Action's full row\n// (action/outcome/contact_id/company_id/reason/row_id/...). Also fed by \"Review Lane\n// Sentinel\" on a batch where nothing would otherwise reach this node at all (every row\n// routed to update/create) \u2014 that marker carries no other field, so it becomes\n// `{queue: \"needs_review\"}` here and is dropped downstream as identity-less.\nreturn $input.all().map((it) => ({ json: { ...it.json, queue: \"needs_review\" } }));\n"
       },
-      "id": "c00330000-0000-4000-8000-000000000000",
+      "id": "c00410000-0000-4000-8000-000000000000",
       "name": "Set Review",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -559,7 +707,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// companyLink.js \u2014 contact -> company resolution for the ingest lane.\n//\n// A contact must never land in HubSpot unassociated (operator ruling, 2026-08-25). This\n// module answers ONE question per row: which company record does this contact belong to?\n// It resolves, it never creates \u2014 an unresolved row is HELD for review, because a junk\n// company shell is worse than a held row, and an existing company must never be\n// duplicated (the company lane already dedupes on `domain`; this keeps ingest honest to\n// the same anchor).\n//\n// Resolution order, strongest first:\n//   1. manual  \u2014 the operator named the company id on the row itself (`company_id`).\n//   2. domain  \u2014 the contact's email domain matched a company's `domain` EXACTLY.\n//   3. name    \u2014 the row's company name matched a company's `name` EXACTLY.\n//\n// ponytail: name matching is exact-EQ only. CONTAINS_TOKEN would raise the hit rate and\n// mis-associate \"Racing Victoria\" onto \"Racing Victoria Foundation\" \u2014 a wrong association\n// is silent and worse than the hold lane it would bypass. Upgrade path if hit rate hurts:\n// a candidate-list return the operator confirms, the way preingest confirms matches.\n//\n// NO npm, dependency-free \u2014 this module is inline()'d verbatim into n8n Code nodes.\n\n// Free/consumer mail domains: an @gmail.com address says nothing about the employer, and\n// searching companies for domain=\"gmail.com\" would associate every such contact onto one\n// arbitrary record. AU ISP domains included \u2014 they are the local shape of the same trap.\nconst FREEMAIL_DOMAINS = new Set([\n  \"gmail.com\", \"googlemail.com\", \"outlook.com\", \"outlook.com.au\", \"hotmail.com\",\n  \"hotmail.com.au\", \"live.com\", \"live.com.au\", \"msn.com\", \"yahoo.com\", \"yahoo.com.au\",\n  \"ymail.com\", \"icloud.com\", \"me.com\", \"mac.com\", \"aol.com\", \"protonmail.com\", \"proton.me\",\n  \"gmx.com\", \"mail.com\", \"zoho.com\",\n  // AU consumer ISPs\n  \"bigpond.com\", \"bigpond.net.au\", \"bigpond.com.au\", \"optusnet.com.au\", \"iinet.net.au\",\n  \"tpg.com.au\", \"internode.on.net\", \"westnet.com.au\", \"dodo.com.au\", \"iprimus.com.au\",\n  \"exemail.com.au\", \"ozemail.com.au\",\n]);\n\n// Hosts that are somebody's PROFILE PAGE, never a company's own domain. Found live\n// 2026-08-25 during the Phase 53 operator walk: an operator with only a LinkedIn URL is the\n// normal case, and the naive host extraction turned\n// `linkedin.com/company/futsal-australia` into the domain `linkedin.com`. That would search\n// HubSpot for domain=linkedin.com, find nothing, create a company whose domain IS\n// linkedin.com \u2014 and then every later LinkedIn-sourced company would MATCH that one poisoned\n// record. One bad row swallowing every future company, silently.\n//\n// These are not the same thing as FREEMAIL_DOMAINS (a personal mailbox); they are hosts where\n// a URL identifies a page ABOUT a company rather than the company's own site. Both are\n// unusable as a company domain, for different reasons, so both are refused here.\nconst NOT_A_COMPANY_DOMAIN = new Set([\n  \"linkedin.com\", \"lnkd.in\", \"facebook.com\", \"fb.com\", \"instagram.com\", \"twitter.com\",\n  \"x.com\", \"youtube.com\", \"youtu.be\", \"tiktok.com\", \"threads.net\", \"medium.com\",\n  \"crunchbase.com\", \"wikipedia.org\", \"en.wikipedia.org\", \"bloomberg.com\", \"zoominfo.com\",\n  \"apollo.io\", \"abn.business.gov.au\", \"linktr.ee\", \"about.me\", \"sites.google.com\",\n  \"wixsite.com\", \"squarespace.com\", \"godaddysites.com\",\n]);\n\n// Same normalisation the companies lane's Build Company Identity applies, so a domain\n// resolved here and a domain the company lane stored are the same string. Returns null for\n// anything that cannot BE a company domain \u2014 the caller then falls through to the exact-name\n// match rather than resolving against a host that identifies no company.\nfunction cleanCompanyDomain(raw) {\n  if (!raw) return null;\n  let d = String(raw).trim().toLowerCase();\n  d = d.replace(/^https?:\\/\\//, \"\").replace(/^www\\./, \"\").split(\"/\")[0].split(\"?\")[0];\n  if (!d) return null;\n  if (NOT_A_COMPANY_DOMAIN.has(d)) return null;\n  if (FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction emailDomain(email) {\n  const e = String(email || \"\").trim().toLowerCase();\n  if (!e || e.indexOf(\"@\") === -1) return null;\n  const d = e.split(\"@\").pop();\n  return d || null;\n}\n\n// The domain to search companies by, or null when the row gives no usable one.\n// An explicit column wins; otherwise the email domain, unless it is freemail.\nfunction companyDomainForRow(row) {\n  const explicit = cleanCompanyDomain((row || {}).company_domain || (row || {}).website);\n  if (explicit) return explicit;\n  const d = emailDomain((row || {}).email_normalized || (row || {}).email);\n  if (!d || FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction companyNameForRow(row) {\n  const n = String(((row || {}).company) || \"\").trim();\n  return n || null;\n}\n\n// HubSpot CRM v3 search envelope -> [{id, properties}]. Tolerates an error item (the\n// search nodes run with onError: continueRegularOutput) by returning [].\nfunction searchResults(response) {\n  const res = (response && response.json) || response || {};\n  if (res.error || (res.json && res.json.error)) return [];\n  const results = res.results;\n  if (!Array.isArray(results)) return [];\n  return results.filter((r) => r && r.id);\n}\n\nfunction domainMatchId(response, domain) {\n  if (!domain) return null;\n  const wanted = String(domain).toLowerCase();\n  for (const r of searchResults(response)) {\n    const got = cleanCompanyDomain((r.properties || {}).domain);\n    if (got && got === wanted) return String(r.id);\n  }\n  return null;\n}\n\nfunction nameMatchId(response, name) {\n  if (!name) return null;\n  const wanted = String(name).trim().toLowerCase();\n  const hits = searchResults(response).filter(\n    (r) => String((r.properties || {}).name || \"\").trim().toLowerCase() === wanted\n  );\n  // Two companies with the identical name is an ambiguity, not a match \u2014 hold it.\n  if (hits.length !== 1) return null;\n  return String(hits[0].id);\n}\n\n// The one entry point the n8n node calls. `row` is the ingest row; the two responses are\n// the domain-search and name-search HTTP node outputs for THAT row.\nfunction resolveCompanyLink(row, domainResponse, nameResponse) {\n  const company_domain = companyDomainForRow(row);\n  const company_name = companyNameForRow(row);\n  const manual = String(((row || {}).company_id) || \"\").trim();\n  if (manual) {\n    return {\n      company_id: manual,\n      company_match: \"manual\",\n      company_domain,\n      company_name,\n      company_hold_reason: null,\n    };\n  }\n  const byDomain = domainMatchId(domainResponse, company_domain);\n  if (byDomain) {\n    return { company_id: byDomain, company_match: \"domain\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  const byName = nameMatchId(nameResponse, company_name);\n  if (byName) {\n    return { company_id: byName, company_match: \"name\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  let reason;\n  if (!company_domain && !company_name) {\n    reason = \"no company domain or name on the row \u2014 nothing to match a company on\";\n  } else {\n    const tried = [];\n    if (company_domain) tried.push(\"domain \" + company_domain);\n    if (company_name) tried.push(\"name \\\"\" + company_name + \"\\\"\");\n    reason = \"no company in HubSpot matched \" + tried.join(\" or \") +\n             \" \u2014 create or enrich the company first, or name its record id on the row\";\n  }\n  return { company_id: null, company_match: null, company_domain, company_name,\n           company_hold_reason: reason };\n}\n\n// v4 default association: HubSpot-defined contact->company, idempotent, no body.\nfunction associationUrl(contactId, companyId) {\n  if (!contactId || !companyId) return null;\n  return \"https://api.hubapi.com/crm/v4/objects/contacts/\" + String(contactId) +\n         \"/associations/default/companies/\" + String(companyId);\n}\nfunction _buildWriteRequest(action, hsObjectId, domain, email) {\n  var d = domain || null;\n  if (!d && action === \"create\" && email && String(email).indexOf(\"@\") !== -1) {\n    d = String(email).split(\"@\").pop().toLowerCase();\n  }\n  return { action: action, hs_object_id: hsObjectId || null, domain: d, email: email || null };\n}\n\n\n// --- n8n wrapper: written contact -> association request ---\n// Phase 70 Plan 02 (D-70-04): this node's own direct predecessor is now a carry merge\n// spliced after \"HubSpot Update\"/\"HubSpot Create\" (carry_source = each write's own\n// Write Gate) \u2014 every $input item already carries BOTH the write's HTTP response\n// (`id`, `properties`) AND the pre-write row Decide Action stamped (`company_id`,\n// `company_domain`, `company_match`, `row_id`, `email`), combined by position with the\n// carried row wired LAST (merge_node's resolveClash: \"preferLast\"). No by-name read of\n// \"Decide Action\", no separate join-by-value search over a fetched list \u2014 the pairing\n// already happened at the merge, and item count/order agree by construction (a literal\n// fan-out of the same delivery feeds both the HTTP node and this node's other input).\nreturn $input.all().map((it) => {\n  const row = it.json || {};\n  // `row.id` is what HubSpot minted/confirmed for THIS write; `row.hs_object_id` is the\n  // pre-write value the carried row already had (null for a create \u2014 the contact did\n  // not exist before this write \u2014 kept only as a defensive fallback).\n  const contactId = row.id != null ? String(row.id) : (row.hs_object_id ? String(row.hs_object_id) : null);\n  if (!contactId) return null;\n  const email = String(row.email || (row.properties && row.properties.email) || \"\").toLowerCase();\n  const company_id = row.company_id ? String(row.company_id) : null;\n  // An UPDATE with no resolved company is not held (the contact already exists, and it\n  // may already carry an association this lane cannot see) \u2014 it simply has nothing to\n  // associate. Only creates are held, at Decide Action.\n  if (!company_id) return null;\n  return { json: {\n    action: \"enrich\",\n    hs_object_id: contactId,\n    contact_id: contactId,\n    email: email || null,\n    domain: row.company_domain || null,\n    company_id,\n    company_match: row.company_match || null,\n    assoc_url: associationUrl(contactId, company_id),\n    // Phase 70 Plan 02 (D-70-01/D-70-04): carried so \"Build Ingest Response\" can join\n    // this association attempt back to its row BY VALUE \u2014 the same join key Decide\n    // Action already emits pre-write.\n    row_id: row.row_id ?? null,\n    // D-70-12 (Phase 70 Plan 05 Task 1): \"HubSpot Associate Company Write Gate\" reads\n    // only this now \u2014 same action/id/domain/email the fields above already compute.\n    write_request: _buildWriteRequest(\"enrich\", contactId, row.company_domain || null, email || null),\n  }};\n}).filter(Boolean);\n"
       },
-      "id": "c00340000-0000-4000-8000-000000000000",
+      "id": "c00420000-0000-4000-8000-000000000000",
       "name": "Build Association Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -578,7 +726,7 @@
           "timeout": 20000
         }
       },
-      "id": "h00350000-0000-4000-8000-000000000000",
+      "id": "h00430000-0000-4000-8000-000000000000",
       "name": "HubSpot Associate Company",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -591,9 +739,9 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "\nconst ROW_IDENTITY_KEYS = [\"row_id\", \"action\", \"outcome\", \"object_id\", \"hs_object_id\", \"id\"];\nfunction hasRowIdentity(row) {\n  return ROW_IDENTITY_KEYS.some((k) => row && row[k] !== undefined && row[k] !== null);\n}\n// Build Ingest Response \u2014 the lane's per-row report, now read from the settled\n// execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.\n// Phase 70 Plan 02 (D-70-01/D-70-04): sits behind \"Ingest Merge Response\", a\n// THREE-input append-mode Merge: the association lane, the review lane, and\n// \"Decide Action Snapshot\" \u2014 a tagged, literal fan-out of \"Decide Action\"'s own full\n// row set (a single-producer node, safe to fan out further; this is the full ground\n// truth this node needs even for a row that was written but never reached the\n// association lane at all, e.g. an update with no company to associate, dropped at\n// \"Build Association Request\"). No node is read by name any more \u2014 every input\n// arrives on $input, distinguished by the `_decided_snapshot` tag \"Decide Action\n// Snapshot\" stamps (a real association attempt never carries it; a starved lane's\n// harmless sentinel marker carries neither the tag nor an `action` field at all).\n//\n// [Rule 1 - Bug, found writing this task's own carry-merge test] `arrived` used to be\n// \"any item with an `action` field\" \u2014 but \"Set Review\" ALSO feeds this Merge (D-70-01),\n// and its contribution is the row's OWN ORIGINAL decided action/email/company_id\n// untouched. A review row that DOES resolve a company (association: \"not_confirmed\" is\n// the correct report \u2014 nothing ever tried to associate it) self-matched against its\n// OWN Set-Review contribution by email, misreporting \"associated\". `action: \"enrich\"`\n// is the literal, unique stamp only \"Build Association Request\" ever writes \u2014 never a\n// value Decide Action itself produces \u2014 so filtering on it (not merely \"has an action\")\n// admits a real association attempt and nothing else.\n// Phase 70 Plan 10 (D-70-23): a starved-lane sentinel's marker is already excluded by\n// construction below (it carries neither `_decided_snapshot` nor a matching `action`),\n// but this is the explicit, defensive filter every consumer of the reserved key must\n// carry \u2014 belt-and-braces against a future change to the predicates below ever\n// admitting one by accident.\nconst allItems = $input.all().map((it) => it.json).filter(Boolean)\n  .filter((row) => row._gsd_sentinel_marker !== true);\nconst decided = allItems.filter((row) => row._decided_snapshot === true);\nconst arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === \"enrich\");\n// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the write gates now EMIT the rows they\n// refuse (D-70-14) straight onto this Merge, carrying `action: \"write_blocked\"` plus a\n// reason. The decided snapshot still says \"update\"/\"create\" for those rows \u2014 reporting\n// it unchanged is exactly the misreport execution 12181 showed (Greg Purcell's blocked\n// update reported as landed). The gate's verdict is the write node's own answer, so it\n// wins here. This is what replaces the pre-write precheck: a report, not a prediction.\nconst blocked = allItems.filter((row) =>\n  row._decided_snapshot !== true && row.action === \"write_blocked\");\nconst blockedByRowId = {};\nconst blockedByContactId = {};\nconst blockedByEmail = {};\nfor (const row of blocked) {\n  if (row.row_id) blockedByRowId[String(row.row_id)] = row;\n  if (row.hs_object_id) blockedByContactId[String(row.hs_object_id)] = row;\n  if (row.email) blockedByEmail[String(row.email).toLowerCase()] = row;\n}\n// Phase 73 Plan 06 Task 3 (D-73-01): \"Build Create Failure Row\"'s own contribution \u2014 a\n// create the write gate ALLOWED but HubSpot itself rejected (a distinct question from\n// `blocked` above, which is a gate refusal; a row can never be both, since a row only\n// reaches \"HubSpot Create\" once its gate has already permitted it). Joined by email\n// only \u2014 this lane mints no `row_id` (D-73-21) and a create's `hs_object_id` is null\n// pre-write by construction, so email is the ONE identity BUG-19 guarantees is present\n// on both the decided snapshot and the failure row.\nconst failed = allItems.filter((row) =>\n  row._decided_snapshot !== true && row.action === \"create_failed\");\nconst failedByEmail = {};\nfor (const row of failed) {\n  if (row.email) failedByEmail[String(row.email).toLowerCase()] = row;\n}\nconst byRowId = {};\nconst byContactId = {};\nconst byEmail = {};\nfor (const row of arrived) {\n  if (row.row_id) byRowId[String(row.row_id)] = row;\n  if (row.contact_id) byContactId[String(row.contact_id)] = row;\n  if (row.email) byEmail[String(row.email).toLowerCase()] = row;\n}\n// Phase 70 Plan 14 (D-70-25): the same positive identity test `ENRICH_BUILD_RESPONSE`\n// applies, at the emit point \u2014 `decided` is already every row `Decide Action` produced\n// (always action-bearing), so this is expected to change nothing here today; kept as a\n// defensive belt-and-braces match to the enrichment lane rather than assumed safe.\nreturn decided.map((row) => {\n  const email = String((row.properties && row.properties.email) || row.email || \"\").toLowerCase();\n  const assoc = (row.row_id && byRowId[String(row.row_id)]) ||\n                (row.hs_object_id && byContactId[String(row.hs_object_id)]) ||\n                (email && byEmail[email]) || null;\n  const contactId = (assoc && assoc.contact_id) || row.hs_object_id || row.contact_id || null;\n  const block = (row.row_id && blockedByRowId[String(row.row_id)]) ||\n                (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||\n                (email && blockedByEmail[email]) || null;\n  const fail = (email && failedByEmail[email]) || null;\n  let association;\n  if (!row.company_id) {\n    association = \"none\";\n  } else if (assoc) {\n    association = \"associated\";\n  } else {\n    association = \"not_confirmed\";  // never reached the write gate, or HubSpot refused it\n  }\n  return { json: {\n    action: fail ? \"create_failed\" : (block ? \"write_blocked\" : row.action),\n    outcome: fail ? \"create_failed\" : (block ? \"write_blocked\" : (row.outcome || null)),\n    contact_id: contactId,\n    hs_object_id: contactId,\n    email: email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    // A refused write never reached the association lane either \u2014 one verdict covers\n    // both (D-70-15), so it cannot report \"associated\". A rejected create is the same\n    // story from HubSpot's own side, not the gate's \u2014 same rule applies.\n    association: (fail || (block && association === \"associated\")) ? \"not_confirmed\" : association,\n    reason: (fail && fail.reason) || (block && block.write_blocked_reason) || row.reason || null,\n    email_status: row.email_status || null,\n    // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`\n    // pre-write. Closes the join for every lane whose rows carry `row_id` into the\n    // backend. Does NOT close it for the pair pipeline's FINAL ingest dispatch \u2014\n    // `extraction.strip_row_id` removes the key before `write_dispatch_csv`\n    // (enrich-before-ingest/SKILL.md:639), so those rows echo `null` here regardless.\n    row_id: row.row_id ?? null,\n  }};\n}).filter((item) => hasRowIdentity(item.json));\n"
+        "jsCode": "\nconst ROW_IDENTITY_KEYS = [\"row_id\", \"action\", \"outcome\", \"object_id\", \"hs_object_id\", \"id\"];\nfunction hasRowIdentity(row) {\n  return ROW_IDENTITY_KEYS.some((k) => row && row[k] !== undefined && row[k] !== null);\n}\n// Build Ingest Response \u2014 the lane's per-row report, now read from the settled\n// execution's runData (D-70-05/D-70-07), never from the synchronous webhook body.\n// Phase 70 Plan 02 (D-70-01/D-70-04): sits behind \"Ingest Merge Response\", a\n// THREE-input append-mode Merge: the association lane, the review lane, and\n// \"Decide Action Snapshot\" \u2014 a tagged, literal fan-out of \"Decide Action\"'s own full\n// row set (a single-producer node, safe to fan out further; this is the full ground\n// truth this node needs even for a row that was written but never reached the\n// association lane at all, e.g. an update with no company to associate, dropped at\n// \"Build Association Request\"). No node is read by name any more \u2014 every input\n// arrives on $input, distinguished by the `_decided_snapshot` tag \"Decide Action\n// Snapshot\" stamps (a real association attempt never carries it; a starved lane's\n// harmless sentinel marker carries neither the tag nor an `action` field at all).\n//\n// [Rule 1 - Bug, found writing this task's own carry-merge test] `arrived` used to be\n// \"any item with an `action` field\" \u2014 but \"Set Review\" ALSO feeds this Merge (D-70-01),\n// and its contribution is the row's OWN ORIGINAL decided action/email/company_id\n// untouched. A review row that DOES resolve a company (association: \"not_confirmed\" is\n// the correct report \u2014 nothing ever tried to associate it) self-matched against its\n// OWN Set-Review contribution by email, misreporting \"associated\". `action: \"enrich\"`\n// is the literal, unique stamp only \"Build Association Request\" ever writes \u2014 never a\n// value Decide Action itself produces \u2014 so filtering on it (not merely \"has an action\")\n// admits a real association attempt and nothing else.\n// Phase 70 Plan 10 (D-70-23): a starved-lane sentinel's marker is already excluded by\n// construction below (it carries neither `_decided_snapshot` nor a matching `action`),\n// but this is the explicit, defensive filter every consumer of the reserved key must\n// carry \u2014 belt-and-braces against a future change to the predicates below ever\n// admitting one by accident.\nconst allItems = $input.all().map((it) => it.json).filter(Boolean)\n  .filter((row) => row._gsd_sentinel_marker !== true);\nconst decided = allItems.filter((row) => row._decided_snapshot === true);\nconst arrived = allItems.filter((row) => row._decided_snapshot !== true && row.action === \"enrich\");\n// Phase 70 Plan 05 Task 2 sub-step 2c (D-70-06): the write gates now EMIT the rows they\n// refuse (D-70-14) straight onto this Merge, carrying `action: \"write_blocked\"` plus a\n// reason. The decided snapshot still says \"update\"/\"create\" for those rows \u2014 reporting\n// it unchanged is exactly the misreport execution 12181 showed (Greg Purcell's blocked\n// update reported as landed). The gate's verdict is the write node's own answer, so it\n// wins here. This is what replaces the pre-write precheck: a report, not a prediction.\nconst blocked = allItems.filter((row) =>\n  row._decided_snapshot !== true && row.action === \"write_blocked\");\nconst blockedByRowId = {};\nconst blockedByContactId = {};\nconst blockedByEmail = {};\nfor (const row of blocked) {\n  if (row.row_id) blockedByRowId[String(row.row_id)] = row;\n  if (row.hs_object_id) blockedByContactId[String(row.hs_object_id)] = row;\n  if (row.email) blockedByEmail[String(row.email).toLowerCase()] = row;\n}\n// Phase 73 Plan 06 Task 3 (D-73-01): \"Build Create Failure Row\"'s own contribution \u2014 a\n// create the write gate ALLOWED but HubSpot itself rejected (a distinct question from\n// `blocked` above, which is a gate refusal; a row can never be both, since a row only\n// reaches \"HubSpot Create\" once its gate has already permitted it). Joined by email\n// only \u2014 this lane mints no `row_id` (D-73-21) and a create's `hs_object_id` is null\n// pre-write by construction, so email is the ONE identity BUG-19 guarantees is present\n// on both the decided snapshot and the failure row.\nconst failed = allItems.filter((row) =>\n  row._decided_snapshot !== true && row.action === \"create_failed\");\nconst failedByEmail = {};\nfor (const row of failed) {\n  if (row.email) failedByEmail[String(row.email).toLowerCase()] = row;\n}\nconst byRowId = {};\nconst byContactId = {};\nconst byEmail = {};\nfor (const row of arrived) {\n  if (row.row_id) byRowId[String(row.row_id)] = row;\n  if (row.contact_id) byContactId[String(row.contact_id)] = row;\n  if (row.email) byEmail[String(row.email).toLowerCase()] = row;\n}\n// Phase 70 Plan 14 (D-70-25): the same positive identity test `ENRICH_BUILD_RESPONSE`\n// applies, at the emit point \u2014 `decided` is already every row `Decide Action` produced\n// (always action-bearing), so this is expected to change nothing here today; kept as a\n// defensive belt-and-braces match to the enrichment lane rather than assumed safe.\nreturn decided.map((row) => {\n  const email = String((row.properties && row.properties.email) || row.email || \"\").toLowerCase();\n  const assoc = (row.row_id && byRowId[String(row.row_id)]) ||\n                (row.hs_object_id && byContactId[String(row.hs_object_id)]) ||\n                (email && byEmail[email]) || null;\n  const contactId = (assoc && assoc.contact_id) || row.hs_object_id || row.contact_id || null;\n  const block = (row.row_id && blockedByRowId[String(row.row_id)]) ||\n                (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||\n                (email && blockedByEmail[email]) || null;\n  const fail = (email && failedByEmail[email]) || null;\n  let association;\n  if (!row.company_id) {\n    association = \"none\";\n  } else if (assoc) {\n    association = \"associated\";\n  } else {\n    association = \"not_confirmed\";  // never reached the write gate, or HubSpot refused it\n  }\n  return { json: {\n    action: fail ? \"create_failed\" : (block ? \"write_blocked\" : row.action),\n    outcome: fail ? \"create_failed\" : (block ? \"write_blocked\" : (row.outcome || null)),\n    contact_id: contactId,\n    hs_object_id: contactId,\n    email: email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    // A refused write never reached the association lane either \u2014 one verdict covers\n    // both (D-70-15), so it cannot report \"associated\". A rejected create is the same\n    // story from HubSpot's own side, not the gate's \u2014 same rule applies.\n    association: (fail || (block && association === \"associated\")) ? \"not_confirmed\" : association,\n    reason: (fail && fail.reason) || (block && block.write_blocked_reason) || row.reason || null,\n    email_status: row.email_status || null,\n    // 73.1-06 (D-16d): `row` here is the decided snapshot -- \"Decide Action\" already\n    // stamped `resolved_by` on it, so this is a straight carry, never a re-derivation.\n    resolved_by: row.resolved_by ?? null,\n    // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`\n    // pre-write. Closes the join for every lane whose rows carry `row_id` into the\n    // backend. Does NOT close it for the pair pipeline's FINAL ingest dispatch \u2014\n    // `extraction.strip_row_id` removes the key before `write_dispatch_csv`\n    // (enrich-before-ingest/SKILL.md:639), so those rows echo `null` here regardless.\n    row_id: row.row_id ?? null,\n  }};\n}).filter((item) => hasRowIdentity(item.json));\n"
       },
-      "id": "c00360000-0000-4000-8000-000000000000",
+      "id": "c00440000-0000-4000-8000-000000000000",
       "name": "Build Ingest Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -604,11 +752,195 @@
     },
     {
       "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00450000-0000-4000-8000-000000000000",
+      "name": "HubSpot Linkedin Search Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2570,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "m00460000-0000-4000-8000-000000000000",
+      "name": "Linkedin Search Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2740,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Linkedin Search Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nreturn rows.some((r) => r && !(r.email_normalized || r.email) && r.linkedin_url) ? [] : [{}];\n"
+      },
+      "id": "c00470000-0000-4000-8000-000000000000",
+      "name": "Linkedin Search Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00480000-0000-4000-8000-000000000000",
+      "name": "Linkedin Search Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3450,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00490000-0000-4000-8000-000000000000",
+      "name": "HubSpot Mobilephone Search Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3230,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "m00500000-0000-4000-8000-000000000000",
+      "name": "Mobilephone Search Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Mobilephone Search Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nreturn rows.some((r) => r && !(r.email_normalized || r.email) && r.mobilephone) ? [] : [{}];\n"
+      },
+      "id": "c00510000-0000-4000-8000-000000000000",
+      "name": "Mobilephone Search Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00520000-0000-4000-8000-000000000000",
+      "name": "Mobilephone Search Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3450,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00530000-0000-4000-8000-000000000000",
+      "name": "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00540000-0000-4000-8000-000000000000",
+      "name": "IF Linkedin Searchable -> Linkedin Search Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00550000-0000-4000-8000-000000000000",
+      "name": "IF Mobilephone Searchable -> HubSpot Mobilephone Search Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00560000-0000-4000-8000-000000000000",
+      "name": "IF Mobilephone Searchable -> Mobilephone Search Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        500
+      ]
+    },
+    {
+      "parameters": {
         "content": "## LV Contact Ingest \u2014 CLOUD template\nImport to n8n Cloud, then add **HubSpot credentials** on the three HubSpot nodes (search / update / create).\n\n**Flow:** Webhook upload -> Extract-from-File -> inlined Code nodes (map/normalize/resolve/merge) -> IF(action) -> HubSpot update / create (GATED, off by default) / Set review.\n\n**Email verify:** real HTTP node -> rapid-email-verifier batch API (up to 100/call); non-gating fallback if unreachable.\n\n**AU-phone DISCLAIMER:** the inline JS is an AU-only heuristic (no libphonenumber in Code nodes). Non-AU / ambiguous numbers -> null -> review. Swap in a phone-validation API for global coverage.",
         "height": 360,
         "width": 460
       },
-      "id": "s00370000-0000-4000-8000-000000000000",
+      "id": "s00570000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -622,7 +954,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('enrich', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00380000-0000-4000-8000-000000000000",
+      "id": "c00580000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -642,7 +974,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00390000-0000-4000-8000-000000000000",
+              "id": "i00590000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.write_allowed }}",
               "rightValue": true,
               "operator": {
@@ -653,7 +985,7 @@
           ]
         }
       },
-      "id": "if00400000-0000-4000-8000-000000000000",
+      "id": "if00600000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Write Gate IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -667,7 +999,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n// D-70-14: maps every item to a verdict \u2014 never filters. Output count == input count.\nreturn $input.all().map((it) => {\n  var wr = it.json.write_request;\n  var allowed = !!wr && _writeSafetyAllows('create', wr.hs_object_id || null, wr.domain || null);\n  if (allowed) return { json: { ...it.json, write_allowed: true } };\n  var reason = !wr\n    ? 'no write_request emitted for this row'\n    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n});\n"
       },
-      "id": "c00410000-0000-4000-8000-000000000000",
+      "id": "c00610000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -687,7 +1019,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00420000-0000-4000-8000-000000000000",
+              "id": "i00620000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.write_allowed }}",
               "rightValue": true,
               "operator": {
@@ -698,7 +1030,7 @@
           ]
         }
       },
-      "id": "if00430000-0000-4000-8000-000000000000",
+      "id": "if00630000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Write Gate IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -720,7 +1052,7 @@
           }
         }
       },
-      "id": "m00440000-0000-4000-8000-000000000000",
+      "id": "m00640000-0000-4000-8000-000000000000",
       "name": "Update Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -734,7 +1066,7 @@
         "mode": "append",
         "numberInputs": 3
       },
-      "id": "m00450000-0000-4000-8000-000000000000",
+      "id": "m00650000-0000-4000-8000-000000000000",
       "name": "Create Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -748,7 +1080,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00460000-0000-4000-8000-000000000000",
+      "id": "c00660000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Permitted Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -762,7 +1094,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00470000-0000-4000-8000-000000000000",
+      "id": "c00670000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Permitted Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -784,7 +1116,7 @@
           }
         }
       },
-      "id": "m00480000-0000-4000-8000-000000000000",
+      "id": "m00680000-0000-4000-8000-000000000000",
       "name": "Associate Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -806,7 +1138,7 @@
           }
         }
       },
-      "id": "m00490000-0000-4000-8000-000000000000",
+      "id": "m00690000-0000-4000-8000-000000000000",
       "name": "Verify Email Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -828,7 +1160,7 @@
           }
         }
       },
-      "id": "m00500000-0000-4000-8000-000000000000",
+      "id": "m00700000-0000-4000-8000-000000000000",
       "name": "Search By Email Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -850,7 +1182,7 @@
           }
         }
       },
-      "id": "m00510000-0000-4000-8000-000000000000",
+      "id": "m00710000-0000-4000-8000-000000000000",
       "name": "Company Domain Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -872,7 +1204,7 @@
           }
         }
       },
-      "id": "m00520000-0000-4000-8000-000000000000",
+      "id": "m00720000-0000-4000-8000-000000000000",
       "name": "Company Name Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -894,7 +1226,7 @@
           }
         }
       },
-      "id": "m00530000-0000-4000-8000-000000000000",
+      "id": "m00730000-0000-4000-8000-000000000000",
       "name": "Source By Field Broadcast",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -916,7 +1248,7 @@
           }
         }
       },
-      "id": "m00540000-0000-4000-8000-000000000000",
+      "id": "m00740000-0000-4000-8000-000000000000",
       "name": "HubSpot Contact History Carry Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -930,7 +1262,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00550000-0000-4000-8000-000000000000",
+      "id": "c00750000-0000-4000-8000-000000000000",
       "name": "IF Has Contact Id True Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -944,7 +1276,7 @@
         "mode": "append",
         "numberInputs": 2
       },
-      "id": "m00560000-0000-4000-8000-000000000000",
+      "id": "m00760000-0000-4000-8000-000000000000",
       "name": "Contact History Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -958,7 +1290,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00570000-0000-4000-8000-000000000000",
+      "id": "c00770000-0000-4000-8000-000000000000",
       "name": "IF Has Contact Id False Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -972,7 +1304,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Contact History Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nreturn rows.some((r) => r && r.identity && r.identity.contact_id) ? [] : [{}];\n"
       },
-      "id": "c00580000-0000-4000-8000-000000000000",
+      "id": "c00780000-0000-4000-8000-000000000000",
       "name": "Contact History Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -986,7 +1318,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00590000-0000-4000-8000-000000000000",
+      "id": "c00790000-0000-4000-8000-000000000000",
       "name": "Contact History Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1000,7 +1332,7 @@
         "mode": "append",
         "numberInputs": 2
       },
-      "id": "m00600000-0000-4000-8000-000000000000",
+      "id": "m00800000-0000-4000-8000-000000000000",
       "name": "Build Association Request Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -1014,7 +1346,7 @@
         "mode": "append",
         "numberInputs": 6
       },
-      "id": "m00610000-0000-4000-8000-000000000000",
+      "id": "m00810000-0000-4000-8000-000000000000",
       "name": "Ingest Merge Response",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -1028,7 +1360,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Review Lane Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\n// Review Lane Sentinel \u2014 the review-side twin of \"Associate Lane Sentinel\". Fires\n// only when EVERY row this execution decided is update/create (so \"Set Review\" would\n// otherwise never even be enqueued at all, on a create-only or update-only batch).\n// `rows` is bound by `_add_starved_lane_sentinel`'s own template, above this body.\nconst anyNonWrite = rows.some((r) => r && r.action !== \"update\" && r.action !== \"create\");\nreturn anyNonWrite ? [] : [{}];\n\n"
       },
-      "id": "c00620000-0000-4000-8000-000000000000",
+      "id": "c00820000-0000-4000-8000-000000000000",
       "name": "Review Lane Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1042,7 +1374,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00630000-0000-4000-8000-000000000000",
+      "id": "c00830000-0000-4000-8000-000000000000",
       "name": "Review Lane Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1056,7 +1388,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Associate Lane Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nconst ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n// Associate Lane Sentinel \u2014 see build_cloud_workflows.py's own comment above this\n// node's call site for why this is a global, single-producer check rather than a\n// per-IF alwaysOutputData flag. `rows` is bound by `_add_starved_lane_sentinel`'s own\n// template, above this body.\n// Phase 70 Plan 05 Task 2 sub-step 2c: `company_id` is part of the question now. With\n// the pre-write refusal precheck removed (D-70-06) a row can be action update/create and\n// still never reach \"HubSpot Associate Company\": \"Build Association Request\" drops any\n// row with no resolved company (CLAUDE.md \u00a713.0.1 \u2014 an update is never HELD for lack of\n// a company, it simply has nothing to associate). A batch of updates that all resolve no\n// company would otherwise leave \"Associate Carry Merge\" with zero deliveries on both\n// inputs and hang \"Ingest Merge Response\" forever. This stays a pre-gate check on\n// purpose: a row the GATE refuses is covered by the gate's own false branch, which\n// delivers to the very same \"Ingest Merge Response\" input this lane feeds.\n// The `_writeSafetyAllows` call below is a duplicate of the gates' predicate, and is\n// deliberately NOT a second authorization: it decides only whether this marker is needed\n// to keep a Merge input fed. The real gates remain the sole place a write is permitted.\n// Same pattern, for the same reason, as the review lane's own BUG-30 precheck. It is\n// required because the marker shares \"Ingest Merge Response\"'s association-lane input\n// with the real association delivery, so the two must be mutually EXCLUSIVE \u2014 a marker\n// that fires while a real association is still in flight would satisfy the Merge early\n// and the real arrival would be dropped (wire_gate_refusal_lane's docstring records the\n// walker run that caught exactly that).\nconst anyAssoc = rows.some((r) => {\n  if (!r || !r.company_id) return false;\n  if (r.action !== \"update\" && r.action !== \"create\") return false;\n  const wr = r.write_request;\n  if (!wr) return false;\n  return _writeSafetyAllows(r.action === \"create\" ? \"create\" : \"enrich\",\n                            wr.hs_object_id || null, wr.domain || null);\n});\nreturn anyAssoc ? [] : [{}];\n\n"
       },
-      "id": "c00640000-0000-4000-8000-000000000000",
+      "id": "c00840000-0000-4000-8000-000000000000",
       "name": "Associate Lane Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1070,7 +1402,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00650000-0000-4000-8000-000000000000",
+      "id": "c00850000-0000-4000-8000-000000000000",
       "name": "Associate Lane Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1084,7 +1416,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Update Gate Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"update\")) return [{}]; return [];\n"
       },
-      "id": "c00660000-0000-4000-8000-000000000000",
+      "id": "c00860000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Gate Unreached Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1098,7 +1430,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00670000-0000-4000-8000-000000000000",
+      "id": "c00870000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Gate Unreached Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1112,7 +1444,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c00680000-0000-4000-8000-000000000000",
+      "id": "c00880000-0000-4000-8000-000000000000",
       "name": "HubSpot Update No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1126,7 +1458,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00690000-0000-4000-8000-000000000000",
+      "id": "c00890000-0000-4000-8000-000000000000",
       "name": "HubSpot Update No Refusal Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1140,7 +1472,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Update Carry Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"update\")) return [{}]; return [];\n"
       },
-      "id": "c00700000-0000-4000-8000-000000000000",
+      "id": "c00900000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Carry Unreached Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1154,7 +1486,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00710000-0000-4000-8000-000000000000",
+      "id": "c00910000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Carry Unreached Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1168,7 +1500,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Update Carry All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c00720000-0000-4000-8000-000000000000",
+      "id": "c00920000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Carry All Refused Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1182,7 +1514,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00730000-0000-4000-8000-000000000000",
+      "id": "c00930000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Carry All Refused Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1196,7 +1528,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00740000-0000-4000-8000-000000000000",
+      "id": "c00940000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Refusal Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1210,7 +1542,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create Gate Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"create\")) return [{}]; return [];\n"
       },
-      "id": "c00750000-0000-4000-8000-000000000000",
+      "id": "c00950000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Gate Unreached Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1224,7 +1556,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00760000-0000-4000-8000-000000000000",
+      "id": "c00960000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Gate Unreached Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1238,7 +1570,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c00770000-0000-4000-8000-000000000000",
+      "id": "c00970000-0000-4000-8000-000000000000",
       "name": "HubSpot Create No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1252,7 +1584,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00780000-0000-4000-8000-000000000000",
+      "id": "c00980000-0000-4000-8000-000000000000",
       "name": "HubSpot Create No Refusal Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1266,7 +1598,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create Carry Unreached Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.action === \"create\")) return [{}]; return [];\n"
       },
-      "id": "c00790000-0000-4000-8000-000000000000",
+      "id": "c00990000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Carry Unreached Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1280,7 +1612,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00800000-0000-4000-8000-000000000000",
+      "id": "c01000000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Carry Unreached Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1294,7 +1626,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create Carry All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c00810000-0000-4000-8000-000000000000",
+      "id": "c01010000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Carry All Refused Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1308,7 +1640,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00820000-0000-4000-8000-000000000000",
+      "id": "c01020000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Carry All Refused Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1322,7 +1654,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00830000-0000-4000-8000-000000000000",
+      "id": "c01030000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Refusal Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1336,7 +1668,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// pairCreateOutcome.js \u2014 pure identity join for the ingest lane's HubSpot Create outcome.\n//\n// \"Create Carry Merge\" (scripts/build_cloud_workflows.py) concatenates (append mode)\n// two or three streams onto one array: the carried pre-write rows (Decide Action's own\n// output for every create-routed row), the HubSpot Create HTTP node's SUCCESS response\n// items, and (D-73-01) its ERROR response items when a create is rejected. Before this\n// module the merge was `combineByPosition` \u2014 item i of the response array paired with\n// item i of the carried-row array \u2014 which held only because the two arrays always had\n// the SAME length and order. `onError: \"continueErrorOutput\"` breaks that: once ANY\n// create in a batch fails, the success array shrinks and every response after the first\n// gap pairs with the WRONG carried row (73-RESEARCH.md's Pitfall 0). Append mode plus\n// this module's identity join replaces positional pairing with a join on each row's OWN\n// identity, so a shrinking response set can never mis-associate a contact.\n//\n// Classification is by SHAPE, not an added marker \u2014 the three sources this merge ever\n// sees are already structurally disjoint by construction:\n//   - a carried row (Decide Action's own output) always carries a non-empty `action`;\n//     no HubSpot HTTP response, success or error, ever has an `action` field (it is not\n//     a valid HubSpot property and this code never sends one).\n//   - a SUCCESS response is HubSpot's own `{id, properties, ...}` echo \u2014 `id` is never\n//     present on a carried row (no top-level `id` field is ever stamped on one) and\n//     HubSpot's own error bodies report a conflict in `message`, never a fresh `id`.\n//   - anything left over (no `action`, no usable `id`) is an ERROR item.\n//\n// The join key is the SAME identity ladder columnMap.js's `requiredIdentity` encodes\n// for CSV completeness (config/column_mapping.yaml's `required_identity.any_of`):\n// email first, then firstname+lastname+company, then linkedin_url \u2014 casefolded and\n// trimmed, computed identically on the carried row and the response side.\n\nfunction _norm(v) {\n  return String(v == null ? \"\" : v).trim().toLowerCase();\n}\n\nfunction _emailOf(row) {\n  row = row || {};\n  const props = row.properties || {};\n  return _norm(row.email || props.email);\n}\n\nfunction _nameKeyOf(row) {\n  row = row || {};\n  const props = row.properties || {};\n  const first = _norm(row.firstname || props.firstname);\n  const last = _norm(row.lastname || props.lastname);\n  const company = _norm(row.company || props.company);\n  if (first && last && company) return `${first}|${last}|${company}`;\n  return \"\";\n}\n\nfunction _linkedinOf(row) {\n  row = row || {};\n  const props = row.properties || {};\n  const raw = row.linkedin_url || props.linkedin_url || props.lv_linkedin_url || props.hs_linkedin_url;\n  return _norm(raw);\n}\n\n// identityKey(row) -> string | null. Never a guess: returns null when no rung of the\n// ladder resolves, so the caller can refuse the pairing instead of matching on nothing.\nfunction identityKey(row) {\n  const email = _emailOf(row);\n  if (email) return `email:${email}`;\n  const nameKey = _nameKeyOf(row);\n  if (nameKey) return `name:${nameKey}`;\n  const li = _linkedinOf(row);\n  if (li) return `linkedin:${li}`;\n  return null;\n}\n\nfunction _isCarriedRow(row) {\n  return typeof (row && row.action) === \"string\" && row.action.length > 0;\n}\n\nfunction _isSuccessResponse(row) {\n  return Boolean(row) && row.id !== undefined && row.id !== null && row.id !== \"\";\n}\n\n// pairCreateOutcome(items) \u2014 `items` already unwrapped to plain json objects (no\n// `{json: ...}` envelopes). Returns one item per carried row, in the carried rows' own\n// order, each stamped `create_outcome`:\n//   \"success\" \u2014 paired with the response sharing its identity key. The response's own\n//               fields are re-attached with the carried row's fields winning any clash\n//               (`{...match, ...row}`) \u2014 the SAME carried-row-wins semantics the retired\n//               combineByPosition carry-merge used (merge_node's own `resolveClash:\n//               \"preferLast\"`, carried row wired last) \u2014 so `id` survives (the response\n//               is the only side that has one) while the row's own email/company_id/\n//               write_request/properties (the request that was actually sent) win.\n//   \"error\"   \u2014 paired with a create ERROR item the same way, plus `create_error`\n//               carrying the raw error item for a caller (Build Create Failure Row) to\n//               classify into a refusal reason.\n//   \"none\"    \u2014 no response of either kind ever arrived for this row's identity key.\n//   \"refused\" \u2014 the row's own identity key is uncomputable, or it collides with\n//               another carried row's key, or more than one response shares the key.\n//               Never guessed \u2014 `create_outcome_reason` names which.\nfunction pairCreateOutcome(items) {\n  const carried = [];\n  const responses = [];\n  for (const row of items || []) {\n    if (!row) continue;\n    if (_isCarriedRow(row)) carried.push(row);\n    else if (_isSuccessResponse(row)) responses.push({ row, outcome: \"success\" });\n    else responses.push({ row, outcome: \"error\" });\n  }\n\n  const carriedKeys = carried.map((row) => identityKey(row));\n  const keyCounts = new Map();\n  for (const key of carriedKeys) {\n    if (key === null) continue;\n    keyCounts.set(key, (keyCounts.get(key) || 0) + 1);\n  }\n\n  const responsesByKey = new Map();\n  for (const resp of responses) {\n    const key = identityKey(resp.row);\n    if (key === null) continue; // an uncomputable response key can never be joined\n    if (!responsesByKey.has(key)) responsesByKey.set(key, []);\n    responsesByKey.get(key).push(resp);\n  }\n\n  return carried.map((row, i) => {\n    const key = carriedKeys[i];\n    if (key === null) {\n      return { ...row, create_outcome: \"refused\",\n               create_outcome_reason: \"no computable identity key\" };\n    }\n    if (keyCounts.get(key) > 1) {\n      return { ...row, create_outcome: \"refused\",\n               create_outcome_reason: \"identity key matches more than one carried row\" };\n    }\n    const matches = responsesByKey.get(key) || [];\n    if (matches.length === 0) {\n      return { ...row, create_outcome: \"none\" };\n    }\n    if (matches.length > 1) {\n      return { ...row, create_outcome: \"refused\",\n               create_outcome_reason: \"identity key matches more than one create response\" };\n    }\n    const [match] = matches;\n    if (match.outcome === \"success\") {\n      return { ...match.row, ...row, create_outcome: \"success\" };\n    }\n    return { ...row, create_outcome: \"error\", create_error: match.row };\n  });\n}\n\n// --- n8n wrapper: identity-join HubSpot Create's outcome back to its OWN carried row ---\n// No $() by-name read \u2014 every item (\"Create Carry Merge\"'s carried rows, success\n// responses, and \u2014 once Task 3 wires it \u2014 error items) arrives on $input.\nreturn pairCreateOutcome($input.all().map((it) => it.json)).map((row) => ({ json: row }));\n"
       },
-      "id": "c00840000-0000-4000-8000-000000000000",
+      "id": "c01040000-0000-4000-8000-000000000000",
       "name": "Pair Create Outcome To Row",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1350,7 +1682,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Build Create Failure Row \u2014 the create-error lane's own contribution to \"Ingest\n// Merge Response\", the same way \"Set Review\"'s own contribution reaches it.\n//\n// T-73-06-01 (information disclosure): an n8n HTTP error item can carry the OUTBOUND\n// request configuration, including its Authorization header. This reads at most three\n// named fields off the raw error object \u2014 message, description, a status code \u2014 with a\n// fixed fallback string when none is present. It never serializes the whole error\n// object into a row, a response, or a fixture.\nfunction _createFailureReason(err) {\n  err = err || {};\n  const nested = err.error || {};\n  const message = [err.message, nested.message, err.description, nested.description]\n    .find((v) => typeof v === \"string\" && v.length > 0);\n  const statusCode = err.statusCode || err.httpCode || nested.statusCode || nested.httpCode || null;\n  if (message) return statusCode ? `${message} (HTTP ${statusCode})` : message;\n  return \"HubSpot rejected this create \u2014 no error detail available\";\n}\n\nconst allItems = $input.all().map((it) => it.json).filter(Boolean);\nconst errors = allItems.filter((row) => row.create_outcome === \"error\");\n\nif (errors.length === 0) {\n  return [{ json: { _gsd_sentinel_marker: true } }];\n}\n\nreturn errors.map((row) => ({ json: {\n  action: \"create_failed\",\n  outcome: \"create_failed\",\n  contact_id: null,\n  hs_object_id: null,\n  email: String(row.email || (row.properties && row.properties.email) || \"\").toLowerCase() || null,\n  company_id: row.company_id || null,\n  company_match: row.company_match || null,\n  reason: _createFailureReason(row.create_error),\n}}));\n"
       },
-      "id": "c00850000-0000-4000-8000-000000000000",
+      "id": "c01050000-0000-4000-8000-000000000000",
       "name": "Build Create Failure Row",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1484,7 +1816,239 @@
       "main": [
         [
           {
+            "node": "IF Linkedin Searchable",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Linkedin Search Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mobilephone Search Sentinel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Linkedin Searchable": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Linkedin Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Linkedin Searchable -> Linkedin Search Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Linkedin Search": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Linkedin Search Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Linkedin Search Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Adapt Linkedin Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Linkedin Search": {
+      "main": [
+        [
+          {
+            "node": "Linkedin Search Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Linkedin Search Merge": {
+      "main": [
+        [
+          {
+            "node": "IF Mobilephone Searchable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linkedin Search Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Linkedin Search Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linkedin Search Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Linkedin Search Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Mobilephone Searchable": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Mobilephone Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Mobilephone Searchable -> HubSpot Mobilephone Search Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Mobilephone Searchable -> Mobilephone Search Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Mobilephone Search": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Mobilephone Search Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Mobilephone Search Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Adapt Mobilephone Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Mobilephone Search": {
+      "main": [
+        [
+          {
+            "node": "Mobilephone Search Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Mobilephone Search Merge": {
+      "main": [
+        [
+          {
             "node": "Resolve Identity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mobilephone Search Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Mobilephone Search Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mobilephone Search Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Mobilephone Search Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Linkedin Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Linkedin Searchable -> Linkedin Search Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Linkedin Search Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Mobilephone Searchable -> HubSpot Mobilephone Search Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Mobilephone Search Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Mobilephone Searchable -> Mobilephone Search Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Mobilephone Search Merge",
             "type": "main",
             "index": 0
           }

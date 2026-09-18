@@ -51,6 +51,10 @@ function resolveIdentity(row, searchResultsByKey) {
 
   const email = normalizeEmailBasic(row.email); // null if absent OR malformed
   const linkedin = canonicalizeLinkedin(row.linkedin_url);
+  // 73.1-06 (D-16a/D-16a-i): mobilephone is a STRONG key, single-hit only -- kept
+  // deliberately distinct from `phone` below, which is NEVER searched (D-16a-i: a
+  // landline is often a company switchboard shared by every contact there).
+  const mobilephone = normalizePhoneAU(row.mobilephone);
   const phone = normalizePhoneAU(row.phone);
   const firstname = String(row.firstname || "").trim();
   const lastname = String(row.lastname || "").trim();
@@ -82,10 +86,26 @@ function resolveIdentity(row, searchResultsByKey) {
       return { outcome: "ambiguous", contact_id: null, match_key: "linkedin_url",
                candidate_ids: ids, reason: "multiple linkedin matches" };
     }
+    // 0 hits -> fall through.
+  }
+
+  // 3. No match on email/linkedin past here. Mobilephone (STRONG, 73.1-06 D-16a-i):
+  // single-hit only, exactly the same shape as the linkedin branch above -- more than
+  // one hit is ambiguous, never a pick.
+  if (mobilephone) {
+    const ids = _ids(searchResultsByKey, "mobilephone");
+    if (ids.length === 1) {
+      return { outcome: "match", contact_id: ids[0], match_key: "mobilephone",
+               candidate_ids: ids, reason: "single mobilephone match" };
+    }
+    if (ids.length > 1) {
+      return { outcome: "ambiguous", contact_id: null, match_key: "mobilephone",
+               candidate_ids: ids, reason: "multiple mobilephone matches" };
+    }
     // 0 hits -> fall through to weak keys.
   }
 
-  // 3. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).
+  // 4. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).
   if (phone && lastname) {
     const ids = _ids(searchResultsByKey, "phone_lastname");
     if (ids.length) {
@@ -102,8 +122,22 @@ function resolveIdentity(row, searchResultsByKey) {
     }
   }
 
-  // 4. HARD SAFETY RULE: no valid email AND no confident match AND no weak-key
-  // candidate -> ambiguous, NEVER net_new.
+  // 5. 73.1-06 (D-16a/D-16a-i, operator ruling): linkedin_url or mobilephone (both
+  // searched above with zero hits, or absent) or phone (D-16a-i -- CREATE-only
+  // identity, NEVER searched as a match rung: a landline is often a company
+  // switchboard shared by every contact there, and an EQ match on it would update the
+  // wrong person) is a genuinely NEW contact, not an unresolved ambiguity. Scoped to
+  // exactly these three keys: a bare name+company row (none of the three present)
+  // falls through to the unchanged hard-safety rule below, exactly as before this
+  // change -- the weak name_company lane stays "never auto-create" on purpose.
+  if (linkedin || mobilephone || phone) {
+    return { outcome: "net_new", contact_id: null, match_key: null, candidate_ids: [],
+             reason: "no email, no match on linkedin/mobilephone -- new contact" };
+  }
+
+  // 6. HARD SAFETY RULE (bare name+company, or no identity at all): no valid email
+  // AND no confident strong-key match AND no weak-key candidate AND none of
+  // linkedin_url/mobilephone/phone -> ambiguous, NEVER net_new.
   return { outcome: "ambiguous", contact_id: null, match_key: null,
            candidate_ids: [], reason: "no email, insufficient identity" };
 }

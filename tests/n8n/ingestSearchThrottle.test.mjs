@@ -25,10 +25,14 @@ function throttledSearchNodes() {
   return wf.nodes.filter((n) => n.parameters?.options?.batching?.batch);
 }
 
-test("wf_contact_ingest_cloud carries exactly three throttled search nodes", () => {
+test("wf_contact_ingest_cloud carries exactly five throttled search nodes", () => {
+  // 73.1-06 (D-16a): two more per-row HubSpot CRM searches joined the lane (the
+  // linkedin_url and mobilephone match rungs) -- exactly the "future fourth [and
+  // fifth] per-row search node" this file's own header predicted, both correctly
+  // throttled at build time (this test would have failed loudly otherwise).
   const nodes = throttledSearchNodes();
-  assert.equal(nodes.length, 3,
-    `expected exactly three batching-throttled nodes, found ${nodes.length}: ${nodes.map((n) => n.name).join(", ")}`);
+  assert.equal(nodes.length, 5,
+    `expected exactly five batching-throttled nodes, found ${nodes.length}: ${nodes.map((n) => n.name).join(", ")}`);
 });
 
 test("every throttled search node runs at 400ms (2.5 req/s, 50% headroom under HubSpot's 5 req/s cap)", () => {

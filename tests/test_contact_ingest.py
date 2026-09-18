@@ -99,22 +99,32 @@ def test_matched_row_patches_without_canonical_email():
     assert "phone" in m["canonical_patch"]
     assert "jobtitle" not in m["canonical_patch"]
 
-    # whole-batch coverage: no-email bob -> ambiguous review; empty coordinator -> skip.
-    assert any(e["outcome"] == "ambiguous" and e["action"] == "review" for e in report)
+    # whole-batch coverage: no-email bob carries a real (non-matching) LinkedIn URL --
+    # 73.1-06 (D-16a): a no-match linkedin_url row is now net_new/review, not the old
+    # ambiguous/review (a bare no-email row with NO alternate identity at all is what
+    # still resolves ambiguous, unchanged); empty coordinator -> skip (rejected
+    # upstream for missing identity, never reaches resolve_identity at all).
+    assert any(e["outcome"] == "net_new" and e["action"] == "review" for e in report)
     assert any(e["action"] == "skip" for e in report)
 
 
 def test_net_new_creates_with_email_when_flag_on_and_recheck_clear():
     # CREATE direction: alice resolves net_new (0 hits) and the recheck stays clear ->
-    # create, with email written as the new record's identity.
+    # create, with email written as the new record's identity. 73.1-06 (D-16a): bob's
+    # own no-match linkedin_url ALSO reaches create now (no email recheck applies to an
+    # emailless row) -- proof of D-16a's "no match -> create" ladder rule, not this
+    # test's own subject, so it is asserted by row_index rather than assumed away.
     report = run_contact_ingest(
         CSV, hs_search=make_search([[], []]), hs_get=make_get(),
         allow_create=True, dry_run=True, upload_confidence=85)
 
     created = [e for e in report if e["action"] == "create"]
-    assert len(created) == 1
-    props = created[0]["payload"]["payload"]["properties"]
+    assert len(created) == 2
+    alice = next(e for e in created if e["row_index"] == 0)
+    props = alice["payload"]["payload"]["properties"]
     assert props["email"] == "alice@example.com"
+    bob = next(e for e in created if e["row_index"] == 1)
+    assert "email" not in bob["payload"]["payload"]["properties"]
 
 
 def test_net_new_create_payload_uses_live_property_names():
@@ -134,28 +144,36 @@ def test_net_new_create_payload_uses_live_property_names():
 
 
 def test_net_new_downgraded_to_review_when_recheck_finds_dup():
-    # A dup appearing between resolution and create must block the create.
+    # A dup appearing between resolution and create must block the create -- for
+    # ALICE specifically (the email recheck this test is about). 73.1-06 (D-16a):
+    # bob (emailless, no recheck applies) still creates on his own no-match
+    # linkedin_url -- unaffected by alice's dup, asserted by row_index rather than a
+    # blanket "no create at all".
     report = run_contact_ingest(
         CSV, hs_search=make_search([[], [{"id": "9"}]]), hs_get=make_get(),
         allow_create=True, dry_run=True, upload_confidence=85)
 
-    assert not any(e["action"] == "create" for e in report)
-    dup = [e for e in report if e["outcome"] == "net_new"]
+    created = [e for e in report if e["action"] == "create"]
+    assert all(e["row_index"] != 0 for e in created), "alice's dup must block HER create"
+    dup = [e for e in report if e["row_index"] == 0]
     assert len(dup) == 1
+    assert dup[0]["outcome"] == "net_new"
     assert dup[0]["action"] == "review"
     assert "dup" in dup[0]["reason"]
 
 
 def test_net_new_is_review_when_flag_off():
     # ALLOW_CONTACT_CREATE off => net_new never creates, even with a clear recheck.
+    # 73.1-06 (D-16a): bob's own no-match linkedin_url is ALSO net_new now (not the
+    # old ambiguous) -- both rows are net_new/review under the flag-off gate.
     report = run_contact_ingest(
         CSV, hs_search=make_search([[], []]), hs_get=make_get(),
         allow_create=False, dry_run=True, upload_confidence=85)
 
     assert not any(e["action"] == "create" for e in report)
     net_new = [e for e in report if e["outcome"] == "net_new"]
-    assert len(net_new) == 1
-    assert net_new[0]["action"] == "review"
+    assert len(net_new) == 2
+    assert all(e["action"] == "review" for e in net_new)
 
 
 def test_no_network_across_scenarios():

@@ -1,8 +1,11 @@
 # src/identity.py
 #
 # Phase 7: conservative identity/dedupe resolver. CLASSIFY ONLY -- never create or
-# PATCH. Auto-match only on STRONG keys (email / linkedin_url); a no-email row can
-# NEVER become net_new; everything uncertain routes to ambiguous (needs_review).
+# PATCH. Auto-match only on STRONG keys (email / linkedin_url / mobilephone, 73.1-06);
+# everything uncertain routes to ambiguous (needs_review). 73.1-06 (D-16a/D-16a-i,
+# operator ruling) AMENDS the original "a no-email row can NEVER become net_new" rule:
+# a row carrying linkedin_url, mobilephone, or phone (create-only, never a match rung)
+# can now become net_new when nothing matches -- a bare name+company row still cannot.
 # HubSpot search is INJECTED (default = hubspot_client.search_records) so the whole
 # module is pure/deterministic and testable offline with a canned-dict stub.
 from typing import Optional
@@ -25,7 +28,8 @@ from .hubspot_client import search_records
 # (REVIEW-C6 -- same pair the n8n lane searches, so a caller can re-verify against
 # whichever one carried the hit and a native-only contact resolves here exactly as it does
 # in the lane, Phase 46 parity discipline).
-_SEARCH_PROPS = ["email", "lv_linkedin_url", "hs_linkedin_url", "phone", "firstname", "lastname", "company"]
+_SEARCH_PROPS = ["email", "lv_linkedin_url", "hs_linkedin_url", "phone", "mobilephone",
+                 "firstname", "lastname", "company"]
 
 
 def canonicalize_linkedin(url) -> Optional[str]:
@@ -81,6 +85,11 @@ def resolve_identity(row: dict, hs_search=search_records) -> IdentityResult:
     # Pure/deterministic given the injected hs_search: no time, randomness, or globals.
     email = normalize_email(row.get("email"))        # None if absent OR invalid
     linkedin = canonicalize_linkedin(row.get("linkedin_url"))
+    # 73.1-06 (D-16a/D-16a-i): mobilephone is a STRONG key, single-hit only -- kept
+    # deliberately distinct from `phone` below, which this module never searches
+    # (D-16a-i: a landline is often a company switchboard shared by every contact
+    # there; an EQ match on it would update the wrong person).
+    mobilephone = normalize_phone(row.get("mobilephone"))
     phone = normalize_phone(row.get("phone"))
     firstname = str(row.get("firstname") or "").strip()
     lastname = str(row.get("lastname") or "").strip()
@@ -128,9 +137,26 @@ def resolve_identity(row: dict, hs_search=search_records) -> IdentityResult:
         if len(ids) > 1:
             return IdentityResult(outcome="ambiguous", match_key="linkedin_url",
                                   candidate_ids=ids, reason="multiple linkedin matches")
+        # 0 hits -> fall through.
+
+    # 3. No match on email/linkedin past here. Mobilephone (STRONG, 73.1-06 D-16a-i):
+    # single-hit only, exactly the same shape as the linkedin branch above -- more
+    # than one hit is ambiguous, never a pick. A single EQ search (no variant
+    # crossing -- D-16a's own text names a plain "mobilephone EQ" rung, unlike
+    # linkedin's multi-property/multi-variant search).
+    if mobilephone:
+        ids = _search_ids(hs_search, [
+            {"propertyName": "mobilephone", "operator": "EQ", "value": mobilephone},
+        ])
+        if len(ids) == 1:
+            return IdentityResult(outcome="match", contact_id=ids[0], match_key="mobilephone",
+                                  candidate_ids=ids, reason="single mobilephone match")
+        if len(ids) > 1:
+            return IdentityResult(outcome="ambiguous", match_key="mobilephone",
+                                  candidate_ids=ids, reason="multiple mobilephone matches")
         # 0 hits -> fall through to weak keys.
 
-    # 3. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).
+    # 4. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).
     if phone and lastname:
         ids = _search_ids(hs_search, [
             {"propertyName": "phone", "operator": "EQ", "value": phone},
@@ -150,9 +176,25 @@ def resolve_identity(row: dict, hs_search=search_records) -> IdentityResult:
             return IdentityResult(outcome="ambiguous", match_key="name_company",
                                   candidate_ids=ids, reason="weak-key match requires review")
 
-    # 4. THE HARD SAFETY RULE (core safety property of Milestone 2): no valid email AND
-    # no confident match AND no weak-key candidate -> ambiguous, NEVER net_new. Returning
-    # net_new here is exactly what would let Phase 8 auto-create a no-email duplicate.
+    # 5. 73.1-06 (D-16a/D-16a-i, operator ruling): AMENDS the Milestone-2 hard safety
+    # rule below -- linkedin_url or mobilephone (both searched above with zero hits, or
+    # absent) or phone (D-16a-i -- CREATE-only identity, NEVER searched as a match rung:
+    # a landline is often a company switchboard shared by every contact there, and an
+    # EQ match on it would update the wrong person) is now a genuinely NEW contact, not
+    # an unresolved ambiguity. Scoped to exactly these three keys: a bare name+company
+    # row (none of the three present) still falls through to the unchanged hard-safety
+    # rule below -- the weak name_company lane stays "never auto-create" on purpose,
+    # exactly the Milestone-2 property this amendment does NOT touch.
+    if linkedin or mobilephone or phone:
+        return IdentityResult(outcome="net_new", contact_id=None, match_key=None,
+                              candidate_ids=[],
+                              reason="no email, no match on linkedin/mobilephone -- new contact")
+
+    # 6. THE HARD SAFETY RULE (bare name+company, or no identity at all -- the
+    # remaining core safety property of Milestone 2): no valid email AND no confident
+    # match AND no weak-key candidate AND none of linkedin_url/mobilephone/phone ->
+    # ambiguous, NEVER net_new. Returning net_new here is exactly what would let
+    # Phase 8 auto-create a no-email duplicate from a bare, error-prone name match.
     return IdentityResult(outcome="ambiguous", contact_id=None, match_key=None,
                           candidate_ids=[], reason="no email, insufficient identity")
 

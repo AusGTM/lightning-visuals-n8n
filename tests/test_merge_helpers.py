@@ -171,13 +171,19 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     shape: "Create Carry Merge" is switched from `combine`/`combineByPosition` to
     `append` so a create rejected on the (Task 3) error output can never shift a later
     success's positional pairing — it is no longer a per-hop carry merge at all, it is
-    the identity-join input "Pair Create Outcome To Row" reads."""
+    the identity-join input "Pair Create Outcome To Row" reads.
+
+    73.1-06 (D-16a) adds a FOURTH and FIFTH exception: "Linkedin Search Merge" and
+    "Mobilephone Search Merge", each a genuine two-lane (IF-true search-result lane /
+    IF-false skip lane) convergence `splice_merge_before` builds for the identity
+    ladder's two new rungs -- the same reconvergence shape as "Contact History Merge"
+    above, not an HTTP-hop carry."""
     wf = b.build_cloud()
     merges = [n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.merge"]
     append_merges = [n for n in merges if n["parameters"]["mode"] == "append"]
     assert sorted(n["name"] for n in append_merges) == sorted([
         "Ingest Merge Response", "Build Association Request Merge", "Contact History Merge",
-        "Create Carry Merge",
+        "Create Carry Merge", "Linkedin Search Merge", "Mobilephone Search Merge",
     ])
 
     ingest_merge = next(n for n in append_merges if n["name"] == "Ingest Merge Response")
@@ -197,12 +203,14 @@ def test_ingest_workflow_carries_exactly_one_append_merge_named_ingest_merge_res
     # Every per-item HTTP hop this lane carries a row across — Phase 70 Plan 02 Task 3's
     # full inventory, plus Phase 72 Plan 04's "HubSpot Contact History Carry Merge"
     # (the same splice_carry_merge_after idiom, joining the new history GET back to its
-    # row ahead of "Contact History Merge"'s two-lane convergence above).
+    # row ahead of "Contact History Merge"'s two-lane convergence above), plus 73.1-06's
+    # own two new per-hop carries for the linkedin_url/mobilephone match rungs.
     assert set(combine_merges) == {
         "Update Carry Merge", "Associate Carry Merge",
         "Verify Email Carry Merge", "Search By Email Carry Merge",
         "Company Domain Carry Merge", "Company Name Carry Merge",
         "Source By Field Broadcast", "HubSpot Contact History Carry Merge",
+        "HubSpot Linkedin Search Carry Merge", "HubSpot Mobilephone Search Carry Merge",
     }
     for name, node in combine_merges.items():
         if name == "Source By Field Broadcast":

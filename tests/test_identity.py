@@ -128,6 +128,45 @@ def test_no_email_linkedin_search_uses_the_written_down_variant_set():
     assert calls[0]["values"] == calls[1]["values"]
 
 
+# --- STRONG key: mobilephone (73.1-06, D-16a/D-16a-i) -------------------------
+
+def test_no_email_mobilephone_single_hit_is_match():
+    s = make_search({"mobilephone": {"results": [{"id": "601"}], "total": 1}})
+    r = resolve_identity({"mobilephone": "0412 345 678"}, hs_search=s)
+    assert r.outcome == "match"
+    assert r.match_key == "mobilephone"
+    assert r.contact_id == "601"
+
+
+def test_no_email_mobilephone_multi_hit_is_ambiguous_never_a_pick():  # D-16a-i
+    s = make_search({"mobilephone": {"results": [{"id": "601"}, {"id": "602"}], "total": 2}})
+    r = resolve_identity({"mobilephone": "0412 345 678"}, hs_search=s)
+    assert r.outcome == "ambiguous"
+    assert r.outcome != "match"
+    assert r.match_key == "mobilephone"
+    assert r.candidate_ids == ["601", "602"]
+    assert r.contact_id is None
+
+
+def test_no_email_mobilephone_zero_hits_falls_through_to_net_new():  # D-16a
+    s = make_search({})
+    r = resolve_identity({"mobilephone": "0412 345 678"}, hs_search=s)
+    assert r.outcome == "net_new"
+    assert r.match_key is None
+    assert r.contact_id is None
+
+
+def test_no_email_bare_phone_is_never_routed_into_a_mobilephone_or_any_strong_search():  # D-16a-i
+    # `phone` (a landline) must NEVER be searched as a strong key -- only `mobilephone`
+    # is. This proves it: a canned hit under the "mobilephone" property name must not
+    # be found by a row that only carries `phone`.
+    s = make_search({"mobilephone": {"results": [{"id": "601"}], "total": 1}})
+    r = resolve_identity({"phone": "0412 345 678"}, hs_search=s)
+    assert r.outcome == "net_new"  # D-16a-i: phone alone -> create-only, no match rung
+    assert r.match_key is None
+    assert "mobilephone" not in [c["filters"][0]["propertyName"] for c in s.calls]
+
+
 # --- WEAK keys: a hit is NEVER confident -> only ambiguous --------------------
 
 def test_no_email_phone_lastname_hit_is_ambiguous_not_match_or_net_new():  # P7-SC1
@@ -153,12 +192,27 @@ def test_no_email_name_company_hit_is_ambiguous():  # P7-SC1
 
 # --- THE HARD RULE: the single most important safety property of Milestone 2 --
 
-def test_no_email_no_hits_is_ambiguous_never_net_new():  # P7-SC2 -- HARD RULE
-    # CORE SAFETY PROPERTY: a row with no valid email and no weak-key candidate must
-    # resolve to ambiguous (review), NEVER net_new -- net_new would let Phase 8
-    # auto-create a no-email duplicate. This test guards exactly that.
+def test_phone_no_hits_is_net_new_not_ambiguous():  # 73.1-06, D-16a-i (AMENDS the old
+    # P7-SC2 hard-rule test below -- `phone` is now CREATE-only identity: a row
+    # carrying phone with no email and no match anywhere is a genuinely new contact,
+    # not an unresolved ambiguity).
     s = make_search({})  # zero hits on every key
     r = resolve_identity({"phone": "0412 345 678", "lastname": "Baker"}, hs_search=s)
+    assert r.outcome == "net_new"
+    assert r.match_key is None
+    assert r.contact_id is None
+    assert r.candidate_ids == []
+
+
+def test_bare_name_company_no_hits_is_still_ambiguous_never_net_new():  # P7-SC2 -- HARD RULE
+    # CORE SAFETY PROPERTY (unchanged by 73.1-06): a row with NONE of
+    # email/linkedin_url/mobilephone/phone and no weak-key candidate must resolve to
+    # ambiguous (review), NEVER net_new -- net_new would let Phase 8 auto-create a
+    # no-email duplicate from a bare, error-prone name match.
+    s = make_search({})  # zero hits on every key
+    r = resolve_identity(
+        {"firstname": "Dave", "lastname": "Nguyen", "company": "Acme"}, hs_search=s
+    )
     assert r.outcome == "ambiguous"
     assert r.outcome != "net_new"
     assert r.reason == "no email, insufficient identity"
@@ -191,12 +245,12 @@ def test_resolve_batch_maps_rows_in_order():  # P7-SC3
     s = make_search({"email": {"results": [{"id": "501"}], "total": 1}})
     rows = [
         {"email": "alice@example.com"},              # -> match
-        {"phone": "0412 345 678", "lastname": "X"},  # -> ambiguous (no email, no hits)
+        {"phone": "0412 345 678", "lastname": "X"},  # -> net_new (73.1-06: phone create-only)
     ]
     results = resolve_batch(rows, hs_search=s)
-    assert [r.outcome for r in results] == ["match", "ambiguous"]
+    assert [r.outcome for r in results] == ["match", "net_new"]
     assert results[0].contact_id == "501"
-    assert results[1].reason == "no email, insufficient identity"
+    assert results[1].match_key is None
 
 
 # --- canonicalize_linkedin ----------------------------------------------------

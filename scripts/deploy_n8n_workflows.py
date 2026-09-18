@@ -130,6 +130,13 @@ NODE_CREDENTIAL_MAP = {
     # this map's own convention — an unmapped HubSpot node deploys UNBOUND and 401s only
     # at runtime.
     "HubSpot Contact History": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # 73.1-06 (D-16a): the ingest lane's own linkedin_url/mobilephone match rungs.
+    # Registered in the SAME commit as their creation in
+    # scripts/build_cloud_workflows.py, per this map's own convention.
+    "HubSpot Linkedin Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HubSpot Mobilephone Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # 73.1-06 (D-14c): wf_backend_status_cloud.json's own portal-proof probe.
+    "HubSpot Account Info": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # wf_scheduled_maintenance_cloud.json (9 nodes):
     "SJ-3 Search (requested poller)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "SJ-1 Search (input-gap scan)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
