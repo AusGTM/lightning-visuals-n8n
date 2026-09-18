@@ -2764,6 +2764,28 @@ start) and AFTER-03 (full end-of-run report).
 > execution `12406`) and the CREATE path (contact `352522004980`, execution `12414`). Full
 > read-back: `.planning/phases/72-enrichment-extras-land-in-hubspot/72-UAT.md` Test 3.
 
+> **Extended 2026-09-18 (Phase 73.1 Plan 09 Task 3, `[observed live]`) — a SIXTH cloud
+> workflow is now live.** `LV Suggest Discovery (Cloud template)` (the D-06 provider-backed
+> discovery lane, ZoomInfo-only per the D-12 operator ruling) had its first deploy — a
+> CREATE, not a PUT, since no live id existed before this task — minting live id
+> `VJJBZ2oJ0079MSzG`, recorded in `scripts/bounce_n8n_workflows.py`'s `WORKFLOWS` map. All
+> six cloud workflows are now live, `active`, `executionOrder: v1`: `LV Backend Status`
+> (`Cj83mOgrIm59oxcX`, 33 nodes, up from 30 — D-14c/D-14a landed since the Phase 72 gate),
+> `LV Contact Ingest` (`AwbBeShdPgV48eiY`, 98 nodes, up from 78 — the identity-ladder
+> plans), `LV Enrichment` (`950HPb7a1GgSAIyZ`, 287 nodes, unchanged), `LV Review Decision`
+> (`WBJwoZOo63wzeP69`, 55 nodes, unchanged), `LV Scheduled Maintenance`
+> (`1fXPuIabz3RsAHgn`, 43 nodes, unchanged), `LV Suggest Discovery`
+> (`VJJBZ2oJ0079MSzG`, 26 nodes, new). Every HubSpot write-safety flag
+> (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`, `ALLOW_HUBSPOT_REVIEW_WRITES`)
+> reads `false` on all four workflows that carry one; Discovery and Backend Status carry
+> **zero** `ALLOW_*` literals of any kind (read-only design, no flag to arm). One disarmed
+> proof POST to the discovery lane (3 companies, 2 gap + 1 non-gap) consumed **exactly one**
+> execution (`12666`), echoed every company once with its `num_associated_contacts`,
+> triggered zero provider-search nodes for the non-gap company, and produced no burst over
+> 3.5 minutes of watching. D-14c's backend-status `portalId` read (`22617666`) upgraded from
+> `[documented]` to `[observed live]`. **Nothing armed. No HubSpot record written.** Full
+> record: `.planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/73.1-UAT.md`.
+
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
 Established during Phase 61's premise spike. **Tags are load-bearing: `[documented]` means
