@@ -70,14 +70,16 @@ RESEARCH_RATE_KEY = "company_domain_research"
 SUGGESTION_RATE_KEY = "suggestion_stage1_discovery"
 SUGGESTION_STAGE2_RATE_KEY = "lusha_contacts_first_time_enrich"
 
-# Phase 73.1 discovery round (D-12/D-13/D-13a). One search-rate key per provider, all
-# shipping null until the D-12 plan-time probe measures them. Ordered in the D-11
-# waterfall's own order (enrichment.FULL_WATERFALL / config/provider_priority.yaml
-# default: zoominfo, apollo, lusha) -- not re-derived here, just mirrored.
+# Phase 73.1 discovery round (D-12/D-13/D-13a). The D-12 plan-time probe measured all
+# three (73.1-D12-VERDICT.json), and the operator ruled 2026-09-18: "ZoomInfo retained
+# as tier-2 source, others (Apollo/Lusha) dropped for search phase. Full waterfall only
+# used on enrich." This dict names only the provider the shipped discovery lane
+# (n8n/code/discoverySearch.js) actually searches -- one entry, not three. Apollo's and
+# Lusha's measured/unmeasured figures still live in cost_rates.json as retained
+# evidence (in case a future ruling revisits this), just not disclosed in this round's
+# cost line.
 DISCOVERY_SEARCH_RATE_KEYS = {
     "zoominfo": "zoominfo_contact_search",
-    "apollo": "apollo_people_search",
-    "lusha": "lusha_prospecting_search",
 }
 
 # The page-fetch axis that bounds ONE company's whole discovery ladder (D-62-14). This
@@ -352,12 +354,16 @@ def discovery_line(gap_company_count, per_company_cap, rates: dict) -> dict:
     `suggestion_line`'s "zero rows is a different kind of nothing" branch order --
     readability before magnitude, no-rows before any rate is consulted.
 
-    Every provider search rate ships null until the D-12 plan-time probe measures it
-    (D-13): the whole-round `state` is `measured` only when EVERY provider's rate is
-    known, and `known` mirrors it -- one known plus two unknown is `unmeasured`,
-    because the total genuinely is. A `null` rate never renders as `$0` or `0 credits`;
-    it renders the word `unknown`, inheriting the same readability-before-magnitude
-    discipline `compare()` established (D-10).
+    The whole-round `state` is `measured` only when EVERY provider named in
+    DISCOVERY_SEARCH_RATE_KEYS has a known rate, and `known` mirrors it -- with the
+    operator's D-12 ruling (2026-09-18, search-only: ZoomInfo retained, Apollo/Lusha
+    dropped) that dict names ZoomInfo alone, and ZoomInfo's rate is a measured zero
+    (D-13), so the shipped round renders `measured` outright. A `null` rate (were one
+    ever added back to this dict) never renders as `$0` or `0 credits`; it renders the
+    word `unknown`, inheriting the same readability-before-magnitude discipline
+    `compare()` established (D-10) -- but a genuinely MEASURED zero, like ZoomInfo's,
+    is not hidden either: it renders its real arithmetic, `0` included (cost_rates.json's
+    own null-means-unknown/zero-means-measured distinction, D-13).
 
     Stage 2's ceiling reuses SUGGESTION_STAGE2_RATE_KEY -- the SAME contacts rate
     `suggestion_line` already uses -- never a second literal for the same spend, and is

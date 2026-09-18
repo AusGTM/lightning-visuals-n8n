@@ -189,30 +189,34 @@ def test_discovery_line_zero_gap_companies_yields_no_rows(rates):
     assert result["stage2_credit_ceiling"] is None
 
 
-def test_discovery_line_all_rates_unknown_is_the_shipped_state(rates):
-    """Test 2: with the shipped cost_rates.json all three provider search rates are
-    null -- the whole round is unmeasured, never zero."""
+def test_discovery_line_zoominfo_only_and_measured_is_the_shipped_state(rates):
+    """Test 2: with the shipped cost_rates.json (D-12 operator ruling 2026-09-18:
+    search-only, ZoomInfo retained, Apollo/Lusha dropped), DISCOVERY_SEARCH_RATE_KEYS
+    names ZoomInfo alone, and its measured rate is a real zero -- the whole round
+    renders `measured`, not `unmeasured`."""
     result = cost_guard.discovery_line(6, 2, rates)
-    assert result["state"] == "unmeasured"
-    assert result["known"] is False
-    assert len(result["providers"]) == 3
-    for provider in result["providers"]:
-        assert provider["rate"] is None
-        assert provider["state"] == "unmeasured"
+    assert result["state"] == "measured"
+    assert result["known"] is True
+    assert len(result["providers"]) == 1
+    zoominfo = result["providers"][0]
+    assert zoominfo["provider"] == "zoominfo"
+    assert zoominfo["rate"] == 0
+    assert zoominfo["state"] == "measured"
     assert result["executions"] == 1
     assert result["stage2_contact_ceiling"] == 12
     expected_ceiling = 12 * rates["rates"][cost_guard.SUGGESTION_STAGE2_RATE_KEY]["value"]
     assert result["stage2_credit_ceiling"] == expected_ceiling
 
 
-def test_discovery_line_never_renders_zero_and_names_unknown_per_provider(rates):
-    """Test 3: the line never says $0 or 0 credits, and says `unknown` once per
-    unknown-rate provider."""
+def test_discovery_line_a_real_measured_zero_renders_its_own_arithmetic_not_unknown(rates):
+    """Test 3: ZoomInfo's rate is a real measured zero (D-13/cost_rates.json's own
+    null-means-unknown/zero-means-measured distinction) -- it renders `0 credits`
+    honestly, and the word `unknown` never appears (no unmeasured provider remains in
+    the shipped DISCOVERY_SEARCH_RATE_KEYS)."""
     result = cost_guard.discovery_line(6, 2, rates)
     line = result["line"]
-    assert "$0" not in line
-    assert "0 credits" not in line
-    assert line.count("unknown") == 3
+    assert "0 credits" in line
+    assert "unknown" not in line
 
 
 def test_discovery_line_names_gap_count_one_execution_and_stage2_ceiling(rates):
@@ -225,18 +229,31 @@ def test_discovery_line_names_gap_count_one_execution_and_stage2_ceiling(rates):
     assert str(result["stage2_contact_ceiling"]) in line
 
 
-def test_discovery_line_a_known_rate_renders_arithmetically(rates):
-    """Test 5: a mixed round (one known, two unknown) is the expected state, not an
-    error -- known providers render arithmetic, unknown providers stay unmeasured."""
+def test_discovery_line_a_nonzero_known_rate_renders_arithmetically(rates):
+    """Test 5: a non-zero known rate renders its own arithmetic, still `measured` --
+    proves the formula, not just the zero-rate special case."""
     rates["rates"]["zoominfo_contact_search"]["value"] = 1
     result = cost_guard.discovery_line(6, 2, rates)
     zoominfo = next(p for p in result["providers"] if p["provider"] == "zoominfo")
     assert zoominfo["state"] == "measured"
-    assert "6" in zoominfo["line"] and "1" in zoominfo["line"] and "6" in zoominfo["line"]
+    assert "6" in zoominfo["line"] and "1" in zoominfo["line"]
     assert "×" in zoominfo["line"] and "=" in zoominfo["line"] and "credits" in zoominfo["line"]
-    others = [p for p in result["providers"] if p["provider"] != "zoominfo"]
-    assert all(p["state"] == "unmeasured" for p in others)
-    assert result["state"] == "unmeasured"  # not every provider is known
+    assert result["state"] == "measured"
+
+
+def test_discovery_line_an_unknown_rate_renders_unknown_not_zero(rates):
+    """If DISCOVERY_SEARCH_RATE_KEYS' one provider's rate were ever unmeasured again,
+    the round must read `unmeasured`/`unknown`, never a silent zero -- proves the
+    unmeasured branch still works even though the shipped table no longer exercises it."""
+    rates["rates"]["zoominfo_contact_search"]["value"] = None
+    result = cost_guard.discovery_line(6, 2, rates)
+    assert result["state"] == "unmeasured"
+    assert result["known"] is False
+    zoominfo = result["providers"][0]
+    assert zoominfo["state"] == "unmeasured"
+    assert zoominfo["rate"] is None
+    assert "unknown" in result["line"]
+    assert "$0" not in result["line"] and "0 credits" not in result["line"]
 
 
 def test_discovery_line_stage2_ceiling_follows_the_stage2_rate_key(rates):

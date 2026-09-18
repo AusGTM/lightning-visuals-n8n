@@ -46,22 +46,22 @@
       "confidence": "unknown -- not yet measured, do not substitute a guess"
     },
     "zoominfo_contact_search": {
-      "value": null,
+      "value": 0,
       "unit": "credits/search",
-      "citation": "No provider search-by-role endpoint has ever been called in this repository (Phase 73.1, D-12/D-13). The endpoint itself is [ASSUMED] from ZoomInfo's published API documentation and has not been probed on this account. The figure is to be measured by the D-12 plan-time probe (scripts/probe_provider_discovery.py) and the operator's ruling -- do not scale zoominfo_per_match or any other rate to fill this in.",
-      "confidence": "unknown -- no provider search endpoint has been called on this account; do not substitute a guess"
+      "citation": "D-12 probe rounds 2-4 (2026-09-18, scripts/probe_provider_discovery.py, 73.1-D12-VERDICT.json), each a live search-by-role call against api.zoominfo.com/gtm/data/v1/contacts/search: balance read 9352 before and 9352 after on every round, a real measured zero, not an absence. This is the search-only ZoomInfo rate; the shipped discovery lane (n8n/code/discoverySearch.js, D-12 ruling 2026-09-18) uses ZoomInfo exclusively for search.",
+      "confidence": "measured"
     },
     "apollo_people_search": {
       "value": null,
       "unit": "credits/search",
-      "citation": "No provider search-by-role endpoint has ever been called in this repository (Phase 73.1, D-12/D-13). The endpoint itself is [ASSUMED] from Apollo's published API documentation and has not been probed on this account. The figure is to be measured by the D-12 plan-time probe (scripts/probe_provider_discovery.py) and the operator's ruling -- do not scale apollo_per_match or any other rate to fill this in. Apollo's balance is unreadable on this account: per this table's existing apollo_per_match citation, Apollo's usage endpoint returns per-endpoint rate limits rather than a depleting credit pool, and the separate provider credit-check endpoint used elsewhere in this repo returns 403 for this account's (non-master) key -- so this search rate can only ever be priced from vendor documentation, never from a before/after balance read.",
-      "confidence": "unknown -- no provider search endpoint has been called on this account; do not substitute a guess"
+      "citation": "D-12 probe rounds 2-4 (2026-09-18, scripts/probe_provider_discovery.py, 73.1-D12-VERDICT.json) confirmed the endpoint exists (POST /api/v1/mixed_people/api_search, 200, people returned) but this account's balance is UNREADABLE on it -- per this table's existing apollo_per_match citation, Apollo's usage endpoint returns per-endpoint rate limits rather than a depleting credit pool, and the separate provider credit-check endpoint used elsewhere in this repo returns 403 for this account's (non-master) key -- so this search rate can only ever be priced from vendor documentation, never from a before/after balance read. Operator ruling 2026-09-18 (D-12): 'search-only: ZoomInfo retained, Apollo/Lusha dropped for search phase, full waterfall only used on enrich' -- Apollo is no longer part of the shipped discovery lane; this figure is retained as unmeasured evidence only, never scaled or guessed.",
+      "confidence": "unknown -- Apollo's balance cannot be read on this account; do not substitute a guess. Apollo is no longer used for search in the shipped lane (D-12 ruling)."
     },
     "lusha_prospecting_search": {
-      "value": null,
-      "unit": "credits/search",
-      "citation": "No provider search-by-role endpoint has ever been called in this repository (Phase 73.1, D-12/D-13). The endpoint itself is [ASSUMED] from Lusha's published API documentation and has not been probed on this account. The figure is to be measured by the D-12 plan-time probe (scripts/probe_provider_discovery.py) and the operator's ruling -- do not scale lusha_contacts_first_time_enrich, lusha_companies_match, or any other rate to fill this in.",
-      "confidence": "unknown -- no provider search endpoint has been called on this account; do not substitute a guess"
+      "value": 1,
+      "unit": "credits/request",
+      "citation": "D-12 probe rounds 2-4 (2026-09-18, scripts/probe_provider_discovery.py, 73.1-D12-VERDICT.json), each a live search-by-role call against api.lusha.com/prospecting/contact/search: CROSS-RUN balance 3615 (before round 2) -> 3614 (before round 3) -> 3613 (before round 4), one credit charged per REQUEST even when the round returned zero results -- the charge lands after the response is returned, so each round's own before/after delta reads 0 while the cross-run balance shows the real cost. Operator ruling 2026-09-18 (D-12): 'search-only: ZoomInfo retained, Apollo/Lusha dropped for search phase, full waterfall only used on enrich' -- Lusha is no longer part of the shipped discovery lane; this figure is retained as measured evidence only, in case a future ruling revisits it.",
+      "confidence": "measured -- Lusha is no longer used for search in the shipped lane (D-12 ruling); this rate is not disclosed in the discovery round's cost line."
     },
     "anthropic_usd_per_record": {
       "value": 0.068624,
