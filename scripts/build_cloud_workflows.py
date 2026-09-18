@@ -12119,6 +12119,14 @@ def _discovery_zoom_search_leaf_js(rung):
 // --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---
 const ROLE_TITLES = __ROLE_TITLES__;
 const _titleCap = capRoleTitles(ROLE_TITLES, ZOOMINFO_JOBTITLE_MAX);
+// 73.1-09 Task 3 follow-through (execution 12668, 2026-09-18): a 401 on this endpoint
+// means the CACHED token (read by "ZoomInfo Search Token Gate" upstream, not re-minted
+// this run) was rejected -- clearing it here mirrors _zoom_split_enrich_contacts_js's own
+// isAuthError-clears-cache precedent exactly, so the NEXT execution re-mints instead of
+// reusing the same rejected token forever. A cloud split-code-node cannot mint inline (no
+// credential access here -- only the credential-bound Mint HTTP node can) so this is
+// "self-heals across runs", the same limitation the enrich lane already accepts.
+const sd = $getWorkflowStaticData("global");
 const items = $input.all();
 const out = [];
 for (const item of items) {
@@ -12156,6 +12164,7 @@ for (const item of items) {
     } catch (e) {
       const s = extractErrorStatus(e);
       status = Number.isFinite(s) ? s : "exception";
+      if (isAuthError(s)) delete sd.zoominfo;   // token rejected -> next run re-mints
       error = String((e && e.message) || e).slice(0, 200);
       res = { error };
     }
