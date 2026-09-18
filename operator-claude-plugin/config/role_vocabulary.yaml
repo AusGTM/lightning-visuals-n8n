@@ -1,5 +1,5 @@
-version: lv-role-vocabulary-v3
-built_on: '2026-09-04'
+version: lv-role-vocabulary-v4
+built_on: '2026-09-18'
 source: generic_fallback
 evidenced: false
 top_n: 20
@@ -136,3 +136,30 @@ families:
   members:
   # Emma Hoadley, same page, same date. No existing family covers this function at all.
   - Sponsorship
+
+# D-11c / 73.1-02 Task 2. The 2026-09-18 pickleball round: Brendan Lee (Executive
+# Officer) and Jen Ramamurthy (Board Chairwoman) both failed classify_title while Liam
+# Oke (Marketing & Communication Coordinator) classified. Labels are human-readable
+# title case, not D-11c's snake_case identifiers `executive_officer`/`board_chair` --
+# role_classify.chosen_families validates the operator's selection against these
+# labels and the prompt builder prints them to the operator, so a label is
+# operator-visible text and every existing family in this file already uses title
+# case.
+- label: Executive Officer
+  recurrence: 0
+  evidenced: false
+  members:
+  # Brendan Lee, pickleball round, 2026-09-18. Two tokens -- never a bare `officer`,
+  # which test_shipped_vocabulary_has_no_bare_grade_noun_members forbids.
+  - Executive Officer
+- label: Board Chair
+  recurrence: 0
+  evidenced: false
+  members:
+  # Jen Ramamurthy, same round, same date -- the actual gap. Deliberately NOT
+  # `Chairman` or `Chairperson`: both already live in the `Chair` family above, and
+  # test_no_member_string_appears_in_two_families (73.1-02 Task 1) fails on a
+  # duplicate. `Chair` already covers the masculine and neutral forms.
+  - Board Chair
+  - Board Chairwoman
+  - Chairwoman

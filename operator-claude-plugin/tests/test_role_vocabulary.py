@@ -284,3 +284,60 @@ def test_no_member_string_appears_in_two_families():
         f"appearing under two labels makes classify_title's longest-wins tie-break "
         f"resolve on YAML order, which its own docstring says it never does"
     )
+
+
+# =====================================================================================
+# 73.1-02 Task 2 (D-11c): the two families the 2026-09-18 pickleball round dropped on
+# the floor -- Brendan Lee (Executive Officer) and Jen Ramamurthy (Board Chairwoman)
+# both failed classify_title and were dropped role_not_selected while Liam Oke
+# (Marketing & Communication Coordinator) classified. Written before the YAML change,
+# so the new-family assertions are seen RED first.
+# =====================================================================================
+
+def test_executive_officer_classifies_to_its_own_family():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title("Executive Officer", vocabulary["families"])
+    assert result == "Executive Officer"
+
+
+def test_chief_executive_officer_classifies_to_executive_officer_via_longest_run():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title(
+        "Chief Executive Officer", vocabulary["families"]
+    )
+    assert result == "Executive Officer"
+
+
+def test_board_chairwoman_classifies_to_board_chair():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title("Board Chairwoman", vocabulary["families"])
+    assert result == "Board Chair"
+
+
+def test_bare_chairwoman_classifies_to_board_chair():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title("Chairwoman", vocabulary["families"])
+    assert result == "Board Chair"
+
+
+def test_board_chair_classifies_to_board_chair():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title("Board Chair", vocabulary["families"])
+    assert result == "Board Chair"
+
+
+def test_chairman_still_classifies_to_chair_unchanged():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title("Chairman", vocabulary["families"])
+    assert result == "Chair"
+
+
+def test_marketing_and_communication_coordinator_still_classifies_unchanged():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title(
+        "Marketing & Communication Coordinator", vocabulary["families"]
+    )
+    assert result is not None, (
+        "Liam Oke's title already classified before D-11c's addition; the new "
+        "families must not disturb it"
+    )
