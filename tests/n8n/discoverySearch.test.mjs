@@ -14,13 +14,28 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const {
-  buildRequest, buildUrl, normalizeResponse, capRoleTitles,
+  buildRequest, buildUrl, normalizeResponse, capRoleTitles, titlesForFamilies,
   DISCOVERY_PEOPLE_CAP, DISCOVERY_ENDPOINTS, ZOOMINFO_JOBTITLE_MAX,
 } = require(path.join(ROOT, "n8n/code/discoverySearch.js"));
+
+// Python oracle: PyYAML parses the REAL shipped vocabulary, no JS-side YAML
+// reimplementation and no hand-written fixture -- same idiom
+// tests/n8n/columnMapIdentityParity.test.mjs already uses for config/column_mapping.yaml.
+// A fixture would not catch a regression in the SHIPPED file's own family ordering (the
+// exact class of bug D-11c closes: the last-declared families getting cut).
+const PY = path.join(ROOT, ".venv/bin/python");
+function shippedRoleFamilyMap() {
+  const script =
+    "import json,yaml;" +
+    "cfg=yaml.safe_load(open('operator-claude-plugin/config/role_vocabulary.yaml'));" +
+    "print(json.dumps({f['label']: f.get('members', []) for f in cfg['families']}))";
+  return JSON.parse(execFileSync(PY, ["-c", script], { cwd: ROOT }).toString());
+}
 
 test("DISCOVERY_ENDPOINTS names exactly one provider: zoominfo", () => {
   assert.deepEqual(Object.keys(DISCOVERY_ENDPOINTS), ["zoominfo"]);
@@ -126,6 +141,39 @@ test("normalizeResponse never emits a reveal-shaped field even when the fixture 
                      mobilePhone: "0411111111", email: "r@example.org" } },
   ] });
   assert.deepEqual(Object.keys(rows[0]).sort(), ["firstname", "jobtitle", "lastname", "provider"]);
+});
+
+// ---- Plan 10 (D-11a/D-11c): titlesForFamilies over the SHIPPED vocabulary ----------
+
+test("73.1-10/D-11c: titlesForFamilies over the shipped vocabulary survives all four D-11c members into a rung-1 request with zero drop", () => {
+  const map = shippedRoleFamilyMap();
+  const titles = titlesForFamilies(map, ["Executive Officer", "Board Chair"]);
+  const { dropped } = capRoleTitles(titles, ZOOMINFO_JOBTITLE_MAX);
+  assert.equal(dropped, 0, "two families' worth of titles must fit well under the 500-char cap");
+  const body = buildRequest("zoominfo", { domain: "example.org", roleTitles: titles });
+  const jobTitle = body.data.attributes.jobTitle;
+  for (const member of ["Executive Officer", "Board Chair", "Board Chairwoman", "Chairwoman"]) {
+    assert.ok(jobTitle.includes(member), `jobTitle must include "${member}"`);
+  }
+});
+
+test("73.1-10: an absent or empty role_families selection falls back to every member in map order -- deliberate, not an accident", () => {
+  const map = shippedRoleFamilyMap();
+  const everyMember = Object.values(map).flat();
+  assert.deepEqual(titlesForFamilies(map, null), everyMember);
+  assert.deepEqual(titlesForFamilies(map, []), everyMember);
+  assert.deepEqual(titlesForFamilies(map, undefined), everyMember);
+});
+
+test("73.1-10: an unknown family label contributes nothing and does not throw -- the lane is not a second validator", () => {
+  const map = shippedRoleFamilyMap();
+  assert.doesNotThrow(() => titlesForFamilies(map, ["Not A Real Family"]));
+  assert.deepEqual(titlesForFamilies(map, ["Not A Real Family"]), []);
+  // A real family alongside an unknown one still contributes its own members.
+  assert.deepEqual(
+    titlesForFamilies(map, ["Not A Real Family", "Executive Officer"]),
+    ["Executive Officer"],
+  );
 });
 
 test("unknown/retired provider raises rather than silently returning an empty/malformed body", () => {

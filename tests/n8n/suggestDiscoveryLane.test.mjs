@@ -144,6 +144,30 @@ test("Task1/Test8: every Merge declares at most 10 inputs", () => {
   }
 });
 
+// ---- Plan 10 (D-11a) ------------------------------------------------------------------
+// Generated-artifact assertion, node-scoped (never a whole-file grep -- the vocabulary
+// strings legitimately appear in more than one node, e.g. Rung1 and Rung2 both mention
+// ROLE_FAMILY_MAP). This lane's leaves are STUBBED (zeroPeopleCodeStubs), so the walker
+// never executes the real filter -- this is the check that actually proves D-11a.
+test("73.1-10/D-11a: ZoomInfo Search Rung1 reads role_families off the row and carries the build-time family map", () => {
+  const wf = loadWf();
+  const rung1 = wf.nodes.find((n) => n.name === "ZoomInfo Search Rung1");
+  assert.ok(rung1, "ZoomInfo Search Rung1 node must exist");
+  const js = rung1.parameters.jsCode;
+  assert.match(js, /ROLE_FAMILY_MAP/, "rung 1 must carry the build-time label->members map");
+  assert.match(js, /titlesForFamilies\(ROLE_FAMILY_MAP, row\.role_families\)/,
+    "rung 1 must filter the map by the row's OWN role_families selection, per row");
+  assert.match(js, /Executive Officer/, "the shipped D-11c family must be present in the map literal");
+  assert.match(js, /Board Chairwoman/, "the shipped D-11c member must survive into rung 1's leaf");
+});
+
+test("73.1-10/D-11a: ZoomInfo Search Rung2 keeps an empty family map -- rung 2 stays unfiltered", () => {
+  const wf = loadWf();
+  const rung2 = wf.nodes.find((n) => n.name === "ZoomInfo Search Rung2");
+  assert.ok(rung2, "ZoomInfo Search Rung2 node must exist");
+  assert.match(rung2.parameters.jsCode, /const ROLE_FAMILY_MAP = \{\};/);
+});
+
 // ---- Task 2 -------------------------------------------------------------------------
 
 test("Task2/Test6: a gap company whose ZoomInfo rung-1 returns a person never reaches rung-2", () => {
