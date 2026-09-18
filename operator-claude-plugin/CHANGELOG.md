@@ -16,6 +16,68 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-09-18
+
+Phase 73.1: provider-backed contact discovery as a second source for the people a round
+proposes, plus four fixes folded in from the 2026-09-18 UAT sitting (session grant,
+CRM-access portal proof, and an emailless identity ladder for the ingest lane).
+
+### Changed
+- **Source rank 2 is now provider discovery, not LinkedIn — and LinkedIn (now rank 3) is
+  HELD where it used to be sendable.** This is a behaviour change an existing operator
+  will notice: a person found only via a LinkedIn page used to be sent automatically and
+  now is not — LinkedIn is still collected, ranked and shown, but never sent without the
+  operator's own review. This follows the operator's own ruling after a round found
+  people at only 1 of 7 companies on the website ladder alone.
+- **A person with only a LinkedIn URL or a mobile number, and no email at all, can now be
+  loaded and matched.** The contact-upload lane's identity check now accepts a name +
+  mobile number or a name + LinkedIn URL on their own, alongside the existing email and
+  name + company groups. A bare phone number by itself still does not count as identity —
+  it needs a name and company alongside it.
+- **A landline is never used to match an existing contact.** Only a mobile number can
+  match, and only on an exact single hit — a landline is too often a shared company
+  switchboard number to safely identify one person by it.
+- **The first "yes" for a batch of sends now covers the whole session.** Every lane and
+  every domain named in that first approval is covered; a later send outside that record
+  set widens the same approval and says so, rather than asking again or silently opening a
+  second one — and an approval opened by mistake while one is already open is refused,
+  naming the one that is already open.
+- **Any HubSpot access outside this plugin — the claude.ai connector, an MCP server, the
+  `hs` CLI — must now prove it is on the right HubSpot portal before its first use, every
+  session.** A tool pointed at the wrong portal used to come back "not found" for a record
+  that genuinely existed; that failure mode is now named and stopped before it is read as
+  "the record does not exist."
+
+### Added
+- **Provider discovery.** When a batch of companies has already been through the website
+  ladder and some still have too few people named, the round now searches ZoomInfo, then
+  Apollo, then Lusha for the roles you chose — gap-filling after the ladder, never before
+  it, and never for a company the ladder already covered. One request covers the whole
+  round regardless of how many companies need it, so the cost is one n8n execution, not
+  one per company. A person found on the company's own page AND by a provider is shown as
+  one person, naming whichever source is the stronger of the two. This release is
+  **search-only**: provider discovery never reveals an email or phone number by itself —
+  that still happens exactly where it always has, in the existing stage-2 enrichment pass.
+- **Two more roles a round can propose people for: Executive Officer and Board Chair** —
+  added to the same role picker every round already uses.
+- **The round states its cost before spending, even when a provider's own search price has
+  not been measured yet.** A provider whose rate is still unknown is shown as "unknown,"
+  never as free, and the round proceeds anyway — it reports what that provider actually
+  cost once the round is done, rather than refusing to run until every price is known.
+- **A created contact's report now names which piece of information actually matched
+  it** — email, LinkedIn, mobile number, or name — not just that it was created.
+
+### Not shipped this release
+- **Provider discovery is search-only.** Whether a future release lets it also reveal an
+  email or phone number in the same pass is an open question, pending a live probe of what
+  each provider actually charges for a search call — deferred to the operator's own
+  reading of that probe before any change to what this feature spends.
+- **A provider's own claimed job title is not yet trusted over this plugin's own role
+  classifier.** Every provider result is still checked against the classifier before it
+  counts toward the roles you chose; trusting the provider's own title match instead is
+  deferred to a small live sample the operator will judge directly, not shipped as the
+  default here.
+
 ## [0.50.2] - 2026-09-18
 
 ### Changed
