@@ -1,0 +1,40 @@
+{
+  "probed_at": "2026-09-18T09:38:52.377753+00:00",
+  "domain": "pickleballaustralia.org.au",
+  "providers": {
+    "zoominfo": {
+      "provider": "zoominfo",
+      "endpoint": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
+      "status": 400,
+      "balance_before": 9352,
+      "balance_after": 9352,
+      "delta": 0,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": "[{'code': 'PFAPI0005', 'detail': 'Invalid field requested', 'id': '9ecf1c94-23eb-4fc4-a0d7-61b2cf575bb9', 'source': {'pointer': '/data/attributes/companyDomain'}, 'status': '400'}]"
+    },
+    "apollo": {
+      "provider": "apollo",
+      "endpoint": "https://api.apollo.io/v1/mixed_people/search",
+      "status": 422,
+      "balance_before": null,
+      "balance_after": null,
+      "delta": null,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": "This endpoint is deprecated for API callers. Please use the new mixed_people/api_search endpoint: https://docs.apollo.io/reference/people-api-search.; Apollo's usage endpoint returns per-endpoint rate limits, not a depleting credit pool (memory `provider-credit-check-endpoints`), and this account's non-master key reads 403 on it. Balance is UNREADABLE on this account -- any Apollo search cost can only come from vendor documentation, never a measured delta."
+    },
+    "lusha": {
+      "provider": "lusha",
+      "endpoint": "https://api.lusha.com/prospecting/contacts/search",
+      "status": 404,
+      "balance_before": 3615,
+      "balance_after": 3615,
+      "delta": 0,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": "no Route matched with those values"
+    }
+  },
+  "operator_ruling": null
+}
