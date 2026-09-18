@@ -1057,15 +1057,31 @@ def partition_for_dispatch(rows, company_domains):
     map's REQUIRED-ness is unchanged, with no default: an
     optional argument here would be a one-keyword bypass of the operator's ruling. A
     row whose company is absent from the map, or whose recorded value cannot be turned
-    into a domain, is held with `reason_code: "company_domain_unknown"` -- never sent.
+    into a domain, is held with `reason_code: "company_domain_unknown"` -- never sent,
+    UNLESS the row itself carries no email (see the no-email guard below, which is
+    checked first and keys on the row, not on the company).
 
     Runs `extraction.hold_emailless(rows)` first, stamping its held entries with
-    `reason_code: "no_email"` and keeping their reasons verbatim. Every remaining row
-    is then classified by `email_domain_relation`; `"related"` stays sendable, and
-    every other verdict becomes a held entry naming the ORIGINAL index in `rows` (never
-    a position in the sendable sublist, which would renumber this pass's holds).
-    Returns `(sendable, held)` with `held` ordered by original index, so the two passes
-    read as one list.
+    `reason_code: "no_email"` and keeping their reasons verbatim. D-16b widened that
+    first pass to hold only a row with none of email/linkedin_url/mobilephone/phone, so
+    a row can now survive it while still carrying no email -- e.g. a LinkedIn- or
+    mobile-keyed provider discovery row. D-16c: the email-domain relation below is a
+    judgement about an EMAIL, so a row with no email has nothing for it to judge and is
+    not held for lacking a comparison it never needed. Every row that survives the
+    first pass and carries no email is therefore appended to `sendable` immediately,
+    BEFORE `email_domain_relation` runs -- keyed on the row's own absent `email`, never
+    on the company's domain being unknown, so a row that DOES carry an email whose
+    company is absent from `company_domains` is still held `company_domain_unknown`
+    exactly as before (the bypass this guard must not open). This does not weaken the
+    relation for any row that does carry an email -- D-02 holds an unrelated or unknown
+    domain exactly as it always has, for a provider-found row as for any other.
+
+    Every remaining row (carries no email, or survived the no-email guard above) is
+    then classified by `email_domain_relation`; `"related"` stays sendable, and every
+    other verdict becomes a held entry naming the ORIGINAL index in `rows` (never a
+    position in the sendable sublist, which would renumber this pass's holds). Returns
+    `(sendable, held)` with `held` ordered by original index, so the two passes read as
+    one list.
 
     Every held entry carries `{"index", "row", "reason", "reason_code"}` -- a uniform
     shape across both passes. These codes are the closed `PARTITION_REASON_CODES`
@@ -1086,6 +1102,9 @@ def partition_for_dispatch(rows, company_domains):
     held = list(no_email_held)
     for i, row in enumerate(rows):
         if i in held_indices:
+            continue
+        if not row.get("email"):
+            sendable.append(row)
             continue
         company_website = domains_by_name.get(_normalize_name(row.get("company")))
         relation = email_domain_relation(row.get("email"), company_website)

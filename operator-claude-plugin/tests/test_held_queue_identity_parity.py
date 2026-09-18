@@ -19,12 +19,16 @@ _FIELD_VALUES = {
     "lastname": "Dewsbury",
     "company": "Acme Co",
     "linkedin_url": "https://linkedin.com/in/example",
+    "mobilephone": "0400 000 111",
+    "phone": "02 9000 0111",
 }
 
 _GROUP_PREFIX = {
     ("email",): "email",
     ("firstname", "lastname", "company"): "name",
     ("linkedin_url",): "linkedin",
+    ("firstname", "lastname", "mobilephone"): "mobile",
+    ("firstname", "lastname", "phone"): "phone",
 }
 
 

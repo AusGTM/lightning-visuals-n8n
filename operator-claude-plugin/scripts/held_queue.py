@@ -352,6 +352,14 @@ def identity_keys(row) -> tuple[str, ...]:
     a `company` normalised by `_normalize_company()` above -- admitted only when both
     the name and the company are present. Linkedin group (`[linkedin_url]`):
     `row["linkedin_url"]` stripped and case-folded, admitted only when non-empty.
+
+    Mobile group (`[firstname, lastname, mobilephone]`) and phone group (`[firstname,
+    lastname, phone]`) -- added Phase 73.1 Plan 05, D-16b: `suggest_contacts.name_key(row)`
+    joined with `NAME_SEPARATOR` to the number stripped of surrounding whitespace,
+    admitted only when both the name and the number are present. A bare number without a
+    name never reaches here at all -- `column_mapping.yaml`'s own group definition
+    requires the name, matching this function's `[firstname, lastname, company]` branch's
+    same all-or-nothing discipline.
     """
     if not isinstance(row, dict):
         return ()
@@ -395,6 +403,26 @@ def identity_keys(row) -> tuple[str, ...]:
             linkedin = row.get("linkedin_url")
             if isinstance(linkedin, str) and linkedin.strip():
                 keys.append(f"linkedin{KEY_SEPARATOR}{linkedin.strip().casefold()}")
+
+        elif fields == ("firstname", "lastname", "mobilephone"):
+            name = suggest_contacts.name_key(row)
+            mobilephone = row.get("mobilephone")
+            number = mobilephone.strip() if isinstance(mobilephone, str) else ""
+            if name is not None and number:
+                first, last = name
+                keys.append(
+                    f"mobile{KEY_SEPARATOR}{first}{NAME_SEPARATOR}{last}{NAME_SEPARATOR}{number}"
+                )
+
+        elif fields == ("firstname", "lastname", "phone"):
+            name = suggest_contacts.name_key(row)
+            phone = row.get("phone")
+            number = phone.strip() if isinstance(phone, str) else ""
+            if name is not None and number:
+                first, last = name
+                keys.append(
+                    f"phone{KEY_SEPARATOR}{first}{NAME_SEPARATOR}{last}{NAME_SEPARATOR}{number}"
+                )
 
         else:
             raise ValueError(
