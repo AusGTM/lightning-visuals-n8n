@@ -12095,14 +12095,30 @@ def _discovery_zoom_search_leaf_js(rung):
     the only node that ever reads client_id/client_secret). Sets
     `_zoominfo_{rung}_people`; folding into the row's own `people` happens once, at
     "Adapt ZoomInfo People" downstream, so this function and its walker-test codeStub
-    agree on exactly the same contract (Task 2 Test 6/7/8)."""
+    agree on exactly the same contract (Task 2 Test 6/7/8).
+
+    73.1-09 Task 3 follow-through (execution 12666, 2026-09-18): the leaf's own try/catch
+    used to swallow the HTTP status and error message entirely, so a genuine zero-match
+    response was indistinguishable from a swallowed exception -- the isolation for this
+    follow-through needed four out-of-band Python replays to find that out. Now stamps
+    `_zoominfo_{rung}_status`/`_error`/`_total` (and rung 1's own `_titles_used`/
+    `_titles_dropped`, from `capRoleTitles` -- see discoverySearch.js) onto every row, so
+    the same diagnosis is available from runData/the response body without a replay.
+    Reuses zoominfoToken.js's `extractErrorStatus` -- the same status-shape idiom the
+    enrich-lane ZoomInfo hops already use -- rather than a second copy of that parsing."""
     unfiltered = (rung == "rung2")
     titles_js = "[]" if unfiltered else json.dumps(_discovery_role_titles())
     key = f"_zoominfo_{rung}_people"
+    status_key = f"_zoominfo_{rung}_status"
+    error_key = f"_zoominfo_{rung}_error"
+    total_key = f"_zoominfo_{rung}_total"
+    used_key = f"_zoominfo_{rung}_titles_used"
+    dropped_key = f"_zoominfo_{rung}_titles_dropped"
     template = r"""
 
 // --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---
 const ROLE_TITLES = __ROLE_TITLES__;
+const _titleCap = capRoleTitles(ROLE_TITLES, ZOOMINFO_JOBTITLE_MAX);
 const items = $input.all();
 const out = [];
 for (const item of items) {
@@ -12111,9 +12127,10 @@ for (const item of items) {
   const reqBody = buildRequest("zoominfo",
     { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });
   const reqUrl = buildUrl("zoominfo", { limit: row.per_company_cap });
-  let res;
+  let res, status = "exception", error = null, total = null;
   if (!token) {
-    res = { error: "no zoominfo token available (mint failed or missing)" };
+    error = "no zoominfo token available (mint failed or missing)";
+    res = { error };
   } else {
     try {
       res = await this.helpers.httpRequest({
@@ -12122,29 +12139,67 @@ for (const item of items) {
                    Accept: "application/vnd.api+json" },
         body: JSON.stringify(reqBody),
       });
+      status = 200;
+      total = (res && res.meta && res.meta.totalResults != null) ? res.meta.totalResults : null;
     } catch (e) {
-      res = { error: String((e && e.message) || e) };
+      const s = extractErrorStatus(e);
+      status = Number.isFinite(s) ? s : "exception";
+      error = String((e && e.message) || e).slice(0, 200);
+      res = { error };
     }
   }
-  out.push({ ...row, "__KEY__": normalizeResponse("zoominfo", res) });
+  out.push({ ...row, "__KEY__": normalizeResponse("zoominfo", res),
+    "__STATUS_KEY__": status, "__ERROR_KEY__": error, "__TOTAL_KEY__": total,
+    "__USED_KEY__": _titleCap.used.length, "__DROPPED_KEY__": _titleCap.dropped });
 }
 return out;
 """
-    body = inline("discoverySearch.js") + template
-    return body.replace("__ROLE_TITLES__", titles_js).replace("__KEY__", key)
+    body = inline("discoverySearch.js", "zoominfoToken.js") + template
+    return (body.replace("__ROLE_TITLES__", titles_js)
+                .replace("__KEY__", key)
+                .replace("__STATUS_KEY__", status_key)
+                .replace("__ERROR_KEY__", error_key)
+                .replace("__TOTAL_KEY__", total_key)
+                .replace("__USED_KEY__", used_key)
+                .replace("__DROPPED_KEY__", dropped_key))
 
 
 ENRICH_DISCOVERY_ADAPT_ZOOM_PEOPLE_JS = inline("discoverySearch.js") + r"""
 
 // --- n8n wrapper: Adapt ZoomInfo People -- rejoin for the ZoomInfo rung-1/rung-2 split.
+// 73.1-09 Task 3 follow-through: folds the per-rung status/error/total (+ rung 1's
+// title-cap used/dropped) scratch keys stamped by ZoomInfo Search Rung1/Rung2 into one
+// `search_diagnostics` object, then deletes the scratch keys so they never leak into the
+// response. Rung 2 only ever ran when rung 1 came back empty (see the IF ZoomInfo Rung1
+// Empty gate upstream) -- `_zoominfo_rung2_status === undefined` is how this node tells
+// "rung 2 never ran" apart from "rung 2 ran and found nothing", without a second flag.
+const DISCOVERY_SCRATCH_KEYS = [
+  "_zoominfo_rung1_people", "_zoominfo_rung1_status", "_zoominfo_rung1_error",
+  "_zoominfo_rung1_total", "_zoominfo_rung1_titles_used", "_zoominfo_rung1_titles_dropped",
+  "_zoominfo_rung2_people", "_zoominfo_rung2_status", "_zoominfo_rung2_error",
+  "_zoominfo_rung2_total", "_zoominfo_rung2_titles_used", "_zoominfo_rung2_titles_dropped",
+];
 return $input.all().map((it) => {
   const row = it.json;
   const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;
   const found = (row._zoominfo_rung1_people || []).concat(row._zoominfo_rung2_people || []);
+  const search_diagnostics = {
+    rung1: {
+      status: row._zoominfo_rung1_status ?? null,
+      total: row._zoominfo_rung1_total ?? null,
+      error: row._zoominfo_rung1_error ?? null,
+      titles_used: row._zoominfo_rung1_titles_used ?? null,
+      titles_dropped: row._zoominfo_rung1_titles_dropped ?? null,
+    },
+    rung2: (row._zoominfo_rung2_status !== undefined) ? {
+      status: row._zoominfo_rung2_status ?? null,
+      total: row._zoominfo_rung2_total ?? null,
+      error: row._zoominfo_rung2_error ?? null,
+    } : null,
+  };
   const rest = { ...row };
-  delete rest._zoominfo_rung1_people;
-  delete rest._zoominfo_rung2_people;
-  return { ...rest, people: (rest.people || []).concat(found).slice(0, cap) };
+  for (const k of DISCOVERY_SCRATCH_KEYS) delete rest[k];
+  return { ...rest, people: (rest.people || []).concat(found).slice(0, cap), search_diagnostics };
 });
 """
 
@@ -12173,6 +12228,7 @@ for (const it of $input.all()) {
       company_id: row.company_id,
       num_associated_contacts: row.num_associated_contacts ?? null,
       people: row.people || [],
+      search_diagnostics: row.search_diagnostics ?? null,
     });
   }
 }

@@ -17,8 +17,10 @@ import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
-const { buildRequest, buildUrl, normalizeResponse, DISCOVERY_PEOPLE_CAP, DISCOVERY_ENDPOINTS } =
-  require(path.join(ROOT, "n8n/code/discoverySearch.js"));
+const {
+  buildRequest, buildUrl, normalizeResponse, capRoleTitles,
+  DISCOVERY_PEOPLE_CAP, DISCOVERY_ENDPOINTS, ZOOMINFO_JOBTITLE_MAX,
+} = require(path.join(ROOT, "n8n/code/discoverySearch.js"));
 
 test("DISCOVERY_ENDPOINTS names exactly one provider: zoominfo", () => {
   assert.deepEqual(Object.keys(DISCOVERY_ENDPOINTS), ["zoominfo"]);
@@ -42,6 +44,42 @@ test("buildRequest(zoominfo) is a JSON:API ContactSearch envelope keyed on compa
 test("buildRequest(zoominfo) joins multiple role titles with OR", () => {
   const body = buildRequest("zoominfo", { domain: "example.org", roleTitles: ["CEO", "President", "Secretary"] });
   assert.equal(body.data.attributes.jobTitle, "CEO OR President OR Secretary");
+});
+
+// Isolation findings, 73.1-09 Task 3 follow-through (execution 12666, 2026-09-18): a real
+// 42-title role vocabulary OR-joins to 757 chars, and ZoomInfo's own 400 (PFAPI0006) says
+// "jobTitle must be less than 500 characters" -- rung 1 could never succeed as originally
+// built. ZOOMINFO_JOBTITLE_MAX is the vendor's own ceiling, capRoleTitles is the greedy
+// stop-before-cap builder, and buildRequest must apply it so no caller can bypass it.
+test("ZOOMINFO_JOBTITLE_MAX is the vendor-documented ceiling", () => {
+  assert.equal(ZOOMINFO_JOBTITLE_MAX, 500);
+});
+
+test("capRoleTitles keeps titles whole under the cap, never splits mid-title, reports used/dropped", () => {
+  // 20 titles of 30 chars (+" OR " joiners) = well past 500 chars joined.
+  const titles = Array.from({ length: 20 }, (_, i) => `Title Number ${String(i).padStart(2, "0")} Long Role`);
+  const { joined, used, dropped } = capRoleTitles(titles, 500);
+  assert.ok(joined.length < 500, `joined length ${joined.length} must be strictly under the cap`);
+  assert.ok(used.length > 0 && used.length < titles.length, "some but not all titles fit");
+  assert.equal(used.length + dropped, titles.length);
+  assert.deepEqual(joined.split(" OR "), used, "kept titles must appear whole, in original order");
+});
+
+test("capRoleTitles is a no-op when the joined string already fits", () => {
+  const titles = ["CEO", "President", "Secretary"];
+  const { joined, used, dropped } = capRoleTitles(titles, 500);
+  assert.equal(joined, "CEO OR President OR Secretary");
+  assert.deepEqual(used, titles);
+  assert.equal(dropped, 0);
+});
+
+test("buildRequest(zoominfo) applies the 500-char cap itself -- a caller cannot bypass it", () => {
+  const titles = Array.from({ length: 42 }, (_, i) => `Some Fairly Long Senior Role Title ${i}`);
+  const joinedUncapped = titles.join(" OR ");
+  assert.ok(joinedUncapped.length >= 500, "fixture must actually exceed the cap to test anything");
+  const body = buildRequest("zoominfo", { domain: "example.org", roleTitles: titles });
+  assert.ok(body.data.attributes.jobTitle.length < 500);
+  assert.notEqual(body.data.attributes.jobTitle, joinedUncapped);
 });
 
 test("buildUrl(zoominfo) carries pagination as a query string, not a body attribute", () => {

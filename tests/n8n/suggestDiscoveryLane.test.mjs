@@ -91,9 +91,19 @@ test("Task1/Test3: the gap:false company's entry carries an empty people array a
   const rows = nodeItems(runData, "Build Discovery Response");
   const co3 = rows[0].companies.find((c) => c.company_id === "3");
   assert.deepEqual(co3.people, []);
+  assert.equal(co3.search_diagnostics, null, "a non-gap company never entered the search lane");
   // No provider node ran on behalf of company 3 specifically is asserted indirectly by
   // Task 2's zero-provider-call tests (an all-non-gap round, below) — this test only
   // pins the response shape for a MIXED round, which Task 1's own skeleton must satisfy.
+});
+
+test("73.1-09 follow-through: a gap company that reached the search lane carries a non-null rung1 diagnostic", () => {
+  const { runData } = run([threeCompanyRequest()]);
+  const rows = nodeItems(runData, "Build Discovery Response");
+  const co1 = rows[0].companies.find((c) => c.company_id === "1");
+  assert.ok(co1.search_diagnostics, "a gap company that reached the search lane must carry diagnostics");
+  assert.ok("rung1" in co1.search_diagnostics);
+  assert.ok("rung2" in co1.search_diagnostics);
 });
 
 test("Task1/Test4: a POST carrying zero companies returns a well-formed empty-companies body, never a bare 200 or a refusal", () => {
@@ -206,7 +216,11 @@ test("Task3/Test1: response body is the D-07 data body {run_id, companies:[{comp
   const body = nodeItems(runData, "Build Discovery Response")[0];
   assert.deepEqual(Object.keys(body).sort(), ["companies", "run_id"]);
   for (const c of body.companies) {
-    assert.deepEqual(Object.keys(c).sort(), ["company_id", "num_associated_contacts", "people"]);
+    // 73.1-09 Task 3 follow-through: search_diagnostics carries per-rung status/total/
+    // error (and rung 1's title-cap used/dropped counts) so a silent zero-people result
+    // is distinguishable from a genuine empty match (execution 12666's own gap).
+    assert.deepEqual(Object.keys(c).sort(),
+      ["company_id", "num_associated_contacts", "people", "search_diagnostics"]);
   }
 });
 

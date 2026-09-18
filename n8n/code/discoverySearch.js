@@ -43,6 +43,34 @@
 // BEFORE anything else sees them (Task 2 acceptance criterion) — never left to a caller.
 const DISCOVERY_PEOPLE_CAP = 10;
 
+// 73.1-09 Task 3 follow-through (execution 12666, 2026-09-18): ZoomInfo's own 400
+// (PFAPI0006, pointer /data/attributes/jobTitle) says "jobTitle must be less than 500
+// characters" -- a real 42-title role vocabulary OR-joins to 757 chars, so rung 1 could
+// never have succeeded as originally built. The vendor says "less than", so the cap is
+// applied strictly (< 500, never <=).
+const ZOOMINFO_JOBTITLE_MAX = 500;
+
+/**
+ * capRoleTitles(titles, max) -> { joined, used, dropped }. Greedily OR-joins titles in
+ * list order, stopping BEFORE the joined string would reach `max` chars -- a title is
+ * kept whole or not at all, never split mid-string. `used` is the array of titles that
+ * made it in (order preserved); `dropped` is a count, not a list (nobody downstream needs
+ * to know WHICH titles were cut, only how many).
+ */
+function capRoleTitles(titles, max) {
+  const cap = Number.isFinite(max) ? max : ZOOMINFO_JOBTITLE_MAX;
+  const list = Array.isArray(titles) ? titles.filter(Boolean) : [];
+  const used = [];
+  let joined = "";
+  for (const t of list) {
+    const next = joined ? `${joined} OR ${t}` : t;
+    if (next.length >= cap) break;
+    joined = next;
+    used.push(t);
+  }
+  return { joined, used, dropped: list.length - used.length };
+}
+
 // ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected
 // endpoint — see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json
 // for what the original (wrong) shapes were and why they changed.
@@ -70,7 +98,10 @@ function buildRequest(provider, opts) {
     // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single
     // OR-joined string (not an array); no `maxResults` — pagination is query-string only.
     const attributes = { companyWebsite: domain };
-    if (roleTitles.length) attributes.jobTitle = roleTitles.join(" OR ");
+    if (roleTitles.length) {
+      const { joined } = capRoleTitles(roleTitles, ZOOMINFO_JOBTITLE_MAX);
+      if (joined) attributes.jobTitle = joined;
+    }
     return { data: { type: "ContactSearch", attributes } };
   }
   throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);
@@ -121,4 +152,7 @@ function normalizeResponse(provider, body) {
   return rows.slice(0, DISCOVERY_PEOPLE_CAP);
 }
 
-module.exports = { DISCOVERY_ENDPOINTS, DISCOVERY_PEOPLE_CAP, buildRequest, buildUrl, normalizeResponse };
+module.exports = {
+  DISCOVERY_ENDPOINTS, DISCOVERY_PEOPLE_CAP, ZOOMINFO_JOBTITLE_MAX,
+  buildRequest, buildUrl, normalizeResponse, capRoleTitles,
+};
