@@ -8,7 +8,7 @@
 // listExpansion.js/providerSelection.js, inlined into a Code node by the builder's
 // inline() (Code nodes cannot import sibling modules at runtime).
 //
-// laneOf(row) -> "fetch_by_id" | "email" | "linkedin" | "name" | "none"
+// laneOf(row) -> "fetch_by_id" | "email" | "linkedin" | "mobilephone" | "name" | "none"
 //   The `fetch_by_id` branch mirrors "IF Bare Event"'s boolean expression exactly
 //   (scripts/build_cloud_workflows.py, "IF Bare Event" node build): object_id present
 //   AND identity_keys.email absent, both read off the row's own json (bare $json since
@@ -40,12 +40,19 @@ function laneOf(row) {
   const objectId = r.object_id;
   const email = trimmedOrValue(identityKeys.email);
   const linkedinUrl = trimmedOrValue(identityKeys.linkedin_url);
+  const mobilephone = trimmedOrValue(identityKeys.mobilephone);
   const lastName = trimmedOrValue(identityKeys.lastName);
   const companyName = trimmedOrValue(identityKeys.companyName);
 
   if (objectId && !email) return "fetch_by_id";
   if (email) return "email";
   if (linkedinUrl) return "linkedin";
+  // 73.1-06, D-16a-i: mobilephone ranks below linkedin, above name. `phone` is
+  // DELIBERATELY never read here — phone is CREATE-only identity, never a match
+  // rung, because a landline is frequently a company switchboard shared by every
+  // contact there and an EQ match on it would update the wrong person (observed
+  // 2026-09-18: a provider row carried a stray unrelated number on `phone`).
+  if (mobilephone) return "mobilephone";
   if (lastName && companyName) return "name";
   return "none";
 }
@@ -171,7 +178,7 @@ function verifiedLinkedinHits(searchResults, rawLinkedinUrl) {
 //   -> { tier: "high"|"medium"|"none"|"unknown", auto, reason, candidates }
 // `unknown` is not `none` (36-CONTEXT.md §6): "we did not find one" (none) and "we could
 // not look" (unknown — the search failed or never ran) must stay distinguishable.
-// Accepts every `laneOf` value ("fetch_by_id" | "email" | "linkedin" | "name" | "none")
+// Accepts every `laneOf` value ("fetch_by_id" | "email" | "linkedin" | "mobilephone" | "name" | "none")
 // plus one CALL-SITE-ONLY literal, "company" (260904-5a8) — never a `laneOf` return value,
 // never carried on a row, see the "company" arm below for why.
 function summarizeMatch(input) {
@@ -203,6 +210,21 @@ function summarizeMatch(input) {
     }
     if (candidates.length > 1) {
       return { tier: "medium", auto: false, reason: "multiple verified linkedin matches — never a pick", candidates };
+    }
+    return { tier: "none", auto: false, reason: "searched, no hit", candidates: [] };
+  }
+
+  // 73.1-06, D-16a-i: a DEDICATED arm, sibling to linkedin, never joined to it with
+  // `||` (Phase 61 REVIEW-C4: a shared arm would make a future divergence
+  // invisible). `candidates` here are ALREADY-VERIFIED hits the caller supplies
+  // (the same single-hit discipline as verifiedLinkedinHits), not an unverified
+  // proposal.
+  if (lane === "mobilephone") {
+    if (candidates.length === 1) {
+      return { tier: "high", auto: true, reason: "matched by mobilephone", candidates: [] };
+    }
+    if (candidates.length > 1) {
+      return { tier: "medium", auto: false, reason: "multiple verified mobilephone matches — never a pick", candidates };
     }
     return { tier: "none", auto: false, reason: "searched, no hit", candidates: [] };
   }
