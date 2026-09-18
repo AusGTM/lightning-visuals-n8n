@@ -144,6 +144,21 @@ test("Task1/Test8: every Merge declares at most 10 inputs", () => {
   }
 });
 
+// ---- Plan 11 (D-11) --------------------------------------------------------------------
+// Node-scoped assertion on the token gate's generated jsCode -- never a whole-file grep,
+// since "zoom_needs_mint"/"zoom_token" legitimately appear in the enrich lane's own gate
+// too. Proves the discovery lane's gate mints unconditionally and consults no cross-run
+// cache, closing the 12668/12669 stale-token failure class at the source.
+test("73.1-11/D-11: ZoomInfo Search Token Gate mints unconditionally, no cross-run cache", () => {
+  const wf = loadWf();
+  const gate = wf.nodes.find((n) => n.name === "ZoomInfo Search Token Gate");
+  assert.ok(gate, "ZoomInfo Search Token Gate node must exist");
+  const js = gate.parameters.jsCode;
+  assert.match(js, /zoom_needs_mint:\s*true/, "the gate must always request a mint");
+  assert.doesNotMatch(js, /needsMint\(/, "the gate must not consult zoominfoToken.js's cache-expiry check");
+  assert.doesNotMatch(js, /getWorkflowStaticData/, "the gate must not read the cross-run token cache");
+});
+
 // ---- Plan 10 (D-11a) ------------------------------------------------------------------
 // Generated-artifact assertion, node-scoped (never a whole-file grep -- the vocabulary
 // strings legitimately appear in more than one node, e.g. Rung1 and Rung2 both mention

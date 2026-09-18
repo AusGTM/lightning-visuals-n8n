@@ -12088,6 +12088,34 @@ def _discovery_provider_eligible_expr():
             f"(($json.people)||[]).length < ($json.per_company_cap || {DISCOVERY_DEFAULT_CAP})")
 
 
+def _discovery_zoom_search_gate_js():
+    """Discovery-lane-only twin of `_zoom_split_gate_js` -- secret-free AND cache-free.
+    73.1-09 Task 3 follow-through found that executions 12668/12669 both 401'd on a
+    token CACHED by execution 12666 twenty-seven minutes earlier and reused across
+    executions; 73.1-11's offline replay narrowed this to a token-lifecycle failure
+    class rather than a request-shape one. This lane runs exactly ONE execution per
+    round (D-08), so `_zoom_split_gate_js`'s cross-execution cache in workflow static
+    data buys at most one free OAuth mint and in exchange carries that entire
+    stale/rejected-token failure class. This gate therefore consults no cross-run
+    store at all: every discovery execution mints its own ZoomInfo token,
+    unconditionally, so "IF ZoomInfo Search Needs Mint" always takes its true branch.
+    No execution can ever reuse a token another execution minted.
+
+    The enrich lane keeps `_zoom_split_gate_js`'s cache untouched -- it makes MANY
+    ZoomInfo calls per execution, so a per-run cache (self-healed on the next run's
+    401, via the leaf's own isAuthError-clears-cache precedent) is the right tradeoff
+    there. That tradeoff does not hold here and this function does not import it."""
+    return r"""
+// --- n8n wrapper: ZoomInfo token gate, discovery lane (CLOUD split-code-node,
+// secret-free, CACHE-FREE by design -- see _discovery_zoom_search_gate_js's own
+// docstring for why) ---
+return $input.all().map((item) => {
+  const row = item.json || {};
+  return { json: { ...row, zoom_needs_mint: true, zoom_token: null } };
+});
+"""
+
+
 def _discovery_zoom_search_leaf_js(rung):
     """Body for "ZoomInfo Search Rung{1,2}" -- a Code node performing its own
     `this.helpers.httpRequest` call, mirroring `_zoom_split_enrich_contacts_js`'s shape
@@ -12303,7 +12331,7 @@ def build_suggest_discovery_cloud():
     # ---- ZoomInfo-only search (D-11, narrowed by the D-12 operator ruling 2026-09-18 to
     # search-only -- Apollo and Lusha dropped from this lane) -------------------------
     zx, zy = x + 260, y - 160
-    nodes.append(code_node("ZoomInfo Search Token Gate", _zoom_split_gate_js("IF ZoomInfo Eligible"), zx, zy))
+    nodes.append(code_node("ZoomInfo Search Token Gate", _discovery_zoom_search_gate_js(), zx, zy))
     nodes.append(_if_bool_node("IF ZoomInfo Search Needs Mint", "zoom_needs_mint", zx + 200, zy))
     nodes.append(_zoom_mint_node("ZoomInfo Search Mint", zx + 400, zy - 120))
     nodes.append(code_node("ZoomInfo Search Cache Token",
