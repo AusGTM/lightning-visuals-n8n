@@ -24,9 +24,9 @@ function threeCompanyRequest() {
       run_id: "run-73.1-07",
       per_company_cap: 5,
       companies: [
-        { company_id: "1", num_associated_contacts: 0, gap: true },
-        { company_id: "2", num_associated_contacts: 0, gap: true },
-        { company_id: "3", num_associated_contacts: 2, gap: false },
+        { company_id: "1", num_associated_contacts: 0, gap: true, domain: "one.example.org" },
+        { company_id: "2", num_associated_contacts: 0, gap: true, domain: "two.example.org" },
+        { company_id: "3", num_associated_contacts: 2, gap: false, domain: "three.example.org" },
       ],
     },
   };
@@ -36,12 +36,15 @@ function threeCompanyRequest() {
 // default — Task 1's tests exercise the skeleton only and must never depend on Task 2's
 // provider nodes existing; Task 2 overrides individual stubs per test.
 function zeroPeopleHttpStubs() {
+  // Function form (one output item per input item) — a bare-array stub returns that
+  // EXACT array regardless of how many items the node received, silently dropping every
+  // item past the array's own length whenever a round sends this node more than one row.
   return {
-    "ZoomInfo Search Mint": [{ access_token: "tok", expires_in: 3600 }],
-    "Apollo Search Rung1": [{ people: [] }],
-    "Apollo Search Rung2": [{ people: [] }],
-    "Lusha Search Rung1": [{ contacts: [] }],
-    "Lusha Search Rung2": [{ contacts: [] }],
+    "ZoomInfo Search Mint": (items) => items.map(() => ({ access_token: "tok", expires_in: 3600 })),
+    "Apollo Search Rung1": (items) => items.map(() => ({ people: [] })),
+    "Apollo Search Rung2": (items) => items.map(() => ({ people: [] })),
+    "Lusha Search Rung1": (items) => items.map(() => ({ contacts: [] })),
+    "Lusha Search Rung2": (items) => items.map(() => ({ contacts: [] })),
   };
 }
 
@@ -134,7 +137,7 @@ test("Task1/Test8: every Merge declares at most 10 inputs", () => {
 
 test("Task2/Test6: a gap company whose ZoomInfo search meets the cap never reaches Apollo or Lusha", () => {
   const req = { body: { run_id: "r", per_company_cap: 1, companies: [
-    { company_id: "9", num_associated_contacts: 0, gap: true } ] } };
+    { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org" } ] } };
   const { runData } = run([req], {
     codeStubs: {
       "ZoomInfo Search Rung1": (items) => items.map((it) => ({
@@ -149,7 +152,7 @@ test("Task2/Test6: a gap company whose ZoomInfo search meets the cap never reach
 
 test("Task2/Test7: a gap company whose ZoomInfo rung-1 returns zero reaches rung-2 before falling through to Apollo", () => {
   const req = { body: { run_id: "r", per_company_cap: 5, companies: [
-    { company_id: "9", num_associated_contacts: 0, gap: true } ] } };
+    { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org" } ] } };
   const { runData } = run([req], {
     codeStubs: {
       "ZoomInfo Search Rung1": (items) => items.map((it) => ({ ...it, _zoominfo_rung1_people: [] })),
@@ -164,7 +167,7 @@ test("Task2/Test7: a gap company whose ZoomInfo rung-1 returns zero reaches rung
 
 test("Task2/Test8: a gap company where all three providers return zero still appears with an empty people array", () => {
   const req = { body: { run_id: "r", per_company_cap: 5, companies: [
-    { company_id: "9", num_associated_contacts: 0, gap: true } ] } };
+    { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org" } ] } };
   const { runData, trace } = run([req]);
   assert.deepEqual(starvedWithData(trace), []);
   const rows = nodeItems(runData, "Build Discovery Response");

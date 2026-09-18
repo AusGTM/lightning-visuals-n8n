@@ -182,6 +182,17 @@ NODE_CREDENTIAL_MAP = {
     "Review Queue Webhook": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
     "Review Queue Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Queue Contact Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 73.1 Plan 07 (D-06) — the sixth cloud workflow's trigger and its three new
+    # provider search nodes. The trigger binds the SAME shared webhook-secret credential
+    # every other trigger in this file binds — one operator secret, six endpoints. The
+    # provider search nodes reuse the SAME credentials the enrichment lane's provider
+    # hops already bind (D-06: "reuses existing n8n credentials", no new registration).
+    "Discovery Webhook Trigger": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
+    "ZoomInfo Search Mint": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
+    "Apollo Search Rung1": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
+    "Apollo Search Rung2": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
+    "Lusha Search Rung1": {"cred_type": "httpHeaderAuth", "cred_name": "LV Lusha"},
+    "Lusha Search Rung2": {"cred_type": "httpHeaderAuth", "cred_name": "LV Lusha"},
 }
 
 

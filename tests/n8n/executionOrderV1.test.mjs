@@ -55,11 +55,12 @@ test("the builder decides the execution order once, not per workflow", () => {
 
   // The emission IDIOM — not the bare identifier, which the constant's own comment and
   // the generation-time assertion both legitimately mention — occurs exactly once per
-  // generated body (eight committed workflows).
+  // generated body (nine committed workflows as of Phase 73.1 Plan 07's sixth cloud
+  // workflow, up from eight).
   const idiomMatches = text.match(/dict\(WORKFLOW_SETTINGS\)/g) || [];
   assert.equal(
-    idiomMatches.length, 8,
-    `expected the emission idiom "dict(WORKFLOW_SETTINGS)" exactly 8 times (one per ` +
+    idiomMatches.length, 9,
+    `expected the emission idiom "dict(WORKFLOW_SETTINGS)" exactly 9 times (one per ` +
     `generated body), found ${idiomMatches.length} — D-70-28 requires no per-workflow ` +
     `settings decision anywhere in the builder`
   );

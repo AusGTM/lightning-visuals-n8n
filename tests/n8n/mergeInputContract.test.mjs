@@ -163,6 +163,17 @@ const MULTI_PRODUCER_TOLERANT = new Map([
     "D-70-23 gated sentinel shares this input with its real producer; admitted by the " +
     "2026-09-11 census, not a proof of safety. No v1 recording exists for this " +
     "workflow at all."],
+  // Phase 73.1 Plan 07 (D-06..D-09): the discovery lane's one real Merge — new
+  // workflow, added by this plan. Mirrors scripts/build_cloud_workflows.py's
+  // identical entry.
+  [["LV Suggest Discovery (Cloud template)", "Discovery Response Merge"].join(" "),
+    "Both inputs' D-70-23 gated sentinels ('All Gap Sentinel'/'All Non-Gap " +
+    "Sentinel'/'Zero Companies Sentinel') share their index with the real producer, " +
+    "mutually exclusive by construction (every company is gap XOR non-gap; a " +
+    "company list is empty or it is not). Added by 73.1-07; no v1 recording exists " +
+    "for this lane yet — the offline walker suite " +
+    "(tests/n8n/suggestDiscoveryLane.test.mjs) is this lane's only evidence until " +
+    "plan 09's live proof."],
 ]);
 
 /** Computes the structural violations named in this file's header for one committed

@@ -1,0 +1,1601 @@
+{
+  "id": "LVSuggestDiscoveryCloud01",
+  "name": "LV Suggest Discovery (Cloud template)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hubspot/suggest/discover",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "w00010000-0000-4000-8000-000000000000",
+      "name": "Discovery Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Parse Discovery Request -- hubspot/suggest/discover envelope -> one\n// item per company (Phase 73.1 Plan 07, D-08/D-09). `run_id` and `per_company_cap` are\n// REQUEST-LEVEL values, read off the envelope with a per-company fallback -- the same\n// idiom `recompute`/`ENVELOPE_RUN_ID` use elsewhere in this repo, never a `mode` value.\n// D-11: at most ONE search per provider per company. The number itself is imported from\n// search_fallback.MAX_FALLBACK_SEARCHES (scripts/build_cloud_workflows.py) -- one\n// source, no JS twin to keep in parity. It is a COUNT OF PROVIDERS ATTEMPTED, never of\n// HTTP calls made: a rung-2 retry re-sends the SAME provider's one search, unfiltered,\n// and is NOT a second unit against this ceiling -- the ZoomInfo/Apollo/Lusha waterfall\n// below enforces \"at most one provider-attempt each\" structurally (each provider's own\n// \"IF <Provider> Eligible\" gate only ever lets a company enter that provider's subgraph\n// once), so this constant is not read by any control-flow below; it exists so the\n// per-company ceiling is visible in the generated artifact and testable against its one\n// source (tests/n8n/suggestDiscoveryLane.test.mjs). Do not \"fix\" the counter to include\n// rung 2 -- that would exhaust the ceiling after one and a half providers on exactly the\n// companies the rung-2 fallback exists for.\nconst DISCOVERY_SEARCH_CEILING = 3;\nconst body = $json.body ?? $json;\nconst envelopeIsObject = body && typeof body === \"object\" && !Array.isArray(body);\nconst ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;\nconst ENVELOPE_CAP = envelopeIsObject ? (body.per_company_cap ?? null) : null;\nconst companies = (envelopeIsObject && Array.isArray(body.companies)) ? body.companies : [];\nreturn companies.map((c) => ({ json: {\n  run_id: (c && c.run_id) ?? ENVELOPE_RUN_ID,\n  per_company_cap: (c && c.per_company_cap) ?? ENVELOPE_CAP ?? DISCOVERY_PEOPLE_CAP,\n  company_id: (c && c.company_id != null) ? String(c.company_id) : null,\n  num_associated_contacts: (c && c.num_associated_contacts) ?? null,\n  domain: (c && c.domain) || null,\n  gap: c ? c.gap : undefined,\n  search_ceiling: DISCOVERY_SEARCH_CEILING,\n  people: [],\n} }));\n"
+      },
+      "id": "c00020000-0000-4000-8000-000000000000",
+      "name": "Parse Discovery Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00030000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.gap === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00040000-0000-4000-8000-000000000000",
+      "name": "IF Company Is Gap",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: ZoomInfo token cache gate (CLOUD split-code-node, secret-free) ---\n// Never reads client_id/client_secret \u2014 only the credential-bound \"ZoomInfo Mint\" HTTP\n// node touches those (Task 2 decision).\nconst sd = $getWorkflowStaticData(\"global\");\nreturn $input.all().map((item) => {\n  const row = item.json || {};\n  const cached = sd.zoominfo;\n  const needs_mint = needsMint(cached, Date.now());\n  return { json: { ...row, zoom_needs_mint: needs_mint,\n                   zoom_token: needs_mint ? null : cached.access_token } };\n});\n"
+      },
+      "id": "c00050000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Search Token Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00060000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.zoom_needs_mint }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00070000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Search Needs Mint",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zoominfo.com/gtm/oauth/v1/token",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth"
+      },
+      "id": "h00080000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Search Mint",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        20
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: cache the freshly-minted ZoomInfo token (CLOUD split-code-node) ---\nconst sd = $getWorkflowStaticData(\"global\");\nreturn $input.all().map((item) => {\n  const merged = item.json || {};\n  const { access_token: _a, expires_in: _e, token_type: _t, ...row } = merged;\n  let zoom_token = null;\n  try {\n    const parsed = parseTokenResponse(merged, Date.now());\n    sd.zoominfo = parsed;\n    zoom_token = parsed.access_token;\n  } catch (e) {\n    zoom_token = null;   // mint response malformed -> Enrich below sees no usable token\n  }\n  return { json: { ...row, zoom_token } };\n});\n"
+      },
+      "id": "c00090000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Search Cache Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---\nconst ROLE_TITLES = [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"];\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const token = row.zoom_token;\n  const reqBody = buildRequest(\"zoominfo\",\n    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });\n  let res;\n  if (!token) {\n    res = { error: \"no zoominfo token available (mint failed or missing)\" };\n  } else {\n    try {\n      res = await this.helpers.httpRequest({\n        method: \"POST\", url: DISCOVERY_ENDPOINTS.zoominfo,\n        headers: { Authorization: \"Bearer \" + token, \"Content-Type\": \"application/vnd.api+json\",\n                   Accept: \"application/vnd.api+json\" },\n        body: JSON.stringify(reqBody),\n      });\n    } catch (e) {\n      res = { error: String((e && e.message) || e) };\n    }\n  }\n  out.push({ ...row, \"_zoominfo_rung1_people\": normalizeResponse(\"zoominfo\", res) });\n}\nreturn out;\n"
+      },
+      "id": "c00100000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Search Rung1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00110000-0000-4000-8000-000000000000",
+              "leftValue": "={{ ($json._zoominfo_rung1_people || []).length === 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00120000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Rung1 Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---\nconst ROLE_TITLES = [];\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const token = row.zoom_token;\n  const reqBody = buildRequest(\"zoominfo\",\n    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });\n  let res;\n  if (!token) {\n    res = { error: \"no zoominfo token available (mint failed or missing)\" };\n  } else {\n    try {\n      res = await this.helpers.httpRequest({\n        method: \"POST\", url: DISCOVERY_ENDPOINTS.zoominfo,\n        headers: { Authorization: \"Bearer \" + token, \"Content-Type\": \"application/vnd.api+json\",\n                   Accept: \"application/vnd.api+json\" },\n        body: JSON.stringify(reqBody),\n      });\n    } catch (e) {\n      res = { error: String((e && e.message) || e) };\n    }\n  }\n  out.push({ ...row, \"_zoominfo_rung2_people\": normalizeResponse(\"zoominfo\", res) });\n}\nreturn out;\n"
+      },
+      "id": "c00130000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Search Rung2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2120,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Adapt ZoomInfo People -- rejoin for the ZoomInfo rung-1/rung-2 split.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const found = (row._zoominfo_rung1_people || []).concat(row._zoominfo_rung2_people || []);\n  const rest = { ...row };\n  delete rest._zoominfo_rung1_people;\n  delete rest._zoominfo_rung2_people;\n  return { ...rest, people: (rest.people || []).concat(found).slice(0, cap) };\n});\n"
+      },
+      "id": "c00140000-0000-4000-8000-000000000000",
+      "name": "Adapt ZoomInfo People",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00150000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Search Mint Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1430,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Discovery Waterfall Complete -- rejoin point for the ZoomInfo/Apollo/\n// Lusha waterfall (D-11). Defensive re-cap only; each provider hop already caps its own\n// contribution before reaching here.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  return { ...row, people: (row.people || []).slice(0, cap) };\n});\n"
+      },
+      "id": "c00160000-0000-4000-8000-000000000000",
+      "name": "Discovery Waterfall Complete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2520,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00170000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.gap === true && !!$json.domain && (($json.people)||[]).length < ($json.per_company_cap || 10) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00180000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Eligible",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        920,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00190000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.gap === true && !!$json.domain && (($json.people)||[]).length < ($json.per_company_cap || 10) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00200000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Eligible",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00210000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.gap === true && !!$json.domain && (($json.people)||[]).length < ($json.per_company_cap || 10) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00220000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Eligible",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/v1/mixed_people/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ q_organization_domains: $json.domain, per_page: $json.per_company_cap, person_titles: [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"] }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00230000-0000-4000-8000-000000000000",
+      "name": "Apollo Search Rung1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        560
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'apollo_rung1_result': it.json } }));\n"
+      },
+      "id": "c00240000-0000-4000-8000-000000000000",
+      "name": "Wrap Apollo Rung1 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00250000-0000-4000-8000-000000000000",
+      "name": "Apollo Rung1 Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1290,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"apollo_rung1_result\"];\n  const rest = { ...merged };\n  delete rest[\"apollo_rung1_result\"];\n  const found = normalizeResponse(\"apollo\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people, _apollo_rung1_count: found.length };\n});\n"
+      },
+      "id": "c00260000-0000-4000-8000-000000000000",
+      "name": "Adapt Apollo Rung1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00270000-0000-4000-8000-000000000000",
+              "leftValue": "={{ ($json._apollo_rung1_count || 0) === 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00280000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Rung1 Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Adapt <Provider> People -- trivial rejoin; both branches already fold their own result into `people` before reaching here.\nreturn $input.all();\n"
+      },
+      "id": "c00290000-0000-4000-8000-000000000000",
+      "name": "Adapt Apollo People",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/v1/mixed_people/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ q_organization_domains: $json.domain, per_page: $json.per_company_cap }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00300000-0000-4000-8000-000000000000",
+      "name": "Apollo Search Rung2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'apollo_rung2_result': it.json } }));\n"
+      },
+      "id": "c00310000-0000-4000-8000-000000000000",
+      "name": "Wrap Apollo Rung2 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00320000-0000-4000-8000-000000000000",
+      "name": "Apollo Rung2 Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1910,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"apollo_rung2_result\"];\n  const rest = { ...merged };\n  delete rest[\"apollo_rung2_result\"];\n  const found = normalizeResponse(\"apollo\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people };\n});\n"
+      },
+      "id": "c00330000-0000-4000-8000-000000000000",
+      "name": "Adapt Apollo Rung2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.lusha.com/prospecting/contacts/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filters: { companies: { domains: [$json.domain] }, contacts: { jobTitles: [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"] } }, pages: { page: 0, size: $json.per_company_cap } }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00340000-0000-4000-8000-000000000000",
+      "name": "Lusha Search Rung1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        1040
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'lusha_rung1_result': it.json } }));\n"
+      },
+      "id": "c00350000-0000-4000-8000-000000000000",
+      "name": "Wrap Lusha Rung1 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00360000-0000-4000-8000-000000000000",
+      "name": "Lusha Rung1 Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1290,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"lusha_rung1_result\"];\n  const rest = { ...merged };\n  delete rest[\"lusha_rung1_result\"];\n  const found = normalizeResponse(\"lusha\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people, _lusha_rung1_count: found.length };\n});\n"
+      },
+      "id": "c00370000-0000-4000-8000-000000000000",
+      "name": "Adapt Lusha Rung1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00380000-0000-4000-8000-000000000000",
+              "leftValue": "={{ ($json._lusha_rung1_count || 0) === 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00390000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Rung1 Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Adapt <Provider> People -- trivial rejoin; both branches already fold their own result into `people` before reaching here.\nreturn $input.all();\n"
+      },
+      "id": "c00400000-0000-4000-8000-000000000000",
+      "name": "Adapt Lusha People",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.lusha.com/prospecting/contacts/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filters: { companies: { domains: [$json.domain] } }, pages: { page: 0, size: $json.per_company_cap } }) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00410000-0000-4000-8000-000000000000",
+      "name": "Lusha Search Rung2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        1000
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().map((it) => ({ json: { 'lusha_rung2_result': it.json } }));\n"
+      },
+      "id": "c00420000-0000-4000-8000-000000000000",
+      "name": "Wrap Lusha Rung2 Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "numberInputs": 2,
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast"
+            }
+          }
+        }
+      },
+      "id": "m00430000-0000-4000-8000-000000000000",
+      "name": "Lusha Rung2 Carry Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1910,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 every endpoint and body shape below is UNCONFIRMED. No search-by-role-title\n// endpoint has ever been called live in this repository. Every currently-wired provider\n// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based\n// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires\n// an already-known identity and CANNOT answer \"who works at this company with this\n// title\". (Deliberately not spelled out as literal URL paths here \u2014 this module is\n// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling\n// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON\n// for those exact identity-enrich path fragments to prove none is wired into this\n// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS\n// below for the actual strings.)\n//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory\n//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.\n//     The contacts-search URL/body below is INFERRED from it by JSON:API family\n//     (`ContactSearch` type), never observed.\n//   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor\n//     documentation only; this account's Apollo API key is not a master key and its\n//     balance already reads 403/unreadable on the confirmed-live usage endpoint\n//     (memory `provider-credit-check-endpoints`) \u2014 whether search fares any better is\n//     unknown.\n//   - Lusha: the prospecting/search product is NOT documented in\n//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based\n//     endpoints named above) and may not be entitled on this plan's Lusha account.\n// `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the\n// live providers, disarmed, before any credit is spent. Until then this module is built\n// and tested entirely behind offline fixtures (D-12's stated assumption).\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// [ASSUMED] endpoints \u2014 see the header comment above for what is and is not known about\n// each one. Named constants, not inlined literals, so scripts/probe_provider_discovery.py\n// (plan 09) has exactly one place to correct per provider once the live probe reports.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/v1/mixed_people/search\",\n  lusha: \"https://api.lusha.com/prospecting/contacts/search\",\n});\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n  const limit = Math.min(Number.isFinite(o.limit) ? o.limit : DISCOVERY_PEOPLE_CAP,\n                          DISCOVERY_PEOPLE_CAP);\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family, per the confirmed-live companies/search shape.\n    const attributes = { companyDomain: domain, maxResults: limit };\n    if (roleTitles.length) attributes.jobTitle = roleTitles;\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const body = { q_organization_domains: domain, per_page: limit };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const body = { filters: { companies: { domains: [domain] } }, pages: { page: 0, size: limit } };\n    if (roleTitles.length) body.filters.contacts = { jobTitles: roleTitles };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    rows = (Array.isArray(raw.contacts) ? raw.contacts : []).map((c) =>\n      _person(c && c.firstName, c && c.lastName, c && c.jobTitle, \"lusha\"));\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"lusha_rung2_result\"];\n  const rest = { ...merged };\n  delete rest[\"lusha_rung2_result\"];\n  const found = normalizeResponse(\"lusha\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people };\n});\n"
+      },
+      "id": "c00440000-0000-4000-8000-000000000000",
+      "name": "Adapt Lusha Rung2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const SENTINEL_MARKER_KEY = '_gsd_sentinel_marker';\n\n// --- n8n wrapper: Build Discovery Response -- D-07's DATA body (not the ack-only shape\n// D-70-07 imposed on the enrichment/ingest lanes -- those two carry row outcomes for\n// writes and had to stop reporting them on the wire; this lane writes nothing and its\n// whole product is the list it returns). Folds by company_id so a Merge that fires\n// twice under v1 can never duplicate a company (Task 3 Test 5); reads run_id off ANY\n// item (marker or real) but excludes a D-70-23 gated sentinel's marker from the\n// `companies` array itself -- a positive identity check (company_id presence), the\n// same philosophy D-70-25's `hasRowIdentity` uses, adapted for this lane's flat\n// per-company-item shape (Task 3 Test 6).\nconst byId = new Map();\nlet runId = null;\nfor (const it of $input.all()) {\n  const row = it.json || {};\n  if (row.run_id != null && runId == null) runId = row.run_id;\n  const isMarker = row[SENTINEL_MARKER_KEY] === true;\n  if (isMarker || row.company_id == null) continue;\n  if (!byId.has(row.company_id)) {\n    byId.set(row.company_id, {\n      company_id: row.company_id,\n      num_associated_contacts: row.num_associated_contacts ?? null,\n      people: row.people || [],\n    });\n  }\n}\nreturn [{ json: { run_id: runId, companies: Array.from(byId.values()) } }];\n"
+      },
+      "id": "c00450000-0000-4000-8000-000000000000",
+      "name": "Build Discovery Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "m00460000-0000-4000-8000-000000000000",
+      "name": "Discovery Response Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// All Gap Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.gap === true)) return [{}]; return [];\n"
+      },
+      "id": "c00470000-0000-4000-8000-000000000000",
+      "name": "All Gap Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00480000-0000-4000-8000-000000000000",
+      "name": "All Gap Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// All Non-Gap Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.gap !== true)) return [{}]; return [];\n"
+      },
+      "id": "c00490000-0000-4000-8000-000000000000",
+      "name": "All Non-Gap Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00500000-0000-4000-8000-000000000000",
+      "name": "All Non-Gap Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Zero Companies Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nconst body = (rows[0] && rows[0].body) || {};\nconst companies = Array.isArray(body.companies) ? body.companies : [];\nif (companies.length === 0) return [{ run_id: body.run_id ?? null }];\nreturn [];\n\n"
+      },
+      "id": "c00510000-0000-4000-8000-000000000000",
+      "name": "Zero Companies Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c00520000-0000-4000-8000-000000000000",
+      "name": "Zero Companies Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00530000-0000-4000-8000-000000000000",
+      "name": "IF Company Is Gap -> Discovery Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00540000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Search Needs Mint -> ZoomInfo Search Mint Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00550000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Eligible -> Apollo Rung1 Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00560000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Rung1 Empty -> Apollo Rung2 Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00570000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Eligible -> Lusha Rung1 Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c00580000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Rung1 Empty -> Lusha Rung2 Carry Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "rw00590000-0000-4000-8000-000000000000",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Suggest Discovery (Cloud template) -- Phase 73.1 Plan 07 (D-06..D-12)\n`hubspot/suggest/discover`: read-only. One POST per round carries every eligible company with a `gap` flag; a gap company is searched ZoomInfo then Apollo then Lusha (D-11), at most one search per provider per company, stopping once `per_company_cap` is met. Rung 2 (unfiltered) fires only when rung 1's title-filtered search returned zero (D-11a). Every company is echoed back with its `num_associated_contacts` verbatim and whatever people were found (D-09) -- zero HubSpot reads, zero HubSpot writes, zero reveal calls (D-12).\n\nEvery provider endpoint and request body in this workflow is [ASSUMED] -- see n8n/code/discoverySearch.js's own header comment and scripts/probe_provider_discovery.py (plan 09).",
+        "height": 320,
+        "width": 560
+      },
+      "id": "s00600000-0000-4000-8000-000000000000",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        800
+      ]
+    }
+  ],
+  "connections": {
+    "Discovery Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Discovery Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Zero Companies Sentinel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Discovery Request": {
+      "main": [
+        [
+          {
+            "node": "IF Company Is Gap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "All Gap Sentinel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "All Non-Gap Sentinel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Search Token Gate": {
+      "main": [
+        [
+          {
+            "node": "IF ZoomInfo Search Needs Mint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Search Needs Mint": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Mint",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF ZoomInfo Search Needs Mint -> ZoomInfo Search Mint Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ZoomInfo Search Rung1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Search Cache Token": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Rung1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Search Rung1": {
+      "main": [
+        [
+          {
+            "node": "IF ZoomInfo Rung1 Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Rung1 Empty": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Rung2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Adapt ZoomInfo People",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Search Rung2": {
+      "main": [
+        [
+          {
+            "node": "Adapt ZoomInfo People",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Search Mint": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Mint Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Search Mint Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Cache Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Eligible": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Token Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Apollo Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt ZoomInfo People": {
+      "main": [
+        [
+          {
+            "node": "IF Apollo Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Apollo Eligible": {
+      "main": [
+        [
+          {
+            "node": "Apollo Search Rung1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Apollo Eligible -> Apollo Rung1 Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Lusha Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Apollo People": {
+      "main": [
+        [
+          {
+            "node": "IF Lusha Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Lusha Eligible": {
+      "main": [
+        [
+          {
+            "node": "Lusha Search Rung1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Lusha Eligible -> Lusha Rung1 Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discovery Waterfall Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Lusha People": {
+      "main": [
+        [
+          {
+            "node": "Discovery Waterfall Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Search Rung1": {
+      "main": [
+        [
+          {
+            "node": "Apollo Rung1 Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Rung1 Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Adapt Apollo Rung1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Apollo Rung1 Result": {
+      "main": [
+        [
+          {
+            "node": "Adapt Apollo Rung1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Apollo Rung1": {
+      "main": [
+        [
+          {
+            "node": "IF Apollo Rung1 Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Apollo Rung1 Empty": {
+      "main": [
+        [
+          {
+            "node": "Apollo Search Rung2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Apollo Rung1 Empty -> Apollo Rung2 Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Adapt Apollo People",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Search Rung2": {
+      "main": [
+        [
+          {
+            "node": "Apollo Rung2 Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Rung2 Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Adapt Apollo Rung2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Apollo Rung2": {
+      "main": [
+        [
+          {
+            "node": "Adapt Apollo People",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lusha Search Rung1": {
+      "main": [
+        [
+          {
+            "node": "Lusha Rung1 Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lusha Rung1 Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Adapt Lusha Rung1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Lusha Rung1 Result": {
+      "main": [
+        [
+          {
+            "node": "Adapt Lusha Rung1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Lusha Rung1": {
+      "main": [
+        [
+          {
+            "node": "IF Lusha Rung1 Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Lusha Rung1 Empty": {
+      "main": [
+        [
+          {
+            "node": "Lusha Search Rung2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Lusha Rung1 Empty -> Lusha Rung2 Carry Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Adapt Lusha People",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lusha Search Rung2": {
+      "main": [
+        [
+          {
+            "node": "Lusha Rung2 Carry Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lusha Rung2 Carry Merge": {
+      "main": [
+        [
+          {
+            "node": "Adapt Lusha Rung2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Lusha Rung2": {
+      "main": [
+        [
+          {
+            "node": "Adapt Lusha People",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Company Is Gap": {
+      "main": [
+        [
+          {
+            "node": "IF ZoomInfo Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Company Is Gap -> Discovery Response Merge Pass-Through",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discovery Waterfall Complete": {
+      "main": [
+        [
+          {
+            "node": "Discovery Response Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Discovery Response Merge": {
+      "main": [
+        [
+          {
+            "node": "Build Discovery Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Gap Sentinel": {
+      "main": [
+        [
+          {
+            "node": "All Gap Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Gap Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Discovery Response Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Non-Gap Sentinel": {
+      "main": [
+        [
+          {
+            "node": "All Non-Gap Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Non-Gap Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Discovery Response Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Zero Companies Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Zero Companies Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zero Companies Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Discovery Response Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Discovery Response Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Company Is Gap -> Discovery Response Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Discovery Response Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Search Needs Mint -> ZoomInfo Search Mint Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Search Mint Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Apollo Eligible -> Apollo Rung1 Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Apollo Rung1 Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Apollo Rung1 Empty -> Apollo Rung2 Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Apollo Rung2 Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Lusha Eligible -> Lusha Rung1 Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Lusha Rung1 Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF Lusha Rung1 Empty -> Lusha Rung2 Carry Merge Pass-Through": {
+      "main": [
+        [
+          {
+            "node": "Lusha Rung2 Carry Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Discovery Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

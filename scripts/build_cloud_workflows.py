@@ -35,6 +35,13 @@ CODE = ROOT / "n8n" / "code"
 sys.path.insert(0, str(ROOT / "operator-claude-plugin" / "scripts"))
 from preingest import refreshable_contact_props  # noqa: E402
 
+# Phase 73.1 Plan 07 (D-11): the discovery lane's per-company search ceiling is imported,
+# never restated — the `provider_registry` pattern of generating a constant IN rather than
+# duplicating it. One source, no JS twin, no parity test needed (tests/n8n/
+# suggestDiscoveryLane.test.mjs reads both this file's emitted literal and the Python
+# constant directly, so a divergence fails loud rather than needing a third copy to check).
+from search_fallback import MAX_FALLBACK_SEARCHES  # noqa: E402
+
 _REFRESHABLE_CONTACT_PROPS = tuple(refreshable_contact_props())
 
 # Regenerate the taxonomy data module FIRST — before any inline() call below reads
@@ -11973,6 +11980,549 @@ def build_review_decision_cloud():
     }
 
 
+# =============================================================================
+# DISCOVERY workflow (Phase 73.1 Plan 07, D-06 through D-12) — the sixth cloud workflow.
+# Read-only: one POST per round carries every eligible company with a `gap` flag; the
+# lane searches the gap set through the ZoomInfo -> Apollo -> Lusha waterfall (D-11) with
+# a two-rung role-title filter (D-11a) and echoes every company back with its
+# num_associated_contacts and whatever people it found (D-09). Zero HubSpot nodes, zero
+# write nodes (assert_no_write_nodes, defined near the other generation-time contracts,
+# applies to THIS workflow only), zero executeWorkflow nodes.
+# =============================================================================
+
+# D-08's own listed body shape names only company_id/num_associated_contacts/gap.
+# `domain` and `per_company_cap` are Claude's-discretion extensions this plan adds and
+# records here: a provider search needs a domain to search BY, and D-11's stop-at-cap
+# rule needs a per-round cap somewhere. Both ride the SAME envelope-with-per-company-
+# fallback idiom CLAUDE.md section 13.0.2 documents for `recompute`/`run_id` — request-
+# level values, never a `mode` value. A company with no domain is simply never eligible
+# for any provider gate below (there is nothing to search).
+DISCOVERY_DEFAULT_CAP = 10  # mirrors discoverySearch.js's DISCOVERY_PEOPLE_CAP exactly
+
+
+def _discovery_role_titles():
+    """D-11a's title filter — flattened, deduplicated member strings across every family
+    in operator-claude-plugin/config/role_vocabulary.yaml, read at BUILD TIME (the same
+    "generate the constant in" idiom MAX_FALLBACK_SEARCHES above uses). D-11a's "chosen
+    role families" language is read here as build-time config (every family), not a
+    per-request selection — recorded as a discretion in 73.1-07-SUMMARY.md; a future plan
+    can thread a per-request subset through without changing this function's shape."""
+    cfg = yaml.safe_load(
+        (ROOT / "operator-claude-plugin" / "config" / "role_vocabulary.yaml").read_text())
+    titles = []
+    for family in cfg.get("families", []):
+        for member in family.get("members", []):
+            if member not in titles:
+                titles.append(member)
+    return titles
+
+
+ENRICH_PARSE_DISCOVERY_REQUEST = inline("discoverySearch.js") + r"""
+
+// --- n8n wrapper: Parse Discovery Request -- hubspot/suggest/discover envelope -> one
+// item per company (Phase 73.1 Plan 07, D-08/D-09). `run_id` and `per_company_cap` are
+// REQUEST-LEVEL values, read off the envelope with a per-company fallback -- the same
+// idiom `recompute`/`ENVELOPE_RUN_ID` use elsewhere in this repo, never a `mode` value.
+// D-11: at most ONE search per provider per company. The number itself is imported from
+// search_fallback.MAX_FALLBACK_SEARCHES (scripts/build_cloud_workflows.py) -- one
+// source, no JS twin to keep in parity. It is a COUNT OF PROVIDERS ATTEMPTED, never of
+// HTTP calls made: a rung-2 retry re-sends the SAME provider's one search, unfiltered,
+// and is NOT a second unit against this ceiling -- the ZoomInfo/Apollo/Lusha waterfall
+// below enforces "at most one provider-attempt each" structurally (each provider's own
+// "IF <Provider> Eligible" gate only ever lets a company enter that provider's subgraph
+// once), so this constant is not read by any control-flow below; it exists so the
+// per-company ceiling is visible in the generated artifact and testable against its one
+// source (tests/n8n/suggestDiscoveryLane.test.mjs). Do not "fix" the counter to include
+// rung 2 -- that would exhaust the ceiling after one and a half providers on exactly the
+// companies the rung-2 fallback exists for.
+const DISCOVERY_SEARCH_CEILING = __DISCOVERY_SEARCH_CEILING__;
+const body = $json.body ?? $json;
+const envelopeIsObject = body && typeof body === "object" && !Array.isArray(body);
+const ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;
+const ENVELOPE_CAP = envelopeIsObject ? (body.per_company_cap ?? null) : null;
+const companies = (envelopeIsObject && Array.isArray(body.companies)) ? body.companies : [];
+return companies.map((c) => ({ json: {
+  run_id: (c && c.run_id) ?? ENVELOPE_RUN_ID,
+  per_company_cap: (c && c.per_company_cap) ?? ENVELOPE_CAP ?? DISCOVERY_PEOPLE_CAP,
+  company_id: (c && c.company_id != null) ? String(c.company_id) : null,
+  num_associated_contacts: (c && c.num_associated_contacts) ?? null,
+  domain: (c && c.domain) || null,
+  gap: c ? c.gap : undefined,
+  search_ceiling: DISCOVERY_SEARCH_CEILING,
+  people: [],
+} }));
+"""
+ENRICH_PARSE_DISCOVERY_REQUEST = ENRICH_PARSE_DISCOVERY_REQUEST.replace(
+    "__DISCOVERY_SEARCH_CEILING__", str(MAX_FALLBACK_SEARCHES))
+
+ENRICH_DISCOVERY_ZERO_COMPANIES_SENTINEL_JS = r"""const body = (rows[0] && rows[0].body) || {};
+const companies = Array.isArray(body.companies) ? body.companies : [];
+if (companies.length === 0) return [{ run_id: body.run_id ?? null }];
+return [];
+"""
+
+ENRICH_DISCOVERY_WATERFALL_COMPLETE_JS = inline("discoverySearch.js") + r"""
+
+// --- n8n wrapper: Discovery Waterfall Complete -- rejoin point for the ZoomInfo/Apollo/
+// Lusha waterfall (D-11). Defensive re-cap only; each provider hop already caps its own
+// contribution before reaching here.
+return $input.all().map((it) => {
+  const row = it.json;
+  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;
+  return { ...row, people: (row.people || []).slice(0, cap) };
+});
+"""
+
+
+def _discovery_provider_eligible_expr():
+    """D-11's stop-at-cap rule + D-08/D-09's gap-only rule, one shared expression every
+    provider gate in the waterfall re-evaluates against the row's CURRENT state -- so a
+    provider whose predecessor already filled the cap is skipped without a separate cap
+    check node (Claude's-discretion simplification recorded in the SUMMARY: one
+    `_if_bool_expr_node` per hop testing eligibility as a whole, not a separate Enabled/
+    Cap pair)."""
+    return ("$json.gap === true && !!$json.domain && "
+            f"(($json.people)||[]).length < ($json.per_company_cap || {DISCOVERY_DEFAULT_CAP})")
+
+
+def _discovery_zoom_search_leaf_js(rung):
+    """Body for "ZoomInfo Search Rung{1,2}" -- a Code node performing its own
+    `this.helpers.httpRequest` call, mirroring `_zoom_split_enrich_contacts_js`'s shape
+    exactly (bearer token threaded through the row as DATA -- "ZoomInfo Search Mint" is
+    the only node that ever reads client_id/client_secret). Sets
+    `_zoominfo_{rung}_people`; folding into the row's own `people` happens once, at
+    "Adapt ZoomInfo People" downstream, so this function and its walker-test codeStub
+    agree on exactly the same contract (Task 2 Test 6/7/8)."""
+    unfiltered = (rung == "rung2")
+    titles_js = "[]" if unfiltered else json.dumps(_discovery_role_titles())
+    key = f"_zoominfo_{rung}_people"
+    template = r"""
+
+// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---
+const ROLE_TITLES = __ROLE_TITLES__;
+const items = $input.all();
+const out = [];
+for (const item of items) {
+  const row = item.json;
+  const token = row.zoom_token;
+  const reqBody = buildRequest("zoominfo",
+    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });
+  let res;
+  if (!token) {
+    res = { error: "no zoominfo token available (mint failed or missing)" };
+  } else {
+    try {
+      res = await this.helpers.httpRequest({
+        method: "POST", url: DISCOVERY_ENDPOINTS.zoominfo,
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/vnd.api+json",
+                   Accept: "application/vnd.api+json" },
+        body: JSON.stringify(reqBody),
+      });
+    } catch (e) {
+      res = { error: String((e && e.message) || e) };
+    }
+  }
+  out.push({ ...row, "__KEY__": normalizeResponse("zoominfo", res) });
+}
+return out;
+"""
+    body = inline("discoverySearch.js") + template
+    return body.replace("__ROLE_TITLES__", titles_js).replace("__KEY__", key)
+
+
+ENRICH_DISCOVERY_ADAPT_ZOOM_PEOPLE_JS = inline("discoverySearch.js") + r"""
+
+// --- n8n wrapper: Adapt ZoomInfo People -- rejoin for the ZoomInfo rung-1/rung-2 split.
+return $input.all().map((it) => {
+  const row = it.json;
+  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;
+  const found = (row._zoominfo_rung1_people || []).concat(row._zoominfo_rung2_people || []);
+  const rest = { ...row };
+  delete rest._zoominfo_rung1_people;
+  delete rest._zoominfo_rung2_people;
+  return { ...rest, people: (rest.people || []).concat(found).slice(0, cap) };
+});
+"""
+
+
+def _discovery_native_json_body_expr(provider, unfiltered):
+    """n8n expression string for a native Apollo/Lusha discovery search HTTP node's
+    json_body -- a HAND-WRITTEN MIRROR of discoverySearch.buildRequest (n8n expressions
+    cannot import a JS module -- the same constraint "Lusha Enrich"'s own json_body
+    already documents, this file's build_enrichment_cloud). Both providers' request
+    shapes here are [ASSUMED] -- see discoverySearch.js's own header comment."""
+    titles_literal = json.dumps(_discovery_role_titles())
+    if provider == "apollo":
+        if unfiltered:
+            body_js = "{ q_organization_domains: $json.domain, per_page: $json.per_company_cap }"
+        else:
+            body_js = ("{ q_organization_domains: $json.domain, per_page: $json.per_company_cap, "
+                       "person_titles: " + titles_literal + " }")
+        return "={{ JSON.stringify(" + body_js + ") }}"
+    if provider == "lusha":
+        if unfiltered:
+            body_js = ("{ filters: { companies: { domains: [$json.domain] } }, "
+                       "pages: { page: 0, size: $json.per_company_cap } }")
+        else:
+            body_js = ("{ filters: { companies: { domains: [$json.domain] }, "
+                       "contacts: { jobTitles: " + titles_literal + " } }, "
+                       "pages: { page: 0, size: $json.per_company_cap } }")
+        return "={{ JSON.stringify(" + body_js + ") }}"
+    raise ValueError(f"_discovery_native_json_body_expr: unknown provider {provider!r}")
+
+
+def _discovery_adapt_native_js(provider, rung):
+    """Folds a native Apollo/Lusha HTTP hop's wrapped raw response into the row's
+    accumulated `people` list and (rung1 only) stamps the count that decides rung 2
+    (Task 2 Test 6/7)."""
+    key = f"{provider}_{rung}_result"
+    extra = f', _{provider}_rung1_count: found.length' if rung == "rung1" else ''
+    template = r"""
+
+// --- n8n wrapper: fold a discovery search response into the row's people list ---
+const items = $input.all();
+return items.map((it) => {
+  const merged = it.json || {};
+  const raw = merged["__KEY__"];
+  const rest = { ...merged };
+  delete rest["__KEY__"];
+  const found = normalizeResponse("__PROVIDER__", raw);
+  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;
+  const people = (rest.people || []).concat(found).slice(0, cap);
+  return { ...rest, people__EXTRA__ };
+});
+"""
+    body = inline("discoverySearch.js") + template
+    return (body.replace("__KEY__", key)
+                .replace("__PROVIDER__", provider)
+                .replace("__EXTRA__", extra))
+
+
+def _discovery_endpoints_py():
+    """Python-side read of discoverySearch.js's DISCOVERY_ENDPOINTS -- one source, no
+    hand-copied second literal for the native Apollo/Lusha HTTP nodes' URLs. Regex-based
+    (the JS object literal is not valid JSON -- unquoted keys) rather than pulling in a
+    JS parser dependency this repo does not otherwise need."""
+    src = extract_js_const("discoverySearch.js", "DISCOVERY_ENDPOINTS")
+    return dict(re.findall(r'(\w+):\s*"([^"]+)"', src))
+
+
+ENRICH_DISCOVERY_BUILD_RESPONSE = (
+    f"const SENTINEL_MARKER_KEY = {SENTINEL_MARKER_KEY!r};\n"
+    r"""
+// --- n8n wrapper: Build Discovery Response -- D-07's DATA body (not the ack-only shape
+// D-70-07 imposed on the enrichment/ingest lanes -- those two carry row outcomes for
+// writes and had to stop reporting them on the wire; this lane writes nothing and its
+// whole product is the list it returns). Folds by company_id so a Merge that fires
+// twice under v1 can never duplicate a company (Task 3 Test 5); reads run_id off ANY
+// item (marker or real) but excludes a D-70-23 gated sentinel's marker from the
+// `companies` array itself -- a positive identity check (company_id presence), the
+// same philosophy D-70-25's `hasRowIdentity` uses, adapted for this lane's flat
+// per-company-item shape (Task 3 Test 6).
+const byId = new Map();
+let runId = null;
+for (const it of $input.all()) {
+  const row = it.json || {};
+  if (row.run_id != null && runId == null) runId = row.run_id;
+  const isMarker = row[SENTINEL_MARKER_KEY] === true;
+  if (isMarker || row.company_id == null) continue;
+  if (!byId.has(row.company_id)) {
+    byId.set(row.company_id, {
+      company_id: row.company_id,
+      num_associated_contacts: row.num_associated_contacts ?? null,
+      people: row.people || [],
+    });
+  }
+}
+return [{ json: { run_id: runId, companies: Array.from(byId.values()) } }];
+"""
+)
+
+
+def _discovery_native_provider_hop(nodes, conns, provider, endpoint, x, y, if_direct_edges):
+    """Appends the two-rung native-HTTP subgraph for Apollo/Lusha directly onto the
+    CALLER's own `nodes`/`conns` (matching splice_carry_merge_after's own requirement
+    that `http_name` already exist in `nodes` before it is called -- unlike ZoomInfo's
+    Code-node leaf, these two need a REAL n8n Credential for their API key, which only a
+    native httpRequest node can bind (D-06: "reuses existing n8n credentials")). Returns
+    (entry_name, exit_name) for `_provider_gate_bypass_chain`'s true_entry/true_exit.
+
+    Every node's OUTGOING edges are wired BEFORE it is ever used as a
+    `splice_carry_merge_after` `carry_source` -- that function APPENDS a new fan-out
+    edge onto whatever `conns[carry_source]` already holds, so wiring the source's other
+    edges afterward would silently overwrite (not merge with) the appended one.
+
+    Both carry-merge sources here are routing IF nodes ("IF <Provider> Eligible" for
+    rung 1, "IF <Provider> Rung1 Empty" for rung 2) -- `assert_merge_input_contract`
+    rule 3 forbids an IF feeding a Merge input directly, so each is appended to
+    `if_direct_edges` for the caller to retarget through a pass-through, exactly the
+    `_retarget_all_if_direct_edges` idiom this file's own precedent (build_enrichment_
+    local_live's "Merge Company"/"Merge Winners" fan-in) already uses."""
+    cap_provider = "Apollo" if provider == "apollo" else "Lusha"
+    rung1, rung2 = f"{cap_provider} Search Rung1", f"{cap_provider} Search Rung2"
+    wrap1, wrap2 = f"Wrap {cap_provider} Rung1 Result", f"Wrap {cap_provider} Rung2 Result"
+    adapt1, adapt2 = f"Adapt {cap_provider} Rung1", f"Adapt {cap_provider} Rung2"
+    empty_if = f"IF {cap_provider} Rung1 Empty"
+    people = f"Adapt {cap_provider} People"
+    eligible_gate = f"IF {cap_provider} Eligible"
+    carry1_name = f"{cap_provider} Rung1 Carry Merge"
+    carry2_name = f"{cap_provider} Rung2 Carry Merge"
+
+    nodes.append(_http_node(rung1, endpoint, x, y, auth="header",
+                             json_body=_discovery_native_json_body_expr(provider, unfiltered=False)))
+    nodes.append(code_node(wrap1, _wrap_provider_result_js(f"{provider}_rung1_result"), x + 40, y + 40))
+    conns[rung1] = {"main": [[{"node": wrap1, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, rung1, eligible_gate,
+                              merge_name=carry1_name, source_out_idx=0)
+    if_direct_edges.append((eligible_gate, 0, carry1_name))
+    nodes.append(code_node(adapt1, _discovery_adapt_native_js(provider, "rung1"), x + 180, y + 40))
+    conns[wrap1] = {"main": [[{"node": adapt1, "type": "main", "index": 0}]]}
+    # splice_carry_merge_after already re-pointed wrap1's downstream edge onto the new
+    # carry merge; re-point the CARRY MERGE's own single output at adapt1 instead.
+    conns[carry1_name] = {"main": [[{"node": adapt1, "type": "main", "index": 0}]]}
+
+    nodes.append(_if_bool_expr_node(empty_if,
+        f'($json._{provider}_rung1_count || 0) === 0', x + 400, y + 40))
+    conns[adapt1] = {"main": [[{"node": empty_if, "type": "main", "index": 0}]]}
+
+    nodes.append(code_node(people,
+        "// Adapt <Provider> People -- trivial rejoin; both branches already fold their "
+        "own result into `people` before reaching here.\nreturn $input.all();\n",
+        x + 1000, y + 40))
+    # Both of "IF <Provider> Rung1 Empty"'s branches wired FIRST — before it is used as a
+    # splice_carry_merge_after carry_source below, per this function's own docstring.
+    conns[empty_if] = {"main": [
+        [{"node": rung2, "type": "main", "index": 0}],   # true: rung1 was empty
+        [{"node": people, "type": "main", "index": 0}],  # false: rung1 had results
+    ]}
+
+    nodes.append(_http_node(rung2, endpoint, x + 620, y - 40, auth="header",
+                             json_body=_discovery_native_json_body_expr(provider, unfiltered=True)))
+    nodes.append(code_node(wrap2, _wrap_provider_result_js(f"{provider}_rung2_result"), x + 660, y))
+    conns[rung2] = {"main": [[{"node": wrap2, "type": "main", "index": 0}]]}
+    splice_carry_merge_after(nodes, conns, rung2, empty_if,
+                              merge_name=carry2_name, source_out_idx=0)
+    if_direct_edges.append((empty_if, 0, carry2_name))
+    nodes.append(code_node(adapt2, _discovery_adapt_native_js(provider, "rung2"), x + 780, y))
+    conns[carry2_name] = {"main": [[{"node": adapt2, "type": "main", "index": 0}]]}
+    conns[adapt2] = {"main": [[{"node": people, "type": "main", "index": 0}]]}
+    return rung1, people
+
+
+def build_suggest_discovery_cloud():
+    """Phase 73.1 Plan 07 (D-06 through D-12) -- the sixth cloud workflow. Straight-line
+    fan-out per company item, never a self-dispatch, never a HubSpot node of any kind
+    (assert_no_write_nodes/D-06). Webhook Trigger binds the SAME shared "LV Enrichment
+    Webhook" credential every other trigger in this file binds (T-73.1-25) -- an
+    unauthenticated discovery endpoint would let a third party enumerate the operator's
+    company book.
+
+    Discretion (recorded per the plan's own instruction): this lane gets NO local
+    replica. It is read-only with no HubSpot credential, so a local mock-HubSpot replica
+    would prove nothing the offline walker test does not; enrichment/ingest have one,
+    backend-status/review/maintenance do not -- the convention is already mixed.
+    """
+    nodes = []
+    conns = {}
+    x = 220
+    y = 300
+
+    webhook = {
+        "parameters": {"httpMethod": "POST", "path": "hubspot/suggest/discover",
+                       "responseMode": "responseNode", "authentication": "headerAuth", "options": {}},
+        "id": nid("w"), "name": "Discovery Webhook Trigger",
+        "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
+    }
+    nodes.append(webhook)
+
+    x += 220
+    nodes.append(code_node("Parse Discovery Request", ENRICH_PARSE_DISCOVERY_REQUEST, x, y))
+    conns["Discovery Webhook Trigger"] = {"main": [[{"node": "Parse Discovery Request", "type": "main", "index": 0}]]}
+
+    x += 220
+    nodes.append(_if_bool_expr_node("IF Company Is Gap", "$json.gap === true", x, y))
+    conns["Parse Discovery Request"] = {"main": [[{"node": "IF Company Is Gap", "type": "main", "index": 0}]]}
+
+    # ---- the ZoomInfo -> Apollo -> Lusha waterfall (D-11) ---------------------------
+    zx, zy = x + 260, y - 160
+    nodes.append(code_node("ZoomInfo Search Token Gate", _zoom_split_gate_js("IF ZoomInfo Eligible"), zx, zy))
+    nodes.append(_if_bool_node("IF ZoomInfo Search Needs Mint", "zoom_needs_mint", zx + 200, zy))
+    nodes.append(_zoom_mint_node("ZoomInfo Search Mint", zx + 400, zy - 120))
+    nodes.append(code_node("ZoomInfo Search Cache Token",
+                            _zoom_split_cache_js("ZoomInfo Search Token Gate"), zx + 600, zy - 120))
+    nodes.append(code_node("ZoomInfo Search Rung1", _discovery_zoom_search_leaf_js("rung1"), zx + 800, zy))
+    nodes.append(_if_bool_expr_node("IF ZoomInfo Rung1 Empty",
+        "($json._zoominfo_rung1_people || []).length === 0", zx + 1000, zy))
+    nodes.append(code_node("ZoomInfo Search Rung2", _discovery_zoom_search_leaf_js("rung2"), zx + 1200, zy - 80))
+    nodes.append(code_node("Adapt ZoomInfo People", ENRICH_DISCOVERY_ADAPT_ZOOM_PEOPLE_JS, zx + 1400, zy))
+    conns.update({
+        "ZoomInfo Search Token Gate": {"main": [[{"node": "IF ZoomInfo Search Needs Mint", "type": "main", "index": 0}]]},
+        "IF ZoomInfo Search Needs Mint": {"main": [
+            [{"node": "ZoomInfo Search Mint", "type": "main", "index": 0}],
+            [{"node": "ZoomInfo Search Rung1", "type": "main", "index": 0}],
+        ]},
+        "ZoomInfo Search Cache Token": {"main": [[{"node": "ZoomInfo Search Rung1", "type": "main", "index": 0}]]},
+        "ZoomInfo Search Rung1": {"main": [[{"node": "IF ZoomInfo Rung1 Empty", "type": "main", "index": 0}]]},
+        "IF ZoomInfo Rung1 Empty": {"main": [
+            [{"node": "ZoomInfo Search Rung2", "type": "main", "index": 0}],   # true: rung1 empty
+            [{"node": "Adapt ZoomInfo People", "type": "main", "index": 0}],   # false: rung1 had results
+        ]},
+        "ZoomInfo Search Rung2": {"main": [[{"node": "Adapt ZoomInfo People", "type": "main", "index": 0}]]},
+    })
+    # A native HTTP node's response REPLACES $json entirely, discarding the row -- the
+    # same reason every other provider hop in this file carries one. Mirrors
+    # build_enrichment_cloud's own "ZoomInfo Mint" -> "ZoomInfo Mint Carry Merge" splice
+    # exactly (carry_source is the gate's TRUE branch, source_out_idx=0 default);
+    # `_zoom_split_cache_js`'s own docstring assumes it is fed the combined
+    # {mint response, carried row} for exactly this reason.
+    if_direct_edges = [("IF ZoomInfo Search Needs Mint", 0, "ZoomInfo Search Mint Carry Merge")]
+    splice_carry_merge_after(nodes, conns, "ZoomInfo Search Mint", "IF ZoomInfo Search Needs Mint",
+                              merge_name="ZoomInfo Search Mint Carry Merge")
+    conns["ZoomInfo Search Mint Carry Merge"] = {"main": [[{"node": "ZoomInfo Search Cache Token", "type": "main", "index": 0}]]}
+
+    x += 220
+    nodes.append(code_node("Discovery Waterfall Complete", ENRICH_DISCOVERY_WATERFALL_COMPLETE_JS,
+                            zx + 1600, zy + 460))
+
+    # `_provider_gate_bypass_chain` only ever wires connection-dict entries BY NAME — it
+    # does not require its true_entry/true_exit nodes to already exist. Build the three
+    # outer "IF <Provider> Eligible" gates FIRST, by these deterministic names (matching
+    # exactly what `_discovery_native_provider_hop` constructs below), so each provider's
+    # own carry-merge (which DOES require its carry_source node to already exist) can
+    # find its gate.
+    gate_nodes, gate_conns, _first_gate = _provider_gate_bypass_chain(
+        providers=[
+            {"gate_name": "IF ZoomInfo Eligible", "enabled_expr": _discovery_provider_eligible_expr(),
+             "true_entry": "ZoomInfo Search Token Gate", "true_exit": "Adapt ZoomInfo People"},
+            {"gate_name": "IF Apollo Eligible", "enabled_expr": _discovery_provider_eligible_expr(),
+             "true_entry": "Apollo Search Rung1", "true_exit": "Adapt Apollo People"},
+            {"gate_name": "IF Lusha Eligible", "enabled_expr": _discovery_provider_eligible_expr(),
+             "true_entry": "Lusha Search Rung1", "true_exit": "Adapt Lusha People"},
+        ],
+        exit_node="Discovery Waterfall Complete", x=zx, y=zy + 200,
+    )
+    nodes.extend(gate_nodes)
+    conns.update(gate_conns)
+
+    apollo_entry, apollo_exit = _discovery_native_provider_hop(
+        nodes, conns, "apollo", _discovery_endpoints_py()["apollo"], zx + 260, zy + 420, if_direct_edges)
+    lusha_entry, lusha_exit = _discovery_native_provider_hop(
+        nodes, conns, "lusha", _discovery_endpoints_py()["lusha"], zx + 260, zy + 900, if_direct_edges)
+    assert apollo_entry == "Apollo Search Rung1" and apollo_exit == "Adapt Apollo People"
+    assert lusha_entry == "Lusha Search Rung1" and lusha_exit == "Adapt Lusha People"
+
+    # ---- gap split: TRUE -> the waterfall, FALSE -> straight through ----------------
+    conns["IF Company Is Gap"] = {"main": [
+        [{"node": "IF ZoomInfo Eligible", "type": "main", "index": 0}],    # true: gap
+        [{"node": "Build Discovery Response", "type": "main", "index": 0}],  # false: non-gap
+    ]}
+    conns["Discovery Waterfall Complete"] = {"main": [[{"node": "Build Discovery Response", "type": "main", "index": 0}]]}
+
+    # ---- the one real Merge on this lane: D-07's response terminal -------------------
+    # Two declared inputs (index0 = non-gap real content, index1 = waterfall-complete
+    # real content) -- by construction, on ANY round with at least one company, at least
+    # one of the two always delivers (every company is gap XOR non-gap), so only a
+    # genuinely EMPTY request needs a dedicated fallback. Each input's own sentinel
+    # SHARES that input's index with its real producer (mutually exclusive by
+    # construction -- the D-70-23 gated-sentinel pattern this file's OWN precedent uses
+    # throughout, "Merge Company Fan-In"/"Merge Winners Fan-In" et al.), rather than a
+    # third dedicated index -- Task 3 Test 7 requires the walker to report ZERO
+    # `merge_fired_with_unfilled_input` entries, which a declared-but-sometimes-unfed
+    # THIRD index would trip on every mixed round.
+    x += 260
+    nodes.append(code_node("Build Discovery Response", ENRICH_DISCOVERY_BUILD_RESPONSE, x, y))
+    merge_name = splice_merge_before(nodes, conns, "Build Discovery Response",
+                                      merge_name="Discovery Response Merge")
+    nongap_idx = _merge_input_index(conns, "IF Company Is Gap", merge_name, source_out_idx=1)
+    waterfall_idx = _merge_input_index(conns, "Discovery Waterfall Complete", merge_name, source_out_idx=0)
+    _add_starved_lane_sentinel(
+        nodes, conns, "All Gap Sentinel", "Parse Discovery Request",
+        'if (rows.length > 0 && rows.every((r) => r.gap === true)) return [{}]; return [];',
+        [(merge_name, nongap_idx)], x, y + 260)
+    _add_starved_lane_sentinel(
+        nodes, conns, "All Non-Gap Sentinel", "Parse Discovery Request",
+        'if (rows.length > 0 && rows.every((r) => r.gap !== true)) return [{}]; return [];',
+        [(merge_name, waterfall_idx)], x, y + 380)
+    _add_starved_lane_sentinel(
+        nodes, conns, "Zero Companies Sentinel", "Discovery Webhook Trigger",
+        ENRICH_DISCOVERY_ZERO_COMPANIES_SENTINEL_JS,
+        [(merge_name, nongap_idx), (merge_name, waterfall_idx)], x, y + 500)
+    _retarget_all_if_direct_edges(nodes, conns, [
+        ("IF Company Is Gap", 1, merge_name),
+    ] + if_direct_edges, x, y + 620)
+
+    x += 220
+    nodes.append({
+        "parameters": {"respondWith": "firstIncomingItem", "options": {}},
+        "id": nid("rw"), "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1,
+        "position": [x, y],
+    })
+    conns["Build Discovery Response"] = {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+
+    notes = [{
+        "content": (
+            "## LV Suggest Discovery (Cloud template) -- Phase 73.1 Plan 07 (D-06..D-12)\n"
+            "`hubspot/suggest/discover`: read-only. One POST per round carries every "
+            "eligible company with a `gap` flag; a gap company is searched ZoomInfo then "
+            "Apollo then Lusha (D-11), at most one search per provider per company, "
+            "stopping once `per_company_cap` is met. Rung 2 (unfiltered) fires only when "
+            "rung 1's title-filtered search returned zero (D-11a). Every company is "
+            "echoed back with its `num_associated_contacts` verbatim and whatever people "
+            "were found (D-09) -- zero HubSpot reads, zero HubSpot writes, zero reveal "
+            "calls (D-12).\n\n"
+            "Every provider endpoint and request body in this workflow is [ASSUMED] -- "
+            "see n8n/code/discoverySearch.js's own header comment and "
+            "scripts/probe_provider_discovery.py (plan 09)."
+        ), "x": x, "y": y + 500, "h": 320, "w": 560,
+    }]
+    for i, n in enumerate(notes, start=1):
+        nodes.append({
+            "parameters": {"content": n["content"], "height": n["h"], "width": n["w"]},
+            "id": nid("s"), "name": f"Sticky Note {i}",
+            "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+            "position": [n["x"], n["y"]],
+        })
+
+    return {
+        "id": "LVSuggestDiscoveryCloud01",
+        "name": "LV Suggest Discovery (Cloud template)",
+        "nodes": nodes,
+        "connections": conns,
+        "settings": dict(WORKFLOW_SETTINGS),
+        "active": False,
+    }
+
+
+def assert_no_write_nodes(wf: dict, name: str) -> dict:
+    """Phase 73.1 Plan 07 (D-06) -- a generation-time refusal in the same style as
+    `assert_no_by_name_reads`/`assert_merge_input_contract`/`assert_no_self_dispatch`
+    (raises `ValueError` naming the workflow and the offending node, composes at the
+    same insertion point, returns `wf` unchanged). Applied to `LV Suggest Discovery
+    (Cloud template)` ONLY, keyed by the workflow BODY's own `name` -- the same keying
+    discipline `_SELF_DISPATCH_EXEMPTIONS` uses (a mislabeled caller-supplied file label
+    must not be able to widen or narrow which workflow this checks).
+
+    The predicate is deliberately the STRICTEST available: refuse generation if ANY node
+    in the named workflow has a URL containing `api.hubapi.com`, in any method -- never a
+    method-and-path heuristic that would need an exception to get wrong. D-09 says this
+    lane never reads HubSpot either (the plugin sends `num_associated_contacts`, the lane
+    only echoes it), so there is no legitimate HubSpot call of any shape here."""
+    if wf.get("name") != "LV Suggest Discovery (Cloud template)":
+        return wf
+    violations = []
+    for node in wf.get("nodes", []):
+        url = ((node.get("parameters") or {}).get("url")) or ""
+        if "api.hubapi.com" in str(url):
+            violations.append(f"  - {node.get('name')!r} targets {url!r}")
+    if violations:
+        raise ValueError(
+            f"{name}: {len(violations)} HubSpot-targeting node(s) refused at generation "
+            "time -- D-06 requires this lane to be read-only:\n" + "\n".join(violations)
+        )
+    return wf
+
+
 # ---- write ------------------------------------------------------------------
 
 # n8n's HubSpot node picks its credential TYPE from its own `authentication` parameter.
@@ -12157,6 +12707,20 @@ _MERGE_INPUT_SENTINEL_RE = re.compile(r"Sentinel$")
 # other fourteen are admitted by census with multi-fire unobserved on that specific
 # Merge — do not read a census entry as "safe", "harmless" or "proven".
 _MERGE_MULTI_PRODUCER_TOLERANT = {
+    # --- Phase 73.1 Plan 07 (D-06..D-09) — the discovery lane's one real Merge. ---
+    ("LV Suggest Discovery (Cloud template)", "Discovery Response Merge"): (
+        "Both inputs' D-70-23 gated sentinels ('All Gap Sentinel'/'All Non-Gap "
+        "Sentinel'/'Zero Companies Sentinel') share their index with the real "
+        "producer, mutually exclusive by construction (every company is gap XOR "
+        "non-gap; a company list is empty or it is not) — the same family (c) "
+        "pattern the enrichment lane's own fan-in Merges use, admitted by the "
+        "2026-09-11 census, not a proof of safety. This is a brand-new lane with no "
+        "live execution yet; unlike the enrichment-lane entries below, there is no "
+        "frozen v1 recording proving this exact Merge never multi-fires — the "
+        "offline walker suite (tests/n8n/suggestDiscoveryLane.test.mjs) is this "
+        "lane's only evidence until plan 09's live proof."
+    ),
+
     # --- Family (a): the operator's own reasoning, 2026-09-11. ---
     ("LV Enrichment (Cloud template)", "Decide Company Action Merge"): (
         "Decide Company Action filters markers out of its own input, so only a "
@@ -12490,10 +13054,10 @@ def _assert_generation_contracts(wf: dict, name: str) -> dict:
     third, outermost, in the same fixed order. Phase 70 gap-closure round 3, plan 70-16
     (D-70-28): `assert_execution_order_v1` joins them as the fourth, outermost of all,
     in the same fixed order."""
-    return assert_execution_order_v1(
+    return assert_no_write_nodes(assert_execution_order_v1(
         assert_no_self_dispatch(
             assert_merge_input_contract(assert_no_by_name_reads(wf, name), name), name),
-        name)
+        name), name)
 
 
 def main():
@@ -12554,6 +13118,14 @@ def main():
         _assert_generation_contracts(_normalize_hubspot_auth(build_review_decision_cloud()), "wf_review_decision_cloud"),
         indent=2) + "\n")
     print(f"wrote {review_cloud.relative_to(ROOT)}")
+
+    _idc[0] = 0
+    discovery_cloud = ROOT / "n8n" / "wf_suggest_discovery_cloud.json"
+    discovery_cloud.write_text(json.dumps(
+        _assert_generation_contracts(_normalize_hubspot_auth(build_suggest_discovery_cloud()),
+                                      "wf_suggest_discovery_cloud"),
+        indent=2) + "\n")
+    print(f"wrote {discovery_cloud.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

@@ -3,22 +3,27 @@
 //
 // [ASSUMED] — every endpoint and body shape below is UNCONFIRMED. No search-by-role-title
 // endpoint has ever been called live in this repository. Every currently-wired provider
-// endpoint in this codebase (Apollo `/v1/people/match`, ZoomInfo
-// `/gtm/data/v1/contacts/enrich`, Lusha `/v3/contacts/search-and-enrich`) requires an
-// already-known identity and CANNOT answer "who works at this company with this title".
-//   - ZoomInfo: `/gtm/data/v1/companies/search` is the one CONFIRMED-LIVE search shape in
-//     this codebase (memory `zoominfo-gtm-companies-contract`, docs). The contacts-search
-//     URL/body below is INFERRED from it by JSON:API family (`ContactSearch` type), never
-//     observed.
+// endpoint in this codebase (Apollo's identity-match endpoint, ZoomInfo's identity-based
+// contacts-enrich endpoint, Lusha's identity-based search-plus-enrich endpoint) requires
+// an already-known identity and CANNOT answer "who works at this company with this
+// title". (Deliberately not spelled out as literal URL paths here — this module is
+// inline()'d verbatim into generated Code nodes, and assert_no_write_nodes's sibling
+// acceptance check in tests/n8n/suggestDiscoveryLane.test.mjs greps the COMMITTED JSON
+// for those exact identity-enrich path fragments to prove none is wired into this
+// read-only lane; see docs/LUSHA-V3-CONTRACT.md and this file's own DISCOVERY_ENDPOINTS
+// below for the actual strings.)
+//   - ZoomInfo: the confirmed-live companies-search shape in this codebase (memory
+//     `zoominfo-gtm-companies-contract`, docs) is the ONE confirmed-live search shape.
+//     The contacts-search URL/body below is INFERRED from it by JSON:API family
+//     (`ContactSearch` type), never observed.
 //   - Apollo: the people-search endpoint and its `person_titles` parameter are from vendor
 //     documentation only; this account's Apollo API key is not a master key and its
 //     balance already reads 403/unreadable on the confirmed-live usage endpoint
 //     (memory `provider-credit-check-endpoints`) — whether search fares any better is
 //     unknown.
 //   - Lusha: the prospecting/search product is NOT documented in
-//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers `/v3/contacts/enrich` and
-//     `/v3/contacts/search-and-enrich` only, both identity-based) and may not be entitled
-//     on this plan's Lusha account.
+//     `docs/LUSHA-V3-CONTRACT.md` at all (that contract covers only the two identity-based
+//     endpoints named above) and may not be entitled on this plan's Lusha account.
 // `scripts/probe_provider_discovery.py` (plan 09) is what resolves each one against the
 // live providers, disarmed, before any credit is spent. Until then this module is built
 // and tested entirely behind offline fixtures (D-12's stated assumption).

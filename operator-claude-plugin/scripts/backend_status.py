@@ -1,5 +1,16 @@
 """operator-claude-plugin/scripts/backend_status.py
 
+Phase 73.1 Plan 07 discretion note: this module and its test
+(operator-claude-plugin/tests/test_status_all_workflows.py) needed NO change for the
+sixth cloud workflow (`LV Suggest Discovery (Cloud template)`). Workflow enumeration
+lives in the SIBLING module `status.py`'s `describe_all`, which reads the live n8n
+`/workflows` collection with no hardcoded list of names or count (D-07 -- this
+directory's tests guard against exactly that kind of static roster existing anywhere
+under operator-claude-plugin/scripts) -- a new workflow is picked up automatically once
+deployed, with zero code change here. THIS module (`fetch_backend_status`) probes a
+single fixed endpoint (`hubspot/backend-status`) that answers with provider/HubSpot-
+queue counts, unrelated to workflow enumeration.
+
 The other half of the credential split (D-01): the facts the plugin is NOT entitled to
 read itself — provider balances, HubSpot queue and review counts, credential health —
 arrive from the n8n-side `hubspot/backend-status` endpoint, which holds those

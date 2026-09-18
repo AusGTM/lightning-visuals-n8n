@@ -27,6 +27,12 @@ WORKFLOWS = {  # committed file -> live id
     "n8n/wf_enrichment_cloud.json": "950HPb7a1GgSAIyZ",
     "n8n/wf_review_decision_cloud.json": "WBJwoZOo63wzeP69",
     "n8n/wf_scheduled_maintenance_cloud.json": "1fXPuIabz3RsAHgn",
+    # Phase 73.1 Plan 07 (D-06): the discovery lane's first deploy is a CREATE, not a
+    # PUT — no live id exists until the operator's plan-09 first deploy mints one via
+    # deploy_n8n_workflows.py's create path. `None` here is deliberate, not a
+    # placeholder to fill in offline: main() below REFUSES this entry BY NAME rather
+    # than attempting a bounce against a nonexistent id.
+    "n8n/wf_suggest_discovery_cloud.json": None,
 }
 WRITE_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")
 
@@ -79,6 +85,11 @@ def main():
     print("| workflow | id | active | live nodes | committed nodes | write flags | execution order |")
     print("|---|---|---|---|---|---|---|")
     for rel, wid in WORKFLOWS.items():
+        if wid is None:
+            print(f"| {rel} | (unset) | - | - | - | - | - | "
+                  f"**REFUSED: no live id yet — run the operator's first CREATE deploy "
+                  f"(plan 09) and fill in the id, or this script would 404 blindly** |")
+            continue
         expected = len(json.loads((root / rel).read_text())["nodes"])
         _api("POST", f"/workflows/{wid}/deactivate")
         _api("POST", f"/workflows/{wid}/activate")
