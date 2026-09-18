@@ -4,7 +4,9 @@
 // headers -> canonical HubSpot contact props via case-insensitive / whitespace-
 // collapsed aliases; unmapped columns are dropped. requiredIdentity mirrors the
 // column_mapping required_identity reject rule (email OR firstname+lastname+company OR
-// linkedin_url).
+// linkedin_url OR firstname+lastname+mobilephone OR firstname+lastname+phone). The two
+// name+number groups added Phase 73.1 Plan 05 (D-16b) — operator ruling: a BARE
+// phone/mobilephone alone is NOT identity, it only completes a name.
 
 // Embedded alias table (source of truth: config/column_mapping.yaml). Keys are
 // already lowercased/whitespace-collapsed, matching _normHeader.
@@ -111,13 +113,18 @@ function _present(v) {
   return v !== null && v !== undefined && String(v).trim() !== "";
 }
 
-// requiredIdentity(row) — email OR (firstname AND lastname AND company) OR linkedin_url.
-// Mirrors config/column_mapping.yaml's required_identity.any_of (3 groups).
+// requiredIdentity(row) — email OR (firstname AND lastname AND company) OR linkedin_url
+// OR (firstname AND lastname AND mobilephone) OR (firstname AND lastname AND phone).
+// Mirrors config/column_mapping.yaml's required_identity.any_of (5 groups). A bare
+// mobilephone or phone alone is NOT identity (D-16b) — it only completes a name.
 function requiredIdentity(row) {
   if (!row) return false;
   if (_present(row.email)) return true;
   if (_present(row.firstname) && _present(row.lastname) && _present(row.company)) return true;
-  return _present(row.linkedin_url);
+  if (_present(row.linkedin_url)) return true;
+  if (_present(row.firstname) && _present(row.lastname) && _present(row.mobilephone)) return true;
+  if (_present(row.firstname) && _present(row.lastname) && _present(row.phone)) return true;
+  return false;
 }
 
 module.exports = { mapRow, requiredIdentity, ALIASES };

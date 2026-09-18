@@ -3,9 +3,13 @@
 # One source of truth for Phase 6 ingestion:
 #   aliases:           lowercased/trimmed source header -> canonical HubSpot contact prop
 #   required_identity: the reject rule -- any_of the identity groups below
-#                      (email OR firstname+lastname+company OR linkedin_url).
+#                      (email OR firstname+lastname+company OR linkedin_url OR
+#                      firstname+lastname+mobilephone OR firstname+lastname+phone).
 #                      linkedin_url added Phase 61-03; name-only rows still route to
 #                      the weak-key needs_review path (D-61-03), they are not accepted here.
+#                      The two name+number groups added Phase 73.1 Plan 05 (D-16b) —
+#                      operator ruling: a BARE phone or mobilephone alone is NOT identity,
+#                      it only completes a name; the group is all three keys or nothing.
 #                      Do not restate the groups anywhere else: extraction.py derives its
 #                      rejection message from this block, and tests/n8n/columnMapIdentityParity
 #                      pins n8n/code/columnMap.js against it.
@@ -97,3 +101,5 @@ required_identity:
     - [email]
     - [firstname, lastname, company]
     - [linkedin_url]
+    - [firstname, lastname, mobilephone]
+    - [firstname, lastname, phone]
