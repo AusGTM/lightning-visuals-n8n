@@ -16,6 +16,22 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.51.1] - 2026-09-18
+
+D-12 operator ruling applied: the live provider-discovery probe (`scripts/
+probe_provider_discovery.py`, `73.1-D12-VERDICT.json`) found Apollo's search preview
+obfuscates the last name and Lusha's carries no name or title at all (and costs 1
+credit per request even on a zero-result round); ZoomInfo's preview alone carries a
+real name and title, measured at 0 credits. The operator ruled: "ZoomInfo retained as
+tier-2 source, others (Apollo/Lusha) dropped for search phase. Full waterfall only used
+on enrich."
+
+### Changed
+- **The provider-discovery lane (`hubspot/suggest/discover`) now searches ZoomInfo
+  only.** Apollo and Lusha search nodes are removed from that lane entirely — the
+  round's cost disclosure (`cost_guard.discovery_line`) now names ZoomInfo alone.
+  Stage 2's existing enrich waterfall (ZoomInfo → Apollo → Lusha) is unchanged.
+
 ## [0.51.0] - 2026-09-18
 
 Phase 73.1: provider-backed contact discovery as a second source for the people a round
