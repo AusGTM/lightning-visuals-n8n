@@ -274,3 +274,75 @@ def test_client_rendered_verdict_is_nowhere_in_extraction_md():
     the verdict used to live in."""
     text = _extraction_md_text()
     assert "client-rendered" not in text.lower()
+
+
+# =====================================================================================
+# Task 2 (Phase 73.1 Plan 05, D-16b) — hold_emailless holds only a row with NONE of
+# email, linkedin_url, mobilephone, phone. Jen Ramamurthy (2026-09-18 pickleball round —
+# mobile plus a LinkedIn profile, no email) is the case that motivated it.
+# =====================================================================================
+
+
+def test_hold_emailless_a_row_with_email_is_sendable_unchanged():
+    sendable, held = extraction.hold_emailless([{"email": "a@b.c"}])
+    assert sendable == [{"email": "a@b.c"}]
+    assert held == []
+
+
+def test_hold_emailless_a_row_with_no_email_but_a_linkedin_url_is_sendable():
+    row = {"firstname": "Jen", "lastname": "Ramamurthy", "linkedin_url": "https://linkedin.com/in/jen"}
+    sendable, held = extraction.hold_emailless([row])
+    assert sendable == [row]
+    assert held == []
+
+
+def test_hold_emailless_a_row_with_no_email_but_a_mobilephone_is_sendable():
+    row = {"firstname": "Jen", "lastname": "Ramamurthy", "mobilephone": "0400 000 111"}
+    sendable, held = extraction.hold_emailless([row])
+    assert sendable == [row]
+    assert held == []
+
+
+def test_hold_emailless_a_row_with_no_email_but_a_phone_is_sendable():
+    row = {"firstname": "Jen", "lastname": "Ramamurthy", "phone": "02 9000 0111"}
+    sendable, held = extraction.hold_emailless([row])
+    assert sendable == [row]
+    assert held == []
+
+
+def test_hold_emailless_a_row_with_none_of_the_four_keys_is_held_naming_all_four():
+    row = {"firstname": "Jen", "lastname": "Ramamurthy", "company": "Widgets Co"}
+    sendable, held = extraction.hold_emailless([row])
+    assert sendable == []
+    assert len(held) == 1
+    reason = held[0]["reason"]
+    for key in ("email", "linkedin_url", "mobilephone", "phone"):
+        assert key in reason, f"held reason must name '{key}': {reason!r}"
+
+
+def test_hold_emailless_whitespace_only_mobilephone_does_not_make_a_row_sendable():
+    row = {"firstname": "Jen", "lastname": "Ramamurthy", "mobilephone": "   "}
+    sendable, held = extraction.hold_emailless([row])
+    assert sendable == []
+    assert len(held) == 1
+
+
+def test_hold_emailless_every_row_appears_once_shape_preserved_no_mutation():
+    rows = [
+        {"email": "a@b.c"},
+        {"firstname": "Jen", "lastname": "R", "linkedin_url": "https://linkedin.com/in/jen"},
+        {"firstname": "Jen", "lastname": "R", "mobilephone": "0400 000 111"},
+        {"firstname": "Jen", "lastname": "R", "phone": "02 9000 0111"},
+        {"firstname": "No", "lastname": "Key"},
+    ]
+    before = [dict(r) for r in rows]
+
+    sendable, held = extraction.hold_emailless(rows)
+
+    assert len(sendable) + len(held) == len(rows)
+    assert sendable == [rows[0], rows[1], rows[2], rows[3]]
+    assert [entry["index"] for entry in held] == [4]
+    entry = held[0]
+    assert set(entry.keys()) == {"index", "row", "reason"}
+    assert entry["row"] == rows[4]
+    assert rows == before
