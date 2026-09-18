@@ -914,42 +914,59 @@ def test_extraction_validate_still_accepts_a_record_carrying_the_extra_provenanc
 
 
 def test_the_tier_gate_and_the_waterfall_gate_are_independent_and_both_must_hold():
-    """The same person, the same successful merge, the same related-domain email — held
-    at tier 3, sendable at tier 2 (D-5sd-01 + D-5sd-05). Drives the REAL
-    `partition_for_dispatch` and the REAL `search_fallback.hold_weak_sources`, so drift
-    in either module's `"suggest_contacts_web_search"` literal fails here."""
+    """Three people, three verdicts, driving the REAL `partition_for_dispatch` and the
+    REAL `search_fallback.hold_weak_sources` (D-01/D-02/D-05), so drift in either
+    module's `"suggest_contacts_web_search"` literal fails here:
+
+      * Jamie -- rank 2 (provider discovery), related-domain email: sendable by BOTH
+        gates.
+      * Robin -- rank 3 (LinkedIn), the SAME related-domain email: held by gate 2 alone
+        (D-01: LinkedIn flipped from sendable to held).
+      * Casey -- rank 2, an UNRELATED-domain email: held by gate 1 alone, and gate 2
+        must NOT resurrect her just because rank 2 is otherwise strong (D-02) -- the two
+        gates are independent and both must hold.
+    """
     company = _company_row()
+    people_specs = [
+        (2, "Jamie", "apollo people search", "jamie@example-club.example"),
+        (3, "Robin", "https://www.linkedin.com/in/robin-fox", "robin@example-club.example"),
+        (2, "Casey", "zoominfo contact search", "casey@unrelated-domain.example"),
+    ]
     records = []
-    for tier, firstname in ((2, "Jamie"), (3, "Robin")):
+    for tier, firstname, locator, _email in people_specs:
         people = [{"firstname": firstname, "lastname": "Fox", "jobtitle": "Director"}]
-        locator = (
-            "https://www.linkedin.com/in/jamie-fox" if tier == 2
-            else "https://racenet.example/2019/committee"
-        )
         records.extend(suggest_contacts.synthesise_rows(
-            company, people, locator, per_company_cap=2, source_tier=tier))
+            company, people, locator, per_company_cap=3, source_tier=tier))
 
     # The join key is minted once at the batch level, before either gate runs.
     minted = suggest_contacts.mint_row_ids(records)
     records = minted["records"]
+    email_by_firstname = {firstname: email for _, firstname, _, email in people_specs}
     for record in records:
-        record["row"]["email"] = (
-            f"{record['row']['firstname'].lower()}@example-club.example"
-        )
+        record["row"]["email"] = email_by_firstname[record["row"]["firstname"]]
 
     company_domains = {company["name"]: company["website"]}
     sendable, held = suggest_contacts.partition_for_dispatch(
         [record["row"] for record in records], company_domains)
-    # Gate 1 alone would send BOTH: the waterfall confirmed each with a related domain.
+    # Gate 1 alone: Jamie and Robin have related-domain emails and pass; Casey does not.
     assert {row["firstname"] for row in sendable} == {"Jamie", "Robin"}
-    assert held == []
+    assert len(held) == 1
+    assert held[0]["row"]["firstname"] == "Casey"
+    assert held[0]["reason_code"] == "email_domain_mismatch"
 
     sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
+    # Gate 2: Jamie (rank 2) survives; Robin (rank 3, LinkedIn) is now held (D-01);
+    # Casey stays held from gate 1 -- gate 2 must not touch a row it never saw as
+    # sendable in the first place (D-02).
     assert [row["firstname"] for row in sendable] == ["Jamie"]
-    assert len(held) == 1
-    assert held[0]["row"]["firstname"] == "Robin"
-    assert held[0]["reason_code"] == "search_source_not_strong"
-    assert "https://racenet.example/2019/committee" in held[0]["reason"]
+    assert {entry["row"]["firstname"] for entry in held} == {"Robin", "Casey"}
+    robin_entry = next(e for e in held if e["row"]["firstname"] == "Robin")
+    casey_entry = next(e for e in held if e["row"]["firstname"] == "Casey")
+    assert robin_entry["reason_code"] == "search_source_not_strong"
+    assert "https://www.linkedin.com/in/robin-fox" in robin_entry["reason"]
+    assert "LinkedIn" in robin_entry["reason"]
+    assert "not this company's own site or LinkedIn" not in robin_entry["reason"]
+    assert casey_entry["reason_code"] == "email_domain_mismatch"
 
 
 def test_a_ladder_sourced_record_passes_the_new_gate_unchanged():

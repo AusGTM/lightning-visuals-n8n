@@ -543,13 +543,13 @@ def test_a_tier_one_or_tier_two_search_record_stays_sendable():
     assert held_out == []
 
 
-def test_a_tier_three_search_record_is_held_with_its_source_url_in_the_reason():
-    """D-5sd-05: an industry site can name a person historically — a 2019 committee list,
-    an archived media release. The person can be real and the waterfall's confirmation
-    genuine, and the claim can still be stale. The operator judges it, with the URL in
-    hand."""
+def test_a_tier_four_search_record_is_held_with_its_source_url_in_the_reason():
+    """D-01/D-5sd-05: an industry site can name a person historically — a 2019 committee
+    list, an archived media release. The person can be real and the waterfall's
+    confirmation genuine, and the claim can still be stale. The operator judges it, with
+    the URL in hand."""
     locator = "https://racenet.example/2019/committee"
-    records = [_search_record("row-1", 3, locator=locator)]
+    records = [_search_record("row-1", 4, locator=locator)]
     sendable = [records[0]["row"]]
     sendable_out, held_out = hold_weak_sources(records, sendable, [])
     assert sendable_out == []
@@ -573,9 +573,9 @@ def test_a_row_already_held_stays_held_and_held_stays_sorted_by_index():
     """The two passes read as one list: a new hold carries the record's ORIGINAL index,
     and the merged list is re-sorted so it never reads as two appended halves."""
     records = [
-        _search_record("row-1", 3),
+        _search_record("row-1", 4),
         _ladder_record("row-2"),
-        _search_record("row-3", 3),
+        _search_record("row-3", 4),
     ]
     already_held = [
         {
@@ -595,7 +595,7 @@ def test_a_row_already_held_stays_held_and_held_stays_sorted_by_index():
 
 
 def test_a_weak_record_that_was_already_held_is_not_held_twice():
-    records = [_search_record("row-1", 3)]
+    records = [_search_record("row-1", 4)]
     already_held = [
         {"index": 0, "row": records[0]["row"], "reason": "no usable email",
          "reason_code": "no_email"}
@@ -610,10 +610,88 @@ def test_a_search_sourced_record_with_no_row_id_refuses_rather_than_joining_noth
     """`rejoin_enriched`'s register: the join key is `row_id`, minted once at the batch
     level. A search-sourced record that reaches this gate unminted would silently match
     nothing in `sendable` and be reported as sent."""
-    record = _search_record("row-1", 3)
+    record = _search_record("row-1", 4)
     del record["row"]["row_id"]
     with pytest.raises(ValueError):
         hold_weak_sources([record], [], [])
+
+
+# --- hold_weak_sources: D-01 (operator ruling 2026-09-18) -- the LinkedIn-vs-industry
+# reason split, and the D-02/D-05 rank-2-is-strong-but-not-a-bypass proof --------------
+
+
+def test_rank_two_provider_discovery_record_stays_sendable():
+    """Test A: rank 2 (provider discovery) is strong, exactly like rank 1."""
+    records = [_search_record("row-1", 2, locator="apollo people search")]
+    sendable = [records[0]["row"]]
+    sendable_out, held_out = hold_weak_sources(records, sendable, [])
+    assert sendable_out == sendable
+    assert held_out == []
+
+
+def test_a_rank_two_record_already_held_for_an_unrelated_email_stays_held():
+    """Test B: gate 1 (email-domain relatedness) already held this record for an
+    unrelated email before gate 2 ever runs. Gate 2 must leave that hold exactly as it
+    found it -- it must never resurrect a row it never saw as sendable, however strong
+    the row's own rank (D-02/D-05: the two gates are independent and both must hold)."""
+    records = [_search_record("row-1", 2, locator="apollo people search")]
+    already_held = [{
+        "index": 0,
+        "row": records[0]["row"],
+        "reason": "email domain mismatch example",
+        "reason_code": "email_domain_mismatch",
+    }]
+    sendable_out, held_out = hold_weak_sources(records, [], already_held)
+    assert sendable_out == []
+    assert held_out == already_held
+
+
+def test_a_rank_three_linkedin_record_is_held_with_a_self_attested_reason():
+    """Test C: rank 3 (LinkedIn) is held with a reason that is actually TRUE of
+    LinkedIn -- current about the person, silent about this company's own record of
+    them -- not the pre-D-01 "not this company's own site or LinkedIn" sentence, which
+    is now false (LinkedIn IS one of the two ranks this branch covers)."""
+    locator = "https://www.linkedin.com/in/jamie-fox"
+    records = [_search_record("row-1", 3, locator=locator)]
+    sendable = [records[0]["row"]]
+    sendable_out, held_out = hold_weak_sources(records, sendable, [])
+    assert sendable_out == []
+    reason = held_out[0]["reason"]
+    assert "LinkedIn" in reason
+    assert "self" in reason  # self-attested / self-maintained
+    assert "not this company's own site or LinkedIn" not in reason
+    assert locator in reason
+    assert "rank" in reason
+    assert "tier" not in reason
+
+
+def test_a_rank_four_record_is_held_as_a_third_party_mention():
+    """Test D: rank 4 (industry/media) is held with the third-party-source wording,
+    naming its own locator."""
+    locator = "https://racenet.example/2019/committee"
+    records = [_search_record("row-1", 4, locator=locator)]
+    sendable = [records[0]["row"]]
+    sendable_out, held_out = hold_weak_sources(records, sendable, [])
+    assert sendable_out == []
+    reason = held_out[0]["reason"]
+    assert locator in reason
+    assert "third-party" in reason
+    assert "rank" in reason
+    assert "tier" not in reason
+
+
+def test_every_operator_visible_hold_weak_sources_reason_says_rank_never_tier():
+    """Test E (D-10b): every reason string this function produces -- LinkedIn, industry,
+    and the fail-closed unreadable-rank branch -- says "rank" and never "tier". The
+    ICP-scoping guard in test_report_enrichment.py bans "tier" from anything the operator
+    is shown; this function's `reason` field is exactly that."""
+    for tier in (3, 4, None, "3", True, 9):
+        records = [_search_record("row-1", tier)]
+        sendable = [records[0]["row"]]
+        _, held_out = hold_weak_sources(records, sendable, [])
+        reason = held_out[0]["reason"]
+        assert "rank" in reason, f"tier {tier!r}: {reason!r}"
+        assert "tier" not in reason, f"tier {tier!r}: {reason!r}"
 
 
 # --- the CLI layer ------------------------------------------------------------------------
