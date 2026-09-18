@@ -71,6 +71,36 @@ function capRoleTitles(titles, max) {
   return { joined, used, dropped: list.length - used.length };
 }
 
+/**
+ * titlesForFamilies(familyMap, chosen) -> array of member strings (D-11a). `familyMap` is a
+ * plain object of label -> array of member strings (build-time config, e.g.
+ * scripts/build_cloud_workflows.py's `_discovery_role_family_map()`). `chosen` is the
+ * round's selected family LABELS, operator order preserved -- when non-empty, walks
+ * `chosen` in order and appends each named family's members (deduped across families,
+ * first occurrence wins); a label absent from `familyMap` contributes nothing and never
+ * throws -- the plugin already validates labels against this same vocabulary
+ * (role_classify.chosen_families), so this function must not be a second validator.
+ * Empty/absent/null `chosen` falls back to every member in map insertion order -- the
+ * pre-D-11a build-time behaviour, preserved as the fallback for a caller that omits the
+ * field entirely.
+ */
+function titlesForFamilies(familyMap, chosen) {
+  const map = (familyMap && typeof familyMap === "object") ? familyMap : {};
+  const labels = (Array.isArray(chosen) && chosen.length) ? chosen : Object.keys(map);
+  const seen = new Set();
+  const out = [];
+  for (const label of labels) {
+    const members = Array.isArray(map[label]) ? map[label] : [];
+    for (const m of members) {
+      if (!seen.has(m)) {
+        seen.add(m);
+        out.push(m);
+      }
+    }
+  }
+  return out;
+}
+
 // ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected
 // endpoint — see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json
 // for what the original (wrong) shapes were and why they changed.
@@ -154,5 +184,5 @@ function normalizeResponse(provider, body) {
 
 module.exports = {
   DISCOVERY_ENDPOINTS, DISCOVERY_PEOPLE_CAP, ZOOMINFO_JOBTITLE_MAX,
-  buildRequest, buildUrl, normalizeResponse, capRoleTitles,
+  buildRequest, buildUrl, normalizeResponse, capRoleTitles, titlesForFamilies,
 };

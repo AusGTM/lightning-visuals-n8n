@@ -12002,21 +12002,19 @@ def build_review_decision_cloud():
 DISCOVERY_DEFAULT_CAP = 10  # mirrors discoverySearch.js's DISCOVERY_PEOPLE_CAP exactly
 
 
-def _discovery_role_titles():
-    """D-11a's title filter — flattened, deduplicated member strings across every family
-    in operator-claude-plugin/config/role_vocabulary.yaml, read at BUILD TIME (the same
-    "generate the constant in" idiom MAX_FALLBACK_SEARCHES above uses). D-11a's "chosen
-    role families" language is read here as build-time config (every family), not a
-    per-request selection — recorded as a discretion in 73.1-07-SUMMARY.md; a future plan
-    can thread a per-request subset through without changing this function's shape."""
+def _discovery_role_family_map():
+    """D-11a's label->members map, read at BUILD TIME from
+    operator-claude-plugin/config/role_vocabulary.yaml (the same "generate the constant
+    in" idiom MAX_FALLBACK_SEARCHES above uses). This is build-time CONFIG only; the
+    SELECTION of which families narrow a given round's rung-1 search is a PER-REQUEST
+    value now carried on the row as `role_families` and applied at runtime by
+    discoverySearch.js's `titlesForFamilies` (Task 1) — replacing the prior build-time-
+    only helper, which read D-11a's "chosen role families" language as every family, a
+    discretion recorded in 73.1-07-SUMMARY.md and retired by this plan."""
     cfg = yaml.safe_load(
         (ROOT / "operator-claude-plugin" / "config" / "role_vocabulary.yaml").read_text())
-    titles = []
-    for family in cfg.get("families", []):
-        for member in family.get("members", []):
-            if member not in titles:
-                titles.append(member)
-    return titles
+    return {family["label"]: list(family.get("members", []))
+            for family in cfg.get("families", []) if family.get("label")}
 
 
 ENRICH_PARSE_DISCOVERY_REQUEST = inline("discoverySearch.js") + r"""
@@ -12043,6 +12041,7 @@ const body = $json.body ?? $json;
 const envelopeIsObject = body && typeof body === "object" && !Array.isArray(body);
 const ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;
 const ENVELOPE_CAP = envelopeIsObject ? (body.per_company_cap ?? null) : null;
+const ENVELOPE_ROLE_FAMILIES = envelopeIsObject ? (body.role_families ?? null) : null;
 const companies = (envelopeIsObject && Array.isArray(body.companies)) ? body.companies : [];
 return companies.map((c) => ({ json: {
   run_id: (c && c.run_id) ?? ENVELOPE_RUN_ID,
@@ -12050,6 +12049,7 @@ return companies.map((c) => ({ json: {
   company_id: (c && c.company_id != null) ? String(c.company_id) : null,
   num_associated_contacts: (c && c.num_associated_contacts) ?? null,
   domain: (c && c.domain) || null,
+  role_families: (c && c.role_families) ?? ENVELOPE_ROLE_FAMILIES ?? null,
   gap: c ? c.gap : undefined,
   search_ceiling: DISCOVERY_SEARCH_CEILING,
   people: [],
@@ -12105,9 +12105,16 @@ def _discovery_zoom_search_leaf_js(rung):
     `_titles_dropped`, from `capRoleTitles` -- see discoverySearch.js) onto every row, so
     the same diagnosis is available from runData/the response body without a replay.
     Reuses zoominfoToken.js's `extractErrorStatus` -- the same status-shape idiom the
-    enrich-lane ZoomInfo hops already use -- rather than a second copy of that parsing."""
+    enrich-lane ZoomInfo hops already use -- rather than a second copy of that parsing.
+
+    73.1-10 Task 1 (D-11a): rung 1 carries the full build-time label->members map
+    (`ROLE_FAMILY_MAP`) and filters it PER ROW at runtime via `titlesForFamilies(
+    ROLE_FAMILY_MAP, row.role_families)` -- the round's chosen families narrow the
+    search, rather than the cap silently truncating the full vocabulary. Rung 2 keeps
+    an empty map, so `titlesForFamilies` always yields `[]` there regardless of
+    `row.role_families` and `buildRequest` emits no title-filter key (unchanged)."""
     unfiltered = (rung == "rung2")
-    titles_js = "[]" if unfiltered else json.dumps(_discovery_role_titles())
+    family_map_js = "{}" if unfiltered else json.dumps(_discovery_role_family_map())
     key = f"_zoominfo_{rung}_people"
     status_key = f"_zoominfo_{rung}_status"
     error_key = f"_zoominfo_{rung}_error"
@@ -12117,8 +12124,7 @@ def _discovery_zoom_search_leaf_js(rung):
     template = r"""
 
 // --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---
-const ROLE_TITLES = __ROLE_TITLES__;
-const _titleCap = capRoleTitles(ROLE_TITLES, ZOOMINFO_JOBTITLE_MAX);
+const ROLE_FAMILY_MAP = __ROLE_FAMILY_MAP__;
 // 73.1-09 Task 3 follow-through (execution 12668, 2026-09-18): a 401 on this endpoint
 // means the CACHED token (read by "ZoomInfo Search Token Gate" upstream, not re-minted
 // this run) was rejected -- clearing it here mirrors _zoom_split_enrich_contacts_js's own
@@ -12132,8 +12138,10 @@ const out = [];
 for (const item of items) {
   const row = item.json;
   const token = row.zoom_token;
+  const roleTitles = titlesForFamilies(ROLE_FAMILY_MAP, row.role_families);
+  const _titleCap = capRoleTitles(roleTitles, ZOOMINFO_JOBTITLE_MAX);
   const reqBody = buildRequest("zoominfo",
-    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });
+    { domain: row.domain, roleTitles, limit: row.per_company_cap });
   const reqUrl = buildUrl("zoominfo", { limit: row.per_company_cap });
   let res, status = "exception", error = null, total = null;
   if (!token) {
@@ -12176,7 +12184,7 @@ for (const item of items) {
 return out;
 """
     body = inline("discoverySearch.js", "zoominfoToken.js") + template
-    return (body.replace("__ROLE_TITLES__", titles_js)
+    return (body.replace("__ROLE_FAMILY_MAP__", family_map_js)
                 .replace("__KEY__", key)
                 .replace("__STATUS_KEY__", status_key)
                 .replace("__ERROR_KEY__", error_key)
