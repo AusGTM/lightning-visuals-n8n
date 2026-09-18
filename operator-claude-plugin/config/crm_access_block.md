@@ -28,8 +28,8 @@ exactly as the ingest lane does. One yes governs all paths.
 lane, and the domains and ids named in that proposal. Every later send goes through
 `covers()` on that one grant. A send outside its record set widens the grant with
 `widen()` and STATES the widening; it never asks again and never opens a second grant.
-A second `open_grant` while one is open is refused by the code, naming the open grant.
-The ask itself is one sentence: this yes covers every send this session across the
+Opening a second grant while one is already open is refused by the code, naming the
+open grant. The ask itself is one sentence: this yes covers every send this session across the
 named lanes for the named domains, widening as new domains appear, and the operator may
 say revoke at any time (`CLOSED_REVOKED`).
 
