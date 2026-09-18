@@ -65,7 +65,7 @@
       "balance_after": null,
       "delta": null,
       "people_returned": true,
-      "reveal_fields_present": true,
+      "reveal_fields_present": false,
       "note": "Apollo's usage endpoint returns per-endpoint rate limits, not a depleting credit pool (memory `provider-credit-check-endpoints`), and this account's non-master key reads 403 on it. Balance is UNREADABLE on this account -- any Apollo search cost can only come from vendor documentation, never a measured delta.",
       "response_shape": {
         "top_keys": [
@@ -91,7 +91,9 @@
           }
         },
         "total_entries": 888
-      }
+      },
+      "reveal_fields_present_as_probed": true,
+      "reveal_fields_present_correction_note": "The probe script (as run) used a substring scan ('email' in blob / 'phone' in blob) which false-positived on Apollo's own flag KEY NAMES (has_email, has_direct_phone -- booleans, never a value). scripts/probe_provider_discovery.py was fixed in plan 73.1-09 Task 2 to check exact value-bearing keys instead (see the module's own _REVEAL_KEYS / _people_from_response). Apollo's preview item keys recorded in response_shape below (first_name, has_city, has_country, has_direct_phone, has_email, has_state, id, last_name_obfuscated, last_refreshed_at, organization, title) carry no real email/phone VALUE -- reveal_fields_present_as_probed (true) was the bug; reveal_fields_present (false) is the corrected reading."
     },
     "lusha": {
       "provider": "lusha",
@@ -148,5 +150,60 @@
       }
     }
   },
-  "operator_ruling": null
+  "operator_ruling": {
+    "ruled_by": "operator",
+    "ruled_at": "2026-09-18",
+    "verbatim": "ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase. Full waterfall only used on enrich.",
+    "ruling": "search-only",
+    "interpretation": "The discovery lane searches ZoomInfo only. Apollo and Lusha are removed from the DISCOVERY lane (not from stage-2 enrichment, which keeps the full ZoomInfo -> Apollo -> Lusha waterfall untouched). No reveal-in-lane, so no `kind: design` todo is required -- this is a narrowing of the search-only lane's provider set, not a scope change to what the lane does.",
+    "basis": "Rounds 2-4 measured all three providers live (this document, and 73.1-D12-VERDICT.round2/3/4.json): ZoomInfo's preview carries real firstName/lastName/jobTitle values at 0 measured credits (balance 9352 -> 9352 across all three rounds); Apollo's preview carries only last_name_obfuscated -- never a real last name -- and its balance is unreadable on this account (403); Lusha's preview carries no name or title at all (contactId/companyId/companyName/fqdn/has*-flags/isShown only) and costs 1 credit per REQUEST even on a zero-result round (cross-run balance 3615 -> 3614 -> 3613 across rounds 2-4, charged after the response returns so each round's own in-round delta reads 0).",
+    "consequences": [
+      {
+        "file": ".planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/73.1-D12-VERDICT.json",
+        "change": "Added this operator_ruling block and the per-provider [observed live] findings (envelope keys, preview fields, measured cost) so the verdict is self-contained. Corrected apollo.reveal_fields_present (see reveal_fields_present_correction_note) without erasing the originally probed value."
+      },
+      {
+        "file": ".planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/73.1-D12-VERDICT.round4.json",
+        "change": "Copied identical to 73.1-D12-VERDICT.json so both carry the ruling."
+      },
+      {
+        "file": "operator-claude-plugin/config/cost_rates.json",
+        "change": "zoominfo_contact_search: null -> 0 (measured, D-12 probe rounds 2-4, balance 9352->9352). lusha_prospecting_search: null -> 1 credit/request (measured, D-12 probe rounds 2-4, cross-run balance 3615->3614->3613, charged after response, charged on 0 results). apollo_people_search: stays null, note clarifies unmeasurable (403) and that Apollo is no longer used for search in the shipped lane."
+      },
+      {
+        "file": "n8n/code/discoverySearch.js",
+        "change": "DISCOVERY_ENDPOINTS/buildRequest/buildUrl/normalizeResponse narrowed to ZoomInfo only. Apollo and Lusha branches deleted (not commented out). Header rewritten to [observed live 2026-09-18, D-12 rounds 2-4] and records the measured reasons for dropping Apollo/Lusha from search."
+      },
+      {
+        "file": "scripts/build_cloud_workflows.py",
+        "change": "Discovery workflow builder narrowed to a ZoomInfo-only search lane: removed the Apollo/Lusha search nodes, their sentinel gates, carry-merges and the now-dead _discovery_native_json_body_expr/_discovery_adapt_native_js/_discovery_endpoints_py/_discovery_native_provider_hop helper functions. Regenerated n8n/wf_suggest_discovery_cloud.json (52 -> 26 nodes), confirmed deterministic on a second build."
+      },
+      {
+        "file": "scripts/deploy_n8n_workflows.py",
+        "change": "NODE_CREDENTIAL_MAP: removed the four Apollo/Lusha Search Rung1/Rung2 credential entries for the discovery lane; only the Discovery Webhook Trigger and ZoomInfo Search Mint entries remain."
+      },
+      {
+        "file": "scripts/probe_provider_discovery.py",
+        "change": "Kept able to probe all three providers (evidence tool for a future ruling), but ZoomInfo's endpoint/body/URL are now the ONLY ones derived from discoverySearch.js (which no longer exports Apollo/Lusha); Apollo/Lusha are the probe's own frozen, round-2-confirmed copies. Fixed the reveal_fields_present false positive: replaced a substring scan over the whole response blob with an exact-key check (_REVEAL_KEYS) against the first returned item's own keys."
+      },
+      {
+        "file": "operator-claude-plugin/scripts/cost_guard.py",
+        "change": "DISCOVERY_SEARCH_RATE_KEYS narrowed to {zoominfo: zoominfo_contact_search} only -- Apollo/Lusha no longer appear in the discovery round's disclosed cost line. discovery_line's docstring updated: with the shipped rate table the round now renders 'measured' (ZoomInfo's rate is a real measured zero), not 'unmeasured'."
+      },
+      {
+        "file": "operator-claude-plugin/skills/suggest-contacts/SKILL.md",
+        "change": "Provider discovery step now states ZoomInfo-only, the D-12 ruling and why (Apollo obfuscates the last name on preview; Lusha's preview carries no name/title and costs 1 credit/request), and that the full waterfall remains for stage-2 enrich."
+      },
+      {
+        "file": "operator-claude-plugin/.claude-plugin/plugin.json + operator-claude-plugin/CHANGELOG.md",
+        "change": "Version bumped 0.51.0 -> 0.51.1 with a CHANGELOG entry naming the ruling. Not pushed."
+      },
+      {
+        "file": "tests/n8n/discoverySearch.test.mjs, tests/n8n/suggestDiscoveryLane.test.mjs, tests/test_probe_provider_discovery.py, operator-claude-plugin/tests/test_cost_guard.py",
+        "change": "Every expectation that pinned three providers was updated to ZoomInfo-only, each seen RED against the pre-ruling code/config before being brought GREEN against the post-ruling code/config."
+      }
+    ],
+    "commit_scope": "73.1-09",
+    "note": "No probe run in this task -- rounds 1-4 above are pre-existing, already-measured evidence. This block applies the operator's verbatim ruling and its offline consequences only: no new provider call, no deploy, no bounce, nothing armed."
+  }
 }
