@@ -22,7 +22,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Parse Discovery Request -- hubspot/suggest/discover envelope -> one\n// item per company (Phase 73.1 Plan 07, D-08/D-09). `run_id` and `per_company_cap` are\n// REQUEST-LEVEL values, read off the envelope with a per-company fallback -- the same\n// idiom `recompute`/`ENVELOPE_RUN_ID` use elsewhere in this repo, never a `mode` value.\n// D-11: at most ONE search per provider per company. The number itself is imported from\n// search_fallback.MAX_FALLBACK_SEARCHES (scripts/build_cloud_workflows.py) -- one\n// source, no JS twin to keep in parity. It is a COUNT OF PROVIDERS ATTEMPTED, never of\n// HTTP calls made: a rung-2 retry re-sends the SAME provider's one search, unfiltered,\n// and is NOT a second unit against this ceiling -- the ZoomInfo/Apollo/Lusha waterfall\n// below enforces \"at most one provider-attempt each\" structurally (each provider's own\n// \"IF <Provider> Eligible\" gate only ever lets a company enter that provider's subgraph\n// once), so this constant is not read by any control-flow below; it exists so the\n// per-company ceiling is visible in the generated artifact and testable against its one\n// source (tests/n8n/suggestDiscoveryLane.test.mjs). Do not \"fix\" the counter to include\n// rung 2 -- that would exhaust the ceiling after one and a half providers on exactly the\n// companies the rung-2 fallback exists for.\nconst DISCOVERY_SEARCH_CEILING = 3;\nconst body = $json.body ?? $json;\nconst envelopeIsObject = body && typeof body === \"object\" && !Array.isArray(body);\nconst ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;\nconst ENVELOPE_CAP = envelopeIsObject ? (body.per_company_cap ?? null) : null;\nconst companies = (envelopeIsObject && Array.isArray(body.companies)) ? body.companies : [];\nreturn companies.map((c) => ({ json: {\n  run_id: (c && c.run_id) ?? ENVELOPE_RUN_ID,\n  per_company_cap: (c && c.per_company_cap) ?? ENVELOPE_CAP ?? DISCOVERY_PEOPLE_CAP,\n  company_id: (c && c.company_id != null) ? String(c.company_id) : null,\n  num_associated_contacts: (c && c.num_associated_contacts) ?? null,\n  domain: (c && c.domain) || null,\n  gap: c ? c.gap : undefined,\n  search_ceiling: DISCOVERY_SEARCH_CEILING,\n  people: [],\n} }));\n"
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builder and response\n// normaliser for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [observed live 2026-09-18, D-12 rounds 2-4] \u2014 ZoomInfo-only, per the operator's D-12\n// ruling (73.1-D12-VERDICT.json's own `operator_ruling`, recorded 2026-09-18):\n// \"ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase.\n// Full waterfall only used on enrich.\" This module used to also build Apollo and Lusha\n// discovery-search request bodies; both are DELETED here, not disabled, because the\n// probe found neither one a usable search-preview source on this account:\n//   - Apollo (round 4, tennis.com.au, 888 total_entries): every preview item's own name\n//     field is `last_name_obfuscated`, never a real `last_name` \u2014 Apollo will not hand\n//     back a person's full name on a bare search, only on a paid reveal, which D-12\n//     keeps out of this lane entirely.\n//   - Lusha (round 4, same domain, 1313 totalResults, 1 credit charged per REQUEST even\n//     for a subsequent round returning zero results): the search preview carries no\n//     name and no title at all (`contactId`, `companyId`, `companyName`, `fqdn`, `has*`\n//     flags, `isShown` only) \u2014 a name/title needs `/prospecting/contact/enrich`, a\n//     second, more expensive call this lane does not make.\n//   - ZoomInfo (round 4, same domain, 1094 totalResults, 0 credits charged across\n//     rounds 2-4): the preview DOES carry `firstName`/`lastName`/`jobTitle` directly,\n//     with no reveal fields (no email/phone value, only `has*` boolean flags) and no\n//     measured cost \u2014 the only provider of the three actually usable as a free-preview\n//     discovery source.\n// Stage 2's existing enrich path keeps the full ZoomInfo -> Apollo -> Lusha waterfall\n// unchanged (CLAUDE.md's provider adapter contract, \u00a716) \u2014 this narrowing is scoped to\n// the discovery (search) lane only.\n//\n// scripts/probe_provider_discovery.py (plan 09) derives ZoomInfo's request body and URL\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy for the shipped provider. It keeps its OWN frozen copies of\n// the retired Apollo/Lusha shapes for future evidence-gathering, since this module no\n// longer carries them at all.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected\n// endpoint \u2014 see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json\n// for what the original (wrong) shapes were and why they changed.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`. ZoomInfo is the only supported provider (D-12).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter. ZoomInfo is the only supported\n * provider (D-12).\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error. ZoomInfo is the only supported provider (D-12).\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Parse Discovery Request -- hubspot/suggest/discover envelope -> one\n// item per company (Phase 73.1 Plan 07, D-08/D-09). `run_id` and `per_company_cap` are\n// REQUEST-LEVEL values, read off the envelope with a per-company fallback -- the same\n// idiom `recompute`/`ENVELOPE_RUN_ID` use elsewhere in this repo, never a `mode` value.\n// D-11: at most ONE search per provider per company. The number itself is imported from\n// search_fallback.MAX_FALLBACK_SEARCHES (scripts/build_cloud_workflows.py) -- one\n// source, no JS twin to keep in parity. It is a COUNT OF PROVIDERS ATTEMPTED, never of\n// HTTP calls made: a rung-2 retry re-sends the SAME provider's one search, unfiltered,\n// and is NOT a second unit against this ceiling -- the search lane below (ZoomInfo\n// only, per the D-12 operator ruling 2026-09-18) enforces \"at most one provider-attempt\n// each\" structurally (each provider's own\n// \"IF <Provider> Eligible\" gate only ever lets a company enter that provider's subgraph\n// once), so this constant is not read by any control-flow below; it exists so the\n// per-company ceiling is visible in the generated artifact and testable against its one\n// source (tests/n8n/suggestDiscoveryLane.test.mjs). Do not \"fix\" the counter to include\n// rung 2 -- that would exhaust the ceiling after one and a half providers on exactly the\n// companies the rung-2 fallback exists for.\nconst DISCOVERY_SEARCH_CEILING = 3;\nconst body = $json.body ?? $json;\nconst envelopeIsObject = body && typeof body === \"object\" && !Array.isArray(body);\nconst ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;\nconst ENVELOPE_CAP = envelopeIsObject ? (body.per_company_cap ?? null) : null;\nconst companies = (envelopeIsObject && Array.isArray(body.companies)) ? body.companies : [];\nreturn companies.map((c) => ({ json: {\n  run_id: (c && c.run_id) ?? ENVELOPE_RUN_ID,\n  per_company_cap: (c && c.per_company_cap) ?? ENVELOPE_CAP ?? DISCOVERY_PEOPLE_CAP,\n  company_id: (c && c.company_id != null) ? String(c.company_id) : null,\n  num_associated_contacts: (c && c.num_associated_contacts) ?? null,\n  domain: (c && c.domain) || null,\n  gap: c ? c.gap : undefined,\n  search_ceiling: DISCOVERY_SEARCH_CEILING,\n  people: [],\n} }));\n"
       },
       "id": "c00020000-0000-4000-8000-000000000000",
       "name": "Parse Discovery Request",
@@ -156,7 +156,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---\nconst ROLE_TITLES = [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"];\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const token = row.zoom_token;\n  const reqBody = buildRequest(\"zoominfo\",\n    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });\n  const reqUrl = buildUrl(\"zoominfo\", { limit: row.per_company_cap });\n  let res;\n  if (!token) {\n    res = { error: \"no zoominfo token available (mint failed or missing)\" };\n  } else {\n    try {\n      res = await this.helpers.httpRequest({\n        method: \"POST\", url: reqUrl,\n        headers: { Authorization: \"Bearer \" + token, \"Content-Type\": \"application/vnd.api+json\",\n                   Accept: \"application/vnd.api+json\" },\n        body: JSON.stringify(reqBody),\n      });\n    } catch (e) {\n      res = { error: String((e && e.message) || e) };\n    }\n  }\n  out.push({ ...row, \"_zoominfo_rung1_people\": normalizeResponse(\"zoominfo\", res) });\n}\nreturn out;\n"
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builder and response\n// normaliser for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [observed live 2026-09-18, D-12 rounds 2-4] \u2014 ZoomInfo-only, per the operator's D-12\n// ruling (73.1-D12-VERDICT.json's own `operator_ruling`, recorded 2026-09-18):\n// \"ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase.\n// Full waterfall only used on enrich.\" This module used to also build Apollo and Lusha\n// discovery-search request bodies; both are DELETED here, not disabled, because the\n// probe found neither one a usable search-preview source on this account:\n//   - Apollo (round 4, tennis.com.au, 888 total_entries): every preview item's own name\n//     field is `last_name_obfuscated`, never a real `last_name` \u2014 Apollo will not hand\n//     back a person's full name on a bare search, only on a paid reveal, which D-12\n//     keeps out of this lane entirely.\n//   - Lusha (round 4, same domain, 1313 totalResults, 1 credit charged per REQUEST even\n//     for a subsequent round returning zero results): the search preview carries no\n//     name and no title at all (`contactId`, `companyId`, `companyName`, `fqdn`, `has*`\n//     flags, `isShown` only) \u2014 a name/title needs `/prospecting/contact/enrich`, a\n//     second, more expensive call this lane does not make.\n//   - ZoomInfo (round 4, same domain, 1094 totalResults, 0 credits charged across\n//     rounds 2-4): the preview DOES carry `firstName`/`lastName`/`jobTitle` directly,\n//     with no reveal fields (no email/phone value, only `has*` boolean flags) and no\n//     measured cost \u2014 the only provider of the three actually usable as a free-preview\n//     discovery source.\n// Stage 2's existing enrich path keeps the full ZoomInfo -> Apollo -> Lusha waterfall\n// unchanged (CLAUDE.md's provider adapter contract, \u00a716) \u2014 this narrowing is scoped to\n// the discovery (search) lane only.\n//\n// scripts/probe_provider_discovery.py (plan 09) derives ZoomInfo's request body and URL\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy for the shipped provider. It keeps its OWN frozen copies of\n// the retired Apollo/Lusha shapes for future evidence-gathering, since this module no\n// longer carries them at all.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected\n// endpoint \u2014 see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json\n// for what the original (wrong) shapes were and why they changed.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`. ZoomInfo is the only supported provider (D-12).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter. ZoomInfo is the only supported\n * provider (D-12).\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error. ZoomInfo is the only supported provider (D-12).\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---\nconst ROLE_TITLES = [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"];\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const token = row.zoom_token;\n  const reqBody = buildRequest(\"zoominfo\",\n    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });\n  const reqUrl = buildUrl(\"zoominfo\", { limit: row.per_company_cap });\n  let res;\n  if (!token) {\n    res = { error: \"no zoominfo token available (mint failed or missing)\" };\n  } else {\n    try {\n      res = await this.helpers.httpRequest({\n        method: \"POST\", url: reqUrl,\n        headers: { Authorization: \"Bearer \" + token, \"Content-Type\": \"application/vnd.api+json\",\n                   Accept: \"application/vnd.api+json\" },\n        body: JSON.stringify(reqBody),\n      });\n    } catch (e) {\n      res = { error: String((e && e.message) || e) };\n    }\n  }\n  out.push({ ...row, \"_zoominfo_rung1_people\": normalizeResponse(\"zoominfo\", res) });\n}\nreturn out;\n"
       },
       "id": "c00100000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Search Rung1",
@@ -201,7 +201,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---\nconst ROLE_TITLES = [];\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const token = row.zoom_token;\n  const reqBody = buildRequest(\"zoominfo\",\n    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });\n  const reqUrl = buildUrl(\"zoominfo\", { limit: row.per_company_cap });\n  let res;\n  if (!token) {\n    res = { error: \"no zoominfo token available (mint failed or missing)\" };\n  } else {\n    try {\n      res = await this.helpers.httpRequest({\n        method: \"POST\", url: reqUrl,\n        headers: { Authorization: \"Bearer \" + token, \"Content-Type\": \"application/vnd.api+json\",\n                   Accept: \"application/vnd.api+json\" },\n        body: JSON.stringify(reqBody),\n      });\n    } catch (e) {\n      res = { error: String((e && e.message) || e) };\n    }\n  }\n  out.push({ ...row, \"_zoominfo_rung2_people\": normalizeResponse(\"zoominfo\", res) });\n}\nreturn out;\n"
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builder and response\n// normaliser for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [observed live 2026-09-18, D-12 rounds 2-4] \u2014 ZoomInfo-only, per the operator's D-12\n// ruling (73.1-D12-VERDICT.json's own `operator_ruling`, recorded 2026-09-18):\n// \"ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase.\n// Full waterfall only used on enrich.\" This module used to also build Apollo and Lusha\n// discovery-search request bodies; both are DELETED here, not disabled, because the\n// probe found neither one a usable search-preview source on this account:\n//   - Apollo (round 4, tennis.com.au, 888 total_entries): every preview item's own name\n//     field is `last_name_obfuscated`, never a real `last_name` \u2014 Apollo will not hand\n//     back a person's full name on a bare search, only on a paid reveal, which D-12\n//     keeps out of this lane entirely.\n//   - Lusha (round 4, same domain, 1313 totalResults, 1 credit charged per REQUEST even\n//     for a subsequent round returning zero results): the search preview carries no\n//     name and no title at all (`contactId`, `companyId`, `companyName`, `fqdn`, `has*`\n//     flags, `isShown` only) \u2014 a name/title needs `/prospecting/contact/enrich`, a\n//     second, more expensive call this lane does not make.\n//   - ZoomInfo (round 4, same domain, 1094 totalResults, 0 credits charged across\n//     rounds 2-4): the preview DOES carry `firstName`/`lastName`/`jobTitle` directly,\n//     with no reveal fields (no email/phone value, only `has*` boolean flags) and no\n//     measured cost \u2014 the only provider of the three actually usable as a free-preview\n//     discovery source.\n// Stage 2's existing enrich path keeps the full ZoomInfo -> Apollo -> Lusha waterfall\n// unchanged (CLAUDE.md's provider adapter contract, \u00a716) \u2014 this narrowing is scoped to\n// the discovery (search) lane only.\n//\n// scripts/probe_provider_discovery.py (plan 09) derives ZoomInfo's request body and URL\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy for the shipped provider. It keeps its OWN frozen copies of\n// the retired Apollo/Lusha shapes for future evidence-gathering, since this module no\n// longer carries them at all.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected\n// endpoint \u2014 see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json\n// for what the original (wrong) shapes were and why they changed.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`. ZoomInfo is the only supported provider (D-12).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter. ZoomInfo is the only supported\n * provider (D-12).\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error. ZoomInfo is the only supported provider (D-12).\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---\nconst ROLE_TITLES = [];\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const token = row.zoom_token;\n  const reqBody = buildRequest(\"zoominfo\",\n    { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });\n  const reqUrl = buildUrl(\"zoominfo\", { limit: row.per_company_cap });\n  let res;\n  if (!token) {\n    res = { error: \"no zoominfo token available (mint failed or missing)\" };\n  } else {\n    try {\n      res = await this.helpers.httpRequest({\n        method: \"POST\", url: reqUrl,\n        headers: { Authorization: \"Bearer \" + token, \"Content-Type\": \"application/vnd.api+json\",\n                   Accept: \"application/vnd.api+json\" },\n        body: JSON.stringify(reqBody),\n      });\n    } catch (e) {\n      res = { error: String((e && e.message) || e) };\n    }\n  }\n  out.push({ ...row, \"_zoominfo_rung2_people\": normalizeResponse(\"zoominfo\", res) });\n}\nreturn out;\n"
       },
       "id": "c00130000-0000-4000-8000-000000000000",
       "name": "ZoomInfo Search Rung2",
@@ -215,7 +215,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Adapt ZoomInfo People -- rejoin for the ZoomInfo rung-1/rung-2 split.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const found = (row._zoominfo_rung1_people || []).concat(row._zoominfo_rung2_people || []);\n  const rest = { ...row };\n  delete rest._zoominfo_rung1_people;\n  delete rest._zoominfo_rung2_people;\n  return { ...rest, people: (rest.people || []).concat(found).slice(0, cap) };\n});\n"
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builder and response\n// normaliser for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [observed live 2026-09-18, D-12 rounds 2-4] \u2014 ZoomInfo-only, per the operator's D-12\n// ruling (73.1-D12-VERDICT.json's own `operator_ruling`, recorded 2026-09-18):\n// \"ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase.\n// Full waterfall only used on enrich.\" This module used to also build Apollo and Lusha\n// discovery-search request bodies; both are DELETED here, not disabled, because the\n// probe found neither one a usable search-preview source on this account:\n//   - Apollo (round 4, tennis.com.au, 888 total_entries): every preview item's own name\n//     field is `last_name_obfuscated`, never a real `last_name` \u2014 Apollo will not hand\n//     back a person's full name on a bare search, only on a paid reveal, which D-12\n//     keeps out of this lane entirely.\n//   - Lusha (round 4, same domain, 1313 totalResults, 1 credit charged per REQUEST even\n//     for a subsequent round returning zero results): the search preview carries no\n//     name and no title at all (`contactId`, `companyId`, `companyName`, `fqdn`, `has*`\n//     flags, `isShown` only) \u2014 a name/title needs `/prospecting/contact/enrich`, a\n//     second, more expensive call this lane does not make.\n//   - ZoomInfo (round 4, same domain, 1094 totalResults, 0 credits charged across\n//     rounds 2-4): the preview DOES carry `firstName`/`lastName`/`jobTitle` directly,\n//     with no reveal fields (no email/phone value, only `has*` boolean flags) and no\n//     measured cost \u2014 the only provider of the three actually usable as a free-preview\n//     discovery source.\n// Stage 2's existing enrich path keeps the full ZoomInfo -> Apollo -> Lusha waterfall\n// unchanged (CLAUDE.md's provider adapter contract, \u00a716) \u2014 this narrowing is scoped to\n// the discovery (search) lane only.\n//\n// scripts/probe_provider_discovery.py (plan 09) derives ZoomInfo's request body and URL\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy for the shipped provider. It keeps its OWN frozen copies of\n// the retired Apollo/Lusha shapes for future evidence-gathering, since this module no\n// longer carries them at all.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected\n// endpoint \u2014 see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json\n// for what the original (wrong) shapes were and why they changed.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`. ZoomInfo is the only supported provider (D-12).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter. ZoomInfo is the only supported\n * provider (D-12).\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error. ZoomInfo is the only supported provider (D-12).\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Adapt ZoomInfo People -- rejoin for the ZoomInfo rung-1/rung-2 split.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const found = (row._zoominfo_rung1_people || []).concat(row._zoominfo_rung2_people || []);\n  const rest = { ...row };\n  delete rest._zoominfo_rung1_people;\n  delete rest._zoominfo_rung2_people;\n  return { ...rest, people: (rest.people || []).concat(found).slice(0, cap) };\n});\n"
       },
       "id": "c00140000-0000-4000-8000-000000000000",
       "name": "Adapt ZoomInfo People",
@@ -251,7 +251,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Discovery Waterfall Complete -- rejoin point for the ZoomInfo/Apollo/\n// Lusha waterfall (D-11). Defensive re-cap only; each provider hop already caps its own\n// contribution before reaching here.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  return { ...row, people: (row.people || []).slice(0, cap) };\n});\n"
+        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builder and response\n// normaliser for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [observed live 2026-09-18, D-12 rounds 2-4] \u2014 ZoomInfo-only, per the operator's D-12\n// ruling (73.1-D12-VERDICT.json's own `operator_ruling`, recorded 2026-09-18):\n// \"ZoomInfo retained as tier-2 source, others (Apollo/Lusha) dropped for search phase.\n// Full waterfall only used on enrich.\" This module used to also build Apollo and Lusha\n// discovery-search request bodies; both are DELETED here, not disabled, because the\n// probe found neither one a usable search-preview source on this account:\n//   - Apollo (round 4, tennis.com.au, 888 total_entries): every preview item's own name\n//     field is `last_name_obfuscated`, never a real `last_name` \u2014 Apollo will not hand\n//     back a person's full name on a bare search, only on a paid reveal, which D-12\n//     keeps out of this lane entirely.\n//   - Lusha (round 4, same domain, 1313 totalResults, 1 credit charged per REQUEST even\n//     for a subsequent round returning zero results): the search preview carries no\n//     name and no title at all (`contactId`, `companyId`, `companyName`, `fqdn`, `has*`\n//     flags, `isShown` only) \u2014 a name/title needs `/prospecting/contact/enrich`, a\n//     second, more expensive call this lane does not make.\n//   - ZoomInfo (round 4, same domain, 1094 totalResults, 0 credits charged across\n//     rounds 2-4): the preview DOES carry `firstName`/`lastName`/`jobTitle` directly,\n//     with no reveal fields (no email/phone value, only `has*` boolean flags) and no\n//     measured cost \u2014 the only provider of the three actually usable as a free-preview\n//     discovery source.\n// Stage 2's existing enrich path keeps the full ZoomInfo -> Apollo -> Lusha waterfall\n// unchanged (CLAUDE.md's provider adapter contract, \u00a716) \u2014 this narrowing is scoped to\n// the discovery (search) lane only.\n//\n// scripts/probe_provider_discovery.py (plan 09) derives ZoomInfo's request body and URL\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy for the shipped provider. It keeps its OWN frozen copies of\n// the retired Apollo/Lusha shapes for future evidence-gathering, since this module no\n// longer carries them at all.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected\n// endpoint \u2014 see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json\n// for what the original (wrong) shapes were and why they changed.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`. ZoomInfo is the only supported provider (D-12).\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter. ZoomInfo is the only supported\n * provider (D-12).\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error. ZoomInfo is the only supported provider (D-12).\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: Discovery Waterfall Complete -- rejoin point for the ZoomInfo-only\n// search (D-11, D-12). Defensive re-cap only; the provider hop already caps its own\n// contribution before reaching here.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const cap = row.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  return { ...row, people: (row.people || []).slice(0, cap) };\n});\n"
       },
       "id": "c00160000-0000-4000-8000-000000000000",
       "name": "Discovery Waterfall Complete",
@@ -295,454 +295,10 @@
     },
     {
       "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "i00190000-0000-4000-8000-000000000000",
-              "leftValue": "={{ $json.gap === true && !!$json.domain && (($json.people)||[]).length < ($json.per_company_cap || 10) }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ]
-        }
-      },
-      "id": "if00200000-0000-4000-8000-000000000000",
-      "name": "IF Apollo Eligible",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1140,
-        340
-      ]
-    },
-    {
-      "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "i00210000-0000-4000-8000-000000000000",
-              "leftValue": "={{ $json.gap === true && !!$json.domain && (($json.people)||[]).length < ($json.per_company_cap || 10) }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ]
-        }
-      },
-      "id": "if00220000-0000-4000-8000-000000000000",
-      "name": "IF Lusha Eligible",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1360,
-        340
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.apollo.io/api/v1/mixed_people/api_search",
-        "options": {
-          "timeout": 20000
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ q_organization_domains_list: [$json.domain], per_page: $json.per_company_cap, page: 1, person_titles: [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"] }) }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "h00230000-0000-4000-8000-000000000000",
-      "name": "Apollo Search Rung1",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1180,
-        560
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "return $input.all().map((it) => ({ json: { 'apollo_rung1_result': it.json } }));\n"
-      },
-      "id": "c00240000-0000-4000-8000-000000000000",
-      "name": "Wrap Apollo Rung1 Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1220,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "numberInputs": 2,
-        "combineBy": "combineByPosition",
-        "options": {
-          "clashHandling": {
-            "values": {
-              "resolveClash": "preferLast"
-            }
-          }
-        }
-      },
-      "id": "m00250000-0000-4000-8000-000000000000",
-      "name": "Apollo Rung1 Carry Merge",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1290,
-        560
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"apollo_rung1_result\"];\n  const rest = { ...merged };\n  delete rest[\"apollo_rung1_result\"];\n  const found = normalizeResponse(\"apollo\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people, _apollo_rung1_count: found.length };\n});\n"
-      },
-      "id": "c00260000-0000-4000-8000-000000000000",
-      "name": "Adapt Apollo Rung1",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1360,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "i00270000-0000-4000-8000-000000000000",
-              "leftValue": "={{ ($json._apollo_rung1_count || 0) === 0 }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ]
-        }
-      },
-      "id": "if00280000-0000-4000-8000-000000000000",
-      "name": "IF Apollo Rung1 Empty",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1580,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Adapt <Provider> People -- trivial rejoin; both branches already fold their own result into `people` before reaching here.\nreturn $input.all();\n"
-      },
-      "id": "c00290000-0000-4000-8000-000000000000",
-      "name": "Adapt Apollo People",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2180,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.apollo.io/api/v1/mixed_people/api_search",
-        "options": {
-          "timeout": 20000
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ q_organization_domains_list: [$json.domain], per_page: $json.per_company_cap, page: 1 }) }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "h00300000-0000-4000-8000-000000000000",
-      "name": "Apollo Search Rung2",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1800,
-        520
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "return $input.all().map((it) => ({ json: { 'apollo_rung2_result': it.json } }));\n"
-      },
-      "id": "c00310000-0000-4000-8000-000000000000",
-      "name": "Wrap Apollo Rung2 Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1840,
-        560
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "numberInputs": 2,
-        "combineBy": "combineByPosition",
-        "options": {
-          "clashHandling": {
-            "values": {
-              "resolveClash": "preferLast"
-            }
-          }
-        }
-      },
-      "id": "m00320000-0000-4000-8000-000000000000",
-      "name": "Apollo Rung2 Carry Merge",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1910,
-        520
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"apollo_rung2_result\"];\n  const rest = { ...merged };\n  delete rest[\"apollo_rung2_result\"];\n  const found = normalizeResponse(\"apollo\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people };\n});\n"
-      },
-      "id": "c00330000-0000-4000-8000-000000000000",
-      "name": "Adapt Apollo Rung2",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1960,
-        560
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.lusha.com/prospecting/contact/search",
-        "options": {
-          "timeout": 20000
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filters: { companies: { include: { domains: [$json.domain] } }, contacts: { include: { jobTitles: [\"CEO\", \"CMO\", \"Head of Broadcast\", \"Head of Marketing\", \"Marketing Manager\", \"Operations Manager\", \"General Manager\", \"Communications Manager\", \"Chairman\", \"Chairperson\", \"Deputy Chairman\", \"Vice Chairman\", \"President\", \"Vice President\", \"Director\", \"Directors\", \"Board Of Directors\", \"Board Member\", \"Committee Member\", \"Secretary\", \"Secretary Manager\", \"Company Secretary\", \"Club Secretary\", \"Treasurer\", \"Finance and Admin Officer\", \"Finance Officer\", \"Track Manager\", \"Racecourse Track Curator\", \"Trackwork Supervisor\", \"Racecourse Manager\", \"Catering Manager\", \"Functions Manager\", \"Executive Assistant\", \"Office Manager\", \"Administration Officer\", \"Marketing\", \"Media\", \"Sponsorship\", \"Executive Officer\", \"Board Chair\", \"Board Chairwoman\", \"Chairwoman\"] } } }, pages: { page: 0, size: $json.per_company_cap } }) }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "h00340000-0000-4000-8000-000000000000",
-      "name": "Lusha Search Rung1",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1180,
-        1040
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "return $input.all().map((it) => ({ json: { 'lusha_rung1_result': it.json } }));\n"
-      },
-      "id": "c00350000-0000-4000-8000-000000000000",
-      "name": "Wrap Lusha Rung1 Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1220,
-        1080
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "numberInputs": 2,
-        "combineBy": "combineByPosition",
-        "options": {
-          "clashHandling": {
-            "values": {
-              "resolveClash": "preferLast"
-            }
-          }
-        }
-      },
-      "id": "m00360000-0000-4000-8000-000000000000",
-      "name": "Lusha Rung1 Carry Merge",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1290,
-        1040
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"lusha_rung1_result\"];\n  const rest = { ...merged };\n  delete rest[\"lusha_rung1_result\"];\n  const found = normalizeResponse(\"lusha\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people, _lusha_rung1_count: found.length };\n});\n"
-      },
-      "id": "c00370000-0000-4000-8000-000000000000",
-      "name": "Adapt Lusha Rung1",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1360,
-        1080
-      ]
-    },
-    {
-      "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "i00380000-0000-4000-8000-000000000000",
-              "leftValue": "={{ ($json._lusha_rung1_count || 0) === 0 }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ]
-        }
-      },
-      "id": "if00390000-0000-4000-8000-000000000000",
-      "name": "IF Lusha Rung1 Empty",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1580,
-        1080
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Adapt <Provider> People -- trivial rejoin; both branches already fold their own result into `people` before reaching here.\nreturn $input.all();\n"
-      },
-      "id": "c00400000-0000-4000-8000-000000000000",
-      "name": "Adapt Lusha People",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2180,
-        1080
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.lusha.com/prospecting/contact/search",
-        "options": {
-          "timeout": 20000
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filters: { companies: { include: { domains: [$json.domain] } } }, pages: { page: 0, size: $json.per_company_cap } }) }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "h00410000-0000-4000-8000-000000000000",
-      "name": "Lusha Search Rung2",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1800,
-        1000
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "return $input.all().map((it) => ({ json: { 'lusha_rung2_result': it.json } }));\n"
-      },
-      "id": "c00420000-0000-4000-8000-000000000000",
-      "name": "Wrap Lusha Rung2 Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1840,
-        1040
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "numberInputs": 2,
-        "combineBy": "combineByPosition",
-        "options": {
-          "clashHandling": {
-            "values": {
-              "resolveClash": "preferLast"
-            }
-          }
-        }
-      },
-      "id": "m00430000-0000-4000-8000-000000000000",
-      "name": "Lusha Rung2 Carry Merge",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1910,
-        1000
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// n8n/code/discoverySearch.js \u2014 provider search-by-role request builders and response\n// normalisers for the discovery lane (Phase 73.1 Plan 07/09, D-06/D-11/D-11a/D-11b/D-12).\n//\n// [ASSUMED] \u2014 round 1 of the D-12 live probe (2026-09-18, pickleballaustralia.org.au)\n// found all three original shapes below WRONG:\n//   - ZoomInfo 400'd: \"Invalid field requested\", pointer /data/attributes/companyDomain.\n//   - Apollo 422'd: \"This endpoint is deprecated for API callers. Please use the new\n//     mixed_people/api_search endpoint.\"\n//   - Lusha 404'd: \"no Route matched with those values\" at /prospecting/contacts/search.\n// See .planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/\n// 73.1-D12-VERDICT.round1.json for the recorded failures. This module now carries the\n// shapes documented in each vendor's own current API reference (read 2026-09-18)\n// instead \u2014 still UNCONFIRMED on this account until round 2 of the probe reports.\n//   - ZoomInfo: `POST /gtm/data/v1/contacts/search`, JSON:API `ContactSearch` envelope.\n//     The valid company filter is `companyWebsite` (not `companyDomain`). The title\n//     filter is `jobTitle`, a single string supporting `OR` (not an array). Pagination\n//     is QUERY-STRING (`?page[size]=N&page[number]=1`), not a body attribute \u2014\n//     `maxResults` is not a valid ZoomInfo attribute at all.\n//   - Apollo: `POST /api/v1/mixed_people/api_search` (the old `/v1/mixed_people/search`\n//     is the deprecated route that 422s for every caller). `q_organization_domains_list`\n//     is an array; `person_titles` is an array.\n//   - Lusha: `POST /prospecting/contact/search` (singular `contact`; the plural\n//     `/prospecting/contacts/search` 404s). Filters nest one level deeper than first\n//     assumed: `filters.companies.include.domains` and\n//     `filters.contacts.include.jobTitles`. Lusha's own response envelope for a search\n//     result is still UNCONFIRMED \u2014 `normalizeResponse` tolerates either a `data[]` or a\n//     `contacts[]` envelope until round 2 settles which one is real.\n//\n// `scripts/probe_provider_discovery.py` (plan 09) derives its request bodies and URLs\n// from THIS module's `buildRequest`/`buildUrl`/`DISCOVERY_ENDPOINTS` rather than holding\n// a second, driftable copy \u2014 round 1's failure mode was exactly that kind of drift made\n// real. Round 2 is what resolves each shape against the live providers, disarmed.\n//\n// D-12: SEARCH-ONLY. `normalizeResponse` never carries an email or a phone field, however\n// generous a fixture provider response would be \u2014 reveal stays in stage 2's existing\n// enrich path (CLAUDE.md's provider adapter contract, \u00a716).\n//\n// NO npm, dependency-free (no CommonJS/ESM module-loading statement in the body below) \u2014\n// this module is inline()'d verbatim into n8n Code nodes by\n// scripts/build_cloud_workflows.py, mirroring n8n/code/lushaRequest.js's own convention.\n\n// D-11a: at most 10 results per provider per company, applied inside normalizeResponse\n// BEFORE anything else sees them (Task 2 acceptance criterion) \u2014 never left to a caller.\nconst DISCOVERY_PEOPLE_CAP = 10;\n\n// Round-1-corrected endpoints \u2014 see the header comment above for what changed and why.\nconst DISCOVERY_ENDPOINTS = Object.freeze({\n  zoominfo: \"https://api.zoominfo.com/gtm/data/v1/contacts/search\",\n  apollo: \"https://api.apollo.io/api/v1/mixed_people/api_search\",\n  lusha: \"https://api.lusha.com/prospecting/contact/search\",\n});\n\nfunction _clampLimit(limit) {\n  return Math.min(Number.isFinite(limit) ? limit : DISCOVERY_PEOPLE_CAP, DISCOVERY_PEOPLE_CAP);\n}\n\n/**\n * buildRequest(provider, opts) -> request body (POJO). `opts`: { domain, roleTitles, limit }.\n * `roleTitles` empty/absent -> the rung-2 UNFILTERED body (D-11a). Never carries an\n * already-known identity field (firstname/lastname/email/linkedinUrl) \u2014 a discovery body\n * has no already-known person in it (Task 2 Test 1). ZoomInfo's pagination is NOT part of\n * this body \u2014 see `buildUrl`.\n */\nfunction buildRequest(provider, opts) {\n  const o = opts || {};\n  const domain = o.domain || null;\n  const roleTitles = Array.isArray(o.roleTitles) ? o.roleTitles.filter(Boolean) : [];\n\n  if (provider === \"zoominfo\") {\n    // JSON:API family. `companyWebsite` (not `companyDomain`); `jobTitle` is a single\n    // OR-joined string (not an array); no `maxResults` \u2014 pagination is query-string only.\n    const attributes = { companyWebsite: domain };\n    if (roleTitles.length) attributes.jobTitle = roleTitles.join(\" OR \");\n    return { data: { type: \"ContactSearch\", attributes } };\n  }\n  if (provider === \"apollo\") {\n    const limit = _clampLimit(o.limit);\n    const body = { q_organization_domains_list: [domain], per_page: limit, page: 1 };\n    if (roleTitles.length) body.person_titles = roleTitles;\n    return body;\n  }\n  if (provider === \"lusha\") {\n    const limit = _clampLimit(o.limit);\n    const body = {\n      filters: { companies: { include: { domains: [domain] } } },\n      pages: { page: 0, size: limit },\n    };\n    if (roleTitles.length) body.filters.contacts = { include: { jobTitles: roleTitles } };\n    return body;\n  }\n  throw new Error(`discoverySearch.buildRequest: unknown provider ${provider}`);\n}\n\n/**\n * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.\n * ZoomInfo's pagination is a query-string parameter (round 1 correction); Apollo and\n * Lusha are the bare endpoint.\n */\nfunction buildUrl(provider, opts) {\n  const o = opts || {};\n  if (provider === \"zoominfo\") {\n    const limit = _clampLimit(o.limit);\n    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;\n  }\n  if (provider === \"apollo\" || provider === \"lusha\") {\n    return DISCOVERY_ENDPOINTS[provider];\n  }\n  throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);\n}\n\nfunction _person(firstname, lastname, jobtitle, provider) {\n  // D-12/D-11b: raw provider title only, never a role_family (classification stays\n  // plugin-side, role_classify.classify_title) \u2014 and never email/phone (search-only).\n  return {\n    firstname: firstname || null,\n    lastname: lastname || null,\n    jobtitle: jobtitle || null,\n    provider,\n  };\n}\n\n/**\n * normalizeResponse(provider, body) -> array of uniform person shapes, capped at\n * DISCOVERY_PEOPLE_CAP regardless of how many the fixture/response carries (Task 2\n * Test 5). Never throws on a missing/empty result list \u2014 an empty array is a legitimate\n * \"found nobody\" answer, not an error.\n */\nfunction normalizeResponse(provider, body) {\n  const raw = body || {};\n  let rows;\n  if (provider === \"zoominfo\") {\n    rows = (Array.isArray(raw.data) ? raw.data : []).map((d) => {\n      const a = (d && d.attributes) || {};\n      return _person(a.firstName, a.lastName, a.jobTitle, \"zoominfo\");\n    });\n  } else if (provider === \"apollo\") {\n    rows = (Array.isArray(raw.people) ? raw.people : []).map((p) =>\n      _person(p && p.first_name, p && p.last_name, p && p.title, \"apollo\"));\n  } else if (provider === \"lusha\") {\n    // [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it (404\n    // before any body was returned). Tolerate either shape until round 2 settles it.\n    const items = Array.isArray(raw.data) ? raw.data\n      : (Array.isArray(raw.contacts) ? raw.contacts : []);\n    rows = items.map((c) => {\n      const first = (c && (c.firstName || (c.name && c.name.first))) || null;\n      const last = (c && (c.lastName || (c.name && c.name.last))) || null;\n      return _person(first, last, c && c.jobTitle, \"lusha\");\n    });\n  } else {\n    throw new Error(`discoverySearch.normalizeResponse: unknown provider ${provider}`);\n  }\n  return rows.slice(0, DISCOVERY_PEOPLE_CAP);\n}\n\n// --- n8n wrapper: fold a discovery search response into the row's people list ---\nconst items = $input.all();\nreturn items.map((it) => {\n  const merged = it.json || {};\n  const raw = merged[\"lusha_rung2_result\"];\n  const rest = { ...merged };\n  delete rest[\"lusha_rung2_result\"];\n  const found = normalizeResponse(\"lusha\", raw);\n  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;\n  const people = (rest.people || []).concat(found).slice(0, cap);\n  return { ...rest, people };\n});\n"
-      },
-      "id": "c00440000-0000-4000-8000-000000000000",
-      "name": "Adapt Lusha Rung2",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1960,
-        1040
-      ]
-    },
-    {
-      "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const SENTINEL_MARKER_KEY = '_gsd_sentinel_marker';\n\n// --- n8n wrapper: Build Discovery Response -- D-07's DATA body (not the ack-only shape\n// D-70-07 imposed on the enrichment/ingest lanes -- those two carry row outcomes for\n// writes and had to stop reporting them on the wire; this lane writes nothing and its\n// whole product is the list it returns). Folds by company_id so a Merge that fires\n// twice under v1 can never duplicate a company (Task 3 Test 5); reads run_id off ANY\n// item (marker or real) but excludes a D-70-23 gated sentinel's marker from the\n// `companies` array itself -- a positive identity check (company_id presence), the\n// same philosophy D-70-25's `hasRowIdentity` uses, adapted for this lane's flat\n// per-company-item shape (Task 3 Test 6).\nconst byId = new Map();\nlet runId = null;\nfor (const it of $input.all()) {\n  const row = it.json || {};\n  if (row.run_id != null && runId == null) runId = row.run_id;\n  const isMarker = row[SENTINEL_MARKER_KEY] === true;\n  if (isMarker || row.company_id == null) continue;\n  if (!byId.has(row.company_id)) {\n    byId.set(row.company_id, {\n      company_id: row.company_id,\n      num_associated_contacts: row.num_associated_contacts ?? null,\n      people: row.people || [],\n    });\n  }\n}\nreturn [{ json: { run_id: runId, companies: Array.from(byId.values()) } }];\n"
       },
-      "id": "c00450000-0000-4000-8000-000000000000",
+      "id": "c00190000-0000-4000-8000-000000000000",
       "name": "Build Discovery Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -756,7 +312,7 @@
         "mode": "append",
         "numberInputs": 2
       },
-      "id": "m00460000-0000-4000-8000-000000000000",
+      "id": "m00200000-0000-4000-8000-000000000000",
       "name": "Discovery Response Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -770,7 +326,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// All Gap Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.gap === true)) return [{}]; return [];\n"
       },
-      "id": "c00470000-0000-4000-8000-000000000000",
+      "id": "c00210000-0000-4000-8000-000000000000",
       "name": "All Gap Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -784,7 +340,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00480000-0000-4000-8000-000000000000",
+      "id": "c00220000-0000-4000-8000-000000000000",
       "name": "All Gap Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -798,7 +354,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// All Non-Gap Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.gap !== true)) return [{}]; return [];\n"
       },
-      "id": "c00490000-0000-4000-8000-000000000000",
+      "id": "c00230000-0000-4000-8000-000000000000",
       "name": "All Non-Gap Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -812,7 +368,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00500000-0000-4000-8000-000000000000",
+      "id": "c00240000-0000-4000-8000-000000000000",
       "name": "All Non-Gap Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -826,7 +382,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Zero Companies Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nconst body = (rows[0] && rows[0].body) || {};\nconst companies = Array.isArray(body.companies) ? body.companies : [];\nif (companies.length === 0) return [{ run_id: body.run_id ?? null }];\nreturn [];\n\n"
       },
-      "id": "c00510000-0000-4000-8000-000000000000",
+      "id": "c00250000-0000-4000-8000-000000000000",
       "name": "Zero Companies Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -840,7 +396,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
-      "id": "c00520000-0000-4000-8000-000000000000",
+      "id": "c00260000-0000-4000-8000-000000000000",
       "name": "Zero Companies Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -854,7 +410,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00530000-0000-4000-8000-000000000000",
+      "id": "c00270000-0000-4000-8000-000000000000",
       "name": "IF Company Is Gap -> Discovery Response Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -868,7 +424,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c00540000-0000-4000-8000-000000000000",
+      "id": "c00280000-0000-4000-8000-000000000000",
       "name": "IF ZoomInfo Search Needs Mint -> ZoomInfo Search Mint Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -879,66 +435,10 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
-      },
-      "id": "c00550000-0000-4000-8000-000000000000",
-      "name": "IF Apollo Eligible -> Apollo Rung1 Carry Merge Pass-Through",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1140,
-        1080
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
-      },
-      "id": "c00560000-0000-4000-8000-000000000000",
-      "name": "IF Apollo Rung1 Empty -> Apollo Rung2 Carry Merge Pass-Through",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1140,
-        1160
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
-      },
-      "id": "c00570000-0000-4000-8000-000000000000",
-      "name": "IF Lusha Eligible -> Lusha Rung1 Carry Merge Pass-Through",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1140,
-        1240
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
-      },
-      "id": "c00580000-0000-4000-8000-000000000000",
-      "name": "IF Lusha Rung1 Empty -> Lusha Rung2 Carry Merge Pass-Through",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1140,
-        1320
-      ]
-    },
-    {
-      "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {}
       },
-      "id": "rw00590000-0000-4000-8000-000000000000",
+      "id": "rw00290000-0000-4000-8000-000000000000",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -949,11 +449,11 @@
     },
     {
       "parameters": {
-        "content": "## LV Suggest Discovery (Cloud template) -- Phase 73.1 Plan 07 (D-06..D-12)\n`hubspot/suggest/discover`: read-only. One POST per round carries every eligible company with a `gap` flag; a gap company is searched ZoomInfo then Apollo then Lusha (D-11), at most one search per provider per company, stopping once `per_company_cap` is met. Rung 2 (unfiltered) fires only when rung 1's title-filtered search returned zero (D-11a). Every company is echoed back with its `num_associated_contacts` verbatim and whatever people were found (D-09) -- zero HubSpot reads, zero HubSpot writes, zero reveal calls (D-12).\n\nEvery provider endpoint and request body in this workflow is [ASSUMED] -- see n8n/code/discoverySearch.js's own header comment and scripts/probe_provider_discovery.py (plan 09).",
+        "content": "## LV Suggest Discovery (Cloud template) -- Phase 73.1 Plan 07/09 (D-06..D-13)\n`hubspot/suggest/discover`: read-only. One POST per round carries every eligible company with a `gap` flag; a gap company is searched ZoomInfo only (D-11, narrowed by the operator's D-12 ruling 2026-09-18 -- 'search-only: ZoomInfo retained, Apollo/Lusha dropped for search phase, full waterfall only used on enrich' -- see 73.1-D12-VERDICT.json), at most one search per company, stopping once `per_company_cap` is met. Rung 2 (unfiltered) fires only when rung 1's title-filtered search returned zero (D-11a). Every company is echoed back with its `num_associated_contacts` verbatim and whatever people were found (D-09) -- zero HubSpot reads, zero HubSpot writes, zero reveal calls (D-12).\n\nZoomInfo's request/response shape is [observed live 2026-09-18, D-12 rounds 2-4] -- see n8n/code/discoverySearch.js's own header comment and scripts/probe_provider_discovery.py (plan 09).",
         "height": 320,
         "width": 560
       },
-      "id": "s00600000-0000-4000-8000-000000000000",
+      "id": "s00300000-0000-4000-8000-000000000000",
       "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1119,7 +619,7 @@
         ],
         [
           {
-            "node": "IF Apollo Eligible",
+            "node": "Discovery Waterfall Complete",
             "type": "main",
             "index": 0
           }
@@ -1130,275 +630,7 @@
       "main": [
         [
           {
-            "node": "IF Apollo Eligible",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Apollo Eligible": {
-      "main": [
-        [
-          {
-            "node": "Apollo Search Rung1",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "IF Apollo Eligible -> Apollo Rung1 Carry Merge Pass-Through",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "IF Lusha Eligible",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adapt Apollo People": {
-      "main": [
-        [
-          {
-            "node": "IF Lusha Eligible",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Lusha Eligible": {
-      "main": [
-        [
-          {
-            "node": "Lusha Search Rung1",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "IF Lusha Eligible -> Lusha Rung1 Carry Merge Pass-Through",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Discovery Waterfall Complete",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adapt Lusha People": {
-      "main": [
-        [
-          {
-            "node": "Discovery Waterfall Complete",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apollo Search Rung1": {
-      "main": [
-        [
-          {
-            "node": "Apollo Rung1 Carry Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apollo Rung1 Carry Merge": {
-      "main": [
-        [
-          {
-            "node": "Adapt Apollo Rung1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wrap Apollo Rung1 Result": {
-      "main": [
-        [
-          {
-            "node": "Adapt Apollo Rung1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adapt Apollo Rung1": {
-      "main": [
-        [
-          {
-            "node": "IF Apollo Rung1 Empty",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Apollo Rung1 Empty": {
-      "main": [
-        [
-          {
-            "node": "Apollo Search Rung2",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "IF Apollo Rung1 Empty -> Apollo Rung2 Carry Merge Pass-Through",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Adapt Apollo People",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apollo Search Rung2": {
-      "main": [
-        [
-          {
-            "node": "Apollo Rung2 Carry Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apollo Rung2 Carry Merge": {
-      "main": [
-        [
-          {
-            "node": "Adapt Apollo Rung2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adapt Apollo Rung2": {
-      "main": [
-        [
-          {
-            "node": "Adapt Apollo People",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lusha Search Rung1": {
-      "main": [
-        [
-          {
-            "node": "Lusha Rung1 Carry Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lusha Rung1 Carry Merge": {
-      "main": [
-        [
-          {
-            "node": "Adapt Lusha Rung1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wrap Lusha Rung1 Result": {
-      "main": [
-        [
-          {
-            "node": "Adapt Lusha Rung1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adapt Lusha Rung1": {
-      "main": [
-        [
-          {
-            "node": "IF Lusha Rung1 Empty",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Lusha Rung1 Empty": {
-      "main": [
-        [
-          {
-            "node": "Lusha Search Rung2",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "IF Lusha Rung1 Empty -> Lusha Rung2 Carry Merge Pass-Through",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Adapt Lusha People",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lusha Search Rung2": {
-      "main": [
-        [
-          {
-            "node": "Lusha Rung2 Carry Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lusha Rung2 Carry Merge": {
-      "main": [
-        [
-          {
-            "node": "Adapt Lusha Rung2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adapt Lusha Rung2": {
-      "main": [
-        [
-          {
-            "node": "Adapt Lusha People",
             "type": "main",
             "index": 0
           }
@@ -1532,50 +764,6 @@
         [
           {
             "node": "ZoomInfo Search Mint Carry Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "IF Apollo Eligible -> Apollo Rung1 Carry Merge Pass-Through": {
-      "main": [
-        [
-          {
-            "node": "Apollo Rung1 Carry Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "IF Apollo Rung1 Empty -> Apollo Rung2 Carry Merge Pass-Through": {
-      "main": [
-        [
-          {
-            "node": "Apollo Rung2 Carry Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "IF Lusha Eligible -> Lusha Rung1 Carry Merge Pass-Through": {
-      "main": [
-        [
-          {
-            "node": "Lusha Rung1 Carry Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "IF Lusha Rung1 Empty -> Lusha Rung2 Carry Merge Pass-Through": {
-      "main": [
-        [
-          {
-            "node": "Lusha Rung2 Carry Merge",
             "type": "main",
             "index": 1
           }

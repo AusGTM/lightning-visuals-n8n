@@ -11983,9 +11983,11 @@ def build_review_decision_cloud():
 # =============================================================================
 # DISCOVERY workflow (Phase 73.1 Plan 07, D-06 through D-12) — the sixth cloud workflow.
 # Read-only: one POST per round carries every eligible company with a `gap` flag; the
-# lane searches the gap set through the ZoomInfo -> Apollo -> Lusha waterfall (D-11) with
-# a two-rung role-title filter (D-11a) and echoes every company back with its
-# num_associated_contacts and whatever people it found (D-09). Zero HubSpot nodes, zero
+# lane searches the gap set through ZoomInfo only (D-11, narrowed by the operator's D-12
+# ruling 2026-09-18 to search-only -- Apollo and Lusha are dropped from this lane; the
+# full waterfall stays in stage 2's existing enrich path) with a two-rung role-title
+# filter (D-11a) and echoes every company back with its num_associated_contacts and
+# whatever people it found (D-09). Zero HubSpot nodes, zero
 # write nodes (assert_no_write_nodes, defined near the other generation-time contracts,
 # applies to THIS workflow only), zero executeWorkflow nodes.
 # =============================================================================
@@ -12027,8 +12029,9 @@ ENRICH_PARSE_DISCOVERY_REQUEST = inline("discoverySearch.js") + r"""
 // search_fallback.MAX_FALLBACK_SEARCHES (scripts/build_cloud_workflows.py) -- one
 // source, no JS twin to keep in parity. It is a COUNT OF PROVIDERS ATTEMPTED, never of
 // HTTP calls made: a rung-2 retry re-sends the SAME provider's one search, unfiltered,
-// and is NOT a second unit against this ceiling -- the ZoomInfo/Apollo/Lusha waterfall
-// below enforces "at most one provider-attempt each" structurally (each provider's own
+// and is NOT a second unit against this ceiling -- the search lane below (ZoomInfo
+// only, per the D-12 operator ruling 2026-09-18) enforces "at most one provider-attempt
+// each" structurally (each provider's own
 // "IF <Provider> Eligible" gate only ever lets a company enter that provider's subgraph
 // once), so this constant is not read by any control-flow below; it exists so the
 // per-company ceiling is visible in the generated artifact and testable against its one
@@ -12063,8 +12066,8 @@ return [];
 
 ENRICH_DISCOVERY_WATERFALL_COMPLETE_JS = inline("discoverySearch.js") + r"""
 
-// --- n8n wrapper: Discovery Waterfall Complete -- rejoin point for the ZoomInfo/Apollo/
-// Lusha waterfall (D-11). Defensive re-cap only; each provider hop already caps its own
+// --- n8n wrapper: Discovery Waterfall Complete -- rejoin point for the ZoomInfo-only
+// search (D-11, D-12). Defensive re-cap only; the provider hop already caps its own
 // contribution before reaching here.
 return $input.all().map((it) => {
   const row = it.json;
@@ -12146,70 +12149,6 @@ return $input.all().map((it) => {
 """
 
 
-def _discovery_native_json_body_expr(provider, unfiltered):
-    """n8n expression string for a native Apollo/Lusha discovery search HTTP node's
-    json_body -- a HAND-WRITTEN MIRROR of discoverySearch.buildRequest (n8n expressions
-    cannot import a JS module -- the same constraint "Lusha Enrich"'s own json_body
-    already documents, this file's build_enrichment_cloud). Round 1 of the D-12 live
-    probe (2026-09-18, pickleballaustralia.org.au) found the original shapes wrong
-    (Apollo 422 deprecated-route, Lusha 404); this now mirrors discoverySearch.js's
-    corrected buildRequest -- still UNCONFIRMED on this account until round 2 reports."""
-    titles_literal = json.dumps(_discovery_role_titles())
-    if provider == "apollo":
-        if unfiltered:
-            body_js = "{ q_organization_domains_list: [$json.domain], per_page: $json.per_company_cap, page: 1 }"
-        else:
-            body_js = ("{ q_organization_domains_list: [$json.domain], per_page: $json.per_company_cap, "
-                       "page: 1, person_titles: " + titles_literal + " }")
-        return "={{ JSON.stringify(" + body_js + ") }}"
-    if provider == "lusha":
-        if unfiltered:
-            body_js = ("{ filters: { companies: { include: { domains: [$json.domain] } } }, "
-                       "pages: { page: 0, size: $json.per_company_cap } }")
-        else:
-            body_js = ("{ filters: { companies: { include: { domains: [$json.domain] } }, "
-                       "contacts: { include: { jobTitles: " + titles_literal + " } } }, "
-                       "pages: { page: 0, size: $json.per_company_cap } }")
-        return "={{ JSON.stringify(" + body_js + ") }}"
-    raise ValueError(f"_discovery_native_json_body_expr: unknown provider {provider!r}")
-
-
-def _discovery_adapt_native_js(provider, rung):
-    """Folds a native Apollo/Lusha HTTP hop's wrapped raw response into the row's
-    accumulated `people` list and (rung1 only) stamps the count that decides rung 2
-    (Task 2 Test 6/7)."""
-    key = f"{provider}_{rung}_result"
-    extra = f', _{provider}_rung1_count: found.length' if rung == "rung1" else ''
-    template = r"""
-
-// --- n8n wrapper: fold a discovery search response into the row's people list ---
-const items = $input.all();
-return items.map((it) => {
-  const merged = it.json || {};
-  const raw = merged["__KEY__"];
-  const rest = { ...merged };
-  delete rest["__KEY__"];
-  const found = normalizeResponse("__PROVIDER__", raw);
-  const cap = rest.per_company_cap || DISCOVERY_PEOPLE_CAP;
-  const people = (rest.people || []).concat(found).slice(0, cap);
-  return { ...rest, people__EXTRA__ };
-});
-"""
-    body = inline("discoverySearch.js") + template
-    return (body.replace("__KEY__", key)
-                .replace("__PROVIDER__", provider)
-                .replace("__EXTRA__", extra))
-
-
-def _discovery_endpoints_py():
-    """Python-side read of discoverySearch.js's DISCOVERY_ENDPOINTS -- one source, no
-    hand-copied second literal for the native Apollo/Lusha HTTP nodes' URLs. Regex-based
-    (the JS object literal is not valid JSON -- unquoted keys) rather than pulling in a
-    JS parser dependency this repo does not otherwise need."""
-    src = extract_js_const("discoverySearch.js", "DISCOVERY_ENDPOINTS")
-    return dict(re.findall(r'(\w+):\s*"([^"]+)"', src))
-
-
 ENRICH_DISCOVERY_BUILD_RESPONSE = (
     f"const SENTINEL_MARKER_KEY = {SENTINEL_MARKER_KEY!r};\n"
     r"""
@@ -12240,76 +12179,6 @@ for (const it of $input.all()) {
 return [{ json: { run_id: runId, companies: Array.from(byId.values()) } }];
 """
 )
-
-
-def _discovery_native_provider_hop(nodes, conns, provider, endpoint, x, y, if_direct_edges):
-    """Appends the two-rung native-HTTP subgraph for Apollo/Lusha directly onto the
-    CALLER's own `nodes`/`conns` (matching splice_carry_merge_after's own requirement
-    that `http_name` already exist in `nodes` before it is called -- unlike ZoomInfo's
-    Code-node leaf, these two need a REAL n8n Credential for their API key, which only a
-    native httpRequest node can bind (D-06: "reuses existing n8n credentials")). Returns
-    (entry_name, exit_name) for `_provider_gate_bypass_chain`'s true_entry/true_exit.
-
-    Every node's OUTGOING edges are wired BEFORE it is ever used as a
-    `splice_carry_merge_after` `carry_source` -- that function APPENDS a new fan-out
-    edge onto whatever `conns[carry_source]` already holds, so wiring the source's other
-    edges afterward would silently overwrite (not merge with) the appended one.
-
-    Both carry-merge sources here are routing IF nodes ("IF <Provider> Eligible" for
-    rung 1, "IF <Provider> Rung1 Empty" for rung 2) -- `assert_merge_input_contract`
-    rule 3 forbids an IF feeding a Merge input directly, so each is appended to
-    `if_direct_edges` for the caller to retarget through a pass-through, exactly the
-    `_retarget_all_if_direct_edges` idiom this file's own precedent (build_enrichment_
-    local_live's "Merge Company"/"Merge Winners" fan-in) already uses."""
-    cap_provider = "Apollo" if provider == "apollo" else "Lusha"
-    rung1, rung2 = f"{cap_provider} Search Rung1", f"{cap_provider} Search Rung2"
-    wrap1, wrap2 = f"Wrap {cap_provider} Rung1 Result", f"Wrap {cap_provider} Rung2 Result"
-    adapt1, adapt2 = f"Adapt {cap_provider} Rung1", f"Adapt {cap_provider} Rung2"
-    empty_if = f"IF {cap_provider} Rung1 Empty"
-    people = f"Adapt {cap_provider} People"
-    eligible_gate = f"IF {cap_provider} Eligible"
-    carry1_name = f"{cap_provider} Rung1 Carry Merge"
-    carry2_name = f"{cap_provider} Rung2 Carry Merge"
-
-    nodes.append(_http_node(rung1, endpoint, x, y, auth="header",
-                             json_body=_discovery_native_json_body_expr(provider, unfiltered=False)))
-    nodes.append(code_node(wrap1, _wrap_provider_result_js(f"{provider}_rung1_result"), x + 40, y + 40))
-    conns[rung1] = {"main": [[{"node": wrap1, "type": "main", "index": 0}]]}
-    splice_carry_merge_after(nodes, conns, rung1, eligible_gate,
-                              merge_name=carry1_name, source_out_idx=0)
-    if_direct_edges.append((eligible_gate, 0, carry1_name))
-    nodes.append(code_node(adapt1, _discovery_adapt_native_js(provider, "rung1"), x + 180, y + 40))
-    conns[wrap1] = {"main": [[{"node": adapt1, "type": "main", "index": 0}]]}
-    # splice_carry_merge_after already re-pointed wrap1's downstream edge onto the new
-    # carry merge; re-point the CARRY MERGE's own single output at adapt1 instead.
-    conns[carry1_name] = {"main": [[{"node": adapt1, "type": "main", "index": 0}]]}
-
-    nodes.append(_if_bool_expr_node(empty_if,
-        f'($json._{provider}_rung1_count || 0) === 0', x + 400, y + 40))
-    conns[adapt1] = {"main": [[{"node": empty_if, "type": "main", "index": 0}]]}
-
-    nodes.append(code_node(people,
-        "// Adapt <Provider> People -- trivial rejoin; both branches already fold their "
-        "own result into `people` before reaching here.\nreturn $input.all();\n",
-        x + 1000, y + 40))
-    # Both of "IF <Provider> Rung1 Empty"'s branches wired FIRST — before it is used as a
-    # splice_carry_merge_after carry_source below, per this function's own docstring.
-    conns[empty_if] = {"main": [
-        [{"node": rung2, "type": "main", "index": 0}],   # true: rung1 was empty
-        [{"node": people, "type": "main", "index": 0}],  # false: rung1 had results
-    ]}
-
-    nodes.append(_http_node(rung2, endpoint, x + 620, y - 40, auth="header",
-                             json_body=_discovery_native_json_body_expr(provider, unfiltered=True)))
-    nodes.append(code_node(wrap2, _wrap_provider_result_js(f"{provider}_rung2_result"), x + 660, y))
-    conns[rung2] = {"main": [[{"node": wrap2, "type": "main", "index": 0}]]}
-    splice_carry_merge_after(nodes, conns, rung2, empty_if,
-                              merge_name=carry2_name, source_out_idx=0)
-    if_direct_edges.append((empty_if, 0, carry2_name))
-    nodes.append(code_node(adapt2, _discovery_adapt_native_js(provider, "rung2"), x + 780, y))
-    conns[carry2_name] = {"main": [[{"node": adapt2, "type": "main", "index": 0}]]}
-    conns[adapt2] = {"main": [[{"node": people, "type": "main", "index": 0}]]}
-    return rung1, people
 
 
 def build_suggest_discovery_cloud():
@@ -12346,7 +12215,8 @@ def build_suggest_discovery_cloud():
     nodes.append(_if_bool_expr_node("IF Company Is Gap", "$json.gap === true", x, y))
     conns["Parse Discovery Request"] = {"main": [[{"node": "IF Company Is Gap", "type": "main", "index": 0}]]}
 
-    # ---- the ZoomInfo -> Apollo -> Lusha waterfall (D-11) ---------------------------
+    # ---- ZoomInfo-only search (D-11, narrowed by the D-12 operator ruling 2026-09-18 to
+    # search-only -- Apollo and Lusha dropped from this lane) -------------------------
     zx, zy = x + 260, y - 160
     nodes.append(code_node("ZoomInfo Search Token Gate", _zoom_split_gate_js("IF ZoomInfo Eligible"), zx, zy))
     nodes.append(_if_bool_node("IF ZoomInfo Search Needs Mint", "zoom_needs_mint", zx + 200, zy))
@@ -12388,33 +12258,20 @@ def build_suggest_discovery_cloud():
                             zx + 1600, zy + 460))
 
     # `_provider_gate_bypass_chain` only ever wires connection-dict entries BY NAME — it
-    # does not require its true_entry/true_exit nodes to already exist. Build the three
-    # outer "IF <Provider> Eligible" gates FIRST, by these deterministic names (matching
-    # exactly what `_discovery_native_provider_hop` constructs below), so each provider's
-    # own carry-merge (which DOES require its carry_source node to already exist) can
-    # find its gate.
+    # does not require its true_entry/true_exit nodes to already exist. One provider
+    # (D-12: ZoomInfo only) -- the chain's own bypass-convergence still applies unchanged
+    # for the "not eligible" case, which now rejoins `exit_node` directly.
     gate_nodes, gate_conns, _first_gate = _provider_gate_bypass_chain(
         providers=[
             {"gate_name": "IF ZoomInfo Eligible", "enabled_expr": _discovery_provider_eligible_expr(),
              "true_entry": "ZoomInfo Search Token Gate", "true_exit": "Adapt ZoomInfo People"},
-            {"gate_name": "IF Apollo Eligible", "enabled_expr": _discovery_provider_eligible_expr(),
-             "true_entry": "Apollo Search Rung1", "true_exit": "Adapt Apollo People"},
-            {"gate_name": "IF Lusha Eligible", "enabled_expr": _discovery_provider_eligible_expr(),
-             "true_entry": "Lusha Search Rung1", "true_exit": "Adapt Lusha People"},
         ],
         exit_node="Discovery Waterfall Complete", x=zx, y=zy + 200,
     )
     nodes.extend(gate_nodes)
     conns.update(gate_conns)
 
-    apollo_entry, apollo_exit = _discovery_native_provider_hop(
-        nodes, conns, "apollo", _discovery_endpoints_py()["apollo"], zx + 260, zy + 420, if_direct_edges)
-    lusha_entry, lusha_exit = _discovery_native_provider_hop(
-        nodes, conns, "lusha", _discovery_endpoints_py()["lusha"], zx + 260, zy + 900, if_direct_edges)
-    assert apollo_entry == "Apollo Search Rung1" and apollo_exit == "Adapt Apollo People"
-    assert lusha_entry == "Lusha Search Rung1" and lusha_exit == "Adapt Lusha People"
-
-    # ---- gap split: TRUE -> the waterfall, FALSE -> straight through ----------------
+    # ---- gap split: TRUE -> the search, FALSE -> straight through -------------------
     conns["IF Company Is Gap"] = {"main": [
         [{"node": "IF ZoomInfo Eligible", "type": "main", "index": 0}],    # true: gap
         [{"node": "Build Discovery Response", "type": "main", "index": 0}],  # false: non-gap
@@ -12465,17 +12322,19 @@ def build_suggest_discovery_cloud():
 
     notes = [{
         "content": (
-            "## LV Suggest Discovery (Cloud template) -- Phase 73.1 Plan 07 (D-06..D-12)\n"
+            "## LV Suggest Discovery (Cloud template) -- Phase 73.1 Plan 07/09 (D-06..D-13)\n"
             "`hubspot/suggest/discover`: read-only. One POST per round carries every "
-            "eligible company with a `gap` flag; a gap company is searched ZoomInfo then "
-            "Apollo then Lusha (D-11), at most one search per provider per company, "
-            "stopping once `per_company_cap` is met. Rung 2 (unfiltered) fires only when "
-            "rung 1's title-filtered search returned zero (D-11a). Every company is "
-            "echoed back with its `num_associated_contacts` verbatim and whatever people "
-            "were found (D-09) -- zero HubSpot reads, zero HubSpot writes, zero reveal "
-            "calls (D-12).\n\n"
-            "Every provider endpoint and request body in this workflow is [ASSUMED] -- "
-            "see n8n/code/discoverySearch.js's own header comment and "
+            "eligible company with a `gap` flag; a gap company is searched ZoomInfo only "
+            "(D-11, narrowed by the operator's D-12 ruling 2026-09-18 -- 'search-only: "
+            "ZoomInfo retained, Apollo/Lusha dropped for search phase, full waterfall "
+            "only used on enrich' -- see 73.1-D12-VERDICT.json), at most one search per "
+            "company, stopping once `per_company_cap` is met. Rung 2 (unfiltered) fires "
+            "only when rung 1's title-filtered search returned zero (D-11a). Every "
+            "company is echoed back with its `num_associated_contacts` verbatim and "
+            "whatever people were found (D-09) -- zero HubSpot reads, zero HubSpot "
+            "writes, zero reveal calls (D-12).\n\n"
+            "ZoomInfo's request/response shape is [observed live 2026-09-18, D-12 rounds "
+            "2-4] -- see n8n/code/discoverySearch.js's own header comment and "
             "scripts/probe_provider_discovery.py (plan 09)."
         ), "x": x, "y": y + 500, "h": 320, "w": 560,
     }]

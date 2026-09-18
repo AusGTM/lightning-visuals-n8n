@@ -4,6 +4,11 @@
 // Walks the COMMITTED n8n/wf_suggest_discovery_cloud.json end to end via the offline
 // walker (never n8n/code/discoverySearch.js in isolation — that is
 // tests/n8n/discoverySearch.test.mjs's job).
+//
+// Plan 09 (D-12, operator ruling 2026-09-18): "ZoomInfo retained as tier-2 source,
+// others (Apollo/Lusha) dropped for search phase. Full waterfall only used on enrich."
+// This lane is ZoomInfo-only end to end — the Apollo/Lusha search nodes no longer exist
+// in the generated graph at all.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -41,10 +46,6 @@ function zeroPeopleHttpStubs() {
   // item past the array's own length whenever a round sends this node more than one row.
   return {
     "ZoomInfo Search Mint": (items) => items.map(() => ({ access_token: "tok", expires_in: 3600 })),
-    "Apollo Search Rung1": (items) => items.map(() => ({ people: [] })),
-    "Apollo Search Rung2": (items) => items.map(() => ({ people: [] })),
-    "Lusha Search Rung1": (items) => items.map(() => ({ contacts: [] })),
-    "Lusha Search Rung2": (items) => items.map(() => ({ contacts: [] })),
   };
 }
 
@@ -135,7 +136,7 @@ test("Task1/Test8: every Merge declares at most 10 inputs", () => {
 
 // ---- Task 2 -------------------------------------------------------------------------
 
-test("Task2/Test6: a gap company whose ZoomInfo search meets the cap never reaches Apollo or Lusha", () => {
+test("Task2/Test6: a gap company whose ZoomInfo rung-1 returns a person never reaches rung-2", () => {
   const req = { body: { run_id: "r", per_company_cap: 1, companies: [
     { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org" } ] } };
   const { runData } = run([req], {
@@ -144,13 +145,12 @@ test("Task2/Test6: a gap company whose ZoomInfo search meets the cap never reach
         ...it, _zoominfo_rung1_people: [{ firstname: "A", lastname: "B", jobtitle: "GM", provider: "zoominfo" }] })),
     },
   });
-  assert.equal(nodeItems(runData, "Apollo Search Rung1").length, 0, "Apollo must not run when the cap is already met");
-  assert.equal(nodeItems(runData, "Lusha Search Rung1").length, 0, "Lusha must not run when the cap is already met");
+  assert.equal(nodeItems(runData, "ZoomInfo Search Rung2").length, 0, "rung 2 must not run when rung 1 had results");
   const rows = nodeItems(runData, "Build Discovery Response");
   assert.equal(rows[0].companies[0].people.length, 1);
 });
 
-test("Task2/Test7: a gap company whose ZoomInfo rung-1 returns zero reaches rung-2 before falling through to Apollo", () => {
+test("Task2/Test7: a gap company whose ZoomInfo rung-1 returns zero reaches rung-2", () => {
   const req = { body: { run_id: "r", per_company_cap: 5, companies: [
     { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org" } ] } };
   const { runData } = run([req], {
@@ -165,7 +165,7 @@ test("Task2/Test7: a gap company whose ZoomInfo rung-1 returns zero reaches rung
   assert.equal(rows[0].companies[0].people.length, 1);
 });
 
-test("Task2/Test8: a gap company where all three providers return zero still appears with an empty people array", () => {
+test("Task2/Test8: a gap company where ZoomInfo returns zero still appears with an empty people array", () => {
   const req = { body: { run_id: "r", per_company_cap: 5, companies: [
     { company_id: "9", num_associated_contacts: 0, gap: true, domain: "nine.example.org" } ] } };
   const { runData, trace } = run([req]);
@@ -186,12 +186,12 @@ test("Task2/Test9: the per-company search ceiling emitted into the lane equals s
   assert.ok(found, `no node emits DISCOVERY_SEARCH_CEILING = ${expected}`);
 });
 
-test("Task2/provider node order is ZoomInfo, then Apollo, then Lusha", () => {
+test("Task2/D-12: only ZoomInfo search nodes exist -- Apollo and Lusha are dropped from this lane", () => {
   const wf = loadWf();
   const names = wf.nodes.map((n) => n.name);
-  const idx = (n) => names.indexOf(n);
-  assert.ok(idx("IF ZoomInfo Eligible") < idx("IF Apollo Eligible"));
-  assert.ok(idx("IF Apollo Eligible") < idx("IF Lusha Eligible"));
+  assert.ok(names.includes("IF ZoomInfo Eligible"));
+  assert.ok(!names.some((n) => /Apollo|Lusha/.test(n)),
+    "no Apollo/Lusha node may exist in the discovery lane after the D-12 search-only ruling");
 });
 
 test("Task2: no identity-enrich endpoint is wired into this lane", () => {
