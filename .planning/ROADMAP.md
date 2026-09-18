@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 4/9 plans executed
+**Plans:** 5/9 plans executed
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -589,7 +589,7 @@ Plans:
 
 **Wave 2** *(blocked on 73.1-01)*
 
-- [ ] 73.1-05-PLAN.md — identity widening: five `required_identity` groups across all three copies, a relaxed `hold_emailless`, and no email-domain judgement on a row with no email (D-16b, D-16c)
+- [x] 73.1-05-PLAN.md — identity widening: five `required_identity` groups across all three copies, a relaxed `hold_emailless`, and no email-domain judgement on a row with no email (D-16b, D-16c)
 
 **Wave 3** *(blocked on 73.1-04 and 73.1-05)*
 
