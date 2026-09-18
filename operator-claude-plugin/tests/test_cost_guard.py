@@ -177,6 +177,82 @@ def test_research_line_tolerates_a_missing_row_id_without_raising(rates):
     assert line["row_ids"] == ["r1", None]
 
 
+# ------------------------------------------------------------------ provider discovery
+
+
+def test_discovery_line_zero_gap_companies_yields_no_rows(rates):
+    """Test 1: zero gap companies is checked first, before any rate is consulted --
+    the same branch order research_line uses."""
+    result = cost_guard.discovery_line(0, 2, rates)
+    assert result["state"] == "no_rows"
+    assert result["stage2_contact_ceiling"] == 0
+    assert result["stage2_credit_ceiling"] is None
+
+
+def test_discovery_line_all_rates_unknown_is_the_shipped_state(rates):
+    """Test 2: with the shipped cost_rates.json all three provider search rates are
+    null -- the whole round is unmeasured, never zero."""
+    result = cost_guard.discovery_line(6, 2, rates)
+    assert result["state"] == "unmeasured"
+    assert result["known"] is False
+    assert len(result["providers"]) == 3
+    for provider in result["providers"]:
+        assert provider["rate"] is None
+        assert provider["state"] == "unmeasured"
+    assert result["executions"] == 1
+    assert result["stage2_contact_ceiling"] == 12
+    expected_ceiling = 12 * rates["rates"][cost_guard.SUGGESTION_STAGE2_RATE_KEY]["value"]
+    assert result["stage2_credit_ceiling"] == expected_ceiling
+
+
+def test_discovery_line_never_renders_zero_and_names_unknown_per_provider(rates):
+    """Test 3: the line never says $0 or 0 credits, and says `unknown` once per
+    unknown-rate provider."""
+    result = cost_guard.discovery_line(6, 2, rates)
+    line = result["line"]
+    assert "$0" not in line
+    assert "0 credits" not in line
+    assert line.count("unknown") == 3
+
+
+def test_discovery_line_names_gap_count_one_execution_and_stage2_ceiling(rates):
+    """Test 4: the rendered line contains the gap-company count, the literal
+    `1 n8n execution`, and the stage-2 ceiling figure."""
+    result = cost_guard.discovery_line(6, 2, rates)
+    line = result["line"]
+    assert "6" in line
+    assert "1 n8n execution" in line
+    assert str(result["stage2_contact_ceiling"]) in line
+
+
+def test_discovery_line_a_known_rate_renders_arithmetically(rates):
+    """Test 5: a mixed round (one known, two unknown) is the expected state, not an
+    error -- known providers render arithmetic, unknown providers stay unmeasured."""
+    rates["rates"]["zoominfo_contact_search"]["value"] = 1
+    result = cost_guard.discovery_line(6, 2, rates)
+    zoominfo = next(p for p in result["providers"] if p["provider"] == "zoominfo")
+    assert zoominfo["state"] == "measured"
+    assert "6" in zoominfo["line"] and "1" in zoominfo["line"] and "6" in zoominfo["line"]
+    assert "×" in zoominfo["line"] and "=" in zoominfo["line"] and "credits" in zoominfo["line"]
+    others = [p for p in result["providers"] if p["provider"] != "zoominfo"]
+    assert all(p["state"] == "unmeasured" for p in others)
+    assert result["state"] == "unmeasured"  # not every provider is known
+
+
+def test_discovery_line_stage2_ceiling_follows_the_stage2_rate_key(rates):
+    """Test 6: the stage-2 credit ceiling is computed from SUGGESTION_STAGE2_RATE_KEY,
+    proved by patching that rate to a different number."""
+    rates["rates"][cost_guard.SUGGESTION_STAGE2_RATE_KEY]["value"] = 3
+    result = cost_guard.discovery_line(6, 2, rates)
+    assert result["stage2_credit_ceiling"] == 12 * 3
+
+
+def test_discovery_line_never_mentions_tier(rates):
+    """Test 7: no occurrence of the word `tier` anywhere in the rendered line."""
+    result = cost_guard.discovery_line(6, 2, rates)
+    assert "tier" not in result["line"].lower()
+
+
 # ----------------------------------------------------------------------------- balances
 
 
