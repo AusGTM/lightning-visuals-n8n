@@ -526,6 +526,91 @@ def test_partition_for_dispatch_requires_company_domains_with_no_default():
 
 
 # =====================================================================================
+# Task 3 (Phase 73.1 Plan 05, D-16c) — no email means no email-domain judgement. An
+# emailless LinkedIn/mobile/phone-keyed row that survives hold_emailless's relaxed
+# check (D-16b) must not be held company_domain_unknown just because it has no email
+# to compare. A row WITH an email is unchanged (D-02).
+# =====================================================================================
+
+
+def test_partition_for_dispatch_an_emailless_linkedin_row_is_sendable_not_held():
+    rows = [{"firstname": "Jen", "lastname": "Ramamurthy", "company": "The Roma Turf Club",
+             "linkedin_url": "https://www.linkedin.com/in/jen-ramamurthy"}]
+    company_domains = {}  # deliberately no entry -- the company is unknown, not just the email
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == rows
+    assert held == []
+
+
+def test_partition_for_dispatch_an_emailless_mobilephone_row_is_sendable_not_held():
+    rows = [{"firstname": "Jen", "lastname": "Ramamurthy", "company": "The Roma Turf Club",
+             "mobilephone": "0400 000 111"}]
+    company_domains = {}
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == rows
+    assert held == []
+
+
+def test_partition_for_dispatch_an_email_row_with_an_unrelated_domain_is_still_held_unchanged():
+    """D-02: a row that DOES carry an email is unchanged -- the email-domain relation
+    still holds an unrelated domain exactly as today, for an emailless-capable row as
+    for any other."""
+    rows = [{"firstname": "Craig", "lastname": "Smith", "company": "The Roma Turf Club",
+             "email": "craig.smith@thehartford.com"}]
+    company_domains = {"The Roma Turf Club": "romaturfclub.com.au"}
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == []
+    assert len(held) == 1
+    assert held[0]["reason_code"] == "email_domain_mismatch"
+    assert held[0]["reason"] == (
+        "email domain thehartford.com does not match romaturfclub.com.au"
+    )
+
+
+def test_partition_for_dispatch_an_email_row_with_unknown_company_domain_is_still_held():
+    """The guard must key on the ABSENT EMAIL, never on the absent company domain --
+    a row WITH an email whose company is unknown is still held company_domain_unknown."""
+    rows = [{"firstname": "Pat", "lastname": "Lee", "company": "Unknown Co",
+             "email": "pat.lee@example.com"}]
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, {})
+    assert sendable == []
+    assert held[0]["reason_code"] == "company_domain_unknown"
+
+
+def test_partition_for_dispatch_a_row_with_none_of_the_four_keys_is_held_no_email_never_reaches_second_pass():
+    rows = [{"firstname": "No", "lastname": "Keys", "company": "The Roma Turf Club"}]
+    company_domains = {"The Roma Turf Club": "romaturfclub.com.au"}
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == []
+    assert len(held) == 1
+    assert held[0]["reason_code"] == "no_email"
+
+
+def test_partition_for_dispatch_held_stays_ordered_by_original_index_with_the_no_email_guard():
+    rows = [
+        {"firstname": "A", "lastname": "One", "company": "Acme",
+         "linkedin_url": "https://www.linkedin.com/in/a-one"},  # emailless, sendable
+        {"firstname": "B", "lastname": "Two", "company": "Acme",
+         "email": "b@stranger.example"},  # mismatch -> held@1
+        {"firstname": "C", "lastname": "Three", "company": "Acme",
+         "mobilephone": "0400 000 111"},  # emailless, sendable
+        {"firstname": "D", "lastname": "Four", "company": "Acme"},  # no key at all -> held@3
+    ]
+    company_domains = {"Acme": "acme.example"}
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows, company_domains)
+    assert sendable == [rows[0], rows[2]]
+    assert [h["index"] for h in held] == [1, 3]
+    assert held[0]["reason_code"] == "email_domain_mismatch"
+    assert held[1]["reason_code"] == "no_email"
+
+
+# =====================================================================================
 # Quick 260905-ad2 — a company may carry MORE THAN ONE domain (D-ad2-01..05). The
 # per-domain rule is byte-identical to today's; only the number of domains it is
 # applied to changes. Roma Turf Club: site `romaturfclub.com.au`, published contact
