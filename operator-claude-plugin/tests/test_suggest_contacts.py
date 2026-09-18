@@ -986,6 +986,159 @@ def test_a_ladder_sourced_record_passes_the_new_gate_unchanged():
     assert after_held == held
 
 
+# =====================================================================================
+# D-01/D-03/D-04/D-05 — provider provenance (DISCOVERY_LOCATOR_BY_PROVIDER, the
+# synthesise_rows `provider` keyword) and the one-person-not-two fold
+# (dedupe_discovered).
+# =====================================================================================
+
+def test_a_provider_stamped_record_carries_the_provider_locator_and_provenance_key():
+    """Test 1: a provider hit's provenance names the endpoint via the synthetic
+    locator and the provider via the sibling `provenance["provider"]` key -- and the
+    row carries only canonical props, exactly like any other synthesised row."""
+    company = _company_row()
+    people = [{"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"}]
+    records = suggest_contacts.synthesise_rows(
+        company, people, suggest_contacts.DISCOVERY_LOCATOR_BY_PROVIDER["apollo"],
+        per_company_cap=2, source_tier=2, provider="apollo")
+    assert records[0]["provenance"] == {
+        "input": "suggest_contacts_web_search",
+        "locator": "apollo people search",
+        "source_tier": 2,
+        "provider": "apollo_search",
+    }
+    assert set(records[0]["row"]) <= set(extraction.canonical_props())
+
+
+def test_provider_is_ignored_when_source_tier_is_omitted():
+    """A caller passing `provider` without `source_tier` gets the byte-identical ladder
+    provenance -- `provider` is never added on its own."""
+    company = _company_row()
+    people = [{"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"}]
+    records = suggest_contacts.synthesise_rows(
+        company, people, "https://example-club.example/board",
+        per_company_cap=2, provider="apollo")
+    assert records[0]["provenance"] == {
+        "input": "suggest_contacts_ladder",
+        "locator": "https://example-club.example/board",
+    }
+
+
+def _discovered_record(firstname, lastname, jobtitle, source_tier=None, provider=None,
+                        locator=None, company_name="Example Racing Club",
+                        linkedin_url=None):
+    """One synthesised-and-minted record for the dedupe tests below, with an optional
+    `linkedin_url` stamped onto the row afterward -- `synthesise_rows` itself never
+    writes that key onto a row (it only ever carries firstname/lastname/company/
+    jobtitle), so a dedupe fixture that needs one stamps it the same way the existing
+    fixtures stamp `email`."""
+    company = {"name": company_name}
+    people = [{"firstname": firstname, "lastname": lastname, "jobtitle": jobtitle}]
+    fetched_url = locator or (
+        suggest_contacts.DISCOVERY_LOCATOR_BY_PROVIDER[provider] if provider
+        else "https://example-club.example/board"
+    )
+    records = suggest_contacts.synthesise_rows(
+        company, people, fetched_url, per_company_cap=1,
+        source_tier=source_tier, provider=provider)
+    record = records[0]
+    if linkedin_url:
+        record["row"]["linkedin_url"] = linkedin_url
+    return record
+
+
+def test_dedupe_folds_a_ladder_hit_and_a_provider_hit_into_one_record():
+    """Test 2: the same person found on the company page (rank 1, no `source_tier`) AND
+    by a provider (rank 2) becomes ONE record, keeping the rank-1 hit's own provenance
+    and locator; the rank-2 hit is recorded as corroboration naming its provider."""
+    ladder_hit = _discovered_record(
+        "Jamie", "Fox", "Director",
+        locator="https://example-club.example/about/committee")
+    provider_hit = _discovered_record(
+        "Jamie", "Fox", "Director", source_tier=2, provider="apollo")
+
+    [merged] = suggest_contacts.dedupe_discovered([ladder_hit, provider_hit])
+    assert merged["provenance"]["input"] == "suggest_contacts_ladder"
+    assert merged["provenance"]["locator"] == "https://example-club.example/about/committee"
+    assert "source_tier" not in merged["provenance"]
+    [corroboration] = merged["provenance"]["corroboration"]
+    assert corroboration["source_tier"] == 2
+    assert corroboration["provider"] == "apollo_search"
+    assert corroboration["locator"] == "apollo people search"
+
+
+def test_the_survivors_jobtitle_is_the_winning_sources_title():
+    """Test 3: the row's `jobtitle` is the WINNING (rank-1) source's title; the rank-2
+    source's own title lives only inside the corroboration entry, never on the row
+    (D-04)."""
+    ladder_hit = _discovered_record("Jamie", "Fox", "Board Director")
+    provider_hit = _discovered_record(
+        "Jamie", "Fox", "Managing Director", source_tier=2, provider="apollo")
+
+    [merged] = suggest_contacts.dedupe_discovered([ladder_hit, provider_hit])
+    assert merged["row"]["jobtitle"] == "Board Director"
+    assert merged["provenance"]["corroboration"][0]["jobtitle"] == "Managing Director"
+
+
+def test_dedupe_keys_on_linkedin_url_when_both_carry_one_else_name_and_company():
+    """Test 4: two records sharing a `linkedin_url` merge even if named differently by
+    the two sources; two people with the SAME name at DIFFERENT companies are never
+    merged, because the fallback key includes company."""
+    left = _discovered_record(
+        "Jamie", "Fox", "Director", linkedin_url="https://www.linkedin.com/in/jfox")
+    right = _discovered_record(
+        "James", "Fox", "Director", source_tier=2, provider="apollo",
+        linkedin_url="https://www.linkedin.com/in/jfox")
+    [merged] = suggest_contacts.dedupe_discovered([left, right])
+    assert merged["row"]["firstname"] == "Jamie"  # the rank-1 (lower) hit survives
+
+    same_name_other_company = _discovered_record(
+        "Jamie", "Fox", "Director", source_tier=2, provider="apollo",
+        company_name="A Different Racing Club")
+    ladder_hit = _discovered_record("Jamie", "Fox", "Director")
+    unmerged = suggest_contacts.dedupe_discovered([ladder_hit, same_name_other_company])
+    assert len(unmerged) == 2
+
+
+def test_corroboration_never_upgrades_a_held_ranks_effective_rank():
+    """Test 5: a rank-1 record corroborated by a rank-3 or rank-4 hit keeps
+    `source_tier` absent (still a ladder hit, rank 1 by convention); a rank-3 record
+    corroborated by a rank-4 hit keeps `source_tier: 3` and is STILL HELD by the real
+    `hold_weak_sources` -- corroboration never lowers (improves) a row's effective
+    rank (T-73.1-03)."""
+    ladder_hit = _discovered_record("Jamie", "Fox", "Director")
+    industry_hit = _discovered_record(
+        "Jamie", "Fox", "Director", source_tier=4,
+        locator="https://racenet.example/2019/committee")
+    [merged_rank1] = suggest_contacts.dedupe_discovered([ladder_hit, industry_hit])
+    assert "source_tier" not in merged_rank1["provenance"]
+
+    linkedin_hit = _discovered_record(
+        "Robin", "Lee", "Director", source_tier=3,
+        locator="https://www.linkedin.com/in/robin-lee")
+    industry_hit_2 = _discovered_record(
+        "Robin", "Lee", "Director", source_tier=4,
+        locator="https://racenet.example/2020/committee")
+    [merged_rank3] = suggest_contacts.dedupe_discovered([linkedin_hit, industry_hit_2])
+    assert merged_rank3["provenance"]["source_tier"] == 3
+
+    minted = suggest_contacts.mint_row_ids([merged_rank3])["records"]
+    sendable = [record["row"] for record in minted]
+    sendable_out, held_out = search_fallback.hold_weak_sources(minted, sendable, [])
+    assert sendable_out == []
+    assert len(held_out) == 1
+
+
+def test_dedupe_with_no_duplicates_returns_records_unchanged_and_in_order():
+    """Test 6: nothing to fold means nothing changes."""
+    records = [
+        _discovered_record("Jamie", "Fox", "Director"),
+        _discovered_record("Robin", "Lee", "Director", source_tier=2, provider="apollo"),
+    ]
+    result = suggest_contacts.dedupe_discovered(records)
+    assert result == records
+
+
 def test_no_candidates_still_returns_give_up_messages_text_verbatim():
     """The docstring changed; the BEHAVIOUR did not. This task adds no branch inside
     `no_candidates` — the eligibility question is asked by the caller, before it decides
