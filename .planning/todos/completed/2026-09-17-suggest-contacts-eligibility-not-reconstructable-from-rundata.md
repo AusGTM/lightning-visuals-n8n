@@ -1,12 +1,13 @@
 ---
 created: 2026-09-17T00:00:00.000Z
-updated: 2026-09-17
+updated: 2026-09-18
 title: suggest-contacts per-company eligibility (num_associated_contacts) cannot be reconstructed offline from n8n runData, forcing every live audit to scope to a representative subset
 area: operator-plugin
 severity: low
 kind: question
 trigger: "the next suggest-contacts batch run where either (a) a direct HubSpot read is available to the plugin at audit time, or (b) the Decide/company-list node's own output is extended to carry num_associated_contacts alongside the company id"
 owner: operator
+resolved_by: "73.1-07-SUMMARY.md"
 ---
 
 ## Found during
@@ -29,3 +30,12 @@ Is it worth wiring `num_associated_contacts` through to the Decide output (or gr
 plugin a narrow direct-read path) so a future audit can reconstruct full eligibility from
 runData/response alone, or is a representative-subset spot-check an acceptable standing
 practice for this skill? Revisit at the trigger above.
+
+## Resolution
+
+Trigger clause (b) satisfied by Phase 73.1 Plan 07 (D-09). The new discovery lane's
+`Build Discovery Response` node echoes `num_associated_contacts` alongside `company_id`
+for EVERY eligible company in its round — gap and non-gap alike — in both the response
+body and the node's own runData (`tests/n8n/suggestDiscoveryLane.test.mjs`, Task 1
+Test 2). A future audit can now reconstruct the full eligible set with its counts
+directly from one execution's runData, without a representative-subset scope-down.
