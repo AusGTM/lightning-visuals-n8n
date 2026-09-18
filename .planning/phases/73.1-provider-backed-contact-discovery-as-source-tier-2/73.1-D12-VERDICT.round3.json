@@ -1,0 +1,84 @@
+{
+  "probed_at": "2026-09-18T10:08:05.365937+00:00",
+  "probe_round": 3,
+  "domain": "pickleballaustralia.org.au",
+  "providers": {
+    "zoominfo": {
+      "provider": "zoominfo",
+      "endpoint": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
+      "status": 200,
+      "balance_before": 9352,
+      "balance_after": 9352,
+      "delta": 0,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": null,
+      "response_shape": {
+        "top_keys": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "lists": {
+          "data": {
+            "len": 0
+          }
+        },
+        "meta": {
+          "totalResults": 0
+        }
+      }
+    },
+    "apollo": {
+      "provider": "apollo",
+      "endpoint": "https://api.apollo.io/api/v1/mixed_people/api_search",
+      "status": 200,
+      "balance_before": null,
+      "balance_after": null,
+      "delta": null,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": "Apollo's usage endpoint returns per-endpoint rate limits, not a depleting credit pool (memory `provider-credit-check-endpoints`), and this account's non-master key reads 403 on it. Balance is UNREADABLE on this account -- any Apollo search cost can only come from vendor documentation, never a measured delta.",
+      "response_shape": {
+        "top_keys": [
+          "people",
+          "total_entries"
+        ],
+        "lists": {
+          "people": {
+            "len": 0
+          }
+        },
+        "total_entries": 0
+      }
+    },
+    "lusha": {
+      "provider": "lusha",
+      "endpoint": "https://api.lusha.com/prospecting/contact/search",
+      "status": 201,
+      "balance_before": 3614,
+      "balance_after": 3614,
+      "delta": 0,
+      "people_returned": false,
+      "reveal_fields_present": false,
+      "note": null,
+      "response_shape": {
+        "top_keys": [
+          "billing",
+          "currentPage",
+          "data",
+          "pageLength",
+          "requestId",
+          "totalResults"
+        ],
+        "lists": {
+          "data": {
+            "len": 0
+          }
+        },
+        "totalResults": 0
+      }
+    }
+  },
+  "operator_ruling": null
+}

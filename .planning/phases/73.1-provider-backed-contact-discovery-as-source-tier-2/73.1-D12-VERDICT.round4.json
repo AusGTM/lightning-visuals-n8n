@@ -1,0 +1,152 @@
+{
+  "probed_at": "2026-09-18T10:08:14.184087+00:00",
+  "probe_round": 4,
+  "domain": "tennis.com.au",
+  "providers": {
+    "zoominfo": {
+      "provider": "zoominfo",
+      "endpoint": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
+      "status": 200,
+      "balance_before": 9352,
+      "balance_after": 9352,
+      "delta": 0,
+      "people_returned": true,
+      "reveal_fields_present": false,
+      "note": null,
+      "response_shape": {
+        "top_keys": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "lists": {
+          "data": {
+            "len": 10,
+            "item_keys": [
+              "attributes",
+              "id",
+              "type"
+            ],
+            "attribute_keys": [
+              "company",
+              "contactAccuracyScore",
+              "directPhoneDoNotCall",
+              "firstName",
+              "hasCompanyCountry",
+              "hasCompanyEmployeeCount",
+              "hasCompanyIndustry",
+              "hasCompanyPhone",
+              "hasCompanyRevenue",
+              "hasCompanyState",
+              "hasCompanyStreet",
+              "hasCompanyZipCode",
+              "hasDirectPhone",
+              "hasEmail",
+              "hasMobilePhone",
+              "hasSupplementalEmail",
+              "jobTitle",
+              "lastName",
+              "lastUpdatedDate",
+              "mobilePhoneDoNotCall",
+              "validDate"
+            ]
+          }
+        },
+        "meta": {
+          "totalResults": 1094
+        }
+      }
+    },
+    "apollo": {
+      "provider": "apollo",
+      "endpoint": "https://api.apollo.io/api/v1/mixed_people/api_search",
+      "status": 200,
+      "balance_before": null,
+      "balance_after": null,
+      "delta": null,
+      "people_returned": true,
+      "reveal_fields_present": true,
+      "note": "Apollo's usage endpoint returns per-endpoint rate limits, not a depleting credit pool (memory `provider-credit-check-endpoints`), and this account's non-master key reads 403 on it. Balance is UNREADABLE on this account -- any Apollo search cost can only come from vendor documentation, never a measured delta.",
+      "response_shape": {
+        "top_keys": [
+          "people",
+          "total_entries"
+        ],
+        "lists": {
+          "people": {
+            "len": 10,
+            "item_keys": [
+              "first_name",
+              "has_city",
+              "has_country",
+              "has_direct_phone",
+              "has_email",
+              "has_state",
+              "id",
+              "last_name_obfuscated",
+              "last_refreshed_at",
+              "organization",
+              "title"
+            ]
+          }
+        },
+        "total_entries": 888
+      }
+    },
+    "lusha": {
+      "provider": "lusha",
+      "endpoint": "https://api.lusha.com/prospecting/contact/search",
+      "status": 201,
+      "balance_before": 3613,
+      "balance_after": 3613,
+      "delta": 0,
+      "people_returned": true,
+      "reveal_fields_present": false,
+      "note": null,
+      "response_shape": {
+        "top_keys": [
+          "billing",
+          "currentPage",
+          "data",
+          "pageLength",
+          "requestId",
+          "totalResults"
+        ],
+        "lists": {
+          "data": {
+            "len": 10,
+            "item_keys": [
+              "companyDescription",
+              "companyId",
+              "companyName",
+              "contactId",
+              "fqdn",
+              "hasCompanyCity",
+              "hasCompanyCountry",
+              "hasCompanyEmployeesCount",
+              "hasCompanyFunding",
+              "hasCompanyIntent",
+              "hasCompanyMainIndustry",
+              "hasCompanyRevenue",
+              "hasCompanySubIndustry",
+              "hasCompanyTechnologies",
+              "hasContactLocation",
+              "hasDepartment",
+              "hasDirectPhone",
+              "hasEmails",
+              "hasMobilePhone",
+              "hasPhones",
+              "hasPrivateEmail",
+              "hasSeniority",
+              "hasSocialLink",
+              "hasWorkEmail",
+              "isShown"
+            ]
+          }
+        },
+        "totalResults": 1313
+      }
+    }
+  },
+  "operator_ruling": null
+}
