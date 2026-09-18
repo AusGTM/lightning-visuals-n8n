@@ -27,12 +27,9 @@ WORKFLOWS = {  # committed file -> live id
     "n8n/wf_enrichment_cloud.json": "950HPb7a1GgSAIyZ",
     "n8n/wf_review_decision_cloud.json": "WBJwoZOo63wzeP69",
     "n8n/wf_scheduled_maintenance_cloud.json": "1fXPuIabz3RsAHgn",
-    # Phase 73.1 Plan 07 (D-06): the discovery lane's first deploy is a CREATE, not a
-    # PUT — no live id exists until the operator's plan-09 first deploy mints one via
-    # deploy_n8n_workflows.py's create path. `None` here is deliberate, not a
-    # placeholder to fill in offline: main() below REFUSES this entry BY NAME rather
-    # than attempting a bounce against a nonexistent id.
-    "n8n/wf_suggest_discovery_cloud.json": None,
+    # Phase 73.1 Plan 09 Task 3 (D-06): the discovery lane's first deploy (a CREATE, not
+    # a PUT) minted this live id on 2026-09-18 via deploy_n8n_workflows.py's create path.
+    "n8n/wf_suggest_discovery_cloud.json": "VJJBZ2oJ0079MSzG",
 }
 WRITE_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")
 
