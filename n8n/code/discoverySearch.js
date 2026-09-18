@@ -101,6 +101,31 @@ function titlesForFamilies(familyMap, chosen) {
   return out;
 }
 
+/**
+ * unknownFamilyLabels(familyMap, chosen) -> array of `chosen` labels absent from
+ * `familyMap`, caller order preserved, deduped. Never throws. WR-03 (73.1-REVIEW.md):
+ * `titlesForFamilies` deliberately never signals an unrecognized label (that stays a
+ * silent zero-contribution, by design -- see its own docstring), which left a
+ * stale/misspelled `role_families` entry indistinguishable from "operator genuinely
+ * wants an unfiltered search". This companion function lets a caller (the rung-1 leaf)
+ * echo which requested labels did NOT resolve, without changing `titlesForFamilies`'s
+ * own pinned return shape. Empty/absent `chosen` returns [] -- the fallback-to-
+ * everything case is not an unknown-label situation.
+ */
+function unknownFamilyLabels(familyMap, chosen) {
+  const map = (familyMap && typeof familyMap === "object") ? familyMap : {};
+  const labels = Array.isArray(chosen) ? chosen : [];
+  const seen = new Set();
+  const out = [];
+  for (const label of labels) {
+    if (!(label in map) && !seen.has(label)) {
+      seen.add(label);
+      out.push(label);
+    }
+  }
+  return out;
+}
+
 // ZoomInfo-only, per the D-12 operator ruling (see header comment). Round-2-corrected
 // endpoint — see n8n/code/discoverySearch.js's git history / 73.1-D12-VERDICT.round1.json
 // for what the original (wrong) shapes were and why they changed.
@@ -232,5 +257,5 @@ function normalizeResponse(provider, body) {
 module.exports = {
   DISCOVERY_ENDPOINTS, DISCOVERY_PEOPLE_CAP, ZOOMINFO_JOBTITLE_MAX,
   buildRequest, buildUrl, buildQuery, normalizeResponse, capRoleTitles, titlesForFamilies,
-  extractErrorDetail,
+  unknownFamilyLabels, extractErrorDetail,
 };

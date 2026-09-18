@@ -20,6 +20,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const require = createRequire(import.meta.url);
 const {
   buildRequest, buildUrl, buildQuery, normalizeResponse, capRoleTitles, titlesForFamilies,
+  unknownFamilyLabels,
   DISCOVERY_PEOPLE_CAP, DISCOVERY_ENDPOINTS, ZOOMINFO_JOBTITLE_MAX, extractErrorDetail,
 } = require(path.join(ROOT, "n8n/code/discoverySearch.js"));
 
@@ -184,6 +185,28 @@ test("73.1-10: an unknown family label contributes nothing and does not throw --
     titlesForFamilies(map, ["Not A Real Family", "Executive Officer"]),
     ["Executive Officer"],
   );
+});
+
+// ---- WR-03 (73.1-REVIEW.md): unknownFamilyLabels, titlesForFamilies's companion -----
+
+test("WR-03: unknownFamilyLabels flags a misspelled/stale label the vocabulary doesn't have", () => {
+  const map = shippedRoleFamilyMap();
+  assert.deepEqual(unknownFamilyLabels(map, ["Not A Real Family"]), ["Not A Real Family"]);
+  assert.deepEqual(unknownFamilyLabels(map, ["Not A Real Family", "Executive Officer"]),
+    ["Not A Real Family"], "a real family alongside an unknown one is not itself flagged");
+});
+
+test("WR-03: unknownFamilyLabels returns [] when every requested label resolves, or none were requested", () => {
+  const map = shippedRoleFamilyMap();
+  assert.deepEqual(unknownFamilyLabels(map, ["Executive Officer", "Board Chair"]), []);
+  assert.deepEqual(unknownFamilyLabels(map, []), []);
+  assert.deepEqual(unknownFamilyLabels(map, null), []);
+  assert.deepEqual(unknownFamilyLabels(map, undefined), []);
+});
+
+test("WR-03: unknownFamilyLabels dedupes a repeated unknown label", () => {
+  const map = shippedRoleFamilyMap();
+  assert.deepEqual(unknownFamilyLabels(map, ["Ghost", "Ghost"]), ["Ghost"]);
 });
 
 test("unknown/retired provider raises rather than silently returning an empty/malformed body", () => {

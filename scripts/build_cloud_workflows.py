@@ -12165,6 +12165,7 @@ def _discovery_zoom_search_leaf_js(rung):
     total_key = f"_zoominfo_{rung}_total"
     used_key = f"_zoominfo_{rung}_titles_used"
     dropped_key = f"_zoominfo_{rung}_titles_dropped"
+    unknown_key = f"_zoominfo_{rung}_unknown_families"
     template = r"""
 
 // --- n8n wrapper: ZoomInfo discovery search (CLOUD split-code-node, secret-free) ---
@@ -12184,6 +12185,11 @@ for (const item of items) {
   const token = row.zoom_token;
   const roleTitles = titlesForFamilies(ROLE_FAMILY_MAP, row.role_families);
   const _titleCap = capRoleTitles(roleTitles, ZOOMINFO_JOBTITLE_MAX);
+  // WR-03 (73.1-REVIEW.md): only meaningful when ROLE_FAMILY_MAP is non-empty (rung 1) --
+  // rung 2's map is always {}, so every requested label would read as "unknown" there
+  // even though rung 2 deliberately ignores role_families altogether.
+  const _unknownFamilies = Object.keys(ROLE_FAMILY_MAP).length
+    ? unknownFamilyLabels(ROLE_FAMILY_MAP, row.role_families) : null;
   const reqBody = buildRequest("zoominfo",
     { domain: row.domain, roleTitles, limit: row.per_company_cap });
   const reqUrl = buildUrl("zoominfo", { limit: row.per_company_cap });
@@ -12225,7 +12231,8 @@ for (const item of items) {
   }
   out.push({ ...row, "__KEY__": normalizeResponse("zoominfo", res),
     "__STATUS_KEY__": status, "__ERROR_KEY__": error, "__TOTAL_KEY__": total,
-    "__USED_KEY__": _titleCap.used.length, "__DROPPED_KEY__": _titleCap.dropped });
+    "__USED_KEY__": _titleCap.used.length, "__DROPPED_KEY__": _titleCap.dropped,
+    "__UNKNOWN_KEY__": _unknownFamilies });
 }
 return out;
 """
@@ -12236,7 +12243,8 @@ return out;
                 .replace("__ERROR_KEY__", error_key)
                 .replace("__TOTAL_KEY__", total_key)
                 .replace("__USED_KEY__", used_key)
-                .replace("__DROPPED_KEY__", dropped_key))
+                .replace("__DROPPED_KEY__", dropped_key)
+                .replace("__UNKNOWN_KEY__", unknown_key))
 
 
 ENRICH_DISCOVERY_ADAPT_ZOOM_PEOPLE_JS = inline("discoverySearch.js") + r"""
@@ -12251,8 +12259,10 @@ ENRICH_DISCOVERY_ADAPT_ZOOM_PEOPLE_JS = inline("discoverySearch.js") + r"""
 const DISCOVERY_SCRATCH_KEYS = [
   "_zoominfo_rung1_people", "_zoominfo_rung1_status", "_zoominfo_rung1_error",
   "_zoominfo_rung1_total", "_zoominfo_rung1_titles_used", "_zoominfo_rung1_titles_dropped",
+  "_zoominfo_rung1_unknown_families",
   "_zoominfo_rung2_people", "_zoominfo_rung2_status", "_zoominfo_rung2_error",
   "_zoominfo_rung2_total", "_zoominfo_rung2_titles_used", "_zoominfo_rung2_titles_dropped",
+  "_zoominfo_rung2_unknown_families",
 ];
 return $input.all().map((it) => {
   const row = it.json;
@@ -12267,6 +12277,10 @@ return $input.all().map((it) => {
       error: row._zoominfo_rung1_error ?? null,
       titles_used: row._zoominfo_rung1_titles_used ?? null,
       titles_dropped: row._zoominfo_rung1_titles_dropped ?? null,
+      // WR-03 (73.1-REVIEW.md): echoes which requested role_families labels did NOT
+      // resolve against the shipped vocabulary, so a drifted/misspelled label is
+      // detectable from the response itself, without a second offline lookup.
+      unknown_role_families: row._zoominfo_rung1_unknown_families ?? null,
     },
     rung2: (row._zoominfo_rung2_status !== undefined) ? {
       status: row._zoominfo_rung2_status ?? null,

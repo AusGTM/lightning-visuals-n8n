@@ -237,6 +237,19 @@ test("WR-01: per_company_cap: 0 means search nobody -- not silently overridden t
   assert.equal(co.search_diagnostics, null, "an excluded company never reached the search lane");
 });
 
+// ---- WR-03 (73.1-REVIEW.md) --------------------------------------------------------
+// Node-scoped (leaves await httpRequest and are stubbed in every walker test here, so
+// this is the check that actually proves the wiring -- tests/n8n/discoverySearch.test.mjs
+// covers unknownFamilyLabels's own logic).
+test("WR-03: ZoomInfo Search Rung1 stamps which requested role_families labels did NOT resolve", () => {
+  const wf = loadWf();
+  const rung1 = wf.nodes.find((n) => n.name === "ZoomInfo Search Rung1");
+  assert.match(rung1.parameters.jsCode, /unknownFamilyLabels\(ROLE_FAMILY_MAP, row\.role_families\)/);
+  const adapt = wf.nodes.find((n) => n.name === "Adapt ZoomInfo People");
+  assert.match(adapt.parameters.jsCode, /unknown_role_families:\s*row\._zoominfo_rung1_unknown_families/,
+    "search_diagnostics.rung1 must surface which labels went unmatched");
+});
+
 // ---- Task 2 -------------------------------------------------------------------------
 
 test("Task2/Test6: a gap company whose ZoomInfo rung-1 returns a person never reaches rung-2", () => {
