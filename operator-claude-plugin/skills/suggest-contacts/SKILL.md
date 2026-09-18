@@ -241,7 +241,18 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    With a grant already open (step 3's reuse branch), skip this call — there is nothing
    to open. Every later round in this batch, and every later round inside this same
    sitting, takes the already-open grant's branch: one consent point per batch, never
-   one per round (D-68-08).
+   one per round (D-68-08). The first yes of the session covers every lane and every
+   domain/id named in that first proposal (D-15a); a later send outside that record set
+   widens the SAME grant rather than opening a second one — see the discovery step's own
+   "Widening the grant" block below for the exact recipe.
+
+   **A second `open_grant` while one is already open is refused, in code, not merely
+   by this skill's own "skip this call" branch above (D-15c).** `open_grant` accepts an
+   `existing_grant` argument for exactly this: whatever grant a caller already believes
+   is open, passed in, so the refusal fires with the open grant's own label named — a
+   defence for the case where the branch above is itself mistaken, since nothing about
+   a grant persists to disk between calls and the only place one lives is whatever the
+   assistant is already holding from earlier in the same conversation.
 
 5. **Stage 1 — read the company's own pages.** For each eligible company in turn: the
    operator supplies or approves the starting page URL, and
@@ -322,22 +333,30 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
    Run `--rank` only when `--eligible` reported `"eligible": true`. Then `web_fetch`
    **only** the URLs in `accepted[]`, in rank order, and nothing else. Each accepted
-   entry carries its own rank: **1** the company's own host, **2** LinkedIn, **3** a
-   named industry body or trade outlet. Call that value `source_rank` below. The whole fallback
-   for one company is bounded by `MAX_FALLBACK_SEARCHES` — at most that many searches and
-   at most that many accepted URLs.
+   entry carries its own rank: **1** the company's own host, **3** LinkedIn, **4** a
+   named industry body or trade outlet. Call that value `source_rank` below. **Rank 2
+   never comes out of this ranker at all** — under the numbering D-01 set (operator
+   ruling 2026-09-18, after a round found people at only 1 of 7 companies), rank 2 is
+   provider discovery, and it is stamped by the NEW step below, never matched from a
+   URL — a matched host from this fallback can only ever land on rank 1, 3 or 4. The
+   whole fallback for one company is bounded by `MAX_FALLBACK_SEARCHES` — at most that
+   many searches and at most that many accepted URLs.
 
    - **A search snippet is never a source for a row field.** The ranker reads the URL host
      and nothing else; a person comes from the fetched page, never from search result text
      or a title. If a URL was mis-transcribed it simply fails to fetch or yields nobody.
    - **A rejected host contributes nothing at all** — not a lower rank, not a caveat, not
      a mention in the report as a person (D-5sd-02, rank 4).
-   - **A rank-3 result is collected, ranked and shown, but can never be sent** (D-5sd-05).
-     Pass the accepted entry's rank through to `synthesise_rows`'s fifth argument (`source_rank` in the block
-     below) so step 8's gate can see it.
+   - **Neither a rank-3 nor a rank-4 result can ever be sent** (D-5sd-05) — a change from
+     before D-01: LinkedIn (now rank 3) used to be sendable and is HELD under this
+     round's numbering, exactly like rank 4 always was. Both are still collected, ranked
+     and shown to the operator; only sending changes. Pass the accepted entry's rank
+     through to `synthesise_rows`'s fifth argument (`source_rank` in the block below) so
+     step 8's gate can see it.
    - The search itself spends no provider credit and no separately-billed tokens, so it is
      outside the priced ceiling shown at step 4 (D-5sd-03). The Lusha credit that a
-     promoted person triggers at stage 2 is **not** free and stays inside it.
+     promoted person triggers at stage 2 is **not** free and stays inside it — and
+     neither is a provider discovery search, priced separately below.
 
    The ladder is bound to the host built from the company's own recorded website — a
    scheme is added when the record has none, but `www.`, case, path and query are kept
@@ -351,8 +370,9 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
    **A company with no usable website on record may still be searched (operator ruling
    2026-09-11).** No ladder is ever built for it, so there is no own-host — no result
-   from this terminal can ever rank 1; rank 2 (LinkedIn) may be sendable and rank 3 is
-   always held, exactly as above. Report `discovery_plan`'s own note verbatim as the
+   from this terminal can ever rank 1; rank 3 (LinkedIn) and rank 4 are always held,
+   exactly as above. The provider discovery step below still runs for it regardless — it
+   needs only a domain to search by, never the ladder. Report `discovery_plan`'s own note verbatim as the
    reason no ladder was built — never `no_candidates`, whose text is
    `give_up_message`'s own and describes a ladder that RAN and found nothing, not one
    that was never built at all. State plainly that a domain found by searching is never
@@ -371,6 +391,173 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    other candidate: an apex/`www` redirect on the same host passes and may be fetched;
    any other redirect target is refused and reported, never chased somewhere else
    (D-62-03); and each accepted redirect fetch spends one of that company's five.
+
+   **Provider discovery — the gap-fill, run once, after every company's own ladder
+   (D-06 through D-11c).** The website ladder above runs FIRST, for every company in the
+   batch; only once it has finished for all of them does this step compute the gap set —
+   the companies where the ladder (plus its search fallback) found FEWER than
+   `per_company_cap` people (D-10). This is the 2026-09-18 pickleball round's own
+   measurement: of the 7 companies in that batch, 6 would have landed in the gap set and
+   gone to providers; Pickleball Australia — whose ladder already found enough people on
+   its own — would not have. Nothing about this step re-asks the operator for a role
+   list or a cap; both are the same round-level `chosen_families`/`per_company_cap`
+   already resolved above.
+
+   Mint ONE run id for the whole round — `run_state.new_run_id()`, the sole existing
+   mint point, never a fresh ad hoc id — and send ONE POST for the whole gap set through
+   `suggest_discovery.fetch_discovery`, carrying EVERY eligible company (gap and
+   non-gap alike, so the response can account for the whole round from one execution,
+   D-08/D-09), each with `company_id`, `name`, `domain` (the bare host —
+   `url_fallback._canonical_authority(website)`, the same helper the ladder above
+   already uses to compare hosts), `role_families` (the chosen family labels — now able
+   to include Executive Officer and Board Chair, D-11c), `num_associated_contacts`
+   (already known from this round's own eligibility check — never re-read from
+   HubSpot), and `gap` (the boolean this step just computed). One n8n execution answers
+   for the whole batch regardless of how many companies are in the gap set:
+
+   ```python
+   gap_entries = [entry for entry in rounds if entry["count"] < per_company_cap]
+   ```
+
+   **State the cost before spending (D-13a).** `cost_guard.discovery_line(len(gap_entries),
+   per_company_cap, cost_guard.load_rates())` renders the gap-company count, each
+   provider's own search rate (or the word "unknown" when it has not been measured
+   yet), the one n8n execution the whole round costs, and the stage-2 reveal ceiling
+   this discovery could still spend at the contact rate. Render it here, in the same
+   worst-case-ceiling register step 4 already used for the round's other spend — never
+   as a second, competing disclosure. **A provider whose search rate is unknown
+   proceeds anyway and reports its measured cost after the round** (D-13) — this is the
+   one deliberate exception to "state the cost before spending" anywhere in this skill,
+   and it applies to that provider's own line only, never to the round as a whole.
+
+   Only when `gap_entries` is non-empty does anything below run — a round where every
+   company's ladder already found enough spends nothing on this step and sends no POST.
+
+   ```python
+   discovery_run_id = run_state.new_run_id()
+   discovery_body = {
+       "run_id": discovery_run_id,
+       "per_company_cap": per_company_cap,
+       "companies": [
+           {
+               "company_id": entry["company"].get("id"),
+               "name": entry["company"].get("name"),
+               "domain": url_fallback._canonical_authority(
+                   entry["company"].get("website") or entry["company"].get("domain") or ""),
+               "role_families": chosen_families,
+               "num_associated_contacts": entry["company"].get("num_associated_contacts"),
+               "gap": entry["count"] < per_company_cap,
+           }
+           for entry in rounds
+       ],
+   }
+   result = suggest_discovery.fetch_discovery(cfg, discovery_body)
+   ```
+
+   **The two channels (D-07).** The response body is the fast path. When it comes back
+   unavailable, or `result["data"]["complete"]` is `False` — fewer companies echoed than
+   were sent, or `companies` missing outright — recover the SAME people from settled
+   runData, keyed on the identical client-minted `run_id`, never a re-send (a re-send
+   would spend the search a second time):
+
+   ```python
+   if result["available"] and result["data"].get("complete"):
+       discovery_companies = result["data"]["companies"]
+   else:
+       recovery = watch.recover_async_dispatch(
+           cfg, discovery_run_id, expected_chunk_count=1,
+           workflow_name=suggest_discovery.DISCOVERY_WORKFLOW_NAME,
+           echo_node=suggest_discovery.DISCOVERY_ECHO_NODE,
+           response_node=suggest_discovery.DISCOVERY_RESPONSE_NODE)
+       if recovery["recovered"] and recovery["responses"]:
+           discovery_companies = recovery["responses"][0].get("companies") or []
+       else:
+           # A miss is reported as recovered: False, plainly, to the operator -- never
+           # back-filled as "zero people found" (D-07). The round otherwise continues
+           # with only the ladder's own results.
+           discovery_companies = []
+   ```
+
+   **Merge before the mint, not after (D-03/D-04).** Immediately following the loop
+   above and before `mint_row_ids` runs, fold each company's provider people in beside
+   its own ladder-found records — grouped by which provider found them, since one
+   company's own response can carry hits from more than one provider in the waterfall:
+
+   ```python
+   by_company_id = {c.get("company_id"): c for c in discovery_companies}
+   new_records = []
+   for entry in rounds:
+       start, count = entry["start"], entry["count"]
+       ladder_records = records[start:start + count]
+       people_by_provider = {}
+       for person in (by_company_id.get(entry["company"].get("id")) or {}).get("people", []):
+           people_by_provider.setdefault(person.get("provider"), []).append(person)
+       provider_records = []
+       for provider, people in people_by_provider.items():
+           # The SAME two gates a ladder-found person already passes through: dropped
+           # first if already associated with the company, then gated per person by
+           # role_classify.classify_title against the chosen families (D-11b) -- the
+           # lane itself does not classify, and trusting a provider's own title match
+           # instead of the classifier is deferred to the end-of-phase live sample,
+           # never shipped here as the default.
+           gated = suggest_contacts.select_people(
+               people, vocabulary["families"], chosen_families, known_contacts)
+           provider_records.extend(suggest_contacts.synthesise_rows(
+               entry["company"], gated["selected"],
+               suggest_contacts.DISCOVERY_LOCATOR_BY_PROVIDER[provider],
+               per_company_cap, 2, provider=provider))
+       # dedupe_discovered folds one person found BOTH on the company's own page and by
+       # a provider into ONE row, naming the better (lower-ranked) source's own
+       # provenance and jobtitle (D-03/D-04); the other hit is kept as corroboration,
+       # which can never upgrade anything -- a rank-3 or rank-4 corroboration on a
+       # merged row never makes it sendable (T-73.1-33). The merged row still has to
+       # clear BOTH gates below it exactly like any other row: the email-relatedness
+       # pass at step 8, and the rank gate `search_fallback.hold_weak_sources` applies
+       # at the end of the pipeline below -- nothing about this merge sends anything
+       # early or skips either gate.
+       merged = suggest_contacts.dedupe_discovered(
+           ladder_records + provider_records)[:per_company_cap]
+       entry["start"], entry["count"] = len(new_records), len(merged)
+       new_records.extend(merged)
+   records = new_records
+   ```
+
+   Capping the merged list to `per_company_cap` keeps whichever rows were seen first —
+   the ladder's own rows, since they are placed first in `ladder_records +
+   provider_records` above — and holds the cap after the merge, the same cap this whole
+   round has honoured everywhere else.
+
+   **Widening the grant, if a later send ever falls outside it (D-15b).** Nothing about
+   the discovery step above writes anything — it is read-only, D-06 — so it needs no
+   grant of its own. But ANY later send in this round or this session that names a
+   domain or id the open grant does not already cover — an operator-stated alternate
+   domain at step 8, a connector write on a different record — auto-widens the SAME open
+   grant and states it, rather than asking again or opening a second one (D-15a/b).
+   `write_grant.widen(ceiling=None)` widens UNCONDITIONALLY, with no check at all — so
+   before calling it, recompute the projection over the WIDENED record set exactly the
+   way this round priced it at step 4: `write_grant.allowance_headroom`, then
+   `write_grant.envelope` (over the widened ids/domains) — `envelope()` itself computes
+   the `write_grant.ceiling_verdict` internally whenever it is handed a `headroom`
+   sample, and returns it at `figures["ceiling"]`, so a caller reads that rather than
+   calling `ceiling_verdict` a second time (the exact shape `plan_grant` itself already
+   uses at step 3 above, mirrored here rather than reinvented):
+
+   ```python
+   headroom = write_grant.allowance_headroom(cfg)
+   figures = write_grant.envelope(
+       cfg, object_type="companies", record_ids=widened_ids,
+       record_domains=widened_domains,
+       providers=(cfg or {}).get("enrichment_providers"), headroom=headroom)
+   grant = write_grant.widen(
+       grant, record_ids=widened_ids, record_domains=widened_domains,
+       ceiling=figures["ceiling"])
+   ```
+
+   A `CEILING_OVER` verdict refuses the widening and is reported to the operator, in the
+   same register as any other refusal this skill relays verbatim; `CEILING_UNKNOWN`
+   proceeds (D-57-02, the same disclose-and-proceed rule step 4 already states). **A
+   widening whose ceiling was never computed this way is not a widening this round
+   performs** — never call `widen` with `ceiling=None`.
 
 6. **Filter, then synthesise.** `suggest_contacts.select_people(people, family_list,
    chosen_families, known_contacts)` drops a person already associated with that company
@@ -643,12 +830,13 @@ and what `enrich-before-ingest/SKILL.md` already calls.
            # your own web search returned, written to a scratch file and read back; the
            # ranker reads the URL host ONLY, so a snippet is never a source for a field.
            # `plan["pasted_url"]` is `None` for a website-less company -- rank 1 is then
-           # structurally unreachable and this round is LinkedIn-or-held (260911-ao2).
+           # structurally unreachable and this round is LinkedIn-or-industry-or-held
+           # (260911-ao2, D-01).
            ranked = search_fallback.rank_results(results, plan["pasted_url"])
            # web_fetch ONLY ranked["accepted"], in rank order, then set `people`,
            # `fetched_url` and `source_rank` from the page ACTUALLY fetched and the
-           # accepted entry it came from -- a rank-3 accept still yields people, and
-           # step 8's gate is what holds them.
+           # accepted entry it came from -- a rank-3 or rank-4 accept still yields
+           # people, and step 8's gate is what holds them.
            fallback_selection = suggest_contacts.select_people(
                people, vocabulary["families"], chosen_families, known_contacts)
            selected = fallback_selection["selected"]
@@ -706,10 +894,11 @@ and what `enrich-before-ingest/SKILL.md` already calls.
                           for c in eligible_companies}
        sendable, held = suggest_contacts.partition_for_dispatch(
            [record["row"] for record in records], company_domains)
-       # The SECOND, records-level gate (D-5sd-01 + D-5sd-05): a search-sourced person
-       # is sendable only from the company's own host or LinkedIn. A rank-3 row is
-       # held however confidently the waterfall validated it. Independent of the pass
-       # above; both hold.
+       # The SECOND, records-level gate (D-5sd-01 + D-5sd-05, D-01): a search-sourced
+       # person is sendable only from the company's own host or provider discovery
+       # (rank 1 or rank 2). A rank-3 (LinkedIn) or rank-4 row is held however
+       # confidently the waterfall validated it. Independent of the pass above; both
+       # hold.
        sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
        # The terminal classify (Phase 65 Task 2): each company's OWN cause and
        # breakdown, read off the batch-wide sendable/held filtered to this company's
@@ -791,6 +980,14 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    the walk — not part of this report; what the operator needs is what was found and
    what it cost, not the page-by-page arithmetic.
 
+   **Name which identity key resolved a created contact (D-16d).** A created row —
+   including an emailless one landed through the ingest lane's identity ladder — already
+   carries `lane` on the row `report_enrichment.build_row_reports` returns: the
+   identity key (`email`, `linkedin`, `mobilephone`, `name`, ...) that actually resolved
+   it. Render that key beside the created-contact line in the mandatory end-of-run
+   account below, so the operator sees WHICH key resolved a person, not merely that one
+   was created.
+
    **The cause, read off `entry["outcome"]` — never re-derived (Phase 65, D-65-01).**
    Every company's line names its cause in the operator's own words, straight off the
    round's own output structure:
@@ -815,8 +1012,9 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    `email_domain_freemail` (a personal mailbox — Gmail, Hotmail, an AU consumer ISP),
    `email_domain_mismatch` (a stranger's domain — the row that started this rule),
    `company_domain_unknown` (nothing on record to compare against), and
-   `search_source_not_strong` (found by the step-5 search fallback on a rank-3 industry
-   source rather than the company's own site or LinkedIn — D-5sd-05). Quote each held
+   `search_source_not_strong` (found on a rank-3 (LinkedIn) or rank-4 (industry body or
+   trade outlet) source rather than the company's own site or provider discovery —
+   D-5sd-05, D-01). Quote each held
    row's own prose `reason` under its group, so the operator can act on it without
    opening HubSpot first; a `search_source_not_strong` reason quotes the **source URL**
    specifically, so the operator can judge a third-party claim themselves rather than

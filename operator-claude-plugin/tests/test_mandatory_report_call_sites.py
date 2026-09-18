@@ -327,12 +327,29 @@ def _suggest_contacts_text():
 
 
 def test_suggest_contacts_run_id_is_sourced_not_minted():
+    """The mandatory END-OF-RUN REPORT's `run_id` is sourced from step 8's reused
+    `enrich-before-ingest` dispatch block, never independently minted here — inventing
+    one for the report would let it describe a write-dispatch run that never actually
+    happened.
+
+    Phase 73.1 Plan 08 added a genuinely SEPARATE, explicitly-named
+    `discovery_run_id` (`run_state.new_run_id()`) for the read-only provider-discovery
+    lane's own n8n execution — a different workflow, a different run, never the one the
+    report below describes. This assertion is scoped to the report call itself, not to
+    every appearance of `run_state.new_run_id()` in the file: banning the literal
+    string outright would forbid the discovery lane's own correlation id along with the
+    report's, which is not what "sourced not minted" ever meant."""
     text = _suggest_contacts_text()
-    assert "run_state.new_run_id()" not in text, (
-        "suggest-contacts must never mint a run_id of its own — it is sourced from "
-        "step 8's reused enrich-before-ingest dispatch block"
-    )
     assert text.count("run_report.build_run_report(") == 1
+    assert "discovery_run_id" in text, (
+        "the discovery step's own run_id must be explicitly named `discovery_run_id`, "
+        "never bound to the bare `run_id` name the report call below reads"
+    )
+    report_call = text.split("run_report.build_run_report(", 1)[1][:80]
+    assert "discovery_run_id" not in report_call, (
+        "the mandatory report must never be built from the discovery round's own "
+        "run_id — it describes the write-dispatch run, sourced from step 8"
+    )
 
 
 def test_suggest_contacts_states_the_empty_round_case():

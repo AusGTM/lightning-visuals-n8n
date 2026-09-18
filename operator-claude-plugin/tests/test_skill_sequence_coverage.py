@@ -618,6 +618,39 @@ COVERED = {
         ("watch.resume_or_disclose", "held_queue.load"),
     ): "test_run_manifest.py::"
        "test_resume_or_disclose_with_held_entries_wired_skips_a_settled_row_end_to_end",
+    # Phase 73.1 Plan 08: the discovery step mints a run id and derives the bare-host
+    # domain, both of which flow into the ONE POST that carries them (D-07/D-08) --
+    # driven against a stub transport, not the three functions called in isolation.
+    (
+        "suggest-contacts",
+        (
+            "run_state.new_run_id", "url_fallback._canonical_authority",
+            "suggest_discovery.fetch_discovery",
+        ),
+    ): "test_suggest_discovery.py::"
+       "test_the_documented_discovery_round_mints_derives_and_posts_end_to_end",
+    # Phase 73.1 Plan 08: the discovery-merge block gates provider people through the
+    # same role filter a ladder person passes, turns the survivors into provenanced
+    # rows, then folds a person found by both the page and a provider into ONE row
+    # naming the winning (lower-ranked) source (D-03/D-04) -- the real join, not the
+    # three functions driven in isolation.
+    (
+        "suggest-contacts",
+        (
+            "suggest_contacts.select_people", "suggest_contacts.synthesise_rows",
+            "suggest_contacts.dedupe_discovered",
+        ),
+    ): "test_suggest_contacts_composition.py::"
+       "test_the_documented_discovery_merge_folds_a_ladder_and_provider_hit_into_one_row",
+    # Phase 73.1 Plan 08: the widening recipe recomputes the projection over the
+    # WIDENED record set before calling widen (D-15b) -- `envelope()` is handed the
+    # SAME sampled headroom `allowance_headroom` returned, and its own
+    # `figures["ceiling"]` (never a second `ceiling_verdict` call) feeds `widen`.
+    (
+        "suggest-contacts",
+        ("write_grant.allowance_headroom", "write_grant.envelope", "write_grant.widen"),
+    ): "test_write_grant.py::"
+       "test_the_documented_widen_recipe_drives_headroom_envelope_and_widen_end_to_end",
 }
 
 NOT_A_PIPELINE = {

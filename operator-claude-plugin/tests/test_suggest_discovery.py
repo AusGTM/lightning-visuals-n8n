@@ -7,7 +7,9 @@ lane). Copies `backend_status.py`'s four-part shape (see that module and
 network call — the autouse `no_network` fixture (conftest.py) guarantees that; this file
 additionally uses `stub_post_transport_factory` to script responses explicitly.
 """
+import run_state
 import suggest_discovery
+import url_fallback
 
 
 SENT_BODY = {
@@ -194,3 +196,47 @@ def test_fetch_discovery_uses_the_module_level_requests_post_by_default():
     default = sig.parameters["transport"].default
     assert callable(default)
     assert getattr(default, "__name__", None) in ("post", "_blocked")
+
+
+# =========================================================================================
+# Phase 73.1 Plan 08 — registers the census identity for suggest-contacts/SKILL.md's
+# discovery-round block: run_state.new_run_id -> url_fallback._canonical_authority ->
+# suggest_discovery.fetch_discovery, the real join end to end (D-07/D-08), not the three
+# functions driven in isolation. Both the minted run_id and the bare-host domain flow
+# straight into the POST body this drives against a stub transport.
+# =========================================================================================
+
+def test_the_documented_discovery_round_mints_derives_and_posts_end_to_end(
+    fake_config, stub_post_transport_factory,
+):
+    minted_run_id = run_state.new_run_id()
+    assert isinstance(minted_run_id, str) and minted_run_id
+
+    bare_domain = url_fallback._canonical_authority("https://www.Example-Racing.COM/about")
+    assert bare_domain == "example-racing.com", (
+        "the domain sent must be the bare host, never the full URL with scheme/path"
+    )
+
+    body = {
+        "run_id": minted_run_id,
+        "per_company_cap": 2,
+        "companies": [
+            {"company_id": "1", "name": "Example Racing", "domain": bare_domain,
+             "role_families": ["board"], "num_associated_contacts": 0, "gap": True},
+        ],
+    }
+    transport = stub_post_transport_factory([
+        {"run_id": minted_run_id, "companies": [
+            {"company_id": "1", "num_associated_contacts": 0, "people": []}]},
+    ])
+    result = suggest_discovery.fetch_discovery(fake_config, body, transport=transport)
+
+    assert len(transport.calls) == 1
+    posted = transport.calls[0]["json"]
+    # the real join: what run_state minted and what the domain helper derived both
+    # reached the wire, unaltered, inside the SAME POST body.
+    assert posted["run_id"] == minted_run_id
+    assert posted["companies"][0]["domain"] == bare_domain
+    assert result["available"] is True
+    assert result["data"]["run_id"] == minted_run_id
+    assert result["data"]["complete"] is True

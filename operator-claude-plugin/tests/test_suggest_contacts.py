@@ -2109,3 +2109,149 @@ def test_round_outcome_is_idempotent_and_mutates_no_input():
     assert sendable == sendable_before
     assert held == held_before
     assert fallback == fallback_before
+
+
+# =====================================================================================
+# Phase 73.1 Plan 08 — suggest-contacts/SKILL.md's discovery step, pinned as a
+# skill-text contract (D-01, D-03/D-04, D-07..D-11c, D-13a, D-15b/D-15c). These read the
+# skill file's own words rather than driving code, since the discovery step is prose+
+# code the assistant follows step by step -- the underlying functions it names
+# (suggest_discovery.fetch_discovery, dedupe_discovered, cost_guard.discovery_line,
+# write_grant.widen/ceiling_verdict) are pinned by their OWN modules' tests; this is
+# what pins the SKILL TEXT is not allowed to drift back to the stale rank numbering or
+# silently drop one of the load-bearing facts a reader depends on.
+# =====================================================================================
+
+SKILL_PATH = (
+    pathlib.Path(__file__).resolve().parent.parent / "skills" / "suggest-contacts" / "SKILL.md"
+)
+
+
+def _skill_text():
+    return SKILL_PATH.read_text(encoding="utf-8")
+
+
+def _windows(text, needle, radius=120):
+    """Every `radius`-char window around an occurrence of `needle` (case-sensitive),
+    reading across a markdown line-wrap the way an operator would."""
+    windows = []
+    idx = 0
+    while True:
+        i = text.find(needle, idx)
+        if i == -1:
+            break
+        windows.append(text[max(0, i - radius):i + len(needle) + radius])
+        idx = i + 1
+    return windows
+
+
+def test_rank_2_is_named_as_provider_discovery_not_linkedin():
+    text = _skill_text()
+    windows = _windows(text, "rank 2")
+    assert windows
+    # at least one "rank 2" occurrence names provider discovery -- the whole point of
+    # D-01's renumbering -- reading across the markdown wrap, not line-by-line.
+    assert any("provider discovery" in w for w in windows)
+    # no "rank 2" occurrence CLAIMS rank 2 IS LinkedIn -- the stale pre-D-01 numbering.
+    assert not any(
+        "2 (linkedin)" in w.lower() or "rank 2, linkedin" in w.lower()
+        or "rank 2 (linkedin" in w.lower()
+        for w in windows
+    ), "a 'rank 2' occurrence claims rank 2 IS LinkedIn -- stale pre-D-01 numbering"
+
+
+def test_rank_3_is_named_as_linkedin_and_explicitly_held():
+    text = _skill_text()
+    windows = _windows(text, "rank 3", radius=200)
+    assert windows
+    assert any("LinkedIn" in w for w in windows), "no 'rank 3' occurrence names LinkedIn"
+    assert any("held" in w.lower() for w in windows), (
+        "no 'rank 3' occurrence states LinkedIn is held"
+    )
+
+
+def test_skill_names_every_new_module_and_function_the_discovery_step_calls():
+    text = _skill_text()
+    for needle in (
+        "suggest_discovery.fetch_discovery",
+        "run_state.new_run_id",
+        "watch.recover_async_dispatch",
+        "dedupe_discovered",
+        "cost_guard.discovery_line",
+        "write_grant.widen",
+        "write_grant.ceiling_verdict",
+        "existing_grant",
+        "role_classify.classify_title",
+    ):
+        assert needle in text, f"skill text never names {needle!r}"
+
+
+def test_skill_states_the_ceiling_is_recomputed_before_any_widening():
+    text = _skill_text()
+    normalized = " ".join(text.split())
+    assert "ceiling=None" in normalized or "ceiling=None" in text
+    assert "never call `widen` with `ceiling=None`" in normalized or \
+        "widen` with `ceiling=None`" in normalized
+
+
+def test_skill_states_ladder_runs_first_and_providers_fill_the_gap():
+    text = _skill_text().lower()
+    assert "ladder" in text and "gap" in text
+    assert "runs first" in text or "run first" in text or "first, for every company" in text
+
+
+def test_skill_states_an_unknown_provider_rate_proceeds_and_reports_after():
+    text = _skill_text()
+    assert "unknown" in text
+    assert "proceeds anyway and reports" in text or "proceeds and reports" in text
+
+
+def test_skill_never_mentions_the_stale_rank_1_2_3_ranker_numbering():
+    """The pre-D-01 ladder text once read '**1** the company's own host, **2**
+    LinkedIn, **3** a named industry body' -- pin that this exact stale ordering is
+    gone."""
+    text = _skill_text()
+    assert "**1** the company's own host, **2** LinkedIn" not in text
+
+
+def test_no_operator_facing_line_in_this_skill_says_tier():
+    """The substring ban `test_report_enrichment.py`'s
+    `test_no_operator_facing_skill_body_mentions_icp_or_tier_not_even_a_placeholder`
+    already enforces repo-wide; pinned again here, scoped to this one file, so a plan-08
+    regression fails in the file it actually touched rather than only in a shared
+    cross-skill scan."""
+    text = _skill_text().lower()
+    assert "tier" not in text
+
+
+def test_stage2_dispatch_block_is_unchanged_by_this_plan():
+    """Plan 08 read stage 2's block and confirmed it needed no fix -- pin that its own
+    reuse sentence (naming the four functions it composes rather than reimplementing)
+    is still exactly the sentence plan 08 found, so a future edit to this block is a
+    deliberate, visible diff rather than an accidental one."""
+    text = _skill_text()
+    assert (
+        "enrichment.resolve_providers" in text
+        and "chunking.dispatch_plan(..., execution_ceiling=...)" in text
+        and "watch.recover_async_dispatch" in text
+        and "preingest.merge_enriched" in text
+    )
+
+
+def test_a_triaged_todo_defers_the_stage2_promotion_and_passes_todo_triage():
+    import subprocess
+    import sys
+
+    todo_dir = pathlib.Path(__file__).resolve().parent.parent.parent / ".planning" / "todos" / "pending"
+    matches = list(todo_dir.glob("*suggest-contacts-stage2*"))
+    assert matches, "no triaged todo deferring the stage-2 promotion was found"
+    body = matches[0].read_text(encoding="utf-8")
+    assert "kind: question" in body
+    assert "trigger:" in body
+    assert "owner:" in body
+
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/todo_triage.py"], cwd=repo_root,
+        capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr

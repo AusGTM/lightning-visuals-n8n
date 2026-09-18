@@ -288,6 +288,15 @@ def test_scan_found_at_least_one_plugin_source_file():
 # call anywhere in `preingest.py` can carry a multipart or form payload, and one
 # asserts the four-key lookup allowlist every match request is pinned to
 # (`enrichment.MATCH_LOOKUP_KEYS`) cannot silently widen.
+#
+# `suggest_discovery.py`'s `fetch_discovery` (Phase 73.1 Plan 08) is written
+# attribute-shaped (`transport=requests.post`, `backend_status.py`'s exact shape) so it
+# IS visible to `_is_requests_send_attribute` and lands on this allowlist deliberately.
+# It POSTs to the read-only sixth cloud workflow (`LV Suggest Discovery`, D-06 — zero
+# HubSpot write nodes anywhere in its graph, `assert_no_write_nodes` enforced at
+# generation time) and carries a search request, never a record to write: D-12 is
+# explicit that this lane is search-only, no reveal, no email/phone in any normalised
+# person. A read wearing a POST's clothes, exactly like the entries above it.
 _EXPECTED_SEND_SHAPED = [
     ("backend_status.py", ["fetch_backend_status"]),
     ("dispatch.py", ["dispatch"]),
@@ -295,6 +304,7 @@ _EXPECTED_SEND_SHAPED = [
     ("preingest.py", ["fetch_matches", "match_batch"]),
     ("probe_n8n_semantics.py", ["execute_probe"]),
     ("review_queue.py", ["fetch_queue"]),
+    ("suggest_discovery.py", ["fetch_discovery"]),
 ]
 
 

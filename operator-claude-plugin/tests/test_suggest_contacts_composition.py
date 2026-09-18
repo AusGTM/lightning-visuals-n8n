@@ -1356,3 +1356,84 @@ def test_a_website_less_company_reaches_the_search_fallback_and_is_always_held()
         walk, rows=[record["row"] for record in rejoined], sendable=sendable, held=held,
         fallback=fallback_selection)
     assert terminal["reentry"] == suggest_contacts.REENTRY_NONE
+
+
+# =====================================================================================
+# Phase 73.1 Plan 08 — registers the census identity for suggest-contacts/SKILL.md's
+# discovery-merge block: `select_people` -> `synthesise_rows` -> `dedupe_discovered`,
+# the real join end to end (D-03/D-04), not the three functions driven in isolation.
+# =====================================================================================
+
+def test_the_documented_discovery_merge_folds_a_ladder_and_provider_hit_into_one_row():
+    """One company: the ladder already found Alex (rank 1). The discovery lane's
+    Apollo hop returns TWO people for the same company -- the SAME Alex (found again,
+    by a provider) and a NEW person, Jordan, that only the provider found. This drives
+    the documented sequence exactly as the skill's own discovery-merge block does:
+    `select_people` gates the provider's raw people (role filter + already-associated
+    drop), `synthesise_rows(..., 2, provider="apollo")` turns the survivors into rows
+    carrying provenance, and `dedupe_discovered` folds Alex's two hits into ONE row
+    naming the LOWER-ranked (ladder) source as the winner, with the provider hit kept
+    only as corroboration -- never promoted, never a second row."""
+    family_list = [
+        {"label": "board", "members": ["Director", "Board Member", "Chairperson"]},
+    ]
+    chosen_families = ["board"]
+    company_row = {"id": "789", "name": "Example Racing Club",
+                    "website": "https://example-racing-club.example"}
+
+    # --- the ladder's own result (rank 1), already synthesised earlier in the round ---
+    ladder_people = [{"firstname": "Alex", "lastname": "Rivera", "jobtitle": "Director"}]
+    ladder_selection = suggest_contacts.select_people(
+        ladder_people, family_list, chosen_families, known_contacts=[])
+    ladder_records = suggest_contacts.synthesise_rows(
+        company_row, ladder_selection["selected"],
+        "https://example-racing-club.example/board", per_company_cap=5)
+    assert len(ladder_records) == 1
+    assert "source_tier" not in ladder_records[0]["provenance"]  # ladder: byte-identical
+
+    # --- the discovery lane's own response for this company (Apollo hop) -------------
+    provider_people = [
+        {"firstname": "Alex", "lastname": "Rivera", "jobtitle": "Board Member",
+         "provider": "apollo"},   # the SAME person, found again, by a provider
+        {"firstname": "Jordan", "lastname": "Nakamura", "jobtitle": "Chairperson",
+         "provider": "apollo"},  # a NEW person only the provider found
+    ]
+    gated = suggest_contacts.select_people(
+        provider_people, family_list, chosen_families, known_contacts=[])
+    assert {p["firstname"] for p in gated["selected"]} == {"Alex", "Jordan"}
+    provider_records = suggest_contacts.synthesise_rows(
+        company_row, gated["selected"],
+        suggest_contacts.DISCOVERY_LOCATOR_BY_PROVIDER["apollo"],
+        per_company_cap=5, source_tier=2, provider="apollo")
+    assert len(provider_records) == 2
+    assert all(r["provenance"]["source_tier"] == 2 for r in provider_records)
+    assert all(r["provenance"]["provider"] == "apollo_search" for r in provider_records)
+
+    # --- the real join: dedupe_discovered folds the SAME person into ONE row ---------
+    merged = suggest_contacts.dedupe_discovered(ladder_records + provider_records)
+
+    assert len(merged) == 2, "Alex's two hits fold into one; Jordan stays a second row"
+    names = sorted(
+        (r["row"].get("firstname"), r["row"].get("lastname")) for r in merged)
+    assert names == [("Alex", "Rivera"), ("Jordan", "Nakamura")]
+
+    alex = next(r for r in merged if r["row"].get("firstname") == "Alex")
+    # D-03: the survivor is the LOWER-ranked (ladder) hit -- never the provider's.
+    assert "source_tier" not in alex["provenance"]
+    assert alex["row"]["jobtitle"] == "Director", (
+        "D-04: the row's jobtitle is the WINNING (ladder) source's title, never the "
+        "provider's corroborating one"
+    )
+    corroboration = alex["provenance"]["corroboration"]
+    assert len(corroboration) == 1
+    assert corroboration[0]["source_tier"] == 2
+    assert corroboration[0]["provider"] == "apollo_search"
+    assert corroboration[0]["jobtitle"] == "Board Member"
+
+    jordan = next(r for r in merged if r["row"].get("firstname") == "Jordan")
+    assert jordan["provenance"]["source_tier"] == 2
+    assert "corroboration" not in jordan["provenance"]
+
+    # A synthesise_rows/select_people call alone never proves the fold; only the
+    # dedupe_discovered join above does -- the two intermediate assertions above
+    # exist only to pin the inputs the real join is exercised against.

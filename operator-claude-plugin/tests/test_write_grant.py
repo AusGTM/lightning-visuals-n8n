@@ -1249,6 +1249,66 @@ def test_covers_admits_a_widened_send(granting_config, stub_module_transport_fac
         record_ids=["99999"], record_domains=["new.example"]) is None
 
 
+# =========================================================================================
+# Phase 73.1 Plan 08 — registers the census identity for suggest-contacts/SKILL.md's
+# widening block: write_grant.allowance_headroom -> write_grant.envelope ->
+# write_grant.widen, the real join end to end (D-15b), not the three functions driven in
+# isolation. `envelope()` is handed the SAME sampled `headroom` object
+# `allowance_headroom` returned, and its own `figures["ceiling"]` -- never a second,
+# separate `ceiling_verdict` call -- is what the widen call below is fed, exactly as the
+# skill text describes.
+# =========================================================================================
+
+def test_the_documented_widen_recipe_drives_headroom_envelope_and_widen_end_to_end(
+        granting_config, stub_module_transport_factory, stub_get_transport_factory):
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=("known.example",))
+
+    headroom_transport = stub_get_transport_factory([{"data": []}])
+    headroom = write_grant.allowance_headroom(granting_config, transport=headroom_transport)
+    assert headroom["sampled"] is True
+
+    widened_ids = [RECORD_ID, "99999"]
+    widened_domains = ["known.example", "new.example"]
+    figures = write_grant.envelope(
+        granting_config, object_type="companies", record_ids=widened_ids,
+        record_domains=widened_domains, providers=[], headroom=headroom)
+    assert figures["ceiling"]["verdict"] in (
+        write_grant.CEILING_OK, write_grant.CEILING_UNKNOWN, write_grant.CEILING_OVER)
+
+    widened = write_grant.widen(
+        grant, record_ids=widened_ids, record_domains=widened_domains,
+        ceiling=figures["ceiling"])
+
+    assert widened["record_ids"] == widened_ids
+    assert widened["record_domains"] == widened_domains
+    assert "99999" in widened["statement"]
+    assert "new.example" in widened["statement"]
+
+
+def test_the_documented_widen_recipe_refuses_when_the_recomputed_ceiling_is_over(
+        granting_config, stub_module_transport_factory, stub_get_transport_factory):
+    """The same recipe, but the widened set's OWN recomputed ceiling is over -- proving
+    the skill's rule that a widening is refused on the WIDENED projection, never on the
+    grant's original one."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(RECORD_ID,), domains=("known.example",))
+
+    headroom_transport = stub_get_transport_factory([{"data": []}])
+    headroom = write_grant.allowance_headroom(granting_config, transport=headroom_transport)
+
+    figures = write_grant.envelope(
+        granting_config, object_type="companies", record_ids=[RECORD_ID, "99999"],
+        record_domains=["known.example", "new.example"], providers=[], headroom=headroom)
+    over_ceiling = {**figures["ceiling"], "verdict": write_grant.CEILING_OVER}
+
+    result = write_grant.widen(
+        grant, record_ids=["99999"], record_domains=["new.example"], ceiling=over_ceiling)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert "ceiling" in result["detail"].lower()
+
+
 def test_covers_outside_refusal_points_at_widen_not_a_new_grant(
         granting_config, stub_module_transport_factory):
     """D-15b amends GRANT-03's old 'widening it needs a new grant' text."""
