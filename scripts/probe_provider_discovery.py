@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """scripts/probe_provider_discovery.py
 
-Phase 73.1 Plan 09 Task 1 (D-12/D-13) — one-shot, opt-in-guarded, credit-spending live
-probe answering the one question this phase could not answer offline: do the three
-[ASSUMED] provider search-by-role endpoints in n8n/code/discoverySearch.js actually exist
-on this account, and what does a search call cost?
+Phase 73.1 Plan 09 Task 1 (D-12/D-13) / Task 2 (round-1 correction) — one-shot,
+opt-in-guarded, credit-spending live probe answering the one question this phase could
+not answer offline: do the three [ASSUMED] provider search-by-role endpoints in
+n8n/code/discoverySearch.js actually exist on this account, and what does a search call
+cost?
+
+Round 1 (2026-09-18, pickleballaustralia.org.au) found all three original endpoints
+wrong (ZoomInfo 400, Apollo 422 deprecated-route, Lusha 404) — see
+.planning/phases/73.1-provider-backed-contact-discovery-as-source-tier-2/
+73.1-D12-VERDICT.round1.json. This script now DERIVES its endpoints, request bodies and
+URLs from n8n/code/discoverySearch.js's own `DISCOVERY_ENDPOINTS`/`buildRequest`/
+`buildUrl` (via a short-lived `node -e` subprocess) instead of holding a second,
+hand-copied literal — that literal is exactly what round 1's failure traces back to.
 
 Reuses scripts/check_provider_credits.py's balance-read machinery (PROVIDER_REGISTRY,
 the per-provider `_CHECK` functions, the ZoomInfo token mint) rather than
@@ -36,6 +45,7 @@ run_name='__main__')" -- --domain exampleracing.example
 """
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,14 +68,46 @@ VERDICT_PATH = (
 # provider_registry.py's PROVIDER_NAMES order, which is the unrelated enrich-lane order.
 DISCOVERY_ORDER = ("zoominfo", "apollo", "lusha")
 
-# [ASSUMED] endpoints under test — a literal copy of n8n/code/discoverySearch.js's
-# DISCOVERY_ENDPOINTS constant. Copied, not imported: this script is Python and
-# discoverySearch.js is inline()'d JS with no cross-language module boundary.
-DISCOVERY_ENDPOINTS = {
-    "zoominfo": "https://api.zoominfo.com/gtm/data/v1/contacts/search",
-    "apollo": "https://api.apollo.io/v1/mixed_people/search",
-    "lusha": "https://api.lusha.com/prospecting/contacts/search",
-}
+_DISCOVERY_SEARCH_JS = ROOT / "n8n" / "code" / "discoverySearch.js"
+
+
+def _node_eval(js_expr):
+    """Evaluate a JS expression against n8n/code/discoverySearch.js's own exports
+    (`m`) and return the parsed JSON result -- so this probe builds its endpoints,
+    request bodies and URLs from the SAME source of truth as the lane, never a second
+    hand-copied literal that can silently drift. That drift is exactly what round 1 of
+    this probe found: the shapes this script used to hardcode were wrong (ZoomInfo 400,
+    Apollo 422, Lusha 404). One short-lived `node` subprocess per call; this probe
+    issues at most three provider searches, so this runs only a handful of times per
+    invocation -- never a hot path."""
+    script = f"const m = require({json.dumps(str(_DISCOVERY_SEARCH_JS))}); console.log(JSON.stringify({js_expr}));"
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"discoverySearch.js node-eval failed for {js_expr!r}: {result.stderr.strip()[:300]}")
+    return json.loads(result.stdout)
+
+
+# Derived from n8n/code/discoverySearch.js's own (round-1-corrected) constant -- never a
+# second, driftable literal.
+DISCOVERY_ENDPOINTS = _node_eval("m.DISCOVERY_ENDPOINTS")
+
+
+def _search_request(provider, domain):
+    """The rung-2 (unfiltered) search body for `provider`, built by
+    n8n/code/discoverySearch.js's OWN buildRequest -- the probe tests bare endpoint
+    existence first, not the role-title filter."""
+    opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
+    return _node_eval(f"m.buildRequest({json.dumps(provider)}, {opts})")
+
+
+def _search_url(provider, domain):
+    """The URL to POST `_search_request`'s body to, built by discoverySearch.js's OWN
+    buildUrl -- ZoomInfo's pagination is a query-string parameter (round-1 correction),
+    not a body attribute; Apollo and Lusha are the bare endpoint."""
+    opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
+    return _node_eval(f"m.buildUrl({json.dumps(provider)}, {opts})")
+
 
 APOLLO_UNREADABLE_NOTE = (
     "Apollo's usage endpoint returns per-endpoint rate limits, not a depleting credit "
@@ -73,21 +115,6 @@ APOLLO_UNREADABLE_NOTE = (
     "reads 403 on it. Balance is UNREADABLE on this account -- any Apollo search cost "
     "can only come from vendor documentation, never a measured delta."
 )
-
-
-def _search_request(provider, domain):
-    """The one [ASSUMED] search body for `provider`, mirroring
-    n8n/code/discoverySearch.js's buildRequest() rung-2 (unfiltered) shape — the probe
-    tests bare endpoint existence first, not the role-title filter."""
-    if provider == "zoominfo":
-        return {"data": {"type": "ContactSearch",
-                          "attributes": {"companyDomain": domain, "maxResults": 10}}}
-    if provider == "apollo":
-        return {"q_organization_domains": domain, "per_page": 10}
-    if provider == "lusha":
-        return {"filters": {"companies": {"domains": [domain]}},
-                 "pages": {"page": 0, "size": 10}}
-    raise ValueError(f"unknown provider {provider}")
 
 
 def _search_headers(provider):
@@ -123,10 +150,14 @@ def _people_from_response(provider, body):
     """(people_returned, reveal_fields_present) — never raises on a malformed body."""
     if not isinstance(body, dict):
         return False, False
-    if provider in ("zoominfo", "lusha"):
+    if provider == "zoominfo":
         items = body.get("data")
     elif provider == "apollo":
         items = body.get("people")
+    elif provider == "lusha":
+        # [ASSUMED] response envelope -- round 1 never reached a 2xx to observe it.
+        # Tolerate either shape, mirroring discoverySearch.js's normalizeResponse.
+        items = body.get("data") if isinstance(body.get("data"), list) else body.get("contacts")
     else:
         items = None
     items = items if isinstance(items, list) else []
@@ -159,9 +190,10 @@ def probe_provider(provider, domain):
         result["balance_after"] = result["balance_before"]
         return result
 
+    url = _search_url(provider, domain)
     body = _search_request(provider, domain)
     try:
-        r = requests.post(DISCOVERY_ENDPOINTS[provider], headers=headers, json=body, timeout=30)
+        r = requests.post(url, headers=headers, json=body, timeout=30)
         result["status"] = r.status_code
         try:
             resp_body = r.json()
@@ -191,9 +223,19 @@ def probe_provider(provider, domain):
     return result
 
 
+def _next_probe_round():
+    """1 + however many round-N verdict snapshots already exist alongside VERDICT_PATH.
+    Round 1's own snapshot (73.1-D12-VERDICT.round1.json) is preserved by hand before
+    each correction; each later run bumps the round number rather than silently
+    overwriting that history."""
+    existing = list(VERDICT_PATH.parent.glob(f"{VERDICT_PATH.stem}.round*.json"))
+    return len(existing) + 1
+
+
 def run_probe(domain):
     verdict = {
         "probed_at": datetime.now(timezone.utc).isoformat(),
+        "probe_round": _next_probe_round(),
         "domain": domain,
         "providers": {p: probe_provider(p, domain) for p in DISCOVERY_ORDER},
         "operator_ruling": None,

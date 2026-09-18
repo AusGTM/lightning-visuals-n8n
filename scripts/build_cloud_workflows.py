@@ -12107,13 +12107,14 @@ for (const item of items) {
   const token = row.zoom_token;
   const reqBody = buildRequest("zoominfo",
     { domain: row.domain, roleTitles: ROLE_TITLES, limit: row.per_company_cap });
+  const reqUrl = buildUrl("zoominfo", { limit: row.per_company_cap });
   let res;
   if (!token) {
     res = { error: "no zoominfo token available (mint failed or missing)" };
   } else {
     try {
       res = await this.helpers.httpRequest({
-        method: "POST", url: DISCOVERY_ENDPOINTS.zoominfo,
+        method: "POST", url: reqUrl,
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/vnd.api+json",
                    Accept: "application/vnd.api+json" },
         body: JSON.stringify(reqBody),
@@ -12149,23 +12150,25 @@ def _discovery_native_json_body_expr(provider, unfiltered):
     """n8n expression string for a native Apollo/Lusha discovery search HTTP node's
     json_body -- a HAND-WRITTEN MIRROR of discoverySearch.buildRequest (n8n expressions
     cannot import a JS module -- the same constraint "Lusha Enrich"'s own json_body
-    already documents, this file's build_enrichment_cloud). Both providers' request
-    shapes here are [ASSUMED] -- see discoverySearch.js's own header comment."""
+    already documents, this file's build_enrichment_cloud). Round 1 of the D-12 live
+    probe (2026-09-18, pickleballaustralia.org.au) found the original shapes wrong
+    (Apollo 422 deprecated-route, Lusha 404); this now mirrors discoverySearch.js's
+    corrected buildRequest -- still UNCONFIRMED on this account until round 2 reports."""
     titles_literal = json.dumps(_discovery_role_titles())
     if provider == "apollo":
         if unfiltered:
-            body_js = "{ q_organization_domains: $json.domain, per_page: $json.per_company_cap }"
+            body_js = "{ q_organization_domains_list: [$json.domain], per_page: $json.per_company_cap, page: 1 }"
         else:
-            body_js = ("{ q_organization_domains: $json.domain, per_page: $json.per_company_cap, "
-                       "person_titles: " + titles_literal + " }")
+            body_js = ("{ q_organization_domains_list: [$json.domain], per_page: $json.per_company_cap, "
+                       "page: 1, person_titles: " + titles_literal + " }")
         return "={{ JSON.stringify(" + body_js + ") }}"
     if provider == "lusha":
         if unfiltered:
-            body_js = ("{ filters: { companies: { domains: [$json.domain] } }, "
+            body_js = ("{ filters: { companies: { include: { domains: [$json.domain] } } }, "
                        "pages: { page: 0, size: $json.per_company_cap } }")
         else:
-            body_js = ("{ filters: { companies: { domains: [$json.domain] }, "
-                       "contacts: { jobTitles: " + titles_literal + " } }, "
+            body_js = ("{ filters: { companies: { include: { domains: [$json.domain] } }, "
+                       "contacts: { include: { jobTitles: " + titles_literal + " } } }, "
                        "pages: { page: 0, size: $json.per_company_cap } }")
         return "={{ JSON.stringify(" + body_js + ") }}"
     raise ValueError(f"_discovery_native_json_body_expr: unknown provider {provider!r}")
