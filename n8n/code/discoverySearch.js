@@ -138,17 +138,64 @@ function buildRequest(provider, opts) {
 }
 
 /**
- * buildUrl(provider, opts) -> the URL to POST `buildRequest`'s body to. `opts`: { limit }.
- * ZoomInfo's pagination is a query-string parameter. ZoomInfo is the only supported
- * provider (D-12).
+ * buildUrl(provider, opts) -> the bare URL to POST `buildRequest`'s body to, with NO
+ * query string embedded (73.1-11 Task 3, execution 12670: the discovery lane's live
+ * rung-1 400'd inside n8n on a literal-bracket query string appended to this URL,
+ * while the byte-identical request succeeded outside n8n via a direct Python replay --
+ * isolating the query string itself, not the account, credential, or request body, as
+ * the live-vs-offline discrepancy). ZoomInfo is the only supported provider (D-12).
+ * Pagination is now `buildQuery`'s job, passed via the httpRequest node's own `qs`
+ * option so n8n's own query-string serializer builds it, never a hand-joined string.
  */
 function buildUrl(provider, opts) {
   const o = opts || {};
   if (provider === "zoominfo") {
-    const limit = _clampLimit(o.limit);
-    return `${DISCOVERY_ENDPOINTS.zoominfo}?page[size]=${limit}&page[number]=1`;
+    void o;
+    return DISCOVERY_ENDPOINTS.zoominfo;
   }
   throw new Error(`discoverySearch.buildUrl: unknown provider ${provider}`);
+}
+
+/**
+ * buildQuery(provider, opts) -> the query-string parameters object for `buildUrl`'s
+ * endpoint, passed to `this.helpers.httpRequest`'s `qs` option (73.1-11 Task 3).
+ * `opts`: { limit }. ZoomInfo is the only supported provider (D-12).
+ */
+function buildQuery(provider, opts) {
+  const o = opts || {};
+  if (provider === "zoominfo") {
+    const limit = _clampLimit(o.limit);
+    return { "page[size]": limit, "page[number]": 1 };
+  }
+  throw new Error(`discoverySearch.buildQuery: unknown provider ${provider}`);
+}
+
+/**
+ * extractErrorDetail(e) -> a short string of the vendor's own JSON:API error detail
+ * (code/title/detail/source.pointer from `errors[0]`), when the caught exception's
+ * response body is readable -- 73.1-11 Task 3's diagnostic gap: the rung leaf used to
+ * keep only `e.message`, discarding whatever the vendor actually said. Never returns
+ * the raw response body/object whole -- an error body can echo the outbound request's
+ * own Authorization header back (the ingest lane's create-error-path rule, applied to
+ * this read path too). Returns null on any shape it cannot read -- never throws.
+ */
+function extractErrorDetail(e) {
+  if (!e) return null;
+  let data = (e.response && e.response.data)
+    || (e.cause && e.cause.response && e.cause.response.data);
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch (_err) { return null; }
+  }
+  if (!data || typeof data !== "object") return null;
+  const errors = Array.isArray(data.errors) ? data.errors : [];
+  const first = errors[0];
+  if (!first || typeof first !== "object") return null;
+  const parts = [];
+  if (first.code) parts.push(`code=${first.code}`);
+  if (first.title) parts.push(`title=${first.title}`);
+  if (first.detail) parts.push(`detail=${first.detail}`);
+  if (first.source && first.source.pointer) parts.push(`pointer=${first.source.pointer}`);
+  return parts.length ? parts.join(" ").slice(0, 400) : null;
 }
 
 function _person(firstname, lastname, jobtitle, provider) {
@@ -184,5 +231,6 @@ function normalizeResponse(provider, body) {
 
 module.exports = {
   DISCOVERY_ENDPOINTS, DISCOVERY_PEOPLE_CAP, ZOOMINFO_JOBTITLE_MAX,
-  buildRequest, buildUrl, normalizeResponse, capRoleTitles, titlesForFamilies,
+  buildRequest, buildUrl, buildQuery, normalizeResponse, capRoleTitles, titlesForFamilies,
+  extractErrorDetail,
 };

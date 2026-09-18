@@ -173,20 +173,31 @@ def test_search_request_and_url_zoominfo_derived_apollo_lusha_frozen():
     discoverySearch.js's own buildRequest/buildUrl -- the shipped source of truth.
     Apollo and Lusha are no longer exported by that module (D-12 ruling), so the probe
     builds their bodies/URLs itself; this pins that the frozen copies still match the
-    round-2-confirmed shapes."""
+    round-2-confirmed shapes.
+
+    73.1-11 Task 3 correction: ZoomInfo's URL is now BARE (no query string) -- execution
+    12670 400'd live on a literal-bracket query string appended to the URL, while the
+    byte-identical request succeeded outside n8n; pagination now rides `_search_params`
+    (`params=`), never a hand-joined URL string."""
     apollo_body = probe_module._search_request("apollo", "example.org")
     assert apollo_body["q_organization_domains_list"] == ["example.org"]
 
     zoominfo_url = probe_module._search_url("zoominfo", "example.org")
-    assert "page[size]" in zoominfo_url
+    assert zoominfo_url == probe_module.DISCOVERY_ENDPOINTS["zoominfo"]
+    assert "?" not in zoominfo_url
+
+    zoominfo_params = probe_module._search_params("zoominfo")
+    assert zoominfo_params == {"page[size]": 10, "page[number]": 1}
 
     lusha_body = probe_module._search_request("lusha", "example.org")
     assert lusha_body["filters"]["companies"]["include"]["domains"] == ["example.org"]
 
     apollo_url = probe_module._search_url("apollo", "example.org")
     assert apollo_url == probe_module.DISCOVERY_ENDPOINTS["apollo"]
+    assert probe_module._search_params("apollo") == {}
     lusha_url = probe_module._search_url("lusha", "example.org")
     assert lusha_url == probe_module.DISCOVERY_ENDPOINTS["lusha"]
+    assert probe_module._search_params("lusha") == {}
 
 
 # --- Round 4 correction: reveal_fields_present must not false-positive on a provider's

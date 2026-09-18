@@ -12140,7 +12140,19 @@ def _discovery_zoom_search_leaf_js(rung):
     ROLE_FAMILY_MAP, row.role_families)` -- the round's chosen families narrow the
     search, rather than the cap silently truncating the full vocabulary. Rung 2 keeps
     an empty map, so `titlesForFamilies` always yields `[]` there regardless of
-    `row.role_families` and `buildRequest` emits no title-filter key (unchanged)."""
+    `row.role_families` and `buildRequest` emits no title-filter key (unchanged).
+
+    73.1-11 Task 3 (execution 12670, 2026-09-18): rung 1 400'd live with a
+    literal-bracket query string (`?page[size]=..&page[number]=..`) appended to the
+    URL, while the byte-identical request succeeded outside n8n via a direct Python
+    replay -- isolating the query string construction itself (not the account, token,
+    or request body) as the live-vs-offline discrepancy. Pagination now rides the
+    `qs` option on the `httpRequest` call (`buildQuery`), never a hand-joined URL
+    string, so n8n's own query-string serializer builds it. The catch block also now
+    reads `extractErrorDetail(e)` -- the vendor's own JSON:API error fields, when the
+    exception carries a readable response body -- appended to the existing `_error`
+    string rather than a new key, so this rung's diagnosis no longer discards a real
+    vendor pointer the way it did on execution 12670."""
     unfiltered = (rung == "rung2")
     family_map_js = "{}" if unfiltered else json.dumps(_discovery_role_family_map())
     key = f"_zoominfo_{rung}_people"
@@ -12171,6 +12183,7 @@ for (const item of items) {
   const reqBody = buildRequest("zoominfo",
     { domain: row.domain, roleTitles, limit: row.per_company_cap });
   const reqUrl = buildUrl("zoominfo", { limit: row.per_company_cap });
+  const reqQuery = buildQuery("zoominfo", { limit: row.per_company_cap });
   let res, status = "exception", error = null, total = null;
   if (!token) {
     error = "no zoominfo token available (mint failed or missing)";
@@ -12178,7 +12191,7 @@ for (const item of items) {
   } else {
     try {
       res = await this.helpers.httpRequest({
-        method: "POST", url: reqUrl,
+        method: "POST", url: reqUrl, qs: reqQuery,
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/vnd.api+json",
                    Accept: "application/vnd.api+json" },
         body: JSON.stringify(reqBody),
@@ -12201,7 +12214,8 @@ for (const item of items) {
       const s = extractErrorStatus(e);
       status = Number.isFinite(s) ? s : "exception";
       if (isAuthError(s)) delete sd.zoominfo;   // token rejected -> next run re-mints
-      error = String((e && e.message) || e).slice(0, 200);
+      const detail = extractErrorDetail(e);
+      error = (String((e && e.message) || e) + (detail ? " | " + detail : "")).slice(0, 400);
       res = { error };
     }
   }

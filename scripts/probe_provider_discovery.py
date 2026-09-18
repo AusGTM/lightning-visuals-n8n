@@ -140,14 +140,28 @@ def _search_request(provider, domain):
 
 
 def _search_url(provider, domain):
-    """The URL to POST `_search_request`'s body to. ZoomInfo's pagination is a
-    query-string parameter, built by discoverySearch.js's own buildUrl (the shipped
-    source of truth); Apollo and Lusha are the bare (retired, evidence-only) endpoint --
-    no pagination correction needed since round 2 already confirmed the bare form."""
+    """The bare URL to POST `_search_request`'s body to, built by discoverySearch.js's
+    own buildUrl (the shipped source of truth). 73.1-11 Task 3: ZoomInfo's pagination
+    no longer rides on this URL at all -- see `_search_params` -- after execution
+    12670 400'd live on a literal-bracket query string that the byte-identical request
+    succeeded on outside n8n; Apollo and Lusha are the bare (retired, evidence-only)
+    endpoint, unaffected."""
     if provider == "zoominfo":
         opts = json.dumps({"domain": domain, "roleTitles": [], "limit": 10})
         return _node_eval(f"m.buildUrl({json.dumps(provider)}, {opts})")
     return DISCOVERY_ENDPOINTS[provider]
+
+
+def _search_params(provider):
+    """Query-string parameters for `_search_url`'s endpoint (73.1-11 Task 3
+    correction), built by discoverySearch.js's own buildQuery -- the shipped source of
+    truth, passed to `requests.post`'s `params=` rather than hand-joined onto the URL.
+    Apollo and Lusha carry no query-string parameters (their pagination lives in the
+    request body); empty dict is a no-op for `requests`."""
+    if provider == "zoominfo":
+        opts = json.dumps({"limit": 10})
+        return _node_eval(f"m.buildQuery({json.dumps(provider)}, {opts})")
+    return {}
 
 
 APOLLO_UNREADABLE_NOTE = (
@@ -274,8 +288,9 @@ def probe_provider(provider, domain):
 
     url = _search_url(provider, domain)
     body = _search_request(provider, domain)
+    params = _search_params(provider)
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=30)
+        r = requests.post(url, headers=headers, params=params, json=body, timeout=30)
         result["status"] = r.status_code
         try:
             resp_body = r.json()
@@ -362,13 +377,15 @@ def _decode_jwt_claims(token):
 def _replay_search(token, domain):
     """POST the SAME unfiltered (rung-2-style) ZoomInfo search with `token`. Returns
     (status_code_or_None, total_results_or_None) -- never raises, never logs the token
-    or the raw response body."""
+    or the raw response body. 73.1-11 Task 3: pagination rides `params=`
+    (`_search_params`), matching the corrected lane shape, not the URL string."""
     url = _search_url("zoominfo", domain)
     body = _search_request("zoominfo", domain)
+    params = _search_params("zoominfo")
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.api+json",
                "Accept": "application/vnd.api+json"}
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=30)
+        r = requests.post(url, headers=headers, params=params, json=body, timeout=30)
         total = None
         if r.ok:
             try:

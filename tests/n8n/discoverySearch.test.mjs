@@ -19,8 +19,8 @@ import { execFileSync } from "node:child_process";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const {
-  buildRequest, buildUrl, normalizeResponse, capRoleTitles, titlesForFamilies,
-  DISCOVERY_PEOPLE_CAP, DISCOVERY_ENDPOINTS, ZOOMINFO_JOBTITLE_MAX,
+  buildRequest, buildUrl, buildQuery, normalizeResponse, capRoleTitles, titlesForFamilies,
+  DISCOVERY_PEOPLE_CAP, DISCOVERY_ENDPOINTS, ZOOMINFO_JOBTITLE_MAX, extractErrorDetail,
 } = require(path.join(ROOT, "n8n/code/discoverySearch.js"));
 
 // Python oracle: PyYAML parses the REAL shipped vocabulary, no JS-side YAML
@@ -97,19 +97,29 @@ test("buildRequest(zoominfo) applies the 500-char cap itself -- a caller cannot 
   assert.notEqual(body.data.attributes.jobTitle, joinedUncapped);
 });
 
-test("buildUrl(zoominfo) carries pagination as a query string, not a body attribute", () => {
+// 73.1-11 Task 3 (execution 12670, 2026-09-18): buildUrl is now BARE (no query
+// string) -- a literal-bracket query string on this URL 400'd live inside n8n while
+// the byte-identical request succeeded outside n8n via a direct Python replay,
+// isolating the query string construction itself. Pagination moved to buildQuery,
+// passed via the httpRequest node's own `qs` option.
+test("buildUrl(zoominfo) is bare -- pagination no longer rides the URL string", () => {
   const url = buildUrl("zoominfo", { limit: 7 });
-  assert.equal(url, "https://api.zoominfo.com/gtm/data/v1/contacts/search?page[size]=7&page[number]=1");
+  assert.equal(url, "https://api.zoominfo.com/gtm/data/v1/contacts/search");
+  assert.ok(!url.includes("?"));
 });
 
-// Test 4 — empty roleTitles -> the rung-2 unfiltered body, still capped at 10 (via
-// buildUrl now that pagination moved off the body).
+test("buildQuery(zoominfo) carries pagination as a params object, clamped at the people cap", () => {
+  assert.deepEqual(buildQuery("zoominfo", { limit: 7 }), { "page[size]": 7, "page[number]": 1 });
+  assert.deepEqual(buildQuery("zoominfo", { limit: 999 }),
+    { "page[size]": DISCOVERY_PEOPLE_CAP, "page[number]": 1 },
+    "zoominfo pagination is clamped in the query object, not the body");
+});
+
+// Test 4 — empty roleTitles -> the rung-2 unfiltered body, still capped at 10.
 test("buildRequest with empty roleTitles produces the unfiltered rung-2 body, still capped", () => {
   const body = buildRequest("zoominfo", { domain: "example.org", roleTitles: [], limit: 999 });
   const json = JSON.stringify(body);
   assert.ok(!json.includes("jobTitle"), "zoominfo unfiltered body must carry no title-filter key");
-  assert.ok(buildUrl("zoominfo", { limit: 999 }).includes(`page[size]=${DISCOVERY_PEOPLE_CAP}`),
-    "zoominfo pagination is clamped in the URL, not the body");
 });
 
 // Test 5 — normalizeResponse turns ZoomInfo's fixture into a uniform person shape, never
@@ -180,6 +190,46 @@ test("unknown/retired provider raises rather than silently returning an empty/ma
   for (const provider of ["bing", "apollo", "lusha"]) {
     assert.throws(() => buildRequest(provider, { domain: "example.org" }));
     assert.throws(() => buildUrl(provider, { domain: "example.org" }));
+    assert.throws(() => buildQuery(provider, { limit: 5 }));
     assert.throws(() => normalizeResponse(provider, {}));
   }
+});
+
+// ---- Plan 11 (73.1-11 Task 3): extractErrorDetail -----------------------------------
+
+test("extractErrorDetail reads code/title/detail/pointer from a JSON:API errors[0], via e.response.data", () => {
+  const e = { message: "Request failed with status code 400", response: { data: {
+    errors: [{ code: "PFAPI0006", title: "Bad Request",
+               detail: "jobTitle must be less than 500 characters",
+               source: { pointer: "/data/attributes/jobTitle" } }] } } };
+  const detail = extractErrorDetail(e);
+  assert.match(detail, /code=PFAPI0006/);
+  assert.match(detail, /title=Bad Request/);
+  assert.match(detail, /detail=jobTitle must be less than 500 characters/);
+  assert.match(detail, /pointer=\/data\/attributes\/jobTitle/);
+});
+
+test("extractErrorDetail parses a string response body (JSON) the same way", () => {
+  const e = { response: { data: JSON.stringify({ errors: [{ code: "X", title: "Y" }] }) } };
+  assert.match(extractErrorDetail(e), /code=X title=Y/);
+});
+
+test("extractErrorDetail reads e.cause.response.data when e.response is absent (a different axios error shape)", () => {
+  const e = { cause: { response: { data: { errors: [{ code: "Z" }] } } } };
+  assert.match(extractErrorDetail(e), /code=Z/);
+});
+
+test("extractErrorDetail returns null on any unreadable shape -- never throws", () => {
+  assert.equal(extractErrorDetail(null), null);
+  assert.equal(extractErrorDetail({}), null);
+  assert.equal(extractErrorDetail({ response: { data: "not json" } }), null);
+  assert.equal(extractErrorDetail({ response: { data: { errors: [] } } }), null);
+  assert.equal(extractErrorDetail({ response: { data: { errors: [{}] } } }), null);
+  assert.equal(extractErrorDetail({ response: { data: 42 } }), null);
+});
+
+test("extractErrorDetail never returns the raw response body/object whole -- can carry the outbound Authorization header", () => {
+  const e = { response: { data: { errors: [{ code: "X" }], _leaked_auth_header: "Bearer secret" } } };
+  const detail = extractErrorDetail(e);
+  assert.ok(!detail.includes("secret"), "only named JSON:API fields may ever surface, never the whole body");
 });
