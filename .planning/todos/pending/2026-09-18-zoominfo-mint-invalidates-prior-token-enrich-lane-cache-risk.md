@@ -1,11 +1,11 @@
 ---
 created: 2026-09-18T13:35:00.000Z
-updated: 2026-09-18
+updated: 2026-09-19
 title: "A later ZoomInfo mint invalidates the earlier token, live-confirmed offline -- does the enrich lane's 24h cross-execution token cache buy anything given any concurrent mint can silently kill it?"
 area: n8n-zoominfo-token
 severity: minor
 kind: design
-decision_needed: "keep _zoom_split_gate_js's 24-hour cross-execution token cache on the enrich lane (accepting that ANY other mint -- backend-status's own mint node, a local probe, or a future discovery-lane request -- can invalidate a cached token mid-lifetime, relying on the leaf's existing isAuthError-clears-cache self-heal to recover on the NEXT run), or drop the cache there too and mint per-execution like the discovery lane now does (73.1-11 Task 1) -- trading one guaranteed free mint per run for immunity to this failure class"
+decision_needed: "keep _zoom_split_gate_js's 24-hour cross-execution token cache on the enrich lane (accepting that ANY other mint -- backend-status's own mint node, a local probe, or a future discovery-lane request -- can invalidate a cached token mid-lifetime, relying on the leaf's existing isAuthError-clears-cache self-heal to recover on the NEXT run), or drop the cache there too and mint per-execution -- IMPORTANT (73.1-REVIEW.md CR-01): the discovery lane's mint-per-execution gate ALONE is not what to mirror. Its own cache-free gate shipped WITH a live bug (CR-01: an N-gap-company round fired N mint calls in one burst, each invalidating the last), fixed in the SAME phase by adding executeOnce=true on the mint node plus a combineAll carry-merge broadcast (73.1-11 Task 1's gate, corrected by this review-fix). Any enrich-lane option (b) must mirror BOTH the cache-free gate AND that executeOnce+combineAll fix together -- the enrich lane fans out MANY rows per execution (not just N gap companies), so mirroring the gate alone would reintroduce CR-01's failure class at a larger scale"
 owner: operator
 files:
   - scripts/build_cloud_workflows.py
@@ -68,6 +68,21 @@ Whether to:
     at the cost of one extra OAuth mint call on every enrich-lane execution that touches
     ZoomInfo (this account's OAuth mints are unmetered/free, per `check_provider_credits.py`'s
     own usage of the same endpoint).
+
+**CORRECTION (73.1-REVIEW.md CR-01, 2026-09-19):** option (b) as originally written is
+incomplete and, read alone, dangerous. `_discovery_zoom_search_gate_js`'s cache-free
+"mint-per-execution" gate is only HALF of what makes the discovery lane safe. As
+originally shipped by 73.1-11 Task 1, that gate composed with `_http_node`'s own "N
+items -> N requests in one burst" behavior and this todo's own `prior_token_invalidated_
+by_later_mint: true` finding to reintroduce token-invalidation 401s deterministically for
+any round with 2+ gap companies -- a live BLOCKER caught by code review, not by execution,
+and fixed by adding `executeOnce=true` on the mint node plus a `combineAll` carry-merge
+broadcast (one mint per execution, its single token re-attached to every row, never one
+mint per row). If option (b) is ever chosen, it must mirror the CORRECTED gate --
+cache-free mint-per-execution PLUS `executeOnce`/`combineAll` -- never the gate alone.
+Mirroring the gate alone would import CR-01's failure class into the enrich lane at a
+LARGER scale: that lane fans out MANY rows per execution (every ZoomInfo call the run
+makes), not just the discovery lane's per-round gap-company count.
 
 Not resolved here -- 73.1-11 Task 2's own explicit scope boundary ("Do NOT change the enrich
 lane here").
