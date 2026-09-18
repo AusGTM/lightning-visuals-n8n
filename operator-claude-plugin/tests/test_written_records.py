@@ -240,11 +240,86 @@ def test_no_pii_key_survives_classification():
     )
     assert keys == [
         "action", "association", "hs_object_id", "object_type", "outcome", "reason",
-        "row_id",
+        "row_id", "source",
     ]
     assert "email" not in written_records.classify_item(
         {"action": "update", "hs_object_id": "1", "email": "a@b.c"}
     )
+
+
+# ------------------------------------------------------------------------------------
+# source (73.1-04 Task 3, D-14b): a write's attribution -- the plugin's own backend
+# lanes, or an outside HubSpot tool (the connector) writing under the same session
+# grant.
+# ------------------------------------------------------------------------------------
+
+def test_classify_item_defaults_source_to_lane():
+    """Test 1: no explicit source, so every existing call site is byte-identical."""
+    entry = written_records.classify_item({"action": "create", "hs_object_id": "1"})
+    assert entry["source"] == written_records.SOURCE_LANE
+
+
+def test_classify_item_carries_an_explicit_connector_source():
+    """Test 2: every other key is unchanged."""
+    entry = written_records.classify_item(
+        {"action": "create", "hs_object_id": "1"}, source=written_records.SOURCE_CONNECTOR)
+    assert entry["source"] == written_records.SOURCE_CONNECTOR
+    assert entry["action"] == "create"
+    assert entry["hs_object_id"] == "1"
+
+
+def test_classify_review_item_also_carries_source_with_the_same_default_and_override():
+    """Both entry-building sites gain the eighth key, not just classify_item."""
+    default_entry = written_records.classify_review_item(
+        {"object_type": "companies", "record_id": "1", "decision": "approve",
+         "outcome": "applied"})
+    assert default_entry["source"] == written_records.SOURCE_LANE
+
+    connector_entry = written_records.classify_review_item(
+        {"object_type": "companies", "record_id": "1", "decision": "approve",
+         "outcome": "applied"}, source=written_records.SOURCE_CONNECTOR)
+    assert connector_entry["source"] == written_records.SOURCE_CONNECTOR
+
+
+def test_classify_item_rejects_an_unrecognised_source():
+    """Test 3: a closed vocabulary, matching the module's existing register for a value
+    nobody can report on."""
+    with pytest.raises(written_records.WrittenRecordsError):
+        written_records.classify_item(
+            {"action": "create", "hs_object_id": "1"}, source="mystery")
+
+
+def test_the_source_key_is_scanned_by_looks_forbidden(monkeypatch):
+    """Test 4: the new key must not be exempted from the Phase 23 D-11 sweep. Patch a
+    forbidden value into the vocabulary so the vocabulary gate alone cannot catch it,
+    and confirm the shared forbidden-name scan still refuses on the source value."""
+    monkeypatch.setattr(
+        written_records, "ALL_SOURCES",
+        frozenset(written_records.ALL_SOURCES | {"api_key"}))
+    with pytest.raises(written_records.WrittenRecordsError):
+        written_records.classify_item(
+            {"action": "create", "hs_object_id": "1"}, source="api_key")
+
+
+def test_a_pre_change_seven_key_entry_reads_back_with_the_default_source(tmp_path):
+    """Test 5: a document written before this change is not invalidated -- there is no
+    version marker on these documents, so tolerance at read time is the only answer."""
+    target = tmp_path / "written_records-legacy.json"
+    target.write_text(json.dumps({
+        "run_id": "legacy",
+        "saved_at": "2026-01-01T00:00:00+00:00",
+        "entries": [
+            {"chunk_index": 0, "object_type": "companies", "action": "create",
+             "hs_object_id": "1", "outcome": "written", "reason": None,
+             "row_id": None, "association": None},
+        ],
+    }))
+
+    entries = written_records.load(path=target)
+
+    assert len(entries) == 1
+    assert entries[0]["source"] == written_records.SOURCE_LANE
+    assert entries[0]["hs_object_id"] == "1"
 
 
 def test_a_value_naming_a_secret_refuses_rather_than_persisting():
