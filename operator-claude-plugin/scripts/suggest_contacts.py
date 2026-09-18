@@ -492,7 +492,23 @@ def agreed_cap(chosen_cap, grant_figures):
 SEARCH_SOURCE_TIERS = (1, 2, 3, 4)
 
 
-def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=None):
+# The synthetic locator for a provider hit (D-01/D-03/D-05, Claude's discretion per
+# 73.1-CONTEXT.md). A provider search has no fetched page for `synthesise_rows`'
+# `fetched_url`/`locator` to name, unlike a ladder or web-search hit -- `locator` is
+# free text (`extraction.validate` only checks it is PRESENT), so this names the
+# provider and the endpoint in the one field that already travels with the row's
+# provenance. Only these three providers/endpoints exist in the waterfall
+# (`enrichment.FULL_WATERFALL`); a fourth provider is a config change here, not a
+# structural one.
+DISCOVERY_LOCATOR_BY_PROVIDER = {
+    "zoominfo": "zoominfo contact search",
+    "apollo": "apollo people search",
+    "lusha": "lusha prospecting search",
+}
+
+
+def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=None,
+                     provider=None):
     """At most `per_company_cap` rows shaped for `extraction.validate()`: `record_type`
     "contacts", `row` carrying only canonical props (`firstname`/`lastname`/`company`/
     `jobtitle`), `provenance` naming this module as the input and, as the locator, the
@@ -515,6 +531,17 @@ def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=N
     An unknown value REFUSES, in the same register `per_company_cap` already uses: a
     silent downgrade to the ladder provenance would make a third-party claim read as
     self-attested and bypass `search_fallback.hold_weak_sources` entirely.
+
+    `provider` (D-03/D-05) is given ONLY by the discovery adapter, alongside
+    `source_tier` -- when both are given, `provenance` gains a sibling `provider` key
+    (`f"{provider}_search"`, the roadmap's own vocabulary) naming which waterfall
+    provider found this person; a `dedupe_discovered` corroboration entry (below) needs
+    to say WHICH provider or web-search hit it demoted, and "named by a provider" reads
+    differently to the operator than "named by an industry-body web page" even though
+    both currently ride the same `suggest_contacts_web_search` input literal. `provider`
+    is IGNORED (never added) when `source_tier` is `None` -- the ladder provenance key
+    set stays byte-identical to every existing call site regardless of what a caller
+    passes here, exactly like the locator-only byte-identical guarantee above.
 
     WHY THE TIER RIDES `provenance` AND NOT THE ROW. This function asserts every row key
     is in `extraction.canonical_props()` (below), and `write_dispatch_csv` raises on a
@@ -569,6 +596,8 @@ def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=N
             "locator": fetched_url,
             "source_tier": source_tier,
         }
+        if provider is not None:
+            provenance["provider"] = f"{provider}_search"
 
     canonical = set(extraction.canonical_props())
     company_name = company.get("name")
@@ -600,6 +629,130 @@ def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=N
             }
         )
     return records
+
+
+def _linkedin_dedupe_key(row):
+    """`row["linkedin_url"]`, normalised the same way `_normalize_name` normalises any
+    other free-text identity field, or `None` when the row carries none."""
+    value = row.get("linkedin_url")
+    if not value:
+        return None
+    return _normalize_name(value)
+
+
+def _name_company_dedupe_key(row):
+    """`(firstname, lastname, company)`, all casefolded/whitespace-collapsed via
+    `name_key`/`_normalize_name`, or `None` when the row's name is incomplete -- mirrors
+    `walk_pages`' own `name_key is None` handling: an incomplete name is never a dedupe
+    key on either axis."""
+    key = name_key(row)
+    if key is None:
+        return None
+    return (*key, _normalize_name(row.get("company")))
+
+
+def _same_discovered_person(row_a, row_b):
+    """D-03's dedupe rule, stated as a pairwise predicate rather than a single grouping
+    key, because the rule itself is conditional on what BOTH sides carry: `linkedin_url`
+    when BOTH rows have one, else casefolded `firstname+lastname+company`. A row with a
+    `linkedin_url` that the other row lacks falls through to the name+company
+    comparison exactly like a row that never had one -- the linkedin comparison only
+    ever fires when it can compare like with like."""
+    link_a, link_b = _linkedin_dedupe_key(row_a), _linkedin_dedupe_key(row_b)
+    if link_a is not None and link_b is not None:
+        return link_a == link_b
+    key_a, key_b = _name_company_dedupe_key(row_a), _name_company_dedupe_key(row_b)
+    if key_a is not None and key_b is not None:
+        return key_a == key_b
+    return False
+
+
+def _discovered_rank(record):
+    """The record's own `source_tier`, or 1 when absent -- a missing `source_tier` is a
+    ladder hit (`synthesise_rows`'s own byte-identical-when-omitted contract), and a
+    ladder hit is rank 1."""
+    tier = (record.get("provenance") or {}).get("source_tier")
+    if isinstance(tier, int) and not isinstance(tier, bool):
+        return tier
+    return 1
+
+
+def dedupe_discovered(records):
+    """Fold `records` that name the SAME person into ONE record apiece (D-03): the
+    survivor is the group's LOWEST-ranked hit (`_discovered_rank`, ties broken by
+    original position -- deterministic when two providers both return rank 2), keeping
+    its own `row`, `provenance["locator"]` and `provenance["source_tier"]` UNTOUCHED.
+    Every other hit in the group is appended to the survivor's
+    `provenance["corroboration"]` as `{"source_tier", "locator", "provider" (when
+    present), "jobtitle"}` -- recorded, never promoted: corroboration NEVER changes the
+    survivor's own `source_tier`, so a rank-3 row corroborated by a rank-4 hit is still
+    rank 3 and still held, and a rank-4 corroboration can never upgrade anything
+    (T-73.1-03 -- an attacker-influenceable search source could otherwise promote a real
+    person to sendable merely by repeating their name).
+
+    Dedupe key: `linkedin_url` when BOTH records carry one, else casefolded
+    `firstname+lastname+company` (`_same_discovered_person`) -- two people sharing a
+    name at DIFFERENT companies are never merged. A record whose row's name is
+    incomplete AND carries no `linkedin_url` is never folded into anything, mirroring
+    `walk_pages`' `name_key is None` handling.
+
+    MUST run BEFORE both `mint_row_ids` and `search_fallback.hold_weak_sources`, and
+    NEVER instead of either: minting after dedupe means no gap in the row-N sequence for
+    a person who no longer has two rows, and a merged row still passes through the
+    email-relatedness gate and the tier gate exactly like any other row -- this function
+    decides who ONE row's provenance belongs to, never whether that row sends.
+
+    Returns a FRESH list; the input `records` and every record inside it are never
+    mutated. A group of one is returned by reference (nothing about it changed); a
+    merged group returns a NEW record with a NEW `row` dict and a NEW `provenance` dict
+    carrying the appended `corroboration` list.
+    """
+    groups = []
+    for index, record in enumerate(records):
+        row = record.get("row") or {}
+        placed = False
+        for group in groups:
+            if any(_same_discovered_person(row, records[j].get("row") or {}) for j in group):
+                group.append(index)
+                placed = True
+                break
+        if not placed:
+            groups.append([index])
+
+    result = []
+    for group in groups:
+        if len(group) == 1:
+            result.append(records[group[0]])
+            continue
+
+        winner_index = min(group, key=lambda i: (_discovered_rank(records[i]), i))
+        winner = records[winner_index]
+        corroboration = []
+        for i in group:
+            if i == winner_index:
+                continue
+            loser_provenance = records[i].get("provenance") or {}
+            loser_row = records[i].get("row") or {}
+            entry = {
+                "source_tier": _discovered_rank(records[i]),
+                "locator": loser_provenance.get("locator"),
+            }
+            if "provider" in loser_provenance:
+                entry["provider"] = loser_provenance["provider"]
+            entry["jobtitle"] = loser_row.get("jobtitle")
+            corroboration.append(entry)
+
+        merged_provenance = dict(winner.get("provenance") or {})
+        merged_provenance["corroboration"] = (
+            list(merged_provenance.get("corroboration") or []) + corroboration
+        )
+        result.append({
+            **winner,
+            "row": dict(winner.get("row") or {}),
+            "provenance": merged_provenance,
+        })
+
+    return result
 
 
 def mint_row_ids(records):
