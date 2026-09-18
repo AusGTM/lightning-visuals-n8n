@@ -830,33 +830,38 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
     )
 
 
+_EMAILLESS_RESOLVABLE_KEYS = ("email", "linkedin_url", "mobilephone", "phone")
+
+
 def hold_emailless(rows: list) -> tuple:
-    """Partition `rows` into `(sendable, held)`. The deployed ingest lane resolves a
-    contact by email only (37-CONTEXT.md §4.1) — a row with no usable `email` produces
+    """Partition `rows` into `(sendable, held)`. The ingest lane's identity ladder
+    resolves a contact by `email`, `linkedin_url`, `mobilephone`, or `phone` (D-16a,
+    widened by D-16b — Phase 73.1 Plan 05) — a row carrying NONE of those four produces
     no HubSpot write and no object id, and therefore cannot be enriched later either,
     since both enrichment entry points need an existing id. Held here rather than sent
     and left to silently fail.
 
     A firstname+lastname+company row still satisfies `column_mapping.yaml`'s
     `required_identity.any_of` and is still a valid EXTRACTION row — valid to extract,
-    valid to match, valid to enrich. It is only invalid to INGEST. Extraction identity
-    and ingest identity are different questions; this function answers the second one
-    only and never touches `has_identity`'s rule.
+    valid to match, valid to enrich. It is only invalid to INGEST when it also carries
+    none of the four resolvable keys above. Extraction identity and ingest identity are
+    different questions; this function answers the second one only and never touches
+    `has_identity`'s rule.
 
     Presence is decided by `_present` — the same trimming predicate `has_identity` uses
-    — so the two can never disagree about what counts as an empty email cell.
+    — so the two can never disagree about what counts as an empty cell.
 
-    Returns `(sendable, held)`: `sendable` is every row whose `email` is present, in
-    input order. `held` is one entry per remaining row, each
-    `{"index": int, "row": dict, "reason": str}` naming the row's original position (in
-    `rows`, not `sendable`), the row itself, and why it is held. Every input row appears
-    in exactly one of the two outputs; neither list mutates an input row; no file is
-    written.
+    Returns `(sendable, held)`: `sendable` is every row carrying at least one of `email`,
+    `linkedin_url`, `mobilephone`, or `phone`, in input order. `held` is one entry per
+    remaining row, each `{"index": int, "row": dict, "reason": str}` naming the row's
+    original position (in `rows`, not `sendable`), the row itself, and why it is held.
+    Every input row appears in exactly one of the two outputs; neither list mutates an
+    input row; no file is written.
     """
     sendable: list = []
     held: list = []
     for i, row in enumerate(rows):
-        if _present(row.get("email")):
+        if any(_present(row.get(key)) for key in _EMAILLESS_RESOLVABLE_KEYS):
             sendable.append(row)
         else:
             held.append(
@@ -864,8 +869,9 @@ def hold_emailless(rows: list) -> tuple:
                     "index": i,
                     "row": row,
                     "reason": (
-                        "no usable email — the deployed ingest lane resolves a contact "
-                        "by email only, so this row would reach HubSpot as no write "
+                        "no usable email, linkedin_url, mobilephone, or phone — the "
+                        "ingest lane's identity ladder resolves a contact by one of "
+                        "those four keys, so this row would reach HubSpot as no write "
                         "and no object id, silently"
                     ),
                 }

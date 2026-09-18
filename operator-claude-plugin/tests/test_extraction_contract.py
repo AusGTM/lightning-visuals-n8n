@@ -236,7 +236,8 @@ def test_a_record_with_no_record_type_key_still_routes_to_the_contact_rules():
             "reason": (
                 "no identity present: needs a non-blank 'email', or all three of "
                 "'firstname'/'lastname'/'company' non-blank, or a non-blank "
-                "'linkedin_url'"
+                "'linkedin_url', or all three of 'firstname'/'lastname'/'mobilephone' "
+                "non-blank, or all three of 'firstname'/'lastname'/'phone' non-blank"
             ),
         }
     ]
