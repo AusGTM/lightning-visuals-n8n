@@ -253,3 +253,34 @@ def test_no_single_token_member_belongs_to_two_families():
         f"equal-length tie-break would resolve it silently by YAML order, so which "
         f"family wins would depend on file layout rather than on the title"
     )
+
+
+# =====================================================================================
+# 73.1-02 Task 1 (D-11c / T-73.1-06): the general form of D-rf1-03 above, covering
+# members of ANY token length, not just bare single-token ones. A multi-token member
+# duplicated across two families (e.g. `Chairman` copied into a naively-added Board
+# Chair family, since `Chairman` already lives in `Chair`) makes classify_title's
+# longest-wins tie-break resolve on YAML order -- exactly what its own docstring
+# promises never happens. Seen RED against a temporary duplicate before Task 2 lands
+# the real families; see 73.1-02-SUMMARY.md for the RED transcript.
+# =====================================================================================
+def test_no_member_string_appears_in_two_families():
+    vocabulary = role_classify.load_families()
+    tokenised_owners = {}
+    for family in vocabulary["families"]:
+        label = family.get("label")
+        for member in family.get("members") or []:
+            tokens = role_classify._tokenize(member)
+            if not tokens:
+                continue
+            tokenised_owners.setdefault(tokens, set()).add(label)
+    collisions = {
+        " ".join(tokens): sorted(labels)
+        for tokens, labels in tokenised_owners.items()
+        if len(labels) > 1
+    }
+    assert not collisions, (
+        f"member string(s) duplicated across families: {collisions} -- a member "
+        f"appearing under two labels makes classify_title's longest-wins tie-break "
+        f"resolve on YAML order, which its own docstring says it never does"
+    )
