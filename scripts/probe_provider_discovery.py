@@ -68,6 +68,15 @@ VERDICT_PATH = (
     / "73.1-D12-VERDICT.json"
 )
 
+# Task 2 (D-11 gap closure) — offline token-lifecycle evidence. Same directory, a
+# separate file: this verdict answers a different question (does a LATER mint
+# invalidate an EARLIER token?) than 73.1-D12-VERDICT.json's provider-endpoint verdict.
+TOKEN_REPLAY_VERDICT_PATH = (
+    ROOT / ".planning" / "phases"
+    / "73.1-provider-backed-contact-discovery-as-source-tier-2"
+    / "73.1-TOKEN-REPLAY-VERDICT.json"
+)
+
 # D-11 waterfall order (CLAUDE.md §11 / RESEARCH.md): ZoomInfo > Apollo > Lusha — NOT
 # provider_registry.py's PROVIDER_NAMES order, which is the unrelated enrich-lane order.
 DISCOVERY_ORDER = ("zoominfo", "apollo", "lusha")
@@ -317,6 +326,107 @@ def run_probe(domain):
     return verdict
 
 
+# --- Task 2 (D-11 gap closure): --token-replay -----------------------------------------
+# Does a LATER ZoomInfo mint invalidate an EARLIER token? Zero n8n executions, zero
+# HubSpot calls, zero ZoomInfo credits (search is measured 0 credits on this account,
+# memory `measured-provider-match-rates`/D-13). Mints two tokens and replays the SAME
+# unfiltered rung-2-style search against each, twice. Reuses `_search_url`/
+# `_search_request` -- the SAME discoverySearch.js-derived shapes the production lane
+# itself sends -- never a hand-written second copy of the request/URL construction.
+
+def _decode_jwt_claims(token):
+    """Decode ONLY the `iat`/`exp` integer claims from a JWT's payload segment, via the
+    stdlib (base64 + json) -- adding no dependency. Never returns, logs, or writes the
+    token itself, nor any other claim (issuer, audience, client id, scopes, ...). Returns
+    {"iat": None, "exp": None} on any malformed/non-JWT input rather than raising."""
+    import base64
+
+    parts = (token or "").split(".")
+    if len(parts) < 2:
+        return {"iat": None, "exp": None}
+    payload_b64 = parts[1]
+    padding = "=" * (-len(payload_b64) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(payload_b64 + padding)
+        claims = json.loads(raw)
+    except Exception:
+        return {"iat": None, "exp": None}
+    iat = claims.get("iat")
+    exp = claims.get("exp")
+    return {
+        "iat": iat if isinstance(iat, int) else None,
+        "exp": exp if isinstance(exp, int) else None,
+    }
+
+
+def _replay_search(token, domain):
+    """POST the SAME unfiltered (rung-2-style) ZoomInfo search with `token`. Returns
+    (status_code_or_None, total_results_or_None) -- never raises, never logs the token
+    or the raw response body."""
+    url = _search_url("zoominfo", domain)
+    body = _search_request("zoominfo", domain)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.api+json",
+               "Accept": "application/vnd.api+json"}
+    try:
+        r = requests.post(url, headers=headers, json=body, timeout=30)
+        total = None
+        if r.ok:
+            try:
+                total = (r.json() or {}).get("meta", {}).get("totalResults")
+            except ValueError:
+                total = None
+        return r.status_code, total
+    except Exception:
+        return None, None
+
+
+def run_token_replay(domain):
+    """Four-step offline-cost replay answering `prior_token_invalidated_by_later_mint`:
+
+    1. Mint token A; search `domain` with A -> status, totalResults.
+    2. Mint token B; record only that a second mint succeeded (status 200) or failed
+       (status None) -- token B's own body is never used for anything but step 4.
+    3. Replay the SAME search with token A again -> status.
+    4. Replay with token B as the control -> status.
+
+    Verdict is true iff step 1 was 200 and step 3 was 401 -- a token that worked, then
+    stopped working after nothing but a second mint, with no expiry involved (the JWT's
+    own claims are recorded separately, never used to gate the boolean)."""
+    token_a = credits_mod._mint_zoominfo_token()
+    status1, total1 = (None, None)
+    if token_a:
+        status1, total1 = _replay_search(token_a, domain)
+
+    token_b = credits_mod._mint_zoominfo_token()
+    status2 = 200 if token_b else None
+
+    status3, total3 = (None, None)
+    if token_a:
+        status3, total3 = _replay_search(token_a, domain)
+
+    status4, total4 = (None, None)
+    if token_b:
+        status4, total4 = _replay_search(token_b, domain)
+
+    steps = [
+        {"step": 1, "description": "mint A, search with A", "status": status1, "total": total1},
+        {"step": 2, "description": "mint B (second mint)", "status": status2, "total": None},
+        {"step": 3, "description": "replay the same search with token A again", "status": status3, "total": total3},
+        {"step": 4, "description": "replay with token B as the control", "status": status4, "total": total4},
+    ]
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "domain": domain,
+        "prior_token_invalidated_by_later_mint": (status1 == 200 and status3 == 401),
+        "steps": steps,
+        "tokens": {
+            "token_a": _decode_jwt_claims(token_a),
+            "token_b": _decode_jwt_claims(token_b),
+        },
+    }
+
+
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
 
@@ -329,6 +439,21 @@ def main(argv=None):
     domain = None
     if "--domain" in argv:
         domain = argv[argv.index("--domain") + 1]
+
+    if "--token-replay" in argv:
+        # ZoomInfo search is measured 0 credits on this account (D-13) and the two
+        # extra mints are free OAuth grants -- still opt-in-guarded (same gate above),
+        # never a second unguarded credential-touching path.
+        replay_domain = domain or os.getenv("DISCOVERY_PROBE_DOMAIN") or "tennis.com.au"
+        verdict = run_token_replay(replay_domain)
+        s1, s3 = verdict["steps"][0]["status"], verdict["steps"][2]["status"]
+        print(f"prior_token_invalidated_by_later_mint={verdict['prior_token_invalidated_by_later_mint']} "
+              f"step1_status={s1} step3_status={s3}")
+        TOKEN_REPLAY_VERDICT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        TOKEN_REPLAY_VERDICT_PATH.write_text(json.dumps(verdict, indent=2, default=str))
+        print(f"\nverdict written to {TOKEN_REPLAY_VERDICT_PATH}")
+        return 0
+
     domain = domain or os.getenv("DISCOVERY_PROBE_DOMAIN")
     if not domain:
         print("refused: no company domain given. Pass --domain <domain> or set "

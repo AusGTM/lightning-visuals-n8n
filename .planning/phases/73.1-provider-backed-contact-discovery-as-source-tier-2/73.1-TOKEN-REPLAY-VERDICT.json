@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-09-18T13:34:46.493602+00:00",
+  "domain": "tennis.com.au",
+  "prior_token_invalidated_by_later_mint": true,
+  "steps": [
+    {
+      "step": 1,
+      "description": "mint A, search with A",
+      "status": 200,
+      "total": 1094
+    },
+    {
+      "step": 2,
+      "description": "mint B (second mint)",
+      "status": 200,
+      "total": null
+    },
+    {
+      "step": 3,
+      "description": "replay the same search with token A again",
+      "status": 401,
+      "total": null
+    },
+    {
+      "step": 4,
+      "description": "replay with token B as the control",
+      "status": 200,
+      "total": 1094
+    }
+  ],
+  "tokens": {
+    "token_a": {
+      "iat": 1789738484,
+      "exp": 1789824884
+    },
+    "token_b": {
+      "iat": 1789738485,
+      "exp": 1789824885
+    }
+  }
+}
