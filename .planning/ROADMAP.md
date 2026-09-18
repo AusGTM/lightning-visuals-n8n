@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 5/9 plans executed
+**Plans:** 6/9 plans executed
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
@@ -593,7 +593,7 @@ Plans:
 
 **Wave 3** *(blocked on 73.1-04 and 73.1-05)*
 
-- [ ] 73.1-06-PLAN.md — the ingest lane's identity ladder (mobilephone single-hit, `phone` create-only) and the backend's own portal proof (D-16a, D-16a-i, D-16d, D-14c)
+- [x] 73.1-06-PLAN.md — the ingest lane's identity ladder (mobilephone single-hit, `phone` create-only) and the backend's own portal proof (D-16a, D-16a-i, D-16d, D-14c)
 
 **Wave 4** *(blocked on 73.1-06)*
 
