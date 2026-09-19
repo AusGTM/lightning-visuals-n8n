@@ -632,7 +632,7 @@ reason each. Regenerate JSON, suites green, disarmed deploy is the operator's st
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on decisions D-74-01..D-74-14 and the
 `73-REVIEW.md` finding ids CR-01..04 / WR-01..12.
 **Depends on:** Phase 73
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -651,4 +651,4 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 74-06-PLAN.md — D-74-11 gate: two scoped disarmed deploys, two proof sends (ceiling 2 executions), two freezes, plugin 0.52.0, operator confirmation (wave 4)
+- [x] 74-06-PLAN.md — D-74-11 gate: two scoped disarmed deploys, two proof sends (ceiling 2 executions), two freezes, plugin 0.52.0, operator confirmation (wave 4)
