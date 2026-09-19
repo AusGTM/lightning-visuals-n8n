@@ -55,6 +55,68 @@ def test_ledger_never_raises_on_malformed_payload():
 
 
 # =====================================================================================
+# backfill_missing_identity — WR-05 (Phase 74 code review): the ledger is keyed by
+# (lane, id), not id alone, so a lane later in _ACTION_LANE_ORDER cannot silently
+# overwrite an earlier lane's entry for the same id.
+# =====================================================================================
+
+def _run_data_with_ledger_entries(entries):
+    """`entries`: `[(node_name, hs_object_id, extra_json_fields), ...]` -> the
+    `run_data` shape `all_node_items` walks (one run per entry, one item per run)."""
+    run_data = {}
+    for node_name, hs_object_id, extra in entries:
+        item = {"json": {"hs_object_id": hs_object_id, **extra}}
+        run_data.setdefault(node_name, []).append({"data": {"main": [[item]]}})
+    return run_data
+
+
+def test_backfill_missing_identity_skips_an_id_ambiguous_across_lanes():
+    """Before this fix, `ledger_by_id` was keyed by id alone, so `_ACTION_LANE_ORDER`'s
+    later lane (contacts) silently overwrote an earlier lane's (companies) entry for
+    the same id -- a real record could be backfilled from the WRONG lane's decision
+    with no signal it happened. Now keyed by `(lane, id)`: an id present under two
+    lanes with differing payloads is skipped, applied from neither."""
+    run_data = _run_data_with_ledger_entries([
+        (report_enrichment.DECIDE_COMPANY_ACTION_NODE, "999",
+         {"action": "write_blocked", "object_type": "companies", "row_id": "co-1"}),
+        (report_enrichment.DECIDE_CONTACT_ACTION_NODE, "999",
+         {"action": "review", "object_type": "contacts", "row_id": "ct-1"}),
+    ])
+    rows = [{"id": "999"}]
+
+    backfilled, excluded_marker_count = report_enrichment.backfill_missing_identity(rows, run_data)
+
+    assert backfilled[0]["hs_object_id"] == "999"
+    assert "action" not in backfilled[0], (
+        "an id ambiguous across lanes must be skipped — neither lane's payload is "
+        "applied, never the last lane's by construction order")
+    assert "object_type" not in backfilled[0]
+    assert "row_id" not in backfilled[0]
+    assert excluded_marker_count == 0, (
+        "ambiguity across lanes is a separate concern from whole-request marker "
+        "exclusion — this row carries a real id and is not a marker")
+
+
+def test_backfill_missing_identity_applies_an_id_present_under_one_lane_only():
+    """The unambiguous case is unchanged: an id present under exactly one lane's
+    ledger still backfills action/object_type/row_id from it, exactly as before this
+    fix."""
+    run_data = _run_data_with_ledger_entries([
+        (report_enrichment.DECIDE_COMPANY_ACTION_NODE, "888",
+         {"action": "write_blocked", "object_type": "companies", "row_id": "co-2"}),
+    ])
+    rows = [{"id": "888"}]
+
+    backfilled, excluded_marker_count = report_enrichment.backfill_missing_identity(rows, run_data)
+
+    assert backfilled[0]["hs_object_id"] == "888"
+    assert backfilled[0]["action"] == "write_blocked"
+    assert backfilled[0]["object_type"] == "companies"
+    assert backfilled[0]["row_id"] == "co-2"
+    assert excluded_marker_count == 0
+
+
+# =====================================================================================
 # Outcome mapping — 57-02: one vocabulary, delegated to written_records.outcome_for_action.
 # =====================================================================================
 

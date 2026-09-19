@@ -216,16 +216,23 @@ def backfill_missing_identity(rows, run_data):
         `object_type` and `row_id` are copied from it when found. A miss leaves
         `action` alone — this never guesses.
     """
-    ledger_by_id = {}
+    # WR-05 (Phase 74 code review): keyed by `(lane, id)`, not id alone. Before this
+    # fix, a later lane in `_ACTION_LANE_ORDER` (contacts) silently overwrote an
+    # earlier lane's (companies) entry for the same id — a real record could be
+    # backfilled from the WRONG lane's decision with no signal it happened. An id
+    # that turns out to be ambiguous across lanes is detected at lookup time below
+    # (all matching entries across lanes are compared) and skipped rather than
+    # merged — ambiguity is not a merge.
+    ledger_by_key = {}
     if isinstance(run_data, dict):
-        for _lane, node_name in _ACTION_LANE_ORDER:
+        for lane, node_name in _ACTION_LANE_ORDER:
             for item in all_node_items(run_data, node_name):
                 if not (isinstance(item, dict) and isinstance(item.get("json"), dict)):
                     continue
                 ledger_json = item["json"]
                 ledger_id = ledger_json.get("hs_object_id")
                 if ledger_id:
-                    ledger_by_id[str(ledger_id)] = ledger_json
+                    ledger_by_key[(lane, str(ledger_id))] = ledger_json
 
     backfilled = []
     excluded_marker_count = 0
@@ -247,8 +254,18 @@ def backfill_missing_identity(rows, run_data):
         new_row = dict(row)
         new_row["hs_object_id"] = str(recovered_id)
         if not new_row.get("action"):
-            ledger_row = ledger_by_id.get(str(recovered_id))
-            if ledger_row:
+            # WR-05: every lane's entry for this id, not just the first (or last)
+            # found — an id present under more than one lane with DIFFERING
+            # payloads is ambiguous and is skipped (applied from neither); an id
+            # present under exactly one lane (or under several lanes that happen
+            # to agree byte-for-byte) is unambiguous and backfills exactly as
+            # before this fix.
+            matches = [
+                payload for (lane, lid), payload in ledger_by_key.items()
+                if lid == str(recovered_id)
+            ]
+            if matches and all(m == matches[0] for m in matches[1:]):
+                ledger_row = matches[0]
                 for key in ("action", "object_type", "row_id"):
                     if ledger_row.get(key) is not None:
                         new_row[key] = ledger_row[key]
