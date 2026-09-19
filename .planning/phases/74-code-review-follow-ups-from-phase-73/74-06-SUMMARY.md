@@ -21,6 +21,7 @@ actuals:
   tokens: 122442
   tasks: 4
   commits: 5
+  plan_head_before: 4eca4197f7b16dced9b7d166bb6f9acb631c5754
 
 # Tech tracking
 tech-stack:
@@ -156,7 +157,7 @@ Each task was committed atomically:
 3. **Task 3: Plugin 0.52.0, phase documentation, todo triage** - `8be17a1b` (feat)
 4. **Task 4: Operator confirms the ceiling held and nothing is armed** - `c4c43d5e` (docs)
 
-**Plan metadata:** committed alongside this SUMMARY (see `git_commit_metadata` step).
+**Plan metadata:** `bd411158` (docs: complete plan)
 
 `plan_head_before: 4eca4197f7b16dced9b7d166bb6f9acb631c5754` (a concurrent operator commit
 landed on `master` between session start and this plan's first commit — verified to touch
