@@ -352,9 +352,12 @@ export function runNode(node, items, ctx) {
  *     is `"continueErrorOutput"`, a stub (or a function's resolved value) may instead be
  *     shaped `{ success: [...], error: [...] }` — either key may be omitted (treated as
  *     `[]`) — to drive BOTH of the node's outputs: `success` on output 0, `error` on
- *     output 1. A stub in the plain array form still yields exactly one output even on
- *     such a node (no existing stub's meaning changes), and a node without
- *     `continueErrorOutput` never reads this shape at all.
+ *     output 1. WR-08 (74-CONTEXT.md): a stub in the plain array form is normalized to
+ *     `{ success: <that array>, error: [] }` and ALSO yields both outputs on such a node
+ *     — output 1 empty, never absent — matching the stub-normalisation code at the HTTP
+ *     branch below exactly (see the Rule-1 comment there for why this changed). A node
+ *     without `continueErrorOutput` never reads this shape at all and yields exactly one
+ *     output as before.
  *   codeStubs: { [nodeName]: array | (inputItems, node) => items } — the same
  *     substitution for a Code node whose body `await`s (the walker runs Code bodies
  *     synchronously and cannot execute one). Both directions throw: an await-bearing
@@ -512,12 +515,23 @@ export function walkWorkflow(wf, opts) {
   function propagate(fromName, outputIndex, items) {
     const node = nodesByName[fromName];
     let outItems = items;
-    // The always-output-data substitution is UNCHANGED and models a different rule from
-    // the one below: a node that RAN and produced nothing, whose AOD flag forces one
-    // empty marker item onto the wire. Live evidence it is still the right model:
-    // execution 12200 (70-UAT.md § Test 1), where "HubSpot Associate Company" never ran
-    // at all and its own alwaysOutputData contributed nothing.
-    if (outItems.length === 0 && node && node.alwaysOutputData === true) {
+    // The always-output-data substitution models a node that RAN and produced nothing on
+    // OUTPUT 0, whose AOD flag forces one empty marker item onto the wire — never
+    // whichever output happens to be empty. D-74-03 (74-CONTEXT.md, CR-01): the real
+    // engine's own source (packages/core/src/execution-engine/workflow-execute.ts,
+    // `ensureAlwaysOutputData` — [documented], file+symbol only, this repo does not vendor
+    // it) guards on `nodeSuccessData?.[0]?.[0]` and writes only `nodeSuccessData[0]` — it
+    // never substitutes into a later output, even when THAT is the one that's empty.
+    // [observed live] execution 12522: `HubSpot Create` (alwaysOutputData: true) outs
+    // `[21, 0]` — output 1 (its error branch) is empty and gets nothing; `Create Carry
+    // Merge` input 2 never receives a delivery from it, and the association still lands
+    // via the v1 end-of-run drain. Before this fix, `outputIndex` was already a parameter
+    // of this function (and already passed by the call site below) but unused in this
+    // condition, so the walker padded WHICHEVER branch was empty — the opposite of the
+    // real rule. Separately, and still true: a node that never RAN at all (zero input,
+    // e.g. execution 12200's "HubSpot Associate Company") contributes nothing regardless
+    // of its own AOD flag — this substitution only ever rescues a node that ran.
+    if (outItems.length === 0 && node && node.alwaysOutputData === true && outputIndex === 0) {
       outItems = [{}];
     }
     // D-70-30 rule (c) — OBSERVED 2026-09-10 (Gate 11, executions 12354/12355/12356,
@@ -815,24 +829,59 @@ export function walkWorkflow(wf, opts) {
   // any pending run left over once a Merge is in `drainedOnce` is reported by the stall
   // pass below as `merge_pending_runs_undrained` — never fired, never dropped silently.
   //
-  // Repeat: fire the EARLIEST pending run of any Merge NOT already in `drainedOnce` whose
-  // filled-input count is `>= requiredInputs`, scanning `mergeState` in `Object.entries`
-  // insertion order when two Merges both qualify. This scan order is DETERMINISTIC, but it
-  // is derived from THIS WALKER's own queue/insertion order, never from any observed
-  // engine ordering — BL-02 (quick task 260911-1z5) is the proof: the walker's rule for
-  // WHICH pending run an input fills matches the engine, but the walker's own dequeue
-  // order does not always match which producer's delivery arrives first, and that is what
-  // determines which name ends up in `sources`. Propagate a fired run's output, then
-  // RESUME `processQueue()` (a drained Merge's output can start work downstream, including
-  // another Merge), then rescan — `mergeState` may have grown. Repeat until no pending run
-  // qualifies. Absent inputs contribute `[]` to the merge maths (via `mergeBuffers`'s
-  // `|| []` fallback) and `undefined` to that run's `sources`/`itemCounts` (the key is
-  // simply never set).
+  // staticReachable(fromName, toName) — D-74-03 drain-order fix. Pure graph-topology BFS
+  // over `wf.connections` (every output branch, not just index 0) — cached, since it
+  // never depends on drain state. Used ONLY to order which qualifying Merge the drain
+  // fires next; it does not change WHETHER a Merge qualifies or what it fires with.
+  const staticReachCache = new Map();
+  function staticReachable(fromName, toName) {
+    const key = fromName + " " + toName;
+    const cached = staticReachCache.get(key);
+    if (cached !== undefined) return cached;
+    const seen = new Set([fromName]);
+    const stack = [fromName];
+    let found = false;
+    while (stack.length && !found) {
+      const cur = stack.pop();
+      const perNode = outgoing[cur];
+      if (!perNode || !Array.isArray(perNode.main)) continue;
+      for (const branch of perNode.main) {
+        if (!Array.isArray(branch)) continue;
+        for (const e of branch) {
+          if (e.node === toName) { found = true; break; }
+          if (!seen.has(e.node)) { seen.add(e.node); stack.push(e.node); }
+        }
+        if (found) break;
+      }
+    }
+    staticReachCache.set(key, found);
+    return found;
+  }
+
+  // Repeat: among Merges NOT already in `drainedOnce` whose filled-input count is
+  // `>= requiredInputs`, fire one that no OTHER qualifying, not-yet-drained Merge can
+  // reach via `connections` — i.e., the most-upstream qualifying Merge, insertion order as
+  // tiebreak (D-74-03, replacing the plain `Object.entries` scan order below). Without
+  // this, a downstream Merge that happens to enter `mergeState` earlier (because its OTHER
+  // inputs arrived via a short path while an upstream Merge is still assembling a longer
+  // one) drains prematurely, uses up its ONE drain (MN-01), and the real delivery that
+  // later arrives from the upstream Merge's own output opens a SECOND pending run that can
+  // never be drained — reported as a false `merge_pending_runs_undrained` loss. Execution
+  // 12522 is the live counter-evidence this fix targets: `Create Carry Merge` (no Merge
+  // upstream of it) drained before `Ingest Merge Response` (reachable FROM it, several
+  // hops downstream), and the real engine completed in one pass with nothing lost — the
+  // walker's prior plain insertion-order scan could pick the opposite order and did, on
+  // this exact graph, for a zero-rejection batch. This is an ORDERING preference only: the
+  // MN-01 one-drain-per-Merge cap, `requiredInputsFor`, and every other rule below are
+  // unchanged; `walkerEngineFidelityV1.test.mjs`'s pinned recordings (12354/12355/12356)
+  // do not exercise this tie-break (their two qualifying-at-once Merges are unrelated by
+  // reachability) and stay green under it.
   if (order === "v1") {
     const drainedOnce = new Set();
     let progressed = true;
     while (progressed) {
       progressed = false;
+      const candidates = [];
       for (const [name, state] of Object.entries(mergeState)) {
         // NT-01 (quick task 260911-1z5): every mergeState entry is v1-shaped under v1
         // (the two shapes are keyed on `order`, fixed for the whole walk) — reaching a
@@ -845,28 +894,38 @@ export function walkWorkflow(wf, opts) {
         }
         if (drainedOnce.has(name)) continue; // MN-01 cap
         const node = nodesByName[name];
-        const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
         const requiredInputs = requiredInputsFor(node);
         const idx = state.pending.findIndex(
           (p) => Object.keys(p.filled).length >= requiredInputs);
         if (idx === -1) continue;
-        const target = state.pending.splice(idx, 1)[0];
-        const merged = mergeBuffers(node, target.filled, numberInputs);
-        runData[name] = runData[name] || [];
-        runData[name].push(merged);
-        state.runs.push({
-          sources: { ...target.sources },
-          itemCounts: Object.fromEntries(
-            Object.entries(target.filled).map(([i, items]) => [i, items.length])),
-          outputCount: merged.length, // NF-BL-01: what the merge maths let OUT
-        });
-        drainedOnce.add(name);
-        recordV1Fire(name, "end-of-run drain"); // MN-02: shared cap with the main-loop fire site above
-        propagate(name, 0, merged);
-        progressed = true;
-        processQueue();
-        break; // rescan mergeState — it may have grown from the propagate/processQueue above
+        candidates.push({ name, idx });
       }
+      if (candidates.length === 0) continue; // nothing qualifies this pass — loop ends (progressed stays false)
+      const chosen = candidates.find((c) =>
+        !candidates.some((other) =>
+          other.name !== c.name && staticReachable(other.name, c.name)))
+        || candidates[0]; // no candidate is "most upstream" (a cycle among candidates) — fall
+        // back to insertion order rather than refuse; no committed graph is known to hit this.
+      const { name, idx } = chosen;
+      const state = mergeState[name];
+      const node = nodesByName[name];
+      const numberInputs = (node.parameters && node.parameters.numberInputs) || 2;
+      const target = state.pending.splice(idx, 1)[0];
+      const merged = mergeBuffers(node, target.filled, numberInputs);
+      runData[name] = runData[name] || [];
+      runData[name].push(merged);
+      state.runs.push({
+        sources: { ...target.sources },
+        itemCounts: Object.fromEntries(
+          Object.entries(target.filled).map(([i, items]) => [i, items.length])),
+        outputCount: merged.length, // NF-BL-01: what the merge maths let OUT
+      });
+      drainedOnce.add(name);
+      recordV1Fire(name, "end-of-run drain"); // MN-02: shared cap with the main-loop fire site above
+      propagate(name, 0, merged);
+      progressed = true;
+      processQueue();
+      // rescan mergeState next iteration — it may have grown from the propagate/processQueue above
     }
   }
 
