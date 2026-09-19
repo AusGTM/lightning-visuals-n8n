@@ -632,14 +632,14 @@ reason each. Regenerate JSON, suites green, disarmed deploy is the operator's st
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on decisions D-74-01..D-74-14 and the
 `73-REVIEW.md` finding ids CR-01..04 / WR-01..12.
 **Depends on:** Phase 73
-**Plans:** 2/6 plans executed
+**Plans:** 3/6 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 74-01-PLAN.md — CR-04: widen the freezer's scrub, re-redact the 7 fixtures, add the value-shape guard, freeze execution 12522 (wave 1)
 - [x] 74-02-PLAN.md — WR-01/02 grant-preview execution basis, WR-05 ledger keying, WR-06 + D-74-13 excluded-marker count and recovery bound (wave 1)
-- [ ] 74-03-PLAN.md — WR-11/12/03 csv_dedupe, WR-04 preview collapsed-block error, WR-09 review-intent comparison (wave 1)
+- [x] 74-03-PLAN.md — WR-11/12/03 csv_dedupe, WR-04 preview collapsed-block error, WR-09 review-intent comparison (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
