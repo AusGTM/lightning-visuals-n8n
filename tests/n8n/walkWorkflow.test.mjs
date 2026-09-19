@@ -291,13 +291,25 @@ test("mutually-exclusive-branch case, RE-DERIVED for v1 (quick task 260911-0tz, 
     "only the live branch's row survives — the dead branch's input is absent");
 });
 
-test("mutually-exclusive-branch case: alwaysOutputData on the IF itself DOES fire the Merge", () => {
+test("mutually-exclusive-branch case, RE-DERIVED for D-74-03: alwaysOutputData on the IF " +
+  "itself does NOT rescue output 1 — the real engine's ensureAlwaysOutputData substitutes " +
+  "into output 0 unconditionally, never whichever branch happens to be empty", () => {
+  // Was: "alwaysOutputData on the IF itself DOES fire the Merge" — that claim rested on
+  // the walker padding WHICHEVER output was empty, checked by item count alone, ignoring
+  // outputIndex. D-74-03 (74-CONTEXT.md, CR-01): the live n8n source
+  // (packages/core/src/execution-engine/workflow-execute.ts, `ensureAlwaysOutputData`)
+  // guards on `nodeSuccessData?.[0]?.[0]` and writes only `nodeSuccessData[0]` — output 0,
+  // always, never the branch that happens to be empty. Output 0 here (the true branch)
+  // already carries a real item, so the substitution never fires at all; output 1 (the
+  // empty false branch) gets nothing, same as the "downstream" case above but now for the
+  // flag placed on the router itself. This is the exact shape execution 12522 pins for
+  // `HubSpot Create` (alwaysOutputData, out [21, 0] — output 1 never padded).
   const graph = wf(
     [
       triggerNode("Trigger"),
       ifNode("Splitter", "={{ $json.id }}", "={{ $json.id }}", { alwaysOutputData: true }), // flag on the IF
       codeNode("TrueSink", PASSTHROUGH),
-      codeNode("FalseSink", PASSTHROUGH), // no flag needed here — it now gets a real delivery
+      codeNode("FalseSink", PASSTHROUGH),
       mergeNode("Merge", 2),
     ],
     {
@@ -308,12 +320,71 @@ test("mutually-exclusive-branch case: alwaysOutputData on the IF itself DOES fir
     }
   );
   const { runData, trace } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{ id: "row-A" }] });
-  // BL-01 (quick task 260911-1z5): both inputs filled this time — the fired run has no
-  // missing input, so `trace.stalled` is genuinely empty, not merely "no genuine loss".
-  assert.deepEqual(trace.stalled, []);
-  assert.equal(runData.FalseSink.length, 1, "FalseSink ran once, fed the IF's forced empty marker");
-  assert.equal(runData.Merge.length, 1, "the Merge fired exactly once");
-  assert.deepEqual(runData.Merge[0], [{ id: "row-A" }, {}]);
+  assert.equal(runData.FalseSink, undefined,
+    "output 1 (the empty branch) gets NO padding even though the node is alwaysOutputData " +
+    "— the flag only ever rescues output 0, and output 0 here already has a real item");
+  assert.deepEqual(trace.stalled,
+    [{ node: "Merge", reason: "merge_fired_with_unfilled_input", run: 0, missingInputs: [1] }],
+    "the Merge drains at end-of-run on TrueSink's filled input alone, same as the " +
+    "downstream-flag case above — the flag's placement on the IF changes nothing here");
+  assert.deepEqual(starvedWithData(trace), [],
+    "nobody ever delivered to input 1 — the by-design D-70-23 gated-sentinel shape, not a loss");
+  assert.equal(runData.Merge.length, 1, "the Merge fired exactly once, via the drain");
+  assert.deepEqual(runData.Merge[0], [{ id: "row-A" }]);
+});
+
+test("D-74-03: alwaysOutputData pads output index 0 only, never a later output — same AOD " +
+  "node, two scenarios distinguishing 'whichever branch is empty' from 'output 0 only'", () => {
+  function graphWithRoute() {
+    return wf(
+      [
+        triggerNode("Trigger"),
+        ifNode("Splitter", "={{ $json.route }}", "={{ 'true' }}", { alwaysOutputData: true }),
+        codeNode("TrueSink", PASSTHROUGH),
+        codeNode("FalseSink", PASSTHROUGH),
+      ],
+      {
+        Trigger: { main: [[edge("Splitter")]] },
+        Splitter: { main: [[edge("TrueSink")], [edge("FalseSink")]] },
+      }
+    );
+  }
+  // (a) output 0 (true branch) is the empty one this run — the flag DOES rescue it.
+  {
+    const { runData } = walkWorkflow(graphWithRoute(), {
+      triggerNode: "Trigger", triggerItems: [{ route: "false" }],
+    });
+    assert.deepEqual(runData.TrueSink, [[{}]], "output 0 is empty -> padded with one marker item");
+    assert.equal(runData.FalseSink.length, 1, "output 1 (non-empty) carries the real row, untouched");
+  }
+  // (b) output 1 (false branch) is the empty one this run — the flag does NOT rescue it,
+  // even though the exact same node, with the exact same flag, rescued output 0 above.
+  {
+    const { runData } = walkWorkflow(graphWithRoute(), {
+      triggerNode: "Trigger", triggerItems: [{ route: "true" }],
+    });
+    assert.equal(runData.FalseSink, undefined,
+      "output 1 is empty -> no padding, no delivery, FalseSink never runs");
+    assert.equal(runData.TrueSink.length, 1, "output 0 (non-empty) carries the real row, unaffected");
+  }
+});
+
+test("D-74-03: a node without alwaysOutputData is unaffected on every output index", () => {
+  const graph = wf(
+    [
+      triggerNode("Trigger"),
+      ifNode("Splitter", "={{ $json.route }}", "={{ 'true' }}"), // no AOD flag anywhere
+      codeNode("TrueSink", PASSTHROUGH),
+      codeNode("FalseSink", PASSTHROUGH),
+    ],
+    {
+      Trigger: { main: [[edge("Splitter")]] },
+      Splitter: { main: [[edge("TrueSink")], [edge("FalseSink")]] },
+    }
+  );
+  const { runData } = walkWorkflow(graph, { triggerNode: "Trigger", triggerItems: [{ route: "false" }] });
+  assert.equal(runData.TrueSink, undefined, "output 0 is empty, no AOD flag -> no padding at all");
+  assert.equal(runData.FalseSink.length, 1, "output 1 carries the real row");
 });
 
 test("respond case: two nodes wired into one respondToWebhook — only the first firing " +
