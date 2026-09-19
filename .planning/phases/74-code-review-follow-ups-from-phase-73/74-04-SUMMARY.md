@@ -19,6 +19,7 @@ actuals:
   tokens: 9795   # code-only (excludes the regenerated n8n/wf_enrichment_cloud.json): chars/4 = 39182/4
   tasks: 3
   commits: 4
+  plan_head_before: fad340e54995ae1f4e9f979b30aac137a9f87acb
   # Full realized diff including the regenerated n8n/wf_enrichment_cloud.json: 81359 chars
   # (~20340 chars/4) -- the code-only figure above is the meaningful one for estimate
   # calibration, same convention 74-01-SUMMARY.md used for its own generated-fixture diffs.
