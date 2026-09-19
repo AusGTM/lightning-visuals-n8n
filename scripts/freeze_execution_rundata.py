@@ -18,11 +18,31 @@ read-only n8n scripts use; this one needs to run unattended, so it loads its own
 environment rather than relying on the caller having sourced it). Never prints,
 logs, or writes a credential value anywhere.
 
-Redaction (T-73-01-01, repo memory `n8n-rundata-carries-webhook-secret`): every
-Webhook Trigger runData item's `headers` object is REPLACED WHOLESALE with a fixed
-placeholder string before anything is written — never a key-by-key scrub, which is
-easy to under-cover. The caller's IP and the shared webhook secret both live inside
-that one object.
+Redaction (T-73-01-01, repo memory `n8n-rundata-carries-webhook-secret`;
+CR-04/D-74-07/D-74-08/D-74-09, Phase 74 Plan 01): `_scrub` walks every dict and
+list at ANY depth of a whole node-run entry (not only its `data.main` subtree —
+that widening is what reaches a node-run-level `run["error"]` sibling of
+`run["data"]`) and replaces the value of any key named in `_SENSITIVE_KEYS`
+WHOLESALE with a fixed placeholder — never a key-by-key allowlist at one fixed
+path, which is easy to under-cover, and never a partial/serialized copy of the
+sensitive value. `_SENSITIVE_KEYS` is `headers`/`error`/`request`/`options`/
+`config` (D-74-07's specified five) PLUS `zoom_token`/`access_token`, added as a
+Phase 74 Task 1 deviation: the five specified keys alone do not reach either
+committed live leak in `exec_12434.runData.json`/`exec_12449.runData.json` — both
+carry a ZoomInfo OAuth JWT directly under `zoom_token`/`access_token`, siblings of
+`json`, never nested under any of the five. Replaces on first match and does not
+recurse into the replaced subtree — an item carrying a bearer value at
+`json.error.request.headers.Authorization` loses the whole `error` value at the
+first match, nothing below it is walked separately. Error fixtures therefore lose
+their message text by design.
+
+`--rescrub PATH [PATH ...]`: re-applies the CURRENT `_scrub` to already-committed
+fixture file(s) in place, without any n8n API call and without `N8N_URL`/
+`N8N_API_KEY` — the mode used to re-redact a fixture whose raw bytes were already
+fetched and committed under an earlier, narrower scrub (D-74-08). Handles both
+established fixture shapes: the single-execution `runData` top-level key (default
+and `--nodes` excerpt modes) and the `--combine` multi-execution shape
+(`executions: {id: {runData: {...}}}`). Never a hand edit of the committed JSON.
 
 Two output shapes:
   - Default: one full-runData fixture per execution id, `exec_<id>.runData.json`,
@@ -43,7 +63,6 @@ Usage:
         --run-id 6891d018e84f4d869eb8080292dac6c5
 """
 import argparse
-import copy
 import json
 import sys
 from pathlib import Path
@@ -63,10 +82,28 @@ import executions_client  # noqa: E402
 REDACTED_PLACEHOLDER = (
     "<redacted — see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
 )
+# D-74-07's five specified keys, widened by `zoom_token`/`access_token` — a Task 1
+# deviation (Rule 1/2): the five alone never reach the live ZoomInfo OAuth JWT
+# committed in exec_12434.runData.json / exec_12449.runData.json, which sits
+# directly under `zoom_token` (35/17 occurrences) or `access_token` (2/2), a
+# sibling of `json`, not nested under headers/error/request/options/config. See
+# tests/test_freeze_execution_rundata.py::test_zoom_token_and_access_token_values_are_replaced.
+_SENSITIVE_KEYS = (
+    "headers",
+    "error",
+    "request",
+    "options",
+    "config",
+    "zoom_token",
+    "access_token",
+)
+
 REDACTION_NOTE = (
-    "the whole `headers` object on every Webhook Trigger runData item was replaced "
-    "with a fixed placeholder before this fixture was committed (T-73-01-01, repo "
-    "memory n8n-rundata-carries-webhook-secret) — never a key-by-key scrub."
+    "any `headers`/`error`/`request`/`options`/`config`/`zoom_token`/`access_token` "
+    "key, at any depth of a whole node-run entry, was replaced wholesale with a "
+    "fixed placeholder before this fixture was committed (T-73-01-01, repo memory "
+    "n8n-rundata-carries-webhook-secret; CR-04/D-74-07/D-74-08) — never a key-by-key "
+    "scrub at one fixed path."
 )
 
 
@@ -77,27 +114,54 @@ def _load_config() -> dict:
     }
 
 
-def _redact_headers(run_data: dict) -> dict:
-    """Deep-copies `run_data` and replaces every item's `json.headers` object
-    wholesale. Never mutates the caller's dict."""
-    redacted = copy.deepcopy(run_data) if isinstance(run_data, dict) else {}
-    for _node_name, runs in redacted.items():
-        if not isinstance(runs, list):
-            continue
-        for run in runs:
-            if not isinstance(run, dict):
-                continue
-            main = (run.get("data") or {}).get("main")
-            if not isinstance(main, list):
-                continue
-            for branch in main:
-                if not isinstance(branch, list):
-                    continue
-                for item in branch:
-                    if isinstance(item, dict) and isinstance(item.get("json"), dict):
-                        if "headers" in item["json"]:
-                            item["json"]["headers"] = REDACTED_PLACEHOLDER
-    return redacted
+def _scrub(value):
+    """Recursively walks `value` — a whole node-run entry, or any nested
+    structure inside one — and replaces the value of any dict key named in
+    `_SENSITIVE_KEYS` with `REDACTED_PLACEHOLDER`, at any depth, in any dict or
+    list. Non-enumerating: unlike the retired `_redact_headers` (which only ever
+    reached `run["data"]["main"][branch][item]["json"]["headers"]`), this walks
+    the ENTIRE structure passed to it — including a node-run-level `run["error"]`
+    sibling of `run["data"]`, which the old function never saw.
+
+    Replaces on FIRST match and does not recurse into the replaced subtree — an
+    item carrying a bearer value at `json.error.request.headers.Authorization`
+    loses the whole `error` value at the first match; `request`/`headers` below
+    it are never inspected separately.
+
+    A non-dict, non-list value (str, int, bool, None) is returned unchanged. Every
+    dict/list level walked builds a brand-new container rather than mutating in
+    place, so the caller's input is never mutated even though this function
+    performs no explicit `copy.deepcopy` — every nested dict/list in the return
+    value is a fresh object, never a reference into the input.
+    """
+    if isinstance(value, dict):
+        return {
+            key: (REDACTED_PLACEHOLDER if key in _SENSITIVE_KEYS else _scrub(v))
+            for key, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_scrub(v) for v in value]
+    return value
+
+
+def _rescrub_fixture(fixture: dict) -> dict:
+    """Re-applies the CURRENT `_scrub` to whichever runData object(s) `fixture`
+    carries, leaving every other field untouched. Handles both established
+    fixture shapes: the single-execution `runData` top-level key (default and
+    `--nodes` excerpt modes) and the `--combine` multi-execution shape
+    (`executions: {id: {runData: {...}}}`). Mutates and returns `fixture` in
+    place — the caller already owns a freshly-parsed dict, not a value shared
+    with anything else."""
+    if isinstance(fixture.get("runData"), dict):
+        fixture["runData"] = _scrub(fixture["runData"])
+    executions = fixture.get("executions")
+    if isinstance(executions, dict):
+        for exec_fixture in executions.values():
+            if isinstance(exec_fixture, dict) and isinstance(exec_fixture.get("runData"), dict):
+                exec_fixture["runData"] = _scrub(exec_fixture["runData"])
+    if "redaction" in fixture:
+        fixture["redaction"] = REDACTION_NOTE
+    return fixture
 
 
 def _run_data_of(execution: dict) -> dict:
@@ -132,7 +196,7 @@ def build_full_fixture(execution: dict) -> dict:
                 "it."
             ),
         },
-        "runData": _redact_headers(_run_data_of(execution)),
+        "runData": _scrub(_run_data_of(execution)),
         "redaction": REDACTION_NOTE,
     }
 
@@ -142,7 +206,7 @@ def build_excerpt(execution: dict, node_names: list) -> dict:
     `--combine` multi-execution mode — a chunked dispatch's run_id spans many
     executions, and committing every one's FULL runData would dwarf what the fixture
     exists to prove."""
-    run_data = _redact_headers(_run_data_of(execution))
+    run_data = _scrub(_run_data_of(execution))
     return {
         "execution_id": execution.get("id"),
         "status": execution.get("status"),
@@ -152,7 +216,7 @@ def build_excerpt(execution: dict, node_names: list) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("execution_ids", nargs="+", type=int)
+    parser.add_argument("execution_ids", nargs="*", type=int)
     parser.add_argument(
         "--out-dir", default="tests/n8n/fixtures/frozen",
         help="Directory for the default (one-file-per-execution) output mode.",
@@ -170,7 +234,29 @@ def main() -> int:
         "--run-id", default=None,
         help="Recorded in the combined excerpt's own header, for the reader's benefit only.",
     )
+    parser.add_argument(
+        "--rescrub", nargs="+", default=None, metavar="PATH",
+        help="Re-apply the CURRENT _scrub to already-committed fixture file(s) in "
+             "place. No n8n API call, no N8N_URL/N8N_API_KEY needed — operates "
+             "entirely on the bytes already on disk (D-74-08).",
+    )
     args = parser.parse_args()
+
+    if args.rescrub:
+        for rel_path in args.rescrub:
+            path = ROOT / rel_path
+            fixture = json.loads(path.read_text())
+            fixture = _rescrub_fixture(fixture)
+            path.write_text(json.dumps(fixture, indent=2, sort_keys=True) + "\n")
+            print(f"rescrubbed {path}")
+        return 0
+
+    if not args.execution_ids:
+        print(
+            "No execution ids given and --rescrub not used — nothing to do.",
+            file=sys.stderr,
+        )
+        return 2
 
     config = _load_config()
     if not config["n8n_url"] or not config["n8n_api_key"]:

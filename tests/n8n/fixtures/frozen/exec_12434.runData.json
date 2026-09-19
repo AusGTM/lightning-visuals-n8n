@@ -5,7 +5,7 @@
     "note": "workflowData dropped; the live graph at freeze time carried this many nodes under this workflow id. This fixture is READ for its runData, never walked, so no committed graph copy is needed beside it."
   },
   "mode": "webhook",
-  "redaction": "the whole `headers` object on every Webhook Trigger runData item was replaced with a fixed placeholder before this fixture was committed (T-73-01-01, repo memory n8n-rundata-carries-webhook-secret) \u2014 never a key-by-key scrub.",
+  "redaction": "any `headers`/`error`/`request`/`options`/`config`/`zoom_token`/`access_token` key, at any depth of a whole node-run entry, was replaced wholesale with a fixed placeholder before this fixture was committed (T-73-01-01, repo memory n8n-rundata-carries-webhook-secret; CR-04/D-74-07/D-74-08) \u2014 never a key-by-key scrub at one fixed path.",
   "runData": {
     "Adapt Apollo Usage": [
       {
@@ -5065,7 +5065,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -5825,7 +5825,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -6941,7 +6941,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -7692,7 +7692,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -8504,7 +8504,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -9028,7 +9028,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -9750,7 +9750,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -10256,7 +10256,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -14325,7 +14325,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -15080,7 +15080,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "input": 1,
@@ -16163,7 +16163,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -16923,7 +16923,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "input": 1,
@@ -20960,7 +20960,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -21711,7 +21711,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -22439,7 +22439,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -23194,7 +23194,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -23942,7 +23942,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -24697,7 +24697,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -25984,7 +25984,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -26529,7 +26529,7 @@
                     "service_tier": "standard"
                   },
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -27501,7 +27501,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -28028,7 +28028,7 @@
                     "service_tier": "standard"
                   },
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -28807,7 +28807,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -29313,7 +29313,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -30035,7 +30035,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -30523,7 +30523,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -32813,7 +32813,7 @@
                   "run_id": "6891d018e84f4d869eb8080292dac6c5",
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -33538,7 +33538,7 @@
                   "run_id": "6891d018e84f4d869eb8080292dac6c5",
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -33609,7 +33609,7 @@
                     "zoominfo"
                   ],
                   "zoom_needs_mint": true,
-                  "zoom_token": null
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -33646,7 +33646,7 @@
                     "zoominfo"
                   ],
                   "zoom_needs_mint": true,
-                  "zoom_token": null
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -33676,12 +33676,7 @@
             [
               {
                 "json": {
-                  "error": {
-                    "code": "ECONNABORTED",
-                    "message": "timeout of 20000ms exceeded",
-                    "name": "AxiosError",
-                    "stack": "AxiosError: timeout of 20000ms exceeded\n    at createTimeoutError (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/axios@1.18.0_patch_hash=149e256a2a7b632497650b32816716ced972ab02a5ab00fbd8a5158a51722c4_437e4fafb503be805d1d0ae72f0b0deb/node_modules/axios/dist/node/axios.cjs:3562:14)\n    at RedirectableRequest.handleTimeout (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/axios@1.18.0_patch_hash=149e256a2a7b632497650b32816716ced972ab02a5ab00fbd8a5158a51722c4_437e4fafb503be805d1d0ae72f0b0deb/node_modules/axios/dist/node/axios.cjs:4080:15)\n    at RedirectableRequest.emit (node:events:509:20)\n    at Timeout._onTimeout (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/follow-redirects@1.16.0_debug@4.4.3_supports-color@8.1.1_/node_modules/follow-redirects/index.js:233:12)\n    at listOnTimeout (node:internal/timers:635:17)\n    at processTimers (node:internal/timers:571:7)\n    at Axios.request (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/axios@1.18.0_patch_hash=149e256a2a7b632497650b32816716ced972ab02a5ab00fbd8a5158a51722c4_437e4fafb503be805d1d0ae72f0b0deb/node_modules/axios/dist/node/axios.cjs:5427:41)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at invokeAxios (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+backend-network@file+packages+@n8n+backend-network_@opentelemetry+core@2.10.0_@ope_41cac35742d0f6042e1dc7a96ef31026/node_modules/@n8n/backend-network/src/http/axios/invoke.ts:15:10)\n    at executeLegacyRequest (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+backend-network@file+packages+@n8n+backend-network_@opentelemetry+core@2.10.0_@ope_41cac35742d0f6042e1dc7a96ef31026/node_modules/@n8n/backend-network/src/http/legacy-request.ts:83:6)\n    at Object.requestLegacy (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+backend-network@file+packages+@n8n+backend-network_@opentelemetry+core@2.10.0_@ope_41cac35742d0f6042e1dc7a96ef31026/node_modules/@n8n/backend-network/src/http/outbound-http.ts:204:13)\n    at proxyRequestToAxios (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.1_@opentelemetry+core@2.10.0_@opente_7e0bf630272413213fcb6a0a5506bf53/node_modules/n8n-core/src/execution-engine/node-execution-context/utils/request-helpers/legacy-request-adapter.ts:31:9)\n    at Object.request (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.1_@opentelemetry+core@2.10.0_@opente_7e0bf630272413213fcb6a0a5506bf53/node_modules/n8n-core/src/execution-engine/node-execution-context/utils/request-helpers/factory.ts:166:11)"
-                  }
+                  "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -33716,12 +33711,7 @@
                   "apollo_org_url": "https://api.apollo.io/v1/organizations/enrich?domain=perthracing.com.au",
                   "container": null,
                   "domain": "perthracing.com.au",
-                  "error": {
-                    "code": "ECONNABORTED",
-                    "message": "timeout of 20000ms exceeded",
-                    "name": "AxiosError",
-                    "stack": "AxiosError: timeout of 20000ms exceeded\n    at createTimeoutError (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/axios@1.18.0_patch_hash=149e256a2a7b632497650b32816716ced972ab02a5ab00fbd8a5158a51722c4_437e4fafb503be805d1d0ae72f0b0deb/node_modules/axios/dist/node/axios.cjs:3562:14)\n    at RedirectableRequest.handleTimeout (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/axios@1.18.0_patch_hash=149e256a2a7b632497650b32816716ced972ab02a5ab00fbd8a5158a51722c4_437e4fafb503be805d1d0ae72f0b0deb/node_modules/axios/dist/node/axios.cjs:4080:15)\n    at RedirectableRequest.emit (node:events:509:20)\n    at Timeout._onTimeout (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/follow-redirects@1.16.0_debug@4.4.3_supports-color@8.1.1_/node_modules/follow-redirects/index.js:233:12)\n    at listOnTimeout (node:internal/timers:635:17)\n    at processTimers (node:internal/timers:571:7)\n    at Axios.request (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/axios@1.18.0_patch_hash=149e256a2a7b632497650b32816716ced972ab02a5ab00fbd8a5158a51722c4_437e4fafb503be805d1d0ae72f0b0deb/node_modules/axios/dist/node/axios.cjs:5427:41)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at invokeAxios (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+backend-network@file+packages+@n8n+backend-network_@opentelemetry+core@2.10.0_@ope_41cac35742d0f6042e1dc7a96ef31026/node_modules/@n8n/backend-network/src/http/axios/invoke.ts:15:10)\n    at executeLegacyRequest (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+backend-network@file+packages+@n8n+backend-network_@opentelemetry+core@2.10.0_@ope_41cac35742d0f6042e1dc7a96ef31026/node_modules/@n8n/backend-network/src/http/legacy-request.ts:83:6)\n    at Object.requestLegacy (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+backend-network@file+packages+@n8n+backend-network_@opentelemetry+core@2.10.0_@ope_41cac35742d0f6042e1dc7a96ef31026/node_modules/@n8n/backend-network/src/http/outbound-http.ts:204:13)\n    at proxyRequestToAxios (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.1_@opentelemetry+core@2.10.0_@opente_7e0bf630272413213fcb6a0a5506bf53/node_modules/n8n-core/src/execution-engine/node-execution-context/utils/request-helpers/legacy-request-adapter.ts:31:9)\n    at Object.request (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.1_@opentelemetry+core@2.10.0_@opente_7e0bf630272413213fcb6a0a5506bf53/node_modules/n8n-core/src/execution-engine/node-execution-context/utils/request-helpers/factory.ts:166:11)"
-                  },
+                  "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
                   "event_id": "sub:undefined:undefined",
                   "event_type": null,
                   "existingRecord": {},
@@ -34485,7 +34475,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -35236,7 +35226,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": [
                   {
@@ -36037,7 +36027,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -36788,7 +36778,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -37514,7 +37504,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -38269,7 +38259,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -40081,7 +40071,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -40836,7 +40826,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 }
               },
               {
@@ -41915,7 +41905,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -42675,7 +42665,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 }
               }
             ]
@@ -43428,7 +43418,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -44183,7 +44173,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "input": 1,
@@ -44966,7 +44956,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -45726,7 +45716,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "input": 2,
@@ -46595,7 +46585,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -47100,7 +47090,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -47822,7 +47812,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -48309,7 +48299,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -49717,7 +49707,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -50262,7 +50252,7 @@
                     "service_tier": "standard"
                   },
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": [
                   {
@@ -51244,7 +51234,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -51771,7 +51761,7 @@
                     "service_tier": "standard"
                   },
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": [
                   {
@@ -52565,7 +52555,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -53071,7 +53061,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -53793,7 +53783,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -54281,7 +54271,7 @@
                   },
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -55232,7 +55222,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -55806,7 +55796,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -56529,7 +56519,7 @@
                       ]
                     },
                     "zoominfo": {
-                      "error": "Request failed with status code 401"
+                      "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                     }
                   },
                   "providers_requested": [
@@ -57089,7 +57079,7 @@
                   "stop_details": null,
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -59338,9 +59328,9 @@
                   "run_id": "6891d018e84f4d869eb8080292dac6c5",
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg",
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
                   "zoominfo_result": {
-                    "error": "Request failed with status code 401"
+                    "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                   }
                 },
                 "pairedItem": {
@@ -60066,9 +60056,9 @@
                   "run_id": "6891d018e84f4d869eb8080292dac6c5",
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg",
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
                   "zoominfo_result": {
-                    "error": "Request failed with status code 401"
+                    "error": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                   }
                 },
                 "pairedItem": {
@@ -60851,7 +60841,7 @@
                   "run_id": "6891d018e84f4d869eb8080292dac6c5",
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -61576,7 +61566,7 @@
                   "run_id": "6891d018e84f4d869eb8080292dac6c5",
                   "total": 0,
                   "zoom_needs_mint": false,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkJDQjRFcGZWbWxjQ2pwd3dHTVFaVU91Rlc2U0NPOGhhSHR4SUJUX0hTNUkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNDU2LCJleHAiOjE3ODk1MzY4NTYsImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiIwMGJhMGMyZC1jZjMxLTQyNTMtOGNkMC1mNzM2ZGU2YTQ2YzMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.JnELU7Rg1pjywx7ahlgaOkgNwv5Ylb68CZXPjEAMyztGnVwGt8tEdR2yWmEDYRTv-bQTB3zZvH0EmMVHvuyKLeB9X_E7PjTV3LcNb9fIwRE_IZ_nqm5JGTAOXQuRB4E0ekUJPS5byYaWgbR_TRCExQJ3gcjeE-3L7Mzxj90MxKivms5fj_gqc6T-tyNIHSKNZTl0cCpwLeOSxvTh2_IWhC40X7vSDYHqZSxWrtcAFtv_EYO44L-p4ri40ZmsHwAHx0Hs16aaG0ASmPsd3EszI1qDyzAviLzBgg6jN8KYCJUBhwL4njp5KjgJXGjdq4Nv0R4JG1SuHdX3CD1mZCcFqg"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 1
@@ -61681,7 +61671,7 @@
                   "refresh_token": null,
                   "scope": "api:audience:manage api:audience:read api:data:intent api:data:news api:gtm-config:manage api:data:contact api:data:scoops api:audience-member:manage api:gtm-config:read api:gtm-data-model:read api:data:company api:audience-member:read api:gtm-data-model:manage zi_api api:account-summary:read api:insights:read api:recommendations:read",
                   "zoom_needs_mint": true,
-                  "zoom_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULk5mNDlPSS0ycUdjQVNUSHo0LUZNY0h3Z0NGNW5rUk15ZUVjYUtmWFVLeEkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNTI5LCJleHAiOjE3ODk1MzY5MjksImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiJlYjYxYTRmZS0zMDk4LTQ1ODAtYWUzYS1kMjgzN2ZlOGI3ZjMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.LR7NS_6AZ-_7-VEkrR8N09Dy8L6FK06JZr8pqH8lhDt2EQJ3w9NbUsSo10V1HL0iooTaTSoWzlJsJhpw7PHfr0VZ455ARjKLejo1OJFeoko9-BLF3E3v9eRAgGG7ovTjaMyLb-8F5zTOLNdLm-3uqsVa7-rqDAUXTAD6W0uPJhHAc_XWf571i9EtZU_nIccqklPETYhYhuODwzm-0sZPe-BhaPKr_347DkShADafo0A1QKlmMfRBJPt-qDTV0bnxoydWqobRgTBtmHbzCGpEZGHXSm__lZl4o-ikM1QLEEN69BI5OvsiNFiROXMYeAJNt_D1e2mEWDXCLzSDGGTLug"
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
@@ -61711,7 +61701,7 @@
             [
               {
                 "json": {
-                  "access_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULk5mNDlPSS0ycUdjQVNUSHo0LUZNY0h3Z0NGNW5rUk15ZUVjYUtmWFVLeEkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNTI5LCJleHAiOjE3ODk1MzY5MjksImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiJlYjYxYTRmZS0zMDk4LTQ1ODAtYWUzYS1kMjgzN2ZlOGI3ZjMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.LR7NS_6AZ-_7-VEkrR8N09Dy8L6FK06JZr8pqH8lhDt2EQJ3w9NbUsSo10V1HL0iooTaTSoWzlJsJhpw7PHfr0VZ455ARjKLejo1OJFeoko9-BLF3E3v9eRAgGG7ovTjaMyLb-8F5zTOLNdLm-3uqsVa7-rqDAUXTAD6W0uPJhHAc_XWf571i9EtZU_nIccqklPETYhYhuODwzm-0sZPe-BhaPKr_347DkShADafo0A1QKlmMfRBJPt-qDTV0bnxoydWqobRgTBtmHbzCGpEZGHXSm__lZl4o-ikM1QLEEN69BI5OvsiNFiROXMYeAJNt_D1e2mEWDXCLzSDGGTLug",
+                  "access_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
                   "expires_in": 86400,
                   "id_token": null,
                   "refresh_token": null,
@@ -61747,7 +61737,7 @@
               {
                 "binary": {},
                 "json": {
-                  "access_token": "eyJraWQiOiJLWFV5V3dSTWR5OVhDbmlMR0laLTdEVGQyMXJIWThpemRNREFPVnhEQXdnIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULk5mNDlPSS0ycUdjQVNUSHo0LUZNY0h3Z0NGNW5rUk15ZUVjYUtmWFVLeEkiLCJpc3MiOiJodHRwczovL29rdGEtbG9naW4uem9vbWluZm8uY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsInN1YiI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4IiwiaWF0IjoxNzg5NDUwNTI5LCJleHAiOjE3ODk1MzY5MjksImNpZCI6IjBvYTE1N3h5Ymk1RHp6aThyNjk4Iiwic2NwIjpbImFwaTphdWRpZW5jZTptYW5hZ2UiLCJhcGk6YXVkaWVuY2U6cmVhZCIsImFwaTpkYXRhOmludGVudCIsImFwaTpkYXRhOm5ld3MiLCJhcGk6Z3RtLWNvbmZpZzptYW5hZ2UiLCJhcGk6ZGF0YTpjb250YWN0IiwiYXBpOmRhdGE6c2Nvb3BzIiwiYXBpOmF1ZGllbmNlLW1lbWJlcjptYW5hZ2UiLCJhcGk6Z3RtLWNvbmZpZzpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOnJlYWQiLCJhcGk6ZGF0YTpjb21wYW55IiwiYXBpOmF1ZGllbmNlLW1lbWJlcjpyZWFkIiwiYXBpOmd0bS1kYXRhLW1vZGVsOm1hbmFnZSIsInppX2FwaSIsImFwaTphY2NvdW50LXN1bW1hcnk6cmVhZCIsImFwaTppbnNpZ2h0czpyZWFkIiwiYXBpOnJlY29tbWVuZGF0aW9uczpyZWFkIl0sImxhc3ROYW1lIjoiSGVybWFub2N6a2kiLCJ6aVNlc3Npb25UeXBlIjo1MDAsInppR3JvdXBJZCI6MCwiemlDb21wYW55UHJvZmlsZUlkIjoiMTMwODgzNjEzNyIsInppUGFydG5lck5hbWUiOiJMaWdodG5pbmcgVmlzdWFscyIsInppUmF0ZUxpbWl0IjoyNSwiemlBcHBsaWNhdGlvbk5hbWUiOiJHVE0gQVBJIiwiemlQbGF0Zm9ybXMiOlsiREVWIFBPUlRBTCIsIkRPWkkiLCJBRE1JTiIsIlNUVURJTyJdLCJ6aUFkbWluUm9sZXMiOiJCQVFBQUlBQUJRQUFBQ0FBTWd3QVFCSUtBQWhBQUFBQUFJQUFBQUFBQUFBQUFFQUFBQUFBQUFCUUpCVEFsc2dJQUNBQS93T01TUklDIiwiemlVc2VybmFtZSI6ImFsZXguaEBsaWdodG5pbmd2aXN1YWxzLmNvbSIsImZpcnN0TmFtZSI6IkFsZXgiLCJ6aVJvbGVzIjoiM3UvOC8vOTlyZi9mLy80RjhuM3BiZDhQQnhoWUtQOHpnTUFPWUFJSUFJQUFBR3dBQUFBQUFBUndOQnorbjl2SzRPQW5BTUNBU1JLT1pBPT0iLCJ6aVV1aWQiOiJlYjYxYTRmZS0zMDk4LTQ1ODAtYWUzYS1kMjgzN2ZlOGI3ZjMiLCJ6aVVzZXJJZCI6MzExNjM3NzgsInNmQ29udGFjdElkIjoiMDAzNHkwMDAwMmVvTDBPQUFVIiwiemlUZW5hbnRJZCI6MjAzMzY2MTAsImVtYWlsIjoiYWxleC5oQGxpZ2h0bmluZ3Zpc3VhbHMuY29tIiwic2ZBY2NvdW50SWQiOiIwMDE0eTAwMDAyaTBmOG9BQUEiLCJ6aU1vbmdvVXNlcklkIjoiMzExNjM3NzgifQ.LR7NS_6AZ-_7-VEkrR8N09Dy8L6FK06JZr8pqH8lhDt2EQJ3w9NbUsSo10V1HL0iooTaTSoWzlJsJhpw7PHfr0VZ455ARjKLejo1OJFeoko9-BLF3E3v9eRAgGG7ovTjaMyLb-8F5zTOLNdLm-3uqsVa7-rqDAUXTAD6W0uPJhHAc_XWf571i9EtZU_nIccqklPETYhYhuODwzm-0sZPe-BhaPKr_347DkShADafo0A1QKlmMfRBJPt-qDTV0bnxoydWqobRgTBtmHbzCGpEZGHXSm__lZl4o-ikM1QLEEN69BI5OvsiNFiROXMYeAJNt_D1e2mEWDXCLzSDGGTLug",
+                  "access_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
                   "expires_in": 86400,
                   "id_token": null,
                   "providers_requested": [
@@ -61759,7 +61749,7 @@
                   "scope": "api:audience:manage api:audience:read api:data:intent api:data:news api:gtm-config:manage api:data:contact api:data:scoops api:audience-member:manage api:gtm-config:read api:gtm-data-model:read api:data:company api:audience-member:read api:gtm-data-model:manage zi_api api:account-summary:read api:insights:read api:recommendations:read",
                   "token_type": "Bearer",
                   "zoom_needs_mint": true,
-                  "zoom_token": null
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": [
                   {
@@ -61810,7 +61800,7 @@
                     "zoominfo"
                   ],
                   "zoom_needs_mint": true,
-                  "zoom_token": null
+                  "zoom_token": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>"
                 },
                 "pairedItem": {
                   "item": 0
