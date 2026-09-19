@@ -635,12 +635,30 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
         recovery = {"recovered": False, "responses": [], "run_data": {},
                      "matched_executions": 0}
     else:
+        # D-74-13 (Phase 74 code review): `bound_seconds=None` (the common case — no
+        # caller resolves one itself) used to fall straight through to
+        # `recover_async_dispatch`'s own hardcoded `DEFAULT_BOUND_SECONDS`, silently
+        # ignoring an operator's `watch_bound_seconds` config override for THIS
+        # recovery path — even though `watch.resolve_bound_seconds` already exists and
+        # is already honoured end to end by the SYNCHRONOUS `watch()` entry point.
+        # Resolved through the SAME function here rather than a second rule, scaled by
+        # the rows actually dispatched in the chunks that landed (the same
+        # `isinstance(r.rows, int)` idiom `projected_spend` already uses — a
+        # backend-resolved `UNKNOWN` chunk contributes no count to scale against). An
+        # explicit caller-supplied `bound_seconds` is never second-guessed.
+        resolved_bound_seconds = bound_seconds
+        if resolved_bound_seconds is None:
+            landed_rows = sum(
+                r.rows for r in outcome.results if r.ok and isinstance(r.rows, int))
+            resolved_bound_seconds = _watch.resolve_bound_seconds(
+                config, landed_rows if landed_rows > 0 else None)
+
         recovery_kwargs = {"transport": get_transport} if get_transport is not None else {}
         if workflow_id is not None:
             recovery_kwargs["workflow_id"] = workflow_id
         recovery = _watch.recover_dispatch(
             config, outcome.run_id, expected_chunk_count=landed,
-            now=now, sleep=sleep, bound_seconds=bound_seconds,
+            now=now, sleep=sleep, bound_seconds=resolved_bound_seconds,
             **recovery_kwargs)
 
     rows = recovery.get("responses") or []
@@ -670,8 +688,9 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
     # lazy (see `dispatch_plan`'s own note) and this one follows the same convention.
     import report_enrichment as _report_enrichment
     written_records_failures = []
+    excluded_marker_count = 0
     if can_write and rows:
-        write_records_rows, _excluded_marker_count = (
+        write_records_rows, excluded_marker_count = (
             _report_enrichment.backfill_missing_identity(rows, run_data))
         try:
             flushed = written_records.append_chunk(outcome.run_id, 0, write_records_rows)
@@ -686,7 +705,7 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
             written_records_failures.append({"chunk_index": 0,
                                              "reason": bookkeeping_reason})
 
-    return {
+    result = {
         "outcome": outcome,
         "rows": rows,
         "run_data": run_data,
@@ -695,6 +714,13 @@ def dispatch_and_recover(plan, providers, armed, config, transport=requests, *,
         "can_write": can_write,
         "written_records_failures": written_records_failures,
     }
+    # WR-06 (Phase 74 code review): the excluded-marker count used to be computed and
+    # discarded (`_excluded_marker_count`), invisible to every caller. Returned only
+    # when non-zero, so the usual zero case adds nothing to what an existing caller
+    # reads — never a `0` key a caller would have to learn to ignore.
+    if excluded_marker_count:
+        result["excluded_marker_count"] = excluded_marker_count
+    return result
 
 
 def projected_spend(outcome) -> int:

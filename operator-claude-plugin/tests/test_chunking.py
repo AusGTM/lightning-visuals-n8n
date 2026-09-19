@@ -1546,6 +1546,93 @@ def test_dispatch_and_recover_reads_rows_from_rundata_never_from_the_ack(
                                             "row_ids": []},)
 
 
+# --- WR-06 / D-74-13 (Phase 74 code review) -------------------------------------------
+
+def test_dispatch_and_recover_returns_the_excluded_marker_count_when_nonzero(
+    fake_config, stub_module_transport_factory, stub_get_transport_factory
+):
+    """WR-06: `dispatch_and_recover` used to unpack and discard the second value
+    `report_enrichment.backfill_missing_identity` returns (`_excluded_marker_count`)
+    — the number of whole-request markers this run's rows carried was computed and
+    thrown away, invisible to every caller. It is now returned in the result dict."""
+    run_id = "run-74-02-wr06-nonzero"
+    plan = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 5)
+
+    result = chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, fake_config, run_id=run_id,
+        transport=stub_module_transport_factory(),
+        get_transport=_recovering_get_transport(
+            stub_get_transport_factory, run_id,
+            [{"row_id": "1", "action": "update", "hs_object_id": "10"},
+             {"action": "research_failed"}]),
+        workflow_id="wf-enrichment-cloud", now=lambda: 0.0, sleep=lambda s: None,
+    )
+
+    assert result["can_write"] is True
+    assert result["excluded_marker_count"] == 1
+
+
+def test_dispatch_and_recover_omits_excluded_marker_count_when_zero(
+    fake_config, stub_module_transport_factory, stub_get_transport_factory
+):
+    """The common case — no whole-request marker in this run's rows — carries no
+    `excluded_marker_count` key at all, never a `0`, so an existing caller reading
+    the result dict is unaffected (WR-06's own "reported only when non-zero" shape)."""
+    run_id = "run-74-02-wr06-zero"
+    plan = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 5)
+
+    result = chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, fake_config, run_id=run_id,
+        transport=stub_module_transport_factory(),
+        get_transport=_recovering_get_transport(
+            stub_get_transport_factory, run_id,
+            [{"row_id": "1", "action": "update", "hs_object_id": "10"}]),
+        workflow_id="wf-enrichment-cloud", now=lambda: 0.0, sleep=lambda s: None,
+    )
+
+    assert "excluded_marker_count" not in result
+
+
+def test_dispatch_and_recover_resolves_the_bound_from_config_when_not_passed_explicitly(
+    fake_config, stub_module_transport_factory, monkeypatch
+):
+    """D-74-13: `dispatch_and_recover`'s own recovery bound used to bypass
+    `watch.resolve_bound_seconds` entirely — an unresolved `bound_seconds=None` fell
+    straight through to `recover_async_dispatch`'s hardcoded `DEFAULT_BOUND_SECONDS`,
+    silently ignoring an operator's `watch_bound_seconds` config override for THIS
+    recovery path even though the synchronous `watch()` path already honoured it
+    (`resolve_bound_seconds` was defined and tested, but this call site never called
+    it — "half-wired", per the plan's own framing). Pinned at both ends: override
+    present resolves to the configured value, override absent resolves to the module
+    default, and an explicit caller-supplied bound is never second-guessed."""
+    captured = {}
+
+    def _fake_recover_dispatch(config, run_id, expected_chunk_count=1, **kwargs):
+        captured["bound_seconds"] = kwargs.get("bound_seconds")
+        return {"recovered": True, "responses": [], "run_data": {}, "matched_executions": 1}
+
+    monkeypatch.setattr(watch, "recover_dispatch", _fake_recover_dispatch)
+    plan = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 5)
+
+    chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, fake_config, run_id="run-bound-default",
+        transport=stub_module_transport_factory())
+    assert captured["bound_seconds"] == watch.DEFAULT_BOUND_SECONDS, (
+        "no override configured -- must resolve to the module default, not None")
+
+    configured = {**fake_config, "watch_bound_seconds": 1234}
+    chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, configured, run_id="run-bound-override",
+        transport=stub_module_transport_factory())
+    assert captured["bound_seconds"] == 1234.0
+
+    chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, configured, run_id="run-bound-explicit",
+        transport=stub_module_transport_factory(), bound_seconds=42)
+    assert captured["bound_seconds"] == 42, (
+        "an explicit caller-supplied bound must never be overridden by config")
+
+
 def _stepping_clock(step=10.0):
     """A monotonic stub that ADVANCES. A constant `now` makes `elapsed` permanently 0,
     so a recovery that never matches loops forever instead of hitting its bound —
