@@ -152,6 +152,35 @@ def collapse_block(collapsed) -> dict:
     return {"count": len(collapsed), "rows": list(collapsed)}
 
 
+class CollapsedBlockError(Exception):
+    """`--collapsed <path>` was explicitly requested and the read failed — missing,
+    unreadable, or malformed JSON (WR-04). Never raised when no path was requested at
+    all; that stays the silent absent-block path `collapse_block(None)` already
+    handles."""
+
+
+def read_collapsed_block(collapsed_arg_path):
+    """Read `csv_dedupe.py`'s `--apply` sidecar report for the CLI's `--collapsed` flag
+    (WR-04). This module never re-derives the collapse itself — see `collapse_block`'s
+    own docstring.
+
+    Returns `None` — the absent-block path, unchanged — ONLY when no path was requested
+    at all (`collapsed_arg_path` is falsy). A path that WAS requested but cannot be read
+    for any reason (missing, unreadable, malformed JSON) is a genuine failure: silently
+    returning `None` there would make `pre_collapse_row_count == row_count`, which reads
+    exactly like a batch with no duplicates — the one case the operator most needs to be
+    able to tell apart from "nothing collapsed". Raises `CollapsedBlockError` naming the
+    offending path instead of swallowing it (73-REVIEW.md's own fix, D-74-10).
+    """
+    if not collapsed_arg_path:
+        return None
+    try:
+        return json.loads(Path(collapsed_arg_path).read_text(encoding="utf-8"))
+    except Exception as e:
+        raise CollapsedBlockError(
+            f"--collapsed {collapsed_arg_path} could not be read ({e})") from e
+
+
 def tabular_cost_block(row_count) -> str:
     """This lane's cost block, rendered through the enrichment lane's SAME helper.
 
@@ -264,14 +293,15 @@ if __name__ == "__main__":
     except Exception:
         _mapping_path = None
 
-    _collapsed = None
-    if _collapsed_arg_path:
-        # csv_dedupe.py's own `--apply` sidecar report — read-only, never re-derived
-        # here (this module never imports csv_dedupe; see collapse_block's docstring).
-        try:
-            _collapsed = json.loads(Path(_collapsed_arg_path).read_text(encoding="utf-8"))
-        except Exception:
-            _collapsed = None
+    # csv_dedupe.py's own `--apply` sidecar report — read-only, never re-derived here
+    # (this module never imports csv_dedupe; see collapse_block's docstring). A path
+    # that was explicitly requested and could not be read is a genuine failure (WR-04);
+    # only "no path requested" stays the silent absent-block path.
+    try:
+        _collapsed = read_collapsed_block(_collapsed_arg_path)
+    except CollapsedBlockError as _e:
+        print(json.dumps({"ok": False, "error": str(_e)}))
+        raise SystemExit(1)
 
     try:
         _preview = build_preview(_path, _mapping_path, collapsed=_collapsed)

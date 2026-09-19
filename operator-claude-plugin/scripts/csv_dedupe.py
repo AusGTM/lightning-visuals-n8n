@@ -150,6 +150,21 @@ def apply_dedupe(path, mapping_path=None, scratch_dir=None):
     }
 
 
+def _resolve_configured_mapping_path():
+    """The CLI's own column-mapping resolution (WR-03). Mirrors `preview.py`'s own
+    `__main__`, which resolves through the SAME canonical reader —
+    `config_gate.load_config().get("column_mapping_path")` — rather than a second,
+    independent resolver for the same config key. Degrades to `None` (behaving exactly
+    as an unconfigured mapping does today) when the config file is missing, unreadable,
+    or the operator has not set a config at all."""
+    try:
+        import config_gate
+
+        return config_gate.load_config().get("column_mapping_path")
+    except Exception:
+        return None
+
+
 if __name__ == "__main__":
     import sys
 
@@ -162,11 +177,12 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     _path, _mode = args[0], args[1]
+    _mapping_path = _resolve_configured_mapping_path()
     try:
         if _mode == "--propose":
-            print(json.dumps({"ok": True, **propose_dedupe(_path)}))
+            print(json.dumps({"ok": True, **propose_dedupe(_path, _mapping_path)}))
         else:
-            print(json.dumps({"ok": True, **apply_dedupe(_path)}))
+            print(json.dumps({"ok": True, **apply_dedupe(_path, _mapping_path)}))
     except Exception as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)
