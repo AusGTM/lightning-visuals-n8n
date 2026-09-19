@@ -8917,6 +8917,53 @@ return $input.all().map((it) => {
     )
     sy += 120
 
+    # D-74-14 (74-CONTEXT.md, CR-01's index-0-only padding rule applied here): AOD on
+    # "IF Research Errored" (below) only ever rescues OUTPUT 0 (the errored/TRUE branch,
+    # "Build Research Failure Response") — the "research happened, no error" case, where
+    # output 0 is the one that's empty. It does NOT rescue output 1 ("Validate Research
+    # Output", the no-error/FALSE branch) when EVERY row's research genuinely errors —
+    # that case leaves "Judge Gate" (fed only by "Validate Research Output") completely
+    # dark, and with it "Companies Judge All/None Needed Sentinel" (sourced FROM Judge
+    # Gate — their own trigger never runs either), so "Merge Company Fan-In" inputs 1 and
+    # 2 (normally fed by "IF Needs Judge"/"Apply Judge Verdict" or those two sentinels)
+    # go unfilled with no producer of any kind. Reproduced offline (corrected walker,
+    # an all-research-errored companies batch): "Merge Company Fan-In" fires via the v1
+    # drain on input 0 alone (from "Companies Research All Needed Sentinel"), and the row
+    # still reaches "Build Response" correctly via "Build Research Failure Response" — so
+    # this specific gap costs a phantom-but-harmless marker today, not a lost row, but it
+    # is exactly the shape `walkWorkflow.mjs` treats as a structural risk (D-74-03's own
+    # rule: never rely on an engine behaviour this repo has not verified), so it is closed
+    # here rather than left to depend on downstream filtering alone.
+    #
+    # "Companies Research Errored Sentinel", sourced from "Research Carry Merge" (the
+    # node whose delivered row set "IF Research Errored" evaluates — confirmed by walking
+    # `conns`), fires the universally-quantified form of the IF's own condition
+    # (`!!$json.error || !Array.isArray($json.content)`) applied to every row, which is
+    # true in EXACTLY the case output 1 is empty. Mutual exclusion with every other
+    # producer of inputs 1/2, by construction, never by luck: this sentinel can only fire
+    # when "Research Carry Merge" itself ran (so "Companies Absent"/"Recompute
+    # Requested"/"Companies Waterfall Absent" cannot also fire — those all mean no row
+    # ever reached the research chain at all) and when EVERY row in that delivery errored
+    # (so "Companies Research None Needed Sentinel" cannot also fire — that requires no
+    # row to have NEEDED research in the first place, the opposite precondition). The real
+    # "IF Needs Judge"/"Apply Judge Verdict" pass-throughs and "Companies Judge All/None
+    # Needed Sentinel" all require "Judge Gate" to have run, which is structurally
+    # impossible in exactly the scenario this sentinel targets (output 1 empty means
+    # "Validate Research Output" — Judge Gate's only producer — never ran). A MIXED batch
+    # (some rows error, some don't) leaves this sentinel silent by the same `every()`
+    # guard, because "Judge Gate" DOES run for the surviving row(s) and the real chain
+    # covers it. No merge input gains a second producer that can fire in the same
+    # lane-scenario as an existing one.
+    _add_starved_lane_sentinel(
+        nodes, conns, "Companies Research Errored Sentinel", "Research Carry Merge",
+        'if (rows.length > 0 && rows.every((r) => !!r.error || !Array.isArray(r.content))) '
+        'return [{}]; return [];',
+        [mc("IF Needs Judge", 1),
+         mc("Apply Judge Verdict")],
+        sx, sy,
+    )
+    sy += 120
+
     # "IF Research Errored" is the ONE place `set_always_output_data` (not a bypass
     # sentinel) is correct: whenever it runs at all, research genuinely happened for at
     # least one row, and its OTHER branch ("Validate Research Output" -> "Judge Gate") is
@@ -8924,8 +8971,10 @@ return $input.all().map((it) => {
     # for "Set Review"/"HubSpot Associate Company" (a flag that can never race a
     # co-starved input, because at most one of a routing IF's two branches is ever empty
     # when the node ran at all). Covers "Build Research Failure Response" (Lane F) for
-    # the "research happened, no error" case; the "no research at all" case is covered
-    # by "Companies Research None Needed Sentinel" above.
+    # the "research happened, no error" case (output 0 empty); the "no research at all"
+    # case is covered by "Companies Research None Needed Sentinel" above, and the "every
+    # row errored" case (output 1 empty — AOD does NOT reach it) is covered by
+    # "Companies Research Errored Sentinel" just above.
     set_always_output_data(nodes, ["IF Research Errored"])
 
     # Phase 70 Plan 03 Task 2 (D-70-07): "Build Refusal Row" is "Build Response Merge"'s

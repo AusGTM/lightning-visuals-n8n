@@ -4396,10 +4396,10 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Refusal Fired Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0) return [{}]; return [];\n"
+        "jsCode": "// Companies Research Errored Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => !!r.error || !Array.isArray(r.content))) return [{}]; return [];\n"
       },
       "id": "c02720000-0000-4000-8000-000000000000",
-      "name": "Refusal Fired Sentinel",
+      "name": "Companies Research Errored Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4413,7 +4413,7 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02730000-0000-4000-8000-000000000000",
-      "name": "Refusal Fired Sentinel Gate",
+      "name": "Companies Research Errored Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4424,10 +4424,10 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Refusal Row Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0) return [{}]; return [];\n"
+        "jsCode": "// Refusal Fired Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0) return [{}]; return [];\n"
       },
       "id": "c02740000-0000-4000-8000-000000000000",
-      "name": "Refusal Row Absent Sentinel",
+      "name": "Refusal Fired Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4441,7 +4441,7 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02750000-0000-4000-8000-000000000000",
-      "name": "Refusal Row Absent Sentinel Gate",
+      "name": "Refusal Fired Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4452,9 +4452,37 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Filter Build Response Rows \u2014 Phase 70 Plan 04 (D-70-04).\n// Drops starved-lane sentinel markers BEFORE the credits broadcast \u2014 see this splice's own comment.\nreturn $input.all().filter((it) => Object.keys(it.json || {}).length > 0 && it.json['_gsd_sentinel_marker'] !== true);\n"
+        "jsCode": "// Refusal Row Absent Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0) return [{}]; return [];\n"
       },
       "id": "c02760000-0000-4000-8000-000000000000",
+      "name": "Refusal Row Absent Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c02770000-0000-4000-8000-000000000000",
+      "name": "Refusal Row Absent Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        6280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Filter Build Response Rows \u2014 Phase 70 Plan 04 (D-70-04).\n// Drops starved-lane sentinel markers BEFORE the credits broadcast \u2014 see this splice's own comment.\nreturn $input.all().filter((it) => Object.keys(it.json || {}).length > 0 && it.json['_gsd_sentinel_marker'] !== true);\n"
+      },
+      "id": "c02780000-0000-4000-8000-000000000000",
       "name": "Filter Build Response Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -4468,36 +4496,8 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// HubSpot Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
-      "id": "c02770000-0000-4000-8000-000000000000",
-      "name": "HubSpot Create No Refusal Sentinel",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        40,
-        6280
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
-      },
-      "id": "c02780000-0000-4000-8000-000000000000",
-      "name": "HubSpot Create No Refusal Sentinel Gate",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        150,
-        6280
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Create All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
-      },
       "id": "c02790000-0000-4000-8000-000000000000",
-      "name": "HubSpot Create All Refused Sentinel",
+      "name": "HubSpot Create No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4511,7 +4511,7 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02800000-0000-4000-8000-000000000000",
-      "name": "HubSpot Create All Refused Sentinel Gate",
+      "name": "HubSpot Create No Refusal Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4522,15 +4522,15 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+        "jsCode": "// HubSpot Create All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
       "id": "c02810000-0000-4000-8000-000000000000",
-      "name": "HubSpot Update No Refusal Sentinel",
+      "name": "HubSpot Create All Refused Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        6400
+        6520
       ]
     },
     {
@@ -4539,21 +4539,21 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02820000-0000-4000-8000-000000000000",
-      "name": "HubSpot Update No Refusal Sentinel Gate",
+      "name": "HubSpot Create All Refused Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         150,
-        6400
+        6520
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Update All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+        "jsCode": "// HubSpot Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
       "id": "c02830000-0000-4000-8000-000000000000",
-      "name": "HubSpot Update All Refused Sentinel",
+      "name": "HubSpot Update No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4567,7 +4567,7 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02840000-0000-4000-8000-000000000000",
-      "name": "HubSpot Update All Refused Sentinel Gate",
+      "name": "HubSpot Update No Refusal Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4578,15 +4578,15 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Company Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+        "jsCode": "// HubSpot Update All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
       "id": "c02850000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Update No Refusal Sentinel",
+      "name": "HubSpot Update All Refused Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        6520
+        6640
       ]
     },
     {
@@ -4595,21 +4595,21 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02860000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Update No Refusal Sentinel Gate",
+      "name": "HubSpot Update All Refused Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         150,
-        6520
+        6640
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Company Update All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+        "jsCode": "// HubSpot Company Update No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
       "id": "c02870000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Update All Refused Sentinel",
+      "name": "HubSpot Company Update No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4623,7 +4623,7 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02880000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Update All Refused Sentinel Gate",
+      "name": "HubSpot Company Update No Refusal Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4634,15 +4634,15 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Company Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
+        "jsCode": "// HubSpot Company Update All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
       "id": "c02890000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Create No Refusal Sentinel",
+      "name": "HubSpot Company Update All Refused Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        6640
+        6760
       ]
     },
     {
@@ -4651,21 +4651,21 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02900000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Create No Refusal Sentinel Gate",
+      "name": "HubSpot Company Update All Refused Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         150,
-        6640
+        6760
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// HubSpot Company Create All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+        "jsCode": "// HubSpot Company Create No Refusal Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && rows.every((r) => r.write_allowed === true)) return [{}]; return [];\n"
       },
       "id": "c02910000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Create All Refused Sentinel",
+      "name": "HubSpot Company Create No Refusal Sentinel",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -4679,12 +4679,40 @@
         "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
       },
       "id": "c02920000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Create All Refused Sentinel Gate",
+      "name": "HubSpot Company Create No Refusal Sentinel Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         150,
         6760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Company Create All Refused Sentinel \u2014 Phase 70 Plan 03 starved-lane sentinel.\n// Bypasses the real routing chain entirely: see _add_starved_lane_sentinel's docstring.\nconst rows = $input.all().map((it) => it.json);\nif (rows.length > 0 && !rows.some((r) => r.write_allowed === true)) return [{}]; return [];\n"
+      },
+      "id": "c02930000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create All Refused Sentinel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        6880
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Sentinel Gate \u2014 Phase 70 Plan 10 (D-70-23). Fed ONLY by its condition\n// node's own output. That output can be an empty array while the condition\n// node itself still RAN (it is always fed the real lane's row set), and the\n// engine counts a zero-item OUTPUT as a real delivery to whatever it feeds\n// (executions 12204-12206) \u2014 sharing a Merge input directly with the\n// condition node therefore let an empty verdict pre-empt a real row. This\n// gate is what the condition feeds instead: when the condition emits\n// nothing, the gate itself is fed zero items and \u2014 per the engine's OWN\n// other rule (execution 12200: a node fed zero items does not run) \u2014 never\n// runs, making no delivery at all. Only the condition's one marker item ever\n// reaches this gate, so it always runs it becomes the delivery.\nreturn $input.all().map((it) => ({ json: { ...it.json, '_gsd_sentinel_marker': true } }));\n"
+      },
+      "id": "c02940000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create All Refused Sentinel Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        6880
       ]
     },
     {
@@ -4700,7 +4728,7 @@
           }
         }
       },
-      "id": "m02930000-0000-4000-8000-000000000000",
+      "id": "m02950000-0000-4000-8000-000000000000",
       "name": "Credits Broadcast",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -4714,41 +4742,13 @@
         "mode": "runOnceForAllItems",
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
-      "id": "c02940000-0000-4000-8000-000000000000",
+      "id": "c02960000-0000-4000-8000-000000000000",
       "name": "IF List Input -> List By Name Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        6760
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
-      },
-      "id": "c02950000-0000-4000-8000-000000000000",
-      "name": "IF Bare Event -> HubSpot Fetch By Id Carry Merge Pass-Through",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        40,
-        6840
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
-      },
-      "id": "c02960000-0000-4000-8000-000000000000",
-      "name": "IF Has Email -> HubSpot Search Carry Merge Pass-Through",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        40,
-        6920
+        6880
       ]
     },
     {
@@ -4757,12 +4757,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c02970000-0000-4000-8000-000000000000",
-      "name": "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through",
+      "name": "IF Bare Event -> HubSpot Fetch By Id Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7000
+        6960
       ]
     },
     {
@@ -4771,12 +4771,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c02980000-0000-4000-8000-000000000000",
-      "name": "IF Name Searchable -> HubSpot Name Search Carry Merge Pass-Through",
+      "name": "IF Has Email -> HubSpot Search Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7080
+        7040
       ]
     },
     {
@@ -4785,12 +4785,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c02990000-0000-4000-8000-000000000000",
-      "name": "IF Lusha Enabled -> Lusha Result Carry Merge Pass-Through",
+      "name": "IF Linkedin Searchable -> HubSpot Linkedin Search Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7160
+        7120
       ]
     },
     {
@@ -4799,12 +4799,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03000000-0000-4000-8000-000000000000",
-      "name": "IF Apollo Enabled -> Apollo Result Carry Merge Pass-Through",
+      "name": "IF Name Searchable -> HubSpot Name Search Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7240
+        7200
       ]
     },
     {
@@ -4813,12 +4813,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03010000-0000-4000-8000-000000000000",
-      "name": "IF ZoomInfo Needs Mint -> ZoomInfo Mint Carry Merge Pass-Through",
+      "name": "IF Lusha Enabled -> Lusha Result Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7320
+        7280
       ]
     },
     {
@@ -4827,12 +4827,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03020000-0000-4000-8000-000000000000",
-      "name": "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through",
+      "name": "IF Apollo Enabled -> Apollo Result Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7400
+        7360
       ]
     },
     {
@@ -4841,12 +4841,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03030000-0000-4000-8000-000000000000",
-      "name": "IF Company Bare Event -> HubSpot Company Search Carry Merge Pass-Through",
+      "name": "IF ZoomInfo Needs Mint -> ZoomInfo Mint Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7480
+        7440
       ]
     },
     {
@@ -4855,12 +4855,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03040000-0000-4000-8000-000000000000",
-      "name": "IF Lusha Company Enabled -> Lusha Company Result Carry Merge Pass-Through",
+      "name": "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7560
+        7520
       ]
     },
     {
@@ -4869,12 +4869,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03050000-0000-4000-8000-000000000000",
-      "name": "IF Apollo Org Enabled -> Apollo Org Result Carry Merge Pass-Through",
+      "name": "IF Company Bare Event -> HubSpot Company Search Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7640
+        7600
       ]
     },
     {
@@ -4883,12 +4883,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03060000-0000-4000-8000-000000000000",
-      "name": "IF ZoomInfo Company Needs Mint -> ZoomInfo Mint Company Carry Merge Pass-Through",
+      "name": "IF Lusha Company Enabled -> Lusha Company Result Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7720
+        7680
       ]
     },
     {
@@ -4897,12 +4897,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03070000-0000-4000-8000-000000000000",
-      "name": "IF ZoomInfo Usage Needs Mint -> ZoomInfo Usage Mint Carry Merge Pass-Through",
+      "name": "IF Apollo Org Enabled -> Apollo Org Result Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7800
+        7760
       ]
     },
     {
@@ -4911,12 +4911,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03080000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Create Write Gate IF -> HubSpot Company Create Carry Merge Pass-Through",
+      "name": "IF ZoomInfo Company Needs Mint -> ZoomInfo Mint Company Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7880
+        7840
       ]
     },
     {
@@ -4925,12 +4925,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03090000-0000-4000-8000-000000000000",
-      "name": "IF Name Searchable -> Enrichment Gate Merge Pass-Through",
+      "name": "IF ZoomInfo Usage Needs Mint -> ZoomInfo Usage Mint Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        7960
+        7920
       ]
     },
     {
@@ -4939,12 +4939,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03100000-0000-4000-8000-000000000000",
-      "name": "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through",
+      "name": "HubSpot Company Create Write Gate IF -> HubSpot Company Create Carry Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8040
+        8000
       ]
     },
     {
@@ -4953,12 +4953,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03110000-0000-4000-8000-000000000000",
-      "name": "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through",
+      "name": "IF Name Searchable -> Enrichment Gate Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8120
+        8080
       ]
     },
     {
@@ -4967,12 +4967,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03120000-0000-4000-8000-000000000000",
-      "name": "IF Enrich -> Build Response Merge Pass-Through",
+      "name": "IF Contact Research Needed -> Merge Winners Fan-In Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8200
+        8160
       ]
     },
     {
@@ -4981,12 +4981,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03130000-0000-4000-8000-000000000000",
-      "name": "IF Company Recompute -> Decide Company Action Merge Pass-Through",
+      "name": "IF Contact Needs Judge -> Merge Winners Fan-In Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8280
+        8240
       ]
     },
     {
@@ -4995,12 +4995,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03140000-0000-4000-8000-000000000000",
-      "name": "IF Company Skip -> Build Response Merge Pass-Through",
+      "name": "IF Enrich -> Build Response Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8360
+        8320
       ]
     },
     {
@@ -5009,12 +5009,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03150000-0000-4000-8000-000000000000",
-      "name": "IF Research Needed -> Merge Company Fan-In Pass-Through",
+      "name": "IF Company Recompute -> Decide Company Action Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8440
+        8400
       ]
     },
     {
@@ -5023,12 +5023,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03160000-0000-4000-8000-000000000000",
-      "name": "IF Needs Judge -> Merge Company Fan-In Pass-Through",
+      "name": "IF Company Skip -> Build Response Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8520
+        8480
       ]
     },
     {
@@ -5037,12 +5037,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03170000-0000-4000-8000-000000000000",
-      "name": "IF Company Enrich -> Build Response Merge Pass-Through",
+      "name": "IF Research Needed -> Merge Company Fan-In Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8600
+        8560
       ]
     },
     {
@@ -5051,12 +5051,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03180000-0000-4000-8000-000000000000",
-      "name": "HubSpot Create Write Gate IF -> Build Response Merge Pass-Through",
+      "name": "IF Needs Judge -> Merge Company Fan-In Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8680
+        8640
       ]
     },
     {
@@ -5065,12 +5065,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03190000-0000-4000-8000-000000000000",
-      "name": "HubSpot Update Write Gate IF -> Build Response Merge Pass-Through",
+      "name": "IF Company Enrich -> Build Response Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8760
+        8720
       ]
     },
     {
@@ -5079,12 +5079,12 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03200000-0000-4000-8000-000000000000",
-      "name": "HubSpot Company Create Write Gate IF -> Build Response Merge Pass-Through",
+      "name": "HubSpot Create Write Gate IF -> Build Response Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8840
+        8800
       ]
     },
     {
@@ -5093,12 +5093,40 @@
         "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
       },
       "id": "c03210000-0000-4000-8000-000000000000",
+      "name": "HubSpot Update Write Gate IF -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8880
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03220000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Create Write Gate IF -> Build Response Merge Pass-Through",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        8960
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pass-through \u2014 see build_cloud_workflows.py's own comment at this node's call site (_add_merge_passthrough).\nreturn $input.all();\n"
+      },
+      "id": "c03230000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         40,
-        8920
+        9040
       ]
     },
     {
@@ -5106,7 +5134,7 @@
         "mode": "append",
         "numberInputs": 6
       },
-      "id": "m03220000-0000-4000-8000-000000000000",
+      "id": "m03240000-0000-4000-8000-000000000000",
       "name": "Build Response Merge Stage 1",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -5120,7 +5148,7 @@
         "mode": "append",
         "numberInputs": 7
       },
-      "id": "m03230000-0000-4000-8000-000000000000",
+      "id": "m03250000-0000-4000-8000-000000000000",
       "name": "Build Response Merge Stage 2",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -5134,7 +5162,7 @@
         "mode": "append",
         "numberInputs": 2
       },
-      "id": "m03240000-0000-4000-8000-000000000000",
+      "id": "m03260000-0000-4000-8000-000000000000",
       "name": "Build Response Merge Stage 3",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -7285,6 +7313,11 @@
             "node": "IF Research Errored",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Companies Research Errored Sentinel",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -8476,6 +8509,33 @@
         [
           {
             "node": "Build Response Merge Stage 2",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Companies Research Errored Sentinel": {
+      "main": [
+        [
+          {
+            "node": "Companies Research Errored Sentinel Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Companies Research Errored Sentinel Gate": {
+      "main": [
+        [
+          {
+            "node": "Merge Company Fan-In",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Merge Company Fan-In",
             "type": "main",
             "index": 2
           }

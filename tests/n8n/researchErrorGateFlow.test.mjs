@@ -171,7 +171,15 @@ test("the wiring routes true->failure terminal, false->Validate Research Output,
   // Phase 70 Plan 04 (D-70-04): "Research Carry Merge" now sits between "Claude Web
   // Research" and "IF Research Errored", re-attaching the row.
   assert.deepEqual(targetsOf(wf, "Claude Web Research", 0), ["Research Carry Merge"]);
-  assert.deepEqual(targetsOf(wf, "Research Carry Merge", 0), ["IF Research Errored"]);
+  // D-74-14 (74-CONTEXT.md): "Companies Research Errored Sentinel" is a SECOND, additive
+  // fan-out consumer of "Research Carry Merge" output 0 — it watches the same row set
+  // "IF Research Errored" evaluates and covers "Merge Company Fan-In" inputs 1/2 for the
+  // "every row errored" case AOD (output-0-only, D-74-03) cannot reach. The real edge to
+  // "IF Research Errored" is unchanged; this is an addition, not a rewire.
+  assert.deepEqual(
+    targetsOf(wf, "Research Carry Merge", 0),
+    ["IF Research Errored", "Companies Research Errored Sentinel"],
+  );
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 0), ["Build Research Failure Response"]);
   assert.deepEqual(targetsOf(wf, "IF Research Errored", 1), ["Validate Research Output"]);
   // Phase 70 Plan 03 (D-70-01): "Build Response" now sits behind a real Merge. Phase 70

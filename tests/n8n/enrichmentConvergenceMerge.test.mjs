@@ -246,10 +246,54 @@ test("Merge Winners fires once over all three inputs on a batch with no research
 });
 
 test("Merge Company fires once over all three inputs on a companies batch with no research/judge need", () => {
-  const { runData, trace } = run([companyEvent("1", "nosuch.example", {})]);
+  // D-74-14: `baseStubs()`'s bare `{}` for "Claude Web Research" has no `content` array,
+  // which "IF Research Errored" (`!!$json.error || !Array.isArray($json.content)`)
+  // correctly reads as a genuine error under the corrected walker (D-74-03) — the OLD
+  // walker's whichever-branch-is-empty padding used to mask that this stub was never a
+  // well-formed "research succeeded" response to begin with. This test's own name says
+  // "no research/judge need" (i.e., a clean, no-escalation research result), so give it
+  // one: a well-formed, non-error response with an empty `data` object — genuinely no
+  // error, and nothing in it triggers a judge escalation either.
+  const { runData, trace } = run([companyEvent("1", "nosuch.example", {})], {
+    "Claude Web Research": (items) => items.map(() => ({
+      content: [{ type: "text", text: JSON.stringify({
+        data: {}, evidence_by_field: {}, matched: false, confidence: 0,
+      }) }],
+    })),
+  });
   assert.deepEqual(starvedWithData(trace), []);
   assert.equal((runData["Merge Company Fan-In"] || []).length, 1);
   assert.ok(nodeItems(runData, "Merge Company").length >= 1, "Merge Company ran with real content");
+});
+
+test("D-74-14: a companies batch where research genuinely errors reaches Build Response " +
+  "once per row, carrying research_failed, with no Merge left undrained", () => {
+  // Two companies, both need research (no existing record) and both error — "IF Research
+  // Errored" output 1 ("Validate Research Output") is empty for every row this run, so
+  // "Judge Gate" and its two sentinels never run either. Before D-74-14's
+  // "Companies Research Errored Sentinel", "Merge Company Fan-In" inputs 1 and 2 had no
+  // producer of ANY kind in this exact shape (trace.stalled: merge_fired_with_unfilled_
+  // input, missingInputs [1, 2]) — by-design per starvedWithData (not a flagged loss,
+  // since the row still reached Build Response via "Build Research Failure Response"),
+  // but exactly the structural risk D-74-03's own rule exists to close rather than leave
+  // to downstream filtering alone.
+  const events = [
+    companyEvent("1", "erroring1.example", {}),
+    companyEvent("2", "erroring2.example", {}),
+  ];
+  const { runData, trace } = run(events, {
+    "Claude Web Research": (items) => items.map(() => ({ error: { message: "rate limited" } })),
+  });
+  assert.deepEqual(starvedWithData(trace), []);
+  assert.deepEqual(
+    trace.stalled.filter((s) => s.reason === "merge_pending_runs_undrained"), [],
+    "no Merge is left with a pending run the one-drain cap refused",
+  );
+  const rows = nodeItems(runData, "Build Response");
+  assert.equal(rows.length, 2, "one row per input row, never fewer, never a phantom marker");
+  assert.deepEqual(rows.map((r) => r.action).sort(), ["research_failed", "research_failed"]);
+  assert.equal((runData["Companies Research Errored Sentinel"] || []).length, 1,
+    "the new sentinel fired exactly once — every row in this batch errored");
 });
 
 // =============================================================================================
