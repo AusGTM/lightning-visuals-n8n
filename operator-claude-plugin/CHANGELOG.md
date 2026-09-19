@@ -16,6 +16,63 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-09-19
+
+Phase 74 code-review follow-ups (`73-REVIEW.md`, 4 blocker / 12 warning findings) applied
+across `write_grant.py`, `report_enrichment.py`, `chunking.py`, `csv_dedupe.py`, `preview.py`,
+`review_decision.py`, and `written_records.py`. One release covering all five plugin-side
+plans (74-01 through 74-05); the backend `n8n/` graph changes those same plans made are
+recorded in the repository-root `CHANGELOG.md`, not here.
+
+### Changed
+- **`write_grant.py` (WR-01, WR-02): the contact-upload grant preview no longer loses its
+  execution count or borrows another lane's cost basis.** The lane-invariant `executions = 1`
+  is hoisted out of the `try`/`except` around the chunk-ceiling lookup, so a missing
+  `max_records_per_chunk` config key now removes only the informational chunk-count sentence,
+  never the execution count itself. `executions_projection_basis` and `providers` are taken
+  per-lane from the estimate (a new `CONTACT_UPLOAD_BASIS` constant) instead of the module-wide
+  default — a contact-upload preview no longer reports the enrichment lane's basis text or
+  provider list.
+- **`report_enrichment.py` (WR-05): a ledger id ambiguous across the companies/contacts
+  decision-node lanes is skipped, never last-lane-wins.** `backfill_missing_identity`'s
+  internal ledger is now keyed by `(lane, id)` — an id present under two lanes with differing
+  payloads is applied from neither, instead of one lane silently overwriting the other's entry
+  for the same id.
+- **`chunking.py` (WR-06, D-74-13): the excluded-marker count is reported, not discarded, and
+  the async recovery bound now honours the operator's configured override.**
+  `dispatch_and_recover` returns `excluded_marker_count` in its result (present only when
+  non-zero) instead of unpacking it into a discarded local. Its recovery-bound resolution now
+  goes through the same `watch.resolve_bound_seconds` the synchronous `watch()` path already
+  used — including that function's per-row scaling floor — where it previously fell through to
+  a hardcoded 600-second default regardless of the operator's `watch_bound_seconds` config key.
+- **`csv_dedupe.py` (WR-11): a CSV row shorter than its header no longer loses trailing
+  columns.** `_canonical_rows` walks the canonical header list by index instead of `zip()`-
+  pairing against the raw row — a row missing trailing cells now keeps every header column,
+  keyed to an empty string, instead of silently dropping them.
+- **`csv_dedupe.py` (WR-12): two different-directory sources sharing a filename stem no longer
+  overwrite each other's deduped output.** `apply_dedupe`'s default output location is now the
+  input's own resolved parent directory, not a fixed plugin-relative `scratch/` path keyed on
+  the bare stem — both the deduped CSV and its report land beside the input by default.
+- **`csv_dedupe.py` (WR-03): the dedupe CLI now honours the operator's configured
+  column-mapping path, the same way the preview CLI already does.** `__main__` resolves
+  `column_mapping_path` through the identical `config_gate.load_config()` read `preview.py`'s
+  own `__main__` uses, instead of a second, independently-drifting resolver.
+- **`preview.py` (WR-04): a malformed `--collapsed` sidecar now raises loudly instead of
+  silently rendering as "no duplicates".** New `read_collapsed_block()` / `CollapsedBlockError`
+  — a path that was explicitly requested but cannot be read (missing, unreadable, malformed
+  JSON) raises naming the offending path; the silent absent-block behaviour is preserved only
+  when `--collapsed` was never passed at all.
+- **`review_decision.py` (WR-09): an approved-but-dropped patch key is now always flagged, even
+  when it would otherwise read as agreement.** `verify_decision`'s intent-stability comparison
+  now tests key presence before value equality — a key present in the approved patch and
+  absent from what the backend actually submitted is always a mismatch, even when both would
+  normalise to the same empty string.
+- **`written_records.py` (D-74-06): a create the operator can never confirm is reported as
+  failed, never as a silent success.** The backend's new `create_unconfirmed` outcome (a
+  create whose HubSpot write response could not be joined back to its row) maps to the
+  existing `FAILED` constant in `ACTION_TO_OUTCOME` — the same honest treatment
+  `create_failed` already gets.
+
 ## [0.51.2] - 2026-09-19
 
 D-11b operator ruling applied (Phase 73.1 verify-work Test 2, live executions `12671` and
