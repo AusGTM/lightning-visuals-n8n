@@ -341,3 +341,17 @@ def test_marketing_and_communication_coordinator_still_classifies_unchanged():
         "Liam Oke's title already classified before D-11c's addition; the new "
         "families must not disturb it"
     )
+
+
+def test_negative_token_assistant_vetoes_the_principal_family():
+    """Operator ruling 2026-09-19 (73.1 verify-work Test 2, live executions 12671/12675):
+    ZoomInfo's title filter is substring-loose and returned two assistants under a CEO
+    filter. `assistant` in the title vetoes every member that does not itself name it."""
+    families = [
+        {"label": "Executive Officer", "members": ["Chief Executive Officer"]},
+        {"label": "Administration", "members": ["Executive Assistant"]},
+    ]
+    assert role_classify.classify_title("Chief Executive Officer", families) == "Executive Officer"
+    assert role_classify.classify_title("Assistant To the Chief Executive Officer", families) is None
+    assert role_classify.classify_title(
+        "Executive Assistant To Chief Executive Officer", families) == "Administration"

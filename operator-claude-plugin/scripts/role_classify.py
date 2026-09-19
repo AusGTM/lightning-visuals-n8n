@@ -149,6 +149,11 @@ def _contains_run(tokens, run) -> bool:
     return any(tokens[i:i + m] == run for i in range(n - m + 1))
 
 
+# ponytail: one hard-coded negative token; move into role_vocabulary.yaml (and its
+# generator, scripts/role_vocabulary.py) if a second one is ever ruled.
+NEGATIVE_TOKENS = ("assistant",)
+
+
 def classify_title(title, family_list):
     """One already-extracted job title string, and a list of role families, in; the
     matching family's `label`, or `None`, out. Never fetches, never calls a model, never
@@ -162,6 +167,12 @@ def classify_title(title, family_list):
     if not title_tokens:
         return None
 
+    # A negative token in the title vetoes any member that does not itself carry it:
+    # `Assistant To the Chief Executive Officer` must not classify as the CEO's family,
+    # while `Executive Assistant` (a member that names the token) still matches. Operator
+    # ruling 2026-09-19 on live executions 12671/12675 (73.1-UAT.md, verify-work Test 2).
+    negatives = {tok for tok in NEGATIVE_TOKENS if tok in title_tokens}
+
     best_length = 0
     best_label = None
     for family in family_list or []:
@@ -170,6 +181,8 @@ def classify_title(title, family_list):
         for member in members:
             member_tokens = _tokenize(member)
             if not member_tokens:
+                continue
+            if negatives and not negatives.issubset(member_tokens):
                 continue
             if len(member_tokens) > best_length and _contains_run(title_tokens, member_tokens):
                 best_length = len(member_tokens)

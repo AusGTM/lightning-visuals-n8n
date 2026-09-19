@@ -16,6 +16,24 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.51.2] - 2026-09-19
+
+D-11b operator ruling applied (Phase 73.1 verify-work Test 2, live executions `12671` and
+`12675`): the classifier gate on provider-discovered people stays and does not relax for
+ZoomInfo-search-sourced candidates. ZoomInfo's `jobTitle` filter is substring-loose — under a
+CEO filter it returned `Executive Assistant To Chief Executive Officer` and `Assistant To the
+Chief Executive Officer`, and longest-wins alone classified the second as the CEO's family.
+
+### Changed
+- **`role_classify.classify_title` now honours one negative token, `assistant`.** A title
+  carrying it vetoes every vocabulary member that does not itself name it: `Assistant To the
+  Chief Executive Officer` no longer classifies as `Executive Officer` (it returns `None` and
+  `suggest_contacts.select_people` drops it `role_not_selected`), while `Executive Assistant`
+  still lands in `Administration`. Replayed over execution `12675`'s real people: tennis.com.au
+  5 kept / 0 dropped, afl.com.au 2 kept / 2 dropped. Plugin-side only — the n8n discovery lane
+  returns raw people and is unchanged. Pinned by
+  `tests/test_role_vocabulary.py::test_negative_token_assistant_vetoes_the_principal_family`.
+
 ## [0.51.1] - 2026-09-18
 
 D-12 operator ruling applied: the live provider-discovery probe (`scripts/
