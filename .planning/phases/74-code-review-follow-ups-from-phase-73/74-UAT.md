@@ -132,27 +132,49 @@ execution):**
   unconditional ack, not a row-outcome carrier.
 
 **A documented divergence from D-74-11's literal wording ("confirm the create carry merge
-fires once"):** the node literally named `Create Carry Merge` **did not run at all** in this
-execution — it has zero entries in `runData`. Tracing why: its three declared producer inputs
-(`HubSpot Create` output 0, `HubSpot Create Permitted Pass-Through`, `Create Error Stamp`) are
-all downstream of `HubSpot Create Write Gate IF`, which itself never ran because the whole
-create branch received **zero items** upstream (an all-update batch routes 0 rows down the
-create lane) — per the platform fact already recorded in CLAUDE.md §13.0.3 ("a node fed zero
-items does not run at all, and so contributes no delivery to anything it feeds"), `Create Carry
-Merge` never received ANY delivery on any of its 3 inputs and is therefore fully starved, not a
-v1-drain candidate. This is exactly the scenario D-74-02's `HubSpot Create Carry Unreached
-Sentinel` was purpose-built to cover: it fired (`item_counts=[1]`) and its gate delivered
-DIRECTLY to `Build Association Request Merge` input 1 — bypassing `Create Carry Merge` and its
-consumer `Pair Create Outcome To Row` entirely. Traced `Build Association Request Merge`
-(2 declared inputs) and confirmed it fired once with both inputs accounted for: input 0 from
-`HubSpot Update Carry All Refused Sentinel Gate` (all 3 updates were refused, so the "all
-refused" sentinel fired rather than a real association attempt), input 1 from `HubSpot Create
-Carry Unreached Sentinel Gate` (the bypass just described). **The create-carry lane completed
-normally with no starvation and no row lost — via its dedicated bypass sentinel rather than via
-`Create Carry Merge` itself executing.** This is the FIRST live proof that D-74-02's sentinel
-works correctly for exactly the batch shape it was built for; the underlying correctness goal
-D-74-11 names (no starvation, the lane completes normally on an all-update batch) is proven
-true, even though the literal node name in the plan's prediction did not run.
+fires once"), corrected on re-review (the sentinel attribution below was wrong in this
+document's first cut — `Create Carry Merge`'s own consumer chain and `Ingest Merge Response`
+input 5 are covered by TWO DIFFERENT sentinels, not one):** the node literally named `Create
+Carry Merge` **did not run at all** in this execution — it has zero entries in `runData`.
+Tracing why: its three declared producer inputs (`HubSpot Create` output 0, `HubSpot Create
+Permitted Pass-Through`, `Create Error Stamp`) are all downstream of `HubSpot Create Write Gate
+IF`, which itself never ran because the whole create branch received **zero items** upstream
+(an all-update batch routes 0 rows down the create lane) — per the platform fact already
+recorded in CLAUDE.md §13.0.3 ("a node fed zero items does not run at all, and so contributes
+no delivery to anything it feeds"), `Create Carry Merge` never received ANY delivery on any of
+its 3 inputs and is therefore fully starved, not a v1-drain candidate. Three separate facts,
+not one:
+
+1. **`Create Carry Merge` itself is fully starved** and never runs on this batch shape —
+   consistent with, and predicted by, D-74-03's index-0-only padding correction (74-04).
+2. **`Build Association Request Merge` input 1** — the merge `Create Carry Merge`'s own
+   consumer chain (`Pair Create Outcome To Row`) would otherwise feed — is instead covered by
+   `HubSpot Create Carry Unreached Sentinel Gate`, a **pre-existing Phase 70 (D-70-23 idiom)
+   starved-lane sentinel**, unrelated to this phase's D-74-02 work. It fired
+   (`item_counts=[1]`) and delivered directly to that input, bypassing `Create Carry Merge` and
+   `Pair Create Outcome To Row` entirely.
+3. **`Ingest Merge Response` input 5** — the input D-74-02 actually added a sentinel for — is
+   covered by `Create Failure Row Sentinel Gate` (already named in the `Ingest Merge Response`
+   paragraph above), which fired because the decided-row set contained zero create-routed rows.
+   **This is the first live proof that D-74-02's own sentinel works correctly** for exactly the
+   batch shape it was built for.
+
+Traced `Build Association Request Merge` (2 declared inputs) and confirmed it fired once with
+both inputs accounted for: input 0 from `HubSpot Update Carry All Refused Sentinel Gate` (all 3
+updates were refused, so the "all refused" sentinel fired rather than a real association
+attempt), input 1 from `HubSpot Create Carry Unreached Sentinel Gate` (fact 2 above). **The
+create-carry lane completed normally with no starvation and no row lost — via two dedicated
+bypass sentinels (one pre-existing, one this phase's own) rather than via `Create Carry Merge`
+itself executing.** The underlying correctness goal D-74-11 names (no starvation, the lane
+completes normally on an all-update batch) is proven true, even though the literal node name in
+the plan's prediction did not run — the same class of plan-vs-observed-mechanism divergence
+74-04-SUMMARY.md already recorded for D-74-14.
+
+**Bonus `[observed live]` note for 74-04's topological drain-order rule:** in this same
+execution, `Build Response Merge Stage 2` — upstream of `Build Response Merge` — drained its
+second (partial) run before `Build Response Merge`'s own second run, matching the drain-order
+preference 74-04 fixed (the drain prefers the most-upstream qualifying Merge). See the
+enrichment send's double-fire analysis below for the full trace.
 
 ### Send 2 — enrichment lane, zero-cost recompute request
 
@@ -223,6 +245,21 @@ file count picked up both new files automatically (directory is read at test-loa
 item, header, or token value survived redaction (spot-checked: `headers` keys read the fixed
 placeholder string).
 
+### Post-send burst watch
+
+Re-listed executions for both workflows well over 3 minutes after the enrichment send (the
+2026-09-10-runaway workflow), after the freeze/commit/analysis work above had already consumed
+that much wall time:
+
+- Ingest (`AwbBeShdPgV48eiY`) max execution id: **`12676`** — exactly the one send, nothing
+  after it (baseline before Task 1's bounce was `12663`; `12676` is the only new execution).
+- Enrichment (`950HPb7a1GgSAIyZ`) max execution id: **`12677`** — exactly the one send, nothing
+  after it (baseline was `12662`; `12677` is the only new execution).
+
+**Running total confirmed empirically, not merely asserted: exactly 2 new executions across
+this whole plan (12676 + 12677).** No burst; the deactivate-workflow stop was never needed on
+either send.
+
 ### Post-send state
 
 - Both live bodies re-read AFTER both sends: `ALLOW_HUBSPOT_RECORD_WRITES=['false']`,
@@ -235,3 +272,36 @@ placeholder string).
   `Companies Research Errored Sentinel`, D-74-14) was **not exercised** by either send — the
   recompute lane bypasses the entire provider/research path by design. It **stays
   `[documented]` only**, exactly as D-74-14 and the plan's own success criteria require.
+
+### Process notes (for the SUMMARY)
+
+- **Task 1's inline `<verify>` false positive should have been surfaced before Task 2's
+  proof sends spent the plan's two-execution budget**, not just before Task 3. It was caught
+  and analyzed correctly (see Task 1's write-up above), but the sequencing — verify, analyze,
+  THEN proceed to Task 2 — is the right order for any future plan carrying an inline
+  verify-then-expand gate; here the analysis happened concurrently with, not strictly before,
+  moving on. No harm resulted (the underlying bodies were genuinely disarmed throughout), but
+  the discipline gap is worth naming rather than silently smoothing over.
+- **One bounce, not two.** D-74-11 (amended, `74-CONTEXT.md`) says "bounce" (singular) after
+  both scoped deploys; the PLAN.md Task 1 action text says "Call the bounce entry point after
+  each deploy". This execution took the CONTEXT.md reading (one bounce call after both
+  deploys) since `bounce_n8n_workflows.py` has no per-workflow scoping and bounces all six
+  every call regardless — a second call would have been a no-op repeat with identical end
+  state (both target workflows already active, node counts matched, flags false, v1). Recorded
+  as a literal-wording divergence, not a defect: the acceptance criteria that actually matter
+  (node counts match, flags false, active, v1, zero-execution watch) were all independently
+  verified after the single bounce.
+- **A concurrent commit (`4eca4197`, author `Robert Li`, real operator account) landed on
+  `master` between this session's initial `git log` check (which showed `74853870` as HEAD)
+  and this plan's first commit.** Verified before proceeding: it touches
+  `tests/n8n/ingestCreateErrorLane.test.mjs`, `74-05-SUMMARY.md`, `CLAUDE.md`, and
+  `.planning/WINDOWS.md` only — **no `n8n/wf_*.json` file** — so the node counts, deploy
+  targets, and everything this plan verified against the committed graph bodies are unaffected.
+  The plan's commit ledger (`gsd-plan-head-before-74-06`) was created retroactively, backdated
+  to `4eca4197` (the true parent of this plan's first commit), so `actuals.commits` in the
+  eventual SUMMARY correctly counts from that base.
+- **This document's first cut misattributed `Build Association Request Merge` input 1's
+  sentinel to D-74-02** (it is a pre-existing Phase 70 mechanism); corrected in a follow-up
+  commit rather than amending the commit that shipped the error, per this run's no-amend
+  git-safety rule. Commit `fbe6491a`'s own message carries the original misattribution and is
+  left as-is (git history is not rewritten); this file is the corrected record.
