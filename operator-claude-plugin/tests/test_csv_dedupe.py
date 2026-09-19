@@ -346,3 +346,90 @@ def test_enrich_before_ingest_row_id_minting_is_unaffected_by_a_duplicate_csv(tm
 def test_preingest_never_imports_csv_dedupe():
     src = inspect.getsource(preingest)
     assert "csv_dedupe" not in src
+
+
+# ========================================================================================
+# Phase 74 Plan 03 Task 1 — WR-11 (short/long rows don't lose trailing identity fields to
+# a zip that stops at the shorter sequence) and WR-12 (output/report paths derive from the
+# input's full resolved path, so they land beside the input rather than in a fixed
+# scratch dir keyed on the bare stem).
+# ========================================================================================
+
+
+def test_canonical_rows_pads_a_row_shorter_than_the_header_with_empty_trailing_columns():
+    # HEADERS has 6 columns; this row supplies only the first 4 (Email/First/Last/
+    # Company) — an exporter that omits trailing empty cells would produce exactly this
+    # shape. The old zip-based pairing drops "LinkedIn"/"Job Title" from the dict
+    # entirely instead of keying them to "".
+    headers = HEADERS
+    rows = [["a@example.com", "Ann", "Adams", "Co A"]]
+
+    canonical = csv_dedupe._canonical_rows(headers, rows, mapping_path=REAL_MAPPING_PATH)
+
+    assert canonical[0]["email"] == "a@example.com"
+    assert canonical[0]["company"] == "Co A"
+    assert canonical[0]["linkedin_url"] == ""
+    assert canonical[0]["jobtitle"] == ""
+
+
+def test_canonical_rows_ignores_overflow_fields_beyond_the_header_without_raising():
+    headers = HEADERS
+    rows = [["a@example.com", "Ann", "Adams", "Co A", "https://linkedin.com/x", "Manager",
+              "an extra column the header never named"]]
+
+    canonical = csv_dedupe._canonical_rows(headers, rows, mapping_path=REAL_MAPPING_PATH)
+
+    assert canonical[0]["jobtitle"] == "Manager"  # not folded together with the overflow
+    assert "an extra column the header never named" not in canonical[0].values()
+
+
+def test_a_short_row_still_clusters_and_survives_dedupe_end_to_end(tmp_path):
+    # Both rows are short by one trailing (empty) column; the surviving row's own
+    # content must still round-trip through the deduped output untouched.
+    path = tmp_path / "contacts.csv"
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(HEADERS)
+        writer.writerow(["priya@example.com", "Priya", "Whitcombe", "Turf Club", ""])
+        writer.writerow(["PRIYA@EXAMPLE.COM", "PRIYA", "WHITCOMBE", "Turf Club", ""])
+
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH, scratch_dir=tmp_path / "scratch")
+
+    assert result["kept_count"] == 1
+    with Path(result["deduped_path"]).open(newline="", encoding="utf-8") as f:
+        out = list(csv.reader(f))
+    assert out[1][:4] == ["priya@example.com", "Priya", "Whitcombe", "Turf Club"]
+
+
+def test_apply_dedupe_writes_beside_the_input_by_default(tmp_path):
+    input_dir = tmp_path / "somewhere" / "else"
+    input_dir.mkdir(parents=True)
+    path = input_dir / "contacts.csv"
+    _write_csv(path, HEADERS, [
+        _row("a@example.com", "Ann", "Adams", "Co A", "", ""),
+    ])
+
+    result = apply_dedupe(path, mapping_path=REAL_MAPPING_PATH)
+
+    assert Path(result["deduped_path"]).parent == input_dir
+    assert Path(result["collapsed_path"]).parent == input_dir
+
+
+def test_apply_dedupe_default_output_does_not_collide_across_directories_sharing_a_stem(
+        tmp_path):
+    dir_a = tmp_path / "a"
+    dir_b = tmp_path / "b"
+    dir_a.mkdir()
+    dir_b.mkdir()
+    path_a = dir_a / "contacts.csv"
+    path_b = dir_b / "contacts.csv"
+    _write_csv(path_a, HEADERS, [_row("a@example.com", "Ann", "Adams", "Co A", "", "")])
+    _write_csv(path_b, HEADERS, [_row("b@example.com", "Bea", "Bell", "Co B", "", "")])
+
+    result_a = apply_dedupe(path_a, mapping_path=REAL_MAPPING_PATH)
+    result_b = apply_dedupe(path_b, mapping_path=REAL_MAPPING_PATH)
+
+    assert Path(result_a["deduped_path"]).read_text(encoding="utf-8") != \
+        Path(result_b["deduped_path"]).read_text(encoding="utf-8")
+    assert "a@example.com" in Path(result_a["deduped_path"]).read_text(encoding="utf-8")
+    assert "b@example.com" in Path(result_b["deduped_path"]).read_text(encoding="utf-8")
