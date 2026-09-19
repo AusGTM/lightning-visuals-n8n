@@ -1633,6 +1633,46 @@ def test_dispatch_and_recover_resolves_the_bound_from_config_when_not_passed_exp
         "an explicit caller-supplied bound must never be overridden by config")
 
 
+def test_dispatch_and_recover_bound_resolution_applies_the_per_row_scaling_floor(
+    fake_config, stub_module_transport_factory, monkeypatch
+):
+    """D-74-13: `watch.resolve_bound_seconds` does two things, not one — it reads
+    the override, THEN applies `max(bound, rows * PER_RECORD_HEADROOM_SECONDS)`. The
+    previous test's single-record plan never exercises the second half, so on its
+    own it would let a reader believe "override set -> resolved always equals the
+    override", which is false once a batch is large enough for the per-row floor to
+    exceed it. Threading `landed_rows` through (rather than `None`) is a deliberate
+    choice, not an oversight: this recovery path watches the SAME enrichment
+    workflow the synchronous `watch()` path already scales for (no Split In Batches
+    node — an N-record dispatch takes roughly N times as long, 29-TIMING.md §3), so
+    the floor is exactly as load-bearing here as it already is there. Pinned
+    directly against the arithmetic: 30 rows landed at the module's own
+    `PER_RECORD_HEADROOM_SECONDS` (45.0/row) floors to 1350.0, which beats a 1234s
+    override."""
+    assert 30 * watch.PER_RECORD_HEADROOM_SECONDS > 1234, (
+        "the fixture below must actually exercise the floor-beats-override case, "
+        "not merely assert a value this test itself invented")
+
+    captured = {}
+
+    def _fake_recover_dispatch(config, run_id, expected_chunk_count=1, **kwargs):
+        captured["bound_seconds"] = kwargs.get("bound_seconds")
+        return {"recovered": True, "responses": [], "run_data": {}, "matched_executions": 1}
+
+    monkeypatch.setattr(watch, "recover_dispatch", _fake_recover_dispatch)
+    plan = chunking.plan_chunks(
+        {"record_ids": [str(i) for i in range(30)], "object_type": "companies"}, 5)
+    configured = {**fake_config, "watch_bound_seconds": 1234}
+
+    chunking.dispatch_and_recover(
+        plan, PROVIDERS, True, configured, run_id="run-bound-floor",
+        transport=stub_module_transport_factory())
+
+    assert captured["bound_seconds"] == 1350.0, (
+        "30 landed rows at 45s/row (1350.0) must beat the 1234s override — the "
+        "override is a floor RAISER, not a hard ceiling on the resolved bound")
+
+
 def _stepping_clock(step=10.0):
     """A monotonic stub that ADVANCES. A constant `now` makes `elapsed` permanently 0,
     so a recovery that never matches loops forever instead of hitting its bound —
