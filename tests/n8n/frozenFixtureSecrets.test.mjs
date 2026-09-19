@@ -11,10 +11,11 @@
 // `Input: '<entire file>'`, which would print the very secret the guard exists to catch,
 // straight into the test transcript and (via #3770 RED-evidence capture) the commit body.
 //
-// Task 1 scope (this commit): exec_12434.runData.json only — the one fixture Task 1's
-// `_scrub` widening re-redacts. Task 2 widens IN_SCOPE_FILES to every JSON file under
-// fixtures/frozen/ and reports the in-scope count so the workflow-body fixtures are
-// provably covered too.
+// Task 2 (this commit): widened from the Task 1 single-file scope to every JSON file
+// under fixtures/frozen/ — runData fixtures, excerpts, and the 4 frozen workflow-body
+// copies alike. The workflow-body fixtures carry the shared-secret header NAME
+// (`X-Enrichment-Secret`) inside node jsCode/notes strings and MUST pass — the guard
+// refuses value shapes only, never key names.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -23,7 +24,7 @@ import fs from "node:fs";
 
 const FROZEN = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "frozen");
 
-const IN_SCOPE_FILES = ["exec_12434.runData.json"];
+const IN_SCOPE_FILES = fs.readdirSync(FROZEN).filter((f) => f.endsWith(".json")).sort();
 
 // Value shapes only (D-74-09) — never a bare key-name match.
 const VALUE_PATTERNS = [
@@ -48,5 +49,14 @@ test("frozen fixtures carry no live secret value shape", () => {
 });
 
 test("guard reports its own in-scope file count", () => {
-  assert.equal(IN_SCOPE_FILES.length, 1, "Task 1 scopes the guard to exec_12434.runData.json only");
+  const onDisk = fs.readdirSync(FROZEN).filter((f) => f.endsWith(".json"));
+  assert.equal(
+    IN_SCOPE_FILES.length,
+    onDisk.length,
+    `guard's in-scope count (${IN_SCOPE_FILES.length}) must equal the directory's JSON file count (${onDisk.length})`
+  );
+  // The 4 frozen workflow-body fixtures are provably in scope — not merely counted.
+  for (const wfFile of onDisk.filter((f) => f.startsWith("wf_"))) {
+    assert.ok(IN_SCOPE_FILES.includes(wfFile), `${wfFile} must be in scope`);
+  }
 });

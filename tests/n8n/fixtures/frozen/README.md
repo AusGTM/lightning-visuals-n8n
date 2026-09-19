@@ -96,3 +96,29 @@ The Webhook Trigger's runData item carries the caller's request headers verbatim
 `x-real-ip`, `x-forwarded-for` and `cf-connecting-ip` to `<redacted>` BEFORE committing, and
 say so in the file's `redaction` header. `tests/n8n/v1RuntimeRecordings.test.mjs` refuses an
 unredacted secret in the five v1 recordings; extend that check when a new recording is added.
+
+### Widened scope (CR-04 / D-74-07 / D-74-08 / D-74-09, Phase 74 Plan 01)
+
+`scripts/freeze_execution_rundata.py`'s `_scrub` replaces ANY `headers`, `error`, `request`,
+`options` or `config` key — plus `zoom_token` and `access_token` (a Task 1 deviation: the five
+specified keys alone never reached the live ZoomInfo OAuth JWT committed in
+`exec_12434.runData.json` / `exec_12449.runData.json`, which sits directly under those two
+names) — at ANY depth of a whole node-run entry, wholesale, on first match. This is wider than
+the per-key header scrub above: it also reaches a node-run-level `run["error"]` sibling of
+`run["data"]`, which the old header-only scrub never saw. **Error fixtures lose their message
+text by design** — a `run["error"]` or `json.error` value is replaced in full, not trimmed to a
+safe subset.
+
+`tests/n8n/frozenFixtureSecrets.test.mjs` (D-74-09) is a directory-wide guard refusing VALUE
+shapes only — a HubSpot `pat-na…` token, a `Bearer <token>` value, a non-placeholder
+`x-enrichment-secret` value, or a JWT body (`eyJ…`) — and never a key NAME. The 4 frozen
+workflow-body fixtures (`wf_*.json`) legitimately carry the `X-Enrichment-Secret` header name
+and `Bearer` string literals inside node jsCode/notes and must pass this guard unmodified; only
+`tests/n8n/v1RuntimeRecordings.test.mjs`'s narrower, five-file `x-enrichment-secret`/`x-real-ip`
+value check above remains scoped to the v1 recordings specifically.
+
+All 7 committed runData/excerpt fixtures existing before this plan (`exec_12434`, `exec_12449`,
+and the five Phase-70 `exec_1235{4..8}` recordings) were re-redacted in place through this
+widened scrub, with no path exemptions (D-74-08). `exec_12316.runData.json` is intentionally
+excluded — it is a hand-curated hand-shape sidecar, not freezer output (see its own row above),
+but it still falls under this guard's directory-wide scan.

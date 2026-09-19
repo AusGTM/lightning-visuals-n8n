@@ -6078,6 +6078,6 @@
     "Decide Company Action",
     "Build Response"
   ],
-  "redaction": "the whole `headers` object on every Webhook Trigger runData item was replaced with a fixed placeholder before this fixture was committed (T-73-01-01, repo memory n8n-rundata-carries-webhook-secret) \u2014 never a key-by-key scrub.",
+  "redaction": "any `headers`/`error`/`request`/`options`/`config`/`zoom_token`/`access_token` key, at any depth of a whole node-run entry, was replaced wholesale with a fixed placeholder before this fixture was committed (T-73-01-01, repo memory n8n-rundata-carries-webhook-secret; CR-04/D-74-07/D-74-08) \u2014 never a key-by-key scrub at one fixed path.",
   "run_id": "6891d018e84f4d869eb8080292dac6c5"
 }
