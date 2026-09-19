@@ -3,13 +3,13 @@ gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 74
-current_phase_name: code-review-follow-ups-from-phase-73
+current_phase_name: Code-review follow-ups from phase 73
 status: executing
 stopped_at: Phase 74 context gathered
-last_updated: "2026-09-19T07:19:33.261Z"
+last_updated: "2026-09-19T07:24:07.818Z"
 last_activity: 2026-09-19
-last_activity_desc: Phase 73.1 complete, transitioned to Phase 74
-state_head: 985b6b6538512e9c304832849693b58f549e1830
+last_activity_desc: Phase 74 execution started
+state_head: dd7d81108e78b44ff7822c6e6d514ef3f4388990
 progress:
   total_phases: 12
   completed_phases: 3
@@ -358,10 +358,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 74 (code-review-follow-ups-from-phase-73) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-19 — Phase 73.1 complete, transitioned to Phase 74
+Phase: 74 (Code-review follow-ups from phase 73) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 74
+Last activity: 2026-09-19 — Phase 74 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
