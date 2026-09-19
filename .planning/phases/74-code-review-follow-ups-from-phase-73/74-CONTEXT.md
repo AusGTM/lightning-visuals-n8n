@@ -18,24 +18,44 @@ proof send on the contact ingest lane. Nothing is armed at any point. No new cap
 ## Implementation Decisions
 
 ### Create-error lane convergence (CR-01, WR-07)
-- **D-74-01:** `Create Carry Merge` input 2 gets a REAL producer: a Code node on `HubSpot
-  Create`'s error edge that emits exactly one marker item per run unconditionally (a marker when
-  the error branch is empty, the error items when it is not), so the input always receives and
-  the merge completes normally instead of via the v1 end-of-run drain. The
-  `set_always_output_data(["HubSpot Create"])` mechanism and its comment block are retired —
-  n8n pads output 0 only, `[observed live]` on execution `12522` (`HubSpot Create` outs
-  `[21, 0]`, input 2 never delivered, association still landed via the drain).
-  — **Reversibility:** costly — the producer sits inside the Phase 70 carry-merge idiom; removing
-  it means re-splicing the create lane and re-running the walker suite.
+- ~~**D-74-01 (as discussed):** a Code node on `HubSpot Create`'s error edge emits one marker
+  per run unconditionally so input 2 always receives; retire `set_always_output_data`.~~
+  **RE-RULED at plan time 2026-09-19 (planner Source Audit, operator ruling B'):** unrealizable
+  under v1 — a node on an empty branch is never dispatched, so it cannot emit (builder comment at
+  the splice, §13.0.3 `[observed live]` rows, `set_always_output_data`'s own docstring); and
+  retiring AOD would break input 0 delivery on an all-rejected batch (AOD pads output 0, which
+  that case needs). Execution `12522` was read zero-cost before ruling: `HubSpot Create` outs
+  `[21, 0]`; `Create Carry Merge` ran ONCE via the v1 end-of-run drain with inputs [Create 21,
+  Permitted Pass-Through 21, error edge never delivered] and emitted 42; `Build Association
+  Request Merge` ran once (22); `HubSpot Associate Company` 22; `Ingest Merge Response` fired once
+  with all 6 inputs; `Build Ingest Response` 46 — no second pending run, nothing lost.
+  **D-74-01 (ruled):** KEEP `Create Carry Merge`'s three inputs and KEEP `alwaysOutputData` on
+  `HubSpot Create` (correct for output 0). Add the D-74-04 stamp node on the error edge. Record
+  the zero-rejection drain as `[observed live]` on `12522` in the builder comment (rewritten to
+  say what the engine actually does — output 0 padded only, input 2 absent, one drain run) and
+  as a §13.0.3 row. The walker pads index 0 only (D-74-03) and its MN-01 one-drain cap is
+  adjusted so this merge's single end-of-run drain run is modelled, not reported as a stall.
+  — **Reversibility:** reversible — no graph shape changes on this merge; the stamp node is one
+  Code node on an existing edge.
 - **D-74-02:** `Ingest Merge Response` input 5 (`Build Create Failure Row`) gets a gated
   starved-lane sentinel keyed on "the decided-row set contains zero create-routed rows". That is
   knowable before any write, so it is not a second producer in the dangerous (double-fire)
   sense. No all-update batch is left drain-only.
 - **D-74-03:** Walker fidelity: `tests/n8n/lib/walkWorkflow.mjs` pads output index 0 only under
-  `alwaysOutputData`; execution `12522`'s runData is frozen (through the CR-04-widened freezer)
-  as `tests/n8n/fixtures/frozen/exec_12522.runData.json` and a fidelity test pins the rule
-  against it; CLAUDE.md §13.0.3 gains the row (file+symbol `[documented]` plus `12522`
-  `[observed live]`). WR-08's JSDoc is corrected in the same edit.
+  `alwaysOutputData`; execution `12522`'s runData is frozen (through the CR-04-widened freezer —
+  NEVER through the current one; the raw JSON already read into the session scratchpad carries
+  the webhook headers and must not be committed as-is) as
+  `tests/n8n/fixtures/frozen/exec_12522.runData.json` and a fidelity test pins the rule against
+  it; CLAUDE.md §13.0.3 gains the row (file+symbol `[documented]` plus `12522` `[observed live]`).
+  WR-08's JSDoc is corrected in the same edit. **Amended at plan time (operator ruling A on the
+  planner's Item 2):** the fix lands with NO exemption. The planner's scratch run showed the
+  index-0 rule turns six test files red (`ingestCreateErrorLane`, `ingestCarryMerge`,
+  `ingestWidenedFieldsFlow`, `walkWorkflow`, `zoominfoLaneFlow`, `enrichmentConvergenceMerge`)
+  because exactly two AOD nodes repo-wide have a consumer on output ≥ 1: `HubSpot Create` (this
+  phase) and the enrichment lane's `IF Research Errored` → `Validate Research Output`
+  (`scripts/build_cloud_workflows.py`, quick task 260918-32u). The second is absorbed into this
+  phase as D-74-14; all six files must be green with the corrected walker and no per-node
+  exemption.
 
 ### Error-item shape (CR-02, CR-03)
 - **D-74-04:** Classification becomes explicit, not structural: a one-line Code node on the
@@ -74,17 +94,41 @@ proof send on the contact ingest lane. Nothing is armed at any point. No new cap
   of the `try`; per-lane `executions_projection_basis` and `providers` taken from the estimate;
   ledger keyed by `(lane, id)` with ambiguous ids skipped; `excluded_marker_count` returned and
   reported when non-zero).
-- **D-74-11:** End-of-phase gate is IN-PHASE and disarmed: regenerate, deploy
-  `--only wf_contact_ingest_cloud.json`, bounce, send ONE all-update batch (zero creates) and
-  read runData: `Create Carry Merge` and `Ingest Merge Response` both complete normally with no
-  `merge_fired_with_unfilled_input`; freeze the execution. One execution, nothing armed, every
-  `ALLOW_*` flag read back `false`. The other five cloud workflows are not deployed.
-  — **Reversibility:** reversible — a disarmed deploy of one workflow; the committed JSON stays
-  the source of truth.
+- **D-74-11 (amended at plan time, operator ruling):** End-of-phase gate is IN-PHASE and
+  disarmed, now covering TWO workflows: regenerate; deploy `--only wf_contact_ingest_cloud.json`
+  AND `--only wf_enrichment_cloud.json` (two scoped deploys, nothing else); bounce; send ONE
+  all-update ingest batch (zero creates) and read runData (`Create Carry Merge` fires once,
+  `Ingest Merge Response` fires once with every input delivered or its sentinel present, no row
+  lost); send ONE disarmed enrichment request on a normal, non-research-error row and read
+  runData (`Build Response Merge` stages converge, every real row reaches `Build Response`, no
+  `merge_pending_runs_undrained`). Freeze both executions through the widened scrubber. **Two
+  executions total**, nothing armed, every `ALLOW_*` flag read back `false` on both workflows,
+  the other four cloud workflows untouched. The research-error branch itself (D-74-14) is not
+  exercised live — it stays `[documented]`, proven by the corrected walker.
+  — **Reversibility:** reversible — disarmed deploys; the committed JSON stays the source of
+  truth.
+- **D-74-14 (added at plan time, operator ruling A on the planner's Item 2):** The enrichment
+  lane's `IF Research Errored` (`alwaysOutputData: true`; output 0 → `Build Research Failure
+  Response`, output 1 → `Validate Research Output`) relies on the same unsound assumption CR-01
+  named: under index-0-only padding, a research ERROR leaves output 1 empty, `Validate Research
+  Output` never runs, and the corrected walker reports `Build Response Merge`
+  `merge_pending_runs_undrained` with `itemCounts {1: 2}` — the shape `walkWorkflow.mjs` defines
+  as a genuine loss. Fix it graph-side in `scripts/build_cloud_workflows.py` so that every
+  consumer downstream of output 1 still receives a delivery (a real item or a sentinel marker) in
+  the error case without any input gaining a second producer that could double-fire; regenerate
+  `wf_enrichment_cloud.json`; prove offline with the corrected walker (the six files green, plus
+  a walker case that drives the research-error branch and asserts no `merge_pending_runs_undrained`
+  and no real row lost). The `[documented]`/`[observed live]` split for this branch is recorded in
+  the §13.0.3 row and the SUMMARY. Node counts may move; record before/after.
+  — **Reversibility:** costly — a splice on the enrichment lane's research branch under the
+  Phase 70 idiom.
 
 ### Folded Todos
 - `2026-09-11-merge-multi-run-drain-and-grouping-unobserved.md` (MN-01 / NF-MJ-01, `kind:
-  question`) — **D-74-12:** answer MN-01 from frozen runData: search `exec_12522` (once frozen),
+  question`) — **D-74-12:** answer MN-01 from frozen runData (plan-time note: the planner's
+  zero-cost probe found NO multi-run pending shape in `exec_12434`/`exec_12449`, and
+  `exec_1235{4,6}` show only the already-documented `Decide Company Action Merge` double-fire —
+  plan MN-01 as likely to stay open): search `exec_12522` (once frozen),
   `exec_12434` and `exec_12449` for any Merge left with two partially-filled pending runs. If
   found, record the answer in §13.0.3 and close the todo with a dated RESOLVED block; if not,
   keep it open with its trigger and say so in the SUMMARY. Never close it on a `resolves_phase`
@@ -95,7 +139,11 @@ proof send on the contact ingest lane. Nothing is armed at any point. No new cap
   No live Stage D run this phase; the todo's trigger ("next Stage D run") stays until one does.
 
 ### Claude's Discretion
-- Whether D-74-01's producer and D-74-04's stamp are one Code node or two.
+- The exact sentinel/producer mechanism for D-74-14 (gated sentinel keyed on the IF outcome, a
+  marker emitted by `Build Research Failure Response`, or another shape) — must satisfy the
+  corrected walker and the no-double-fire rule.
+- ~~Whether D-74-01's producer and D-74-04's stamp are one Code node or two.~~ (D-74-01 no longer
+  adds a producer; only the D-74-04 stamp node lands on the error edge.)
 - Exact wording of the `UNOBSERVED` tag and of the §13.0.3 rows.
 - Plan/wave grouping; the roadmap's fix order (CR-03, CR-02, CR-04, CR-01, then WR) is the
   default unless a shared file makes another order cheaper.
@@ -174,6 +222,12 @@ proof send on the contact ingest lane. Nothing is armed at any point. No new cap
   engine flag believed to synthesise one" (73-REVIEW.md, CR-01 fix option 2).
 - The proof send is an ALL-UPDATE batch on purpose — it is the case where every silent producer
   is silent at once.
+- Plan-time facts from the planner's first pass (2026-09-19): `test_write_grant.py` has zero
+  `COST_LANE_CONTACT_UPLOAD` coverage (WR-01/02 need a new case, not an extension);
+  `test_report_enrichment.py` (WR-05) and `test_chunking.py` (WR-06 / D-74-13) exist; current
+  builder anchors: `:173` `extract_js_const`, `:837` `BUILD_CREATE_FAILURE_ROW_JS`, `:874`
+  `BUILD_INGEST_RESPONSE`, `:2228-2229` splice, `:2243` discarded `_append_merge_input` return,
+  `:10730` `_add_starved_lane_sentinel` (re-grep before editing).
 
 </specifics>
 

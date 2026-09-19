@@ -132,3 +132,16 @@ hit only on the header name inside node code.
 
 - Armed duplicate-email create to observe the real error-item shape (trigger stays "a real race").
 - Deploying any cloud workflow other than the ingest lane.
+
+---
+
+## Plan-time rulings (2026-09-19, planner Source Audit)
+
+| Item | Options presented | Selected |
+|------|-------------------|----------|
+| D-74-01 unrealizable under v1 | A terminal-only error lane / B keep input 2, drain residual / C freeze 12522 first | C, then (after the read) **B'**: keep input 2 + AOD, add stamp node, document the drain |
+| D-74-03 walker fix exposes `IF Research Errored` on the enrichment lane | A absorb into Phase 74 / B fix graph-side, deploy later / C split into 74.1 / D exemption + defect todo | **A** (recorded as D-74-14) |
+| Amended end-of-phase gate | deploy both + one proof send each / deploy both, ingest proof only / ingest only | **deploy both, one proof send each** (2 executions) |
+
+**Notes:** execution 12522 was read zero-cost (raw JSON kept in the session scratchpad, not
+committed) to inform the D-74-01 pick; its per-node run/item counts are recorded in CONTEXT.md.
