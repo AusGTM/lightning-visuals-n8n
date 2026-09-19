@@ -21,9 +21,14 @@ excludes the header — checked against the real Stage A CSV, its "row 3" is thi
 row 4, and its "rows 37/38" are this module's rows 38/39 (off by one, the header row).
 
 Mirrors `name_split.py`'s established idiom: a propose mode that reports without writing,
-and an apply mode that writes a corrected copy into the scratch dir and returns its path.
-Comparison is exact, casefolded and trimmed only — no similarity score, no approximate
-matcher; this codebase has none, deliberately (24-RESEARCH.md Pitfall 5).
+and an apply mode that writes a corrected copy and returns its path. Unlike
+`name_split.py`, the write does NOT default into a fixed plugin-relative scratch dir
+(WR-12): two different source files sharing a bare stem silently overwrote each other's
+output and report there, so the default output location is the input's OWN resolved
+parent directory instead — both files land beside the input unless a caller explicitly
+overrides `scratch_dir`. Comparison is exact, casefolded and trimmed only — no
+similarity score, no approximate matcher; this codebase has none, deliberately
+(24-RESEARCH.md Pitfall 5).
 """
 import csv
 import json
@@ -33,8 +38,6 @@ from extraction import _first_satisfied_key, identity_groups
 from preview import label_headers, resolve_mapping_path
 from tabular import read_table
 
-SCRATCH_DIR = Path(__file__).resolve().parent.parent / "scratch"
-
 DUPLICATE_OUTCOME = "duplicate_in_csv"
 
 
@@ -42,11 +45,21 @@ def _canonical_rows(headers, rows, mapping_path=None):
     """Map each raw row onto the canonical prop names `identity_groups()` speaks (e.g.
     "Email Address" -> "email"), through the SAME alias lookup `preview.py`'s own
     display labelling uses — never a second lookup of its own. A header with no
-    canonical mapping contributes no key to the row."""
+    canonical mapping contributes no key to the row.
+
+    Indexed by position against `canonical_headers`, never `zip()` (WR-11): a row
+    shorter than the header — an exporter that omits trailing empty cells produces
+    exactly this shape — keeps every header column, with each missing trailing value
+    keyed to an empty string, rather than losing it to a zip that stops at the shorter
+    sequence. A row LONGER than the header is handled by the same walk without
+    raising: anything past the header's own length is simply never read, never folded
+    into the last column.
+    """
     labels = label_headers(headers, resolve_mapping_path(mapping_path))
     canonical_headers = [label["canonical"] for label in labels["labels"]]
     return [
-        {c: v for c, v in zip(canonical_headers, row) if c is not None}
+        {c: (row[i] if i < len(row) else "")
+         for i, c in enumerate(canonical_headers) if c is not None}
         for row in rows
     ]
 
@@ -98,27 +111,34 @@ def propose_dedupe(path, mapping_path=None):
     }
 
 
-def apply_dedupe(path, mapping_path=None, scratch_dir=SCRATCH_DIR):
-    """Write a corrected copy into `scratch_dir` carrying only the surviving rows —
-    original column order, surviving rows' original order, winner fields untouched —
-    and a sidecar JSON report of what was collapsed. Returns `{"deduped_path",
-    "collapsed_path", "collapsed", "original_count", "kept_count"}`.
+def apply_dedupe(path, mapping_path=None, scratch_dir=None):
+    """Write a corrected copy carrying only the surviving rows — original column order,
+    surviving rows' original order, winner fields untouched — and a sidecar JSON report
+    of what was collapsed. Returns `{"deduped_path", "collapsed_path", "collapsed",
+    "original_count", "kept_count"}`.
+
+    `scratch_dir`, when given, is where both files are written, unchanged from before.
+    Its DEFAULT is the input's own resolved parent directory (WR-12), not a fixed
+    plugin-relative scratch dir keyed on the bare stem — that fixed-dir default let two
+    unrelated sources sharing a stem overwrite each other's output and report. Deriving
+    the default from the input's full resolved path means both files land beside the
+    input, so a same-stem source living elsewhere is never touched.
     """
-    path = Path(path)
+    path = Path(path).resolve()
     headers, rows = read_table(path)
     kept, collapsed = find_duplicates(headers, rows, mapping_path)
 
-    scratch_dir = Path(scratch_dir)
-    scratch_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(scratch_dir) if scratch_dir is not None else path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    out_path = scratch_dir / f"deduped-{path.stem}.csv"
+    out_path = out_dir / f"deduped-{path.stem}.csv"
     with out_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
         for i in kept:
             writer.writerow(rows[i])
 
-    report_path = scratch_dir / f"dedupe-report-{path.stem}.json"
+    report_path = out_dir / f"dedupe-report-{path.stem}.json"
     report_path.write_text(json.dumps(collapsed), encoding="utf-8")
 
     return {
