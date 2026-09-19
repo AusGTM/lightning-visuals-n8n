@@ -181,6 +181,17 @@ EXECUTIONS_BASIS = (
     "1 webhook execution per chunk + 1 sub-execution per record (the enrichment "
     "workflow has no batching node, so it fans out per record)")
 
+# WR-02 (Phase 74 code review): the contact-upload lane's OWN execution basis, distinct
+# from the per-chunk constant above -- this lane makes no provider call and no
+# per-record model call, and it dispatches the whole CSV as a single multipart POST
+# (`dispatch.py::dispatch()`, `watch.recover_dispatch(..., expected_chunk_count=1, ...)`
+# — a hardcoded 1, not a computed chunk count). Describing it with the per-chunk-plus-
+# per-record text above would name a cost model this lane does not run.
+CONTACT_UPLOAD_BASIS = (
+    "1 webhook execution per POST (this lane sends the whole CSV as a single "
+    "multipart POST -- no chunking, no per-record sub-execution; "
+    "dispatch.py::dispatch())")
+
 _ALLOWANCE_SAMPLED = (
     "This projection is now compared against the SAMPLED remaining monthly execution "
     "allowance, not only the plan's configured total (Phase 57, D-57-01). The executions "
@@ -333,7 +344,7 @@ def allowance_headroom(config, *, transport=None, now=None) -> dict:
     }
 
 
-def ceiling_verdict(figures, headroom) -> dict:
+def ceiling_verdict(figures, headroom, *, basis=None) -> dict:
     """Pure, no I/O: compare a batch's projected execution count against a sampled
     monthly remainder (Phase 57, D-57-01).
 
@@ -344,6 +355,13 @@ def ceiling_verdict(figures, headroom) -> dict:
     feature that is off). `CEILING_OVER` only when both are real numbers and the
     projection STRICTLY exceeds the remainder — consuming the exact remaining allowance
     is legitimate and must not refuse.
+
+    `basis` (WR-02, Phase 74 code review): the execution-projection basis text to
+    attach to the returned verdict's `"basis"` key. `envelope()` passes the SAME
+    per-lane value it already computed for `figures["executions_projection_basis"]` —
+    never re-derived here. Defaults to the module-level per-chunk constant for a
+    caller (or an existing direct test) with no lane-specific text of its own, so
+    every pre-existing call stays byte-identical.
     """
     headroom = headroom or {}
     projected = (figures or {}).get("projected_executions")
@@ -376,7 +394,7 @@ def ceiling_verdict(figures, headroom) -> dict:
         "spent_sampled": spent,
         "remaining_sampled": remaining,
         "shortfall": shortfall,
-        "basis": EXECUTIONS_BASIS,
+        "basis": basis if basis is not None else EXECUTIONS_BASIS,
         "reason": reason,
     }
 
@@ -549,33 +567,51 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     chunk_record_ceiling = None
     executions = None
     executions_basis = PROJECTED
+
+    # WR-01 (Phase 74 code review): the contact-upload lane's execution count is
+    # LANE-INVARIANT — always exactly ONE execution per POST, hardcoded, never
+    # `chunk_count` and never `chunk_count + record_count`. Verified against
+    # `dispatch.py::dispatch()`, the contact-upload lane's only send path: it sends
+    # the WHOLE csv as a single multipart POST regardless of row count (no chunking
+    # loop exists for this lane at all — `chunking.plan_chunks`/`chunk_ceiling` belong
+    # to the ENRICHMENT lane's `dispatch_plan`, a different call path this lane never
+    # uses) and recovers it via `watch.recover_dispatch(..., expected_chunk_count=1,
+    # ...)` — a literal, hardcoded 1, not a computed chunk count. No separate
+    # "association hop" execution count is tracked anywhere in this codebase today
+    # (the association PUT runs inside the same n8n execution as the create, not as a
+    # further one) — if a future lane ever dispatches an association as its own
+    # execution, its count is added here.
+    #
+    # Hoisted OUT of the `try` below (was previously assigned only after
+    # `chunking.chunk_ceiling(config)` succeeded): a missing `max_records_per_chunk`
+    # key used to raise BEFORE this assignment ever ran, leaving `executions` at
+    # `None` and the preview reporting "not projected" for a number this lane always
+    # knows, independent of any chunk ceiling. A missing ceiling now removes only the
+    # informational `chunk_count`/`chunk_record_ceiling` figures below (and the
+    # "at N chunk(s)..." render sentence that depends on them), never the execution
+    # count itself.
+    if cost_lane == COST_LANE_CONTACT_UPLOAD:
+        executions = 1
+
     try:
         chunk_record_ceiling = chunking.chunk_ceiling(config)
         chunk_count = chunking.plan_chunks(
             {"record_ids": ids + domains, "object_type": object_type},
             chunk_record_ceiling).chunk_count
-        if cost_lane == COST_LANE_CONTACT_UPLOAD:
-            # D-73-16/F-A2: exactly ONE execution per POST, hardcoded — never
-            # `chunk_count` and never `chunk_count + record_count`. Verified against
-            # `dispatch.py::dispatch()`, the contact-upload lane's only send path: it
-            # sends the WHOLE csv as a single multipart POST regardless of row count
-            # (no chunking loop exists for this lane at all — `chunking.plan_chunks`/
-            # `chunk_ceiling` belong to the ENRICHMENT lane's `dispatch_plan`, a
-            # different call path this lane never uses) and recovers it via
-            # `watch.recover_dispatch(..., expected_chunk_count=1, ...)` — a literal,
-            # hardcoded 1, not a computed chunk count. `chunk_count` above is still
-            # computed and shown for informational parity with the other lanes'
-            # figures, but it is NOT this lane's real POST count and must never drive
-            # its execution projection. No separate "association hop" execution count
-            # is tracked anywhere in this codebase today (the association PUT runs
-            # inside the same n8n execution as the create, not as a further one) — if a
-            # future lane ever dispatches an association as its own execution, its
-            # count is added here.
-            executions = 1
-        else:
+        if cost_lane != COST_LANE_CONTACT_UPLOAD:
             executions = chunk_count + record_count
     except chunking.ChunkPlanError:
-        executions_basis = UNCONFIGURED
+        if cost_lane != COST_LANE_CONTACT_UPLOAD:
+            executions_basis = UNCONFIGURED
+
+    # WR-02 (Phase 74 code review): the execution-projection basis is now PER-LANE,
+    # taken alongside the estimate the function already computed above, rather than
+    # the module-level per-chunk constant read unconditionally — a contact-upload
+    # preview must never describe itself with the enrichment lane's per-chunk-plus-
+    # per-record cost model.
+    executions_projection_basis = (
+        CONTACT_UPLOAD_BASIS if cost_lane == COST_LANE_CONTACT_UPLOAD
+        else EXECUTIONS_BASIS)
 
     # Phase 62 / D-62-11: the suggestion round's cost enters the SAME opening envelope,
     # never a second ask. `figures["suggestion_allowance"]` is a THIRD name — never
@@ -620,12 +656,19 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     if headroom is None:
         get_transport = transport.get if hasattr(transport, "get") else transport
         headroom = allowance_headroom(config, transport=get_transport)
-    ceiling = ceiling_verdict({"projected_executions": executions}, headroom)
+    ceiling = ceiling_verdict(
+        {"projected_executions": executions}, headroom, basis=executions_projection_basis)
 
     figures = {
         "record_count": record_count,
         "object_type": object_type,
-        "providers": providers,
+        # WR-02: the providers this batch was actually PRICED against — taken from
+        # the estimate `envelope()` already computed above (`estimate.get("providers")`
+        # is `[]` for the contact-upload lane's zero-cost estimate, and the
+        # rate-applicable subset for every other lane's `cost_guard.estimate_batch`
+        # result) — never the caller's raw, unfiltered `providers` argument, which
+        # can name a provider this lane/object_type never actually prices.
+        "providers": estimate.get("providers", providers),
         "provider_credits": estimate.get("provider_credits") or {},
         "verdicts": verdicts,
         "anthropic_usd": estimate.get("anthropic_usd"),
@@ -636,7 +679,7 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
         "chunk_ceiling": chunk_record_ceiling,
         "chunk_count": chunk_count,
         "projected_executions": executions,
-        "executions_projection_basis": EXECUTIONS_BASIS,
+        "executions_projection_basis": executions_projection_basis,
         "monthly_execution_allowance": allowance,
         "allowance_configured": allowance_configured,
         # Phase 57 / D-57-01 / RUN-05: the ceiling is now sampled, not asserted absent.
@@ -730,10 +773,23 @@ def _envelope_block(figures):
 
     executions = figures.get("projected_executions")
     if isinstance(executions, int):
-        lines.append(
-            f"n8n executions: **{executions} (projected, not measured)** — "
-            f"{figures['executions_projection_basis']}, at {figures['chunk_count']} "
-            f"chunk(s) of at most {figures['chunk_ceiling']} record(s).")
+        chunk_count = figures.get("chunk_count")
+        chunk_ceiling = figures.get("chunk_ceiling")
+        # WR-01 (Phase 74 code review): the "at N chunk(s) of at most M record(s)"
+        # clause is INFORMATIONAL and depends on a chunk ceiling that may not be
+        # configured (e.g. the contact-upload lane, whose own execution count above
+        # is lane-invariant and known regardless). Render it only when both figures
+        # are actually available — never a fabricated or stale "at None chunk(s)..."
+        # tail on a real execution count.
+        if chunk_count is not None and chunk_ceiling is not None:
+            lines.append(
+                f"n8n executions: **{executions} (projected, not measured)** — "
+                f"{figures['executions_projection_basis']}, at {chunk_count} "
+                f"chunk(s) of at most {chunk_ceiling} record(s).")
+        else:
+            lines.append(
+                f"n8n executions: **{executions} (projected, not measured)** — "
+                f"{figures['executions_projection_basis']}.")
     else:
         lines.append(
             f"n8n executions: **not projected** — `{chunking.CEILING_KEY}` is not set in "
@@ -1239,7 +1295,10 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
             f"remaining of the configured {ceiling['allowance']} allowance "
             f"({ceiling['spent_sampled']} already sampled spent this month) — "
             f"{ceiling['shortfall']} execution(s) over. This projection is "
-            f"{EXECUTIONS_BASIS}, and it is measured to OVER-STATE a real chunk's cost "
+            # WR-02 (Phase 74 code review): `ceiling['basis']` is the SAME per-lane
+            # text `envelope()` already attached above — never the unconditional
+            # module constant, which would misname a contact-upload batch's basis.
+            f"{ceiling['basis']}, and it is measured to OVER-STATE a real chunk's cost "
             f"(roughly 3x) — deliberately, so it refuses early rather than letting an "
             f"over-budget batch through late. {RETENTION_CAVEAT} Name a smaller batch, "
             f"or tell me to override this refusal and why."

@@ -768,6 +768,65 @@ def test_envelope_contact_upload_figure_equals_the_previews_figure_for_the_ident
     assert figures["anthropic_usd_per_record"] == preview_figure["anthropic_usd_per_record"]
 
 
+def test_envelope_contact_upload_lane_reports_one_execution_even_when_chunk_ceiling_is_missing():
+    """WR-01 (Phase 74 code review): the contact-upload lane's execution count is
+    lane-invariant -- always exactly one execution per POST -- but before this fix it
+    was assigned INSIDE the `try` that calls `chunking.chunk_ceiling(config)`, so a
+    missing `max_records_per_chunk` key raised before the assignment ever ran and the
+    caught exception left `projected_executions` at `None`, reporting "not projected"
+    for a number this lane always knows regardless of any chunk ceiling. Config
+    deliberately omits `max_records_per_chunk` (never use `_lane_config()`'s default,
+    which sets it)."""
+    config = {
+        "n8n_url": "https://fake-tenant.n8n.cloud",
+        "webhook_secret": "fake-secret-for-tests-only",
+        "n8n_monthly_execution_allowance": 2500,
+    }
+    figures = _lane_envelope(
+        config, object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane="contact-upload")
+
+    assert figures["projected_executions"] == 1, (
+        "the contact-upload lane always sends exactly one POST, independent of "
+        "whether a chunk ceiling is configured")
+    assert figures["chunk_count"] is None, (
+        "the informational chunk count stays unavailable -- there is no ceiling to "
+        "compute it from")
+    assert figures["chunk_ceiling"] is None
+    assert "at None chunk(s)" not in figures["block"], (
+        "a missing ceiling must suppress the chunk-count sentence, never render a "
+        "fabricated or stale figure")
+    assert "1 (projected, not measured)" in figures["block"], (
+        "the execution count itself must still render even though the ceiling is "
+        "unavailable"
+    )
+
+
+def test_envelope_contact_upload_and_default_lane_report_different_basis_and_providers():
+    """WR-02 (Phase 74 code review): before this fix, `executions_projection_basis` and
+    `providers` came from an unconditional module-level constant / the caller's raw
+    argument, regardless of which cost lane actually priced the batch -- so a
+    contact-upload preview (no provider, no chunking) could describe itself with the
+    enrichment lane's "1 webhook execution per chunk + 1 sub-execution per record"
+    basis text and the caller's full provider list, neither of which is true for this
+    lane. Both figures must now be taken from the lane's own estimate."""
+    contact_upload = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane="contact-upload")
+    default_lane = _lane_envelope(
+        _lane_config(), object_type="contacts", record_ids=["1", "2", "3"],
+        providers=["lusha"], lane=None)
+
+    assert contact_upload["executions_projection_basis"] != default_lane["executions_projection_basis"], (
+        "a lane that makes no provider call and no per-record model call must not "
+        "describe itself with the per-chunk-plus-per-record basis text")
+    assert "sub-execution per record" not in contact_upload["executions_projection_basis"]
+    assert contact_upload["providers"] == [], (
+        "contact-upload calls no provider -- its providers list must say so, not echo "
+        "the caller's requested provider list")
+    assert default_lane["providers"] == ["lusha"]
+
+
 def test_envelope_companies_lane_prices_lusha_at_the_companies_match_rate_not_the_contacts_rate():
     """RED first (D-73-16 / F-B1): a companies batch must never be priced at Lusha's
     7-credit contacts first-time-enrich rate — it must use the measured 2-credit
