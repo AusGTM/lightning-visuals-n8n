@@ -825,6 +825,22 @@ PAIR_CREATE_OUTCOME_JS = inline("pairCreateOutcome.js") + r"""
 return pairCreateOutcome($input.all().map((it) => it.json)).map((row) => ({ json: row }));
 """
 
+# Phase 74 Plan 05 Task 1 (D-74-04, CR-02): the ONLY writer of `_create_error`. Sits
+# between "HubSpot Create"'s error output and "Create Carry Merge"'s third input — fed
+# by that edge alone, so it runs only when the error branch actually delivers at least
+# one item this execution (a node fed zero items is never dispatched — execution 12200
+# — so this node's own absence on a zero-rejection batch is exactly the same absence the
+# direct edge it replaces had; nothing about Create Carry Merge's own firing changes).
+# Stamps every item it sees and changes nothing else — `pairCreateOutcome.js` reads the
+# stamp, never writes it (n8n/code/pairCreateOutcome.js's own header).
+CREATE_ERROR_STAMP_JS = r"""// Create Error Stamp — Phase 74 Plan 05 Task 1 (D-74-04). The ONLY producer of the
+// `_create_error` marker `pairCreateOutcome.js` classifies FIRST, ahead of every shape
+// guess. Fed by "HubSpot Create"'s own error output (index 1) — never runs at all when
+// that branch is empty (a zero-rejection batch), which is fine: "Create Carry Merge"'s
+// third input is then simply absent, exactly as it was before this node existed.
+return $input.all().map((it) => ({ json: { ...it.json, _create_error: true } }));
+"""
+
 # Phase 73 Plan 06 Task 3 (D-73-01, F-A6): fed by "Pair Create Outcome To Row"'s FULL
 # output (a fan-out — the SAME delivery "Build Association Request Merge" receives),
 # never by "HubSpot Create"'s error output directly — it needs the pair node's own
@@ -2189,43 +2205,49 @@ return anyNonWrite ? [] : [{}];
         n for n in nodes if n["name"] == "Pair Create Outcome To Row")
     _pair_create_outcome_node["parameters"]["jsCode"] = PAIR_CREATE_OUTCOME_JS
 
-    # Phase 73 Plan 06 Task 3 (D-73-01, F-A6): the create node's error output feeds
-    # "Create Carry Merge" directly at a NEW third input — one producer, no intermediate
-    # classifier (the pair node right after it does the classifying, per its own
-    # docstring). Deliberately NO starved-lane sentinel here: `_add_starved_lane_
-    # sentinel` evaluates its SOURCE's own rows, which for this input would be the
-    # PRE-write rows — it cannot see an HTTP outcome, so it would have to fire
-    # unconditionally, becoming a SECOND producer on this input, which the write-gate
-    # refusal lane's own docstring already documents as the mechanism that fabricates a
-    # combined row on a `combineByPosition` merge and double-fires an append one.
+    # Phase 73 Plan 06 Task 3 (D-73-01, F-A6) / Phase 74 Plan 05 Task 1 (D-74-01 as
+    # RULED, B' — 74-CONTEXT.md — supersedes every prior version of this comment,
+    # including the "the fix is alwaysOutputData" paragraph that used to sit here; that
+    # paragraph described a mechanism execution `12522` proved does not exist):
     #
-    # [Rule 1 - Bug, found running this task's own suite] the plan's own must-have
-    # ("the v1 end-of-run drain fires Create Carry Merge once on whichever inputs
-    # arrived, so the error input needs no sentinel") is true in ISOLATION but was
-    # incomplete: it never delivering in the common (zero-rejection) case makes THIS
-    # merge itself drain-only rather than normally-completing, and that timing change
-    # propagates downstream. "Build Association Request Merge" (fed by this merge via
-    # "Pair Create Outcome To Row", and separately by an ALWAYS-immediate write-gate
-    # sentinel on its Update-lane input) is ALSO an append merge with a v1
-    # required-input count of 1 — the walker's own drain caps at ONE drained run per
-    # Merge (MN-01), so once the sentinel's immediate delivery lets it drain with only
-    # the Update-side input filled, the LATER real Create-side delivery (arriving only
-    # once Create Carry Merge's own drain fires and propagates through the pair node)
-    # opens a SECOND, now-undrainable pending run — the association is silently lost.
-    # Observed directly: `ingestWidenedFieldsFlow.test.mjs`'s pre-existing single-create
-    # tracer tests (D-72-01/D-72-04), previously green, failed with
-    # `merge_pending_runs_undrained` on exactly this shape once the third input existed.
+    # "HubSpot Create"'s error output (index 1) feeds "Create Error Stamp" (D-74-04,
+    # above), which feeds "Create Carry Merge"'s third input — one producer, no
+    # classifier upstream of the stamp (the pair node right after the merge does the
+    # actual classifying, per its own docstring; the stamp only marks the branch, it
+    # never decides anything). Deliberately NO starved-lane sentinel on this input:
+    # `_add_starved_lane_sentinel` evaluates its SOURCE's own PRE-write rows, which
+    # cannot see an HTTP outcome, so it would have to fire unconditionally — a SECOND
+    # producer on this input, which the write-gate refusal lane's own docstring already
+    # documents as the mechanism that fabricates a combined row on a `combineByPosition`
+    # merge and double-fires an append one.
     #
-    # The fix is `alwaysOutputData` — a DIFFERENT, already-established mechanism in this
-    # exact function (`set_always_output_data`, below) — not a second producer: it makes
-    # "HubSpot Create"'s OWN sole error-output edge deliver an empty marker whenever the
-    # branch would otherwise be silent, so "Create Carry Merge" completes NORMALLY (not
-    # via drain) in the common case, exactly as it did before this plan. A marker with
-    # no `action` and no `id` classifies as an "error" item with an uncomputable
-    # identity key (`pairCreateOutcome.js`'s own `identityKey` returns null for `{}`),
-    # so it joins to nothing and is silently ignored — harmless on every batch shape,
-    # including an all-rejected batch where the SUCCESS branch is the one left empty.
-    _append_merge_input(nodes, conns, "Create Carry Merge", "HubSpot Create", source_out_idx=1)
+    # What actually happens when the error branch is empty (the common, zero-rejection
+    # case) — `[observed live]` on execution `12522`, CLAUDE.md §13.0.3, D-74-03's walker
+    # fix: `ensureAlwaysOutputData` rescues ONLY output index 0, never output 1, so
+    # `alwaysOutputData` on "HubSpot Create" does NOT pad the error branch — "Create
+    # Error Stamp" is simply never dispatched (fed zero items, execution 12200's rule),
+    # and "Create Carry Merge"'s third input is genuinely ABSENT this execution, not
+    # delivered-with-a-marker. "Create Carry Merge" still completes — via the v1
+    # end-of-run drain (`requiredInputs: 1` on an append Merge), in ONE pass, with
+    # whatever subset of its three inputs actually arrived. `12522` is the proof: input 2
+    # never delivered, and the merge still drained once with 42 items (21 success + 21
+    # carried, 0 error), 22 reached "Build Association Request Merge", all 46 rows
+    # reached "Build Ingest Response" — nothing lost, no second pending run.
+    #
+    # `alwaysOutputData` is KEPT on "HubSpot Create" regardless (below) — not for the
+    # error branch, but because it DOES rescue output 0 (the success branch) on an
+    # ALL-REJECTED batch, which needs it: without it, a batch where every create is
+    # rejected would leave "Create Carry Merge" input 0 permanently absent rather than
+    # padded, changing what the merge's OWN drain sees. D-73-01's original 3-input shape
+    # (`Create Carry Merge`'s `numberInputs: 3`) is unchanged by this correction — only
+    # this comment's account of WHY it completes is.
+    nodes.append(code_node("Create Error Stamp", CREATE_ERROR_STAMP_JS, 40, 620))
+    conns.setdefault("HubSpot Create", {"main": [[]]})
+    while len(conns["HubSpot Create"]["main"]) <= 1:
+        conns["HubSpot Create"]["main"].append([])
+    conns["HubSpot Create"]["main"][1].append(
+        {"node": "Create Error Stamp", "type": "main", "index": 0})
+    _append_merge_input(nodes, conns, "Create Carry Merge", "Create Error Stamp")
     set_always_output_data(nodes, ["HubSpot Create"])
 
     # "Build Create Failure Row" needs the pair node's OWN classification (it must tell

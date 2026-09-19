@@ -192,22 +192,42 @@ test("splice_carry_merge_after's mechanism retired every by-name read on this la
   for (const httpNode of httpNodes) {
     // Phase 73 Plan 06 Task 3 (D-73-01): "HubSpot Create" alone now has TWO outbound
     // edges — its success output (unchanged) and its NEW error output
-    // (`onError: "continueErrorOutput"`), both feeding "Create Carry Merge" (one
-    // producer per input, never a fan-out to more than one consumer). The assertion's
-    // real intent — no untracked fan-out, every consumer a carry merge, never a
-    // by-name reader — is unchanged; only the expected EDGE COUNT for this one node
-    // moves from 1 to 2, each edge asserted individually.
+    // (`onError: "continueErrorOutput"`), both eventually feeding "Create Carry Merge"
+    // (one producer per input, never a fan-out to more than one consumer). The
+    // assertion's real intent — no untracked fan-out, every consumer either a carry
+    // merge or the ONE stamp node on the error edge, never a by-name reader — is
+    // unchanged; only the expected EDGE COUNT for this one node moves from 1 to 2, each
+    // edge asserted individually.
+    //
+    // Phase 74 Plan 05 Task 1 (D-74-04): the error output (index 1) no longer feeds
+    // "Create Carry Merge" DIRECTLY — it feeds "Create Error Stamp" first, a single
+    // Code node that stamps `_create_error: true` and changes nothing else, which then
+    // feeds the merge. Still "one producer per input, never a fan-out" and still no
+    // by-name read — the stamp node's own jsCode reads only `$input`.
     const outputs = wf.connections[httpNode.name]?.main || [];
     const expectedOutputs = httpNode.name === "HubSpot Create" ? 2 : 1;
     assert.equal(outputs.length, expectedOutputs,
       `${httpNode.name} has exactly ${expectedOutputs} output branch(es)`);
-    for (const outs of outputs) {
+    outputs.forEach((outs, outIdx) => {
       assert.equal((outs || []).length, 1,
         `${httpNode.name}: each output branch has exactly one outbound edge`);
       const target = wf.nodes.find((n) => n.name === outs[0].node);
+      if (httpNode.name === "HubSpot Create" && outIdx === 1) {
+        assert.equal(target.name, "Create Error Stamp",
+          "HubSpot Create's error output must feed the D-74-04 stamp node, nothing else");
+        assert.equal(target.type, "n8n-nodes-base.code");
+        const stampOutputs = wf.connections["Create Error Stamp"]?.main || [];
+        assert.equal(stampOutputs.length, 1);
+        assert.equal((stampOutputs[0] || []).length, 1,
+          "Create Error Stamp has exactly one outbound edge");
+        const stampTarget = wf.nodes.find((n) => n.name === stampOutputs[0][0].node);
+        assert.equal(stampTarget.type, "n8n-nodes-base.merge",
+          "Create Error Stamp's only consumer must be a carry merge, not a by-name reader");
+        return;
+      }
       assert.equal(target.type, "n8n-nodes-base.merge",
         `${httpNode.name}'s only consumer must be a carry merge, not a by-name reader`);
-    }
+    });
   }
 });
 

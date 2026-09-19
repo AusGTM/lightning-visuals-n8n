@@ -133,6 +133,81 @@ test("name-and-company identity ladder pairs a row with no email", () => {
   assert.equal(out[0].id, "hs-9");
 });
 
+// --- Phase 74 Plan 05 Task 1 (D-74-04/D-74-05, CR-02) — the explicit `_create_error`
+// stamp beats both shape checks, and correctness no longer rests on a guessed shape. ---
+
+test("a stamped item carrying a non-empty action field still classifies as an error outcome (stamp beats the carried-row test)", () => {
+  const row = carriedRow({ email: "stamped-action@example.com" });
+  // Shaped exactly like a CARRIED row (non-empty `action`) — the OLD classifier would
+  // have pushed this to `carried`, producing a SECOND (bogus) carried row that shares
+  // `row`'s own identity key and refuses BOTH via "identity key matches more than one
+  // carried row". The stamp must route it to `responses` before that shape test ever runs.
+  const stampedLikeCarried = {
+    action: "create", outcome: "net_new", email: "stamped-action@example.com",
+    _create_error: true,
+  };
+  const out = pairCreateOutcome([row, stampedLikeCarried]);
+  assert.equal(out.length, 1, "the stamped item must never become a second carried row");
+  assert.equal(out[0].create_outcome, "error");
+  assert.equal(out[0].create_error, stampedLikeCarried);
+});
+
+test("a stamped item carrying an id still classifies as an error outcome (stamp beats the success-response test)", () => {
+  const row = carriedRow({ email: "stamped-id@example.com" });
+  // Shaped exactly like a SUCCESS response (a usable `id`) — a real HubSpot error body
+  // that happens to echo a conflicting record's id (e.g. "Existing ID: 555" surfaced as
+  // a structured field) must never be read as a success just because `id` is present.
+  const stampedLikeSuccess = {
+    id: "555", properties: { email: "stamped-id@example.com" }, _create_error: true,
+  };
+  const out = pairCreateOutcome([row, stampedLikeSuccess]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].create_outcome, "error");
+  assert.notEqual(out[0].create_outcome, "success");
+});
+
+test("an item with no stamp classifies exactly as it does today: carried row, then success response, then error", () => {
+  const row = carriedRow({ email: "unstamped@example.com" });
+  const success = successResponse({ id: "hs-1", properties: { email: "unstamped@example.com" } });
+  const out = pairCreateOutcome([row, success]);
+  assert.equal(out[0].create_outcome, "success", "no stamp present — the shape ladder is unchanged");
+});
+
+test("mirrors the graph stub (tests/n8n/ingestCreateErrorLane.test.mjs) with its invented `properties.email` removed: the rejected row's own error item still pairs as create_outcome error, via the stamp, not the guessed shape", () => {
+  // The hand-written graph-level stub (D-74-05's UNOBSERVED tag) invents
+  // `properties: { email: EMAIL_2 }` on the error item so `identityKey()`'s `_emailOf()`
+  // resolves — CR-02's exact flagged assumption. This reconstructs that same 3-row batch
+  // at the unit level with that nested shape GONE, replaced by only what this module's
+  // header now documents a real error item might plausibly carry back: the outbound
+  // request's own top-level fields, spread onto the response the way an n8n HTTP node's
+  // error item can echo request data (T-73-06-01's own premise). Without the stamp, that
+  // spread makes the item carry `action`/`outcome` too — shaped exactly like a THIRD
+  // carried row that collides with row 2's own identity key, so the OLD classifier
+  // refuses BOTH (never reports a failure at all — the silent-wrong-answer bug D-74-04
+  // exists to close). With the stamp read first, it is unambiguously an error, joined via
+  // its own top-level `email`.
+  const row1 = carriedRow({ email: "survivor1@laneone.example" });
+  const row2 = carriedRow({ email: "rejected@lanetwo.example" });
+  const row3 = carriedRow({ email: "survivor3@lanethree.example" });
+  const resp1 = successResponse({ id: "hs-created-1", properties: { email: "survivor1@laneone.example" } });
+  const resp3 = successResponse({ id: "hs-created-3", properties: { email: "survivor3@lanethree.example" } });
+  const rejectedNoInventedShape = {
+    ...carriedRow({ email: "rejected@lanetwo.example" }), // the request echo, no nested properties.email
+    message: "Contact already exists. Existing ID: 555",
+    _create_error: true,
+  };
+
+  const out = pairCreateOutcome([row1, row2, row3, resp1, resp3, rejectedNoInventedShape]);
+  const byEmail = Object.fromEntries(out.map((r) => [r.email, r]));
+
+  assert.equal(byEmail["survivor1@laneone.example"].create_outcome, "success");
+  assert.equal(byEmail["survivor3@lanethree.example"].create_outcome, "success");
+  assert.equal(byEmail["rejected@lanetwo.example"].create_outcome, "error",
+    "still a create failure with the invented properties.email shape removed");
+  assert.notEqual(byEmail["rejected@lanetwo.example"].create_outcome, "refused",
+    "must not be silently swallowed as an identity collision with its own carried row");
+});
+
 test("the carried row's own properties win over the response's on a key clash (preferLast parity)", () => {
   const row = carriedRow({ email: "row@example.com", properties: { email: "row@example.com", lv_enrichment_requested: "true" } });
   const resp = successResponse({ id: "hs-7", properties: { email: "row@example.com" } });

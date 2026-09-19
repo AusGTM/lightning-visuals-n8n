@@ -91,6 +91,16 @@ test("one rejected create costs its own row: the other two associate to their ow
         error: [
           {
             message: "Contact already exists. Existing ID: 555",
+            // D-74-05 (KNOWN-UNOBSERVED, pinned): this nested `properties.email` shape
+            // is INVENTED, not pinned by any frozen runData — CR-02's exact finding.
+            // Real n8n HTTP error-item shape for a `continueErrorOutput` node is still
+            // `[documented]` only (D-73-19) — see CLAUDE.md §13.0.3. This stub's
+            // correctness no longer rests on it: "Create Error Stamp" (D-74-04) stamps
+            // every item on this branch `_create_error: true` BEFORE this item ever
+            // reaches `pairCreateOutcome`, so classification into the error bucket is
+            // driven by that explicit marker, never by whether this invented shape
+            // happens to be right. Pinned unit-level (with this exact nested shape
+            // stripped) in tests/n8n/pairCreateOutcome.test.mjs.
             properties: { email: EMAIL_2 },
             // A realistic n8n HTTP error shape can carry the OUTBOUND request
             // configuration, including its own Authorization header — T-73-06-01's

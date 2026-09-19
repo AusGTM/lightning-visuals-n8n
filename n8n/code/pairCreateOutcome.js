@@ -12,8 +12,16 @@
 // this module's identity join replaces positional pairing with a join on each row's OWN
 // identity, so a shrinking response set can never mis-associate a contact.
 //
-// Classification is by SHAPE, not an added marker — the three sources this merge ever
-// sees are already structurally disjoint by construction:
+// Classification (Phase 74 Plan 05 Task 1, D-74-04/D-74-05, CR-02): the PRIMARY signal
+// is now an explicit stamp, `_create_error: true`, applied by a builder-authored Code
+// node sitting on "HubSpot Create"'s own error edge (scripts/build_cloud_workflows.py) —
+// never written here, only read. A stamped item is always an error item, even if it
+// happens to also carry a non-empty `action` (would otherwise pass the carried-row
+// test) or a usable `id` (would otherwise pass the success-response test). This is
+// tested FIRST, ahead of every shape check below.
+//
+// SHAPE remains the fallback for an item with no stamp — the three sources this merge
+// ever sees are, absent a stamp, structurally disjoint by construction:
 //   - a carried row (Decide Action's own output) always carries a non-empty `action`;
 //     no HubSpot HTTP response, success or error, ever has an `action` field (it is not
 //     a valid HubSpot property and this code never sends one).
@@ -21,6 +29,11 @@
 //     present on a carried row (no top-level `id` field is ever stamped on one) and
 //     HubSpot's own error bodies report a conflict in `message`, never a fresh `id`.
 //   - anything left over (no `action`, no usable `id`) is an ERROR item.
+//
+// D-74-05: this repo has never observed the real shape of an n8n HTTP error item on a
+// `continueErrorOutput` node (D-73-19 — `[documented]` only, CLAUDE.md §13.0.3). The
+// stamp is what makes that unobserved shape irrelevant to correctness — a stamped item
+// is an error item regardless of what else it happens to carry.
 //
 // The join key is the SAME identity ladder columnMap.js's `requiredIdentity` encodes
 // for CSV completeness (config/column_mapping.yaml's `required_identity.any_of`):
@@ -74,6 +87,12 @@ function _isSuccessResponse(row) {
   return Boolean(row) && row.id !== undefined && row.id !== null && row.id !== "";
 }
 
+// D-74-04: the explicit signal, read only — never set here. Beats both shape checks
+// below on purpose (see this module's header).
+function _isStampedError(row) {
+  return Boolean(row) && row._create_error === true;
+}
+
 // pairCreateOutcome(items) — `items` already unwrapped to plain json objects (no
 // `{json: ...}` envelopes). Returns one item per carried row, in the carried rows' own
 // order, each stamped `create_outcome`:
@@ -96,7 +115,8 @@ function pairCreateOutcome(items) {
   const responses = [];
   for (const row of items || []) {
     if (!row) continue;
-    if (_isCarriedRow(row)) carried.push(row);
+    if (_isStampedError(row)) responses.push({ row, outcome: "error" });
+    else if (_isCarriedRow(row)) carried.push(row);
     else if (_isSuccessResponse(row)) responses.push({ row, outcome: "success" });
     else responses.push({ row, outcome: "error" });
   }
