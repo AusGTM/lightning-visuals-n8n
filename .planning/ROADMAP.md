@@ -67,7 +67,7 @@ carrying its live evidence.
 - [x] Phase 72: Enrichment extras land in HubSpot (added 2026-09-12 after Phase 71 F71-5; 8 plans + 4 gap-closure plans) (completed 2026-09-13)
 - [x] Phase 73: GA fix list from stress attempt 2 (added 2026-09-15 after stress attempt 2; 7 plans; attempt 3 A–F PASS) (completed 2026-09-18)
 - [x] Phase 73.1: Provider-backed contact discovery as source tier 2 (inserted 2026-09-18 by operator ruling; runs before 74) (completed 2026-09-19)
-- [ ] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking)
+- [x] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking) (completed 2026-09-19)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -632,7 +632,7 @@ reason each. Regenerate JSON, suites green, disarmed deploy is the operator's st
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on decisions D-74-01..D-74-14 and the
 `73-REVIEW.md` finding ids CR-01..04 / WR-01..12.
 **Depends on:** Phase 73
-**Plans:** 6/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
