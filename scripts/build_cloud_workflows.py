@@ -181,13 +181,28 @@ def extract_js_const(module_name: str, const_name: str) -> str:
     Byte-identical to the source, so editing the list in `companyLink.js` propagates on
     the next regen — never a second, driftable copy. Raises if the constant is not found,
     so a rename in the source module fails the build rather than silently inlining stale
-    text."""
+    text.
+
+    WR-10 (73-REVIEW.md, Phase 74 Plan 05 Task 3): the non-greedy `.*?;` regex stops at
+    the FIRST `;` that ends a line — it works today only because every extracted
+    constant's own literal happens to contain no `;` at any line end, including inside
+    a `//` comment line. A comment ending in a semicolon, or a future constant whose
+    literal contains one, would silently truncate the extraction into a
+    syntactically-broken prefix spliced verbatim into a generated Code node — the regex
+    still matches, so nothing would raise. Balanced brackets/braces/parens are enough to
+    catch that, and need no real parser."""
     src = (CODE / module_name).read_text()
     m = re.search(rf"^const\s+{re.escape(const_name)}\s*=.*?;\s*$", src, re.MULTILINE | re.DOTALL)
     if not m:
         raise ValueError(
             f"extract_js_const: no top-level `const {const_name} = ...;` found in {module_name}")
-    return m.group(0)
+    text = m.group(0)
+    if text.count("[") != text.count("]") or text.count("{") != text.count("}") \
+            or text.count("(") != text.count(")"):
+        raise ValueError(
+            f"extract_js_const: `const {const_name}` in {module_name} did not extract as a "
+            f"balanced statement — the terminating `;` heuristic truncated it.")
+    return text
 
 
 # D-70-12 (Phase 70 Plan 05 Task 1): the single canonical write-request shape every gated
@@ -2298,15 +2313,61 @@ return anyNonWrite ? [] : [{}];
     # a genuine HubSpot rejection apart from a carried row or a success), so it cannot
     # sit upstream of it — fed by a SECOND fan-out edge off "Pair Create Outcome To
     # Row"'s single output, the same "single-producer node, safe to fan out further"
-    # pattern "Decide Action Snapshot" already uses on this lane. One producer,
-    # downstream of the classification, so it can actually tell whether the batch had
-    # any rejections — it emits its OWN sentinel marker on the zero-rejection case
-    # rather than relying on a separate starved-lane sentinel, which would be a SECOND
-    # producer on "Ingest Merge Response"'s new input.
+    # pattern "Decide Action Snapshot" already uses on this lane. Its OWN zero-rejection
+    # sentinel marker (D-74-06's widened "zero non-success items" branch) covers the
+    # case where it RAN and found nothing to report — but it never runs AT ALL when
+    # "Pair Create Outcome To Row" never runs, which happens whenever "Create Carry
+    # Merge" never fires: zero create-routed rows in the batch, OR create-routed rows
+    # exist but every one of them is refused pre-write (a disarmed batch, or an armed
+    # one outside the allowlist) — the gate refuses, the permitted pass-through emits
+    # nothing, and neither of "Create Carry Merge"'s other two inputs ever delivers
+    # either. WR-07 / D-74-02 (Phase 74 Plan 05 Task 3): this input needs a SEPARATE
+    # starved-lane sentinel to cover THAT case — every other write-gated input on this
+    # lane already has one; this was the one exception.
     nodes.append(code_node("Build Create Failure Row", BUILD_CREATE_FAILURE_ROW_JS, 40, 560))
     conns["Pair Create Outcome To Row"]["main"][0].append(
         {"node": "Build Create Failure Row", "type": "main", "index": 0})
-    _append_merge_input(nodes, conns, ingest_merge_response, "Build Create Failure Row")
+    _create_failure_row_idx = _append_merge_input(
+        nodes, conns, ingest_merge_response, "Build Create Failure Row")
+
+    # D-74-02: the sentinel's own condition is a DISJUNCTION, evaluated inside this ONE
+    # node so its marker can only ever emit once per execution — never a race with
+    # itself:
+    #   (a) writes are not permitted for create at all — composed from the SAME
+    #       WRITE_SAFETY_GATE_JS constant "Associate Lane Sentinel" already prefixes
+    #       onto its own condition (the composition idiom, not that sentinel's own
+    #       predicate — this one is about the create lane, not the update/association
+    #       lane). This is what covers a batch that DOES contain create-routed rows but
+    #       none of them is permitted: the real write gate refuses every one, the
+    #       permitted pass-through delivers nothing, "Create Carry Merge" never fires,
+    #       and neither does "Pair Create Outcome To Row" or "Build Create Failure Row".
+    #   (b) the decided row set contains zero create-routed rows at all — D-74-02's own
+    #       literal predicate; "Create Carry Merge" is not even reachable.
+    # The real producer's own firing condition (at least one create-routed row whose
+    # write is permitted) is the exact complement of this disjunction, so the marker and
+    # the real delivery can never both land on this input in the same execution — the
+    # SAME mutual-exclusion argument "Associate Lane Sentinel" already carries, applied
+    # to a different lane. Composing the write-safety gate here is safe because
+    # `n8n_arming.set_write_safety` (operator-claude-plugin/scripts/n8n_arming.py)
+    # rewrites every node's jsCode by SCANNING for the constant's declaration, not from
+    # an enumerated node list — arming a real batch rewrites this sentinel's own copy of
+    # the constant exactly as it rewrites every write gate's.
+    _create_failure_sentinel_js = WRITE_SAFETY_GATE_JS + r"""// Create Failure Row Sentinel — see build_cloud_workflows.py's own comment above this
+// call site for the mutual-exclusion argument. `rows` is bound by
+// _add_starved_lane_sentinel's own template, above this body.
+const zeroCreateRows = !rows.some((r) => r && r.action === "create");
+const writesNotPermitted = !rows.some((r) => {
+  if (!r || r.action !== "create") return false;
+  const wr = r.write_request;
+  if (!wr) return false;
+  return _writeSafetyAllows("create", wr.hs_object_id || null, wr.domain || null);
+});
+return (zeroCreateRows || writesNotPermitted) ? [{}] : [];
+"""
+    _add_starved_lane_sentinel(
+        nodes, conns, "Create Failure Row Sentinel", "Decide Action",
+        _create_failure_sentinel_js,
+        [(ingest_merge_response, _create_failure_row_idx)], 60, 1340)
 
     return {
         "id": "LVcontactIngestCloud01",

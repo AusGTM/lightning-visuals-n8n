@@ -257,7 +257,13 @@ function armGraphForCreate(wf, domains) {
   assert.ok(decide, "node present: Decide Action");
   decide.parameters.jsCode = decide.parameters.jsCode.replace(
     'const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
-  for (const name of ["HubSpot Create Write Gate", "Associate Lane Sentinel"]) {
+  // Phase 74 Plan 05 Task 3 (D-74-02): "Create Failure Row Sentinel" carries the same
+  // baked write-safety constants (composed from WRITE_SAFETY_GATE_JS, same idiom as
+  // "Associate Lane Sentinel") — the real arming tool (n8n_arming.set_write_safety)
+  // rewrites every declaring node, so this hand-rolled helper must too, or the
+  // sentinel's own unarmed copy would fire its marker onto "Ingest Merge Response"
+  // input 5 alongside "Build Create Failure Row"'s real delivery in the same execution.
+  for (const name of ["HubSpot Create Write Gate", "Associate Lane Sentinel", "Create Failure Row Sentinel"]) {
     const node = wf.nodes.find((n) => n.name === name);
     assert.ok(node, `node present: ${name}`);
     node.parameters.jsCode = node.parameters.jsCode

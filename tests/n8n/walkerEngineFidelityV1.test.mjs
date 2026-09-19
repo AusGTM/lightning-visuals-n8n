@@ -188,7 +188,10 @@ test("execution 12522 (ingest lane, D-74-03): the corrected walker's own predict
   const decide = wf.nodes.find((n) => n.name === "Decide Action");
   decide.parameters.jsCode = decide.parameters.jsCode.replace(
     'const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
-  for (const name of ["HubSpot Create Write Gate", "Associate Lane Sentinel"]) {
+  // Phase 74 Plan 05 Task 3 (D-74-02): "Create Failure Row Sentinel" carries the same
+  // baked write-safety constants — arm it too, or its own unarmed copy fires a marker
+  // onto "Ingest Merge Response" input 5 alongside this batch's real delivery.
+  for (const name of ["HubSpot Create Write Gate", "Associate Lane Sentinel", "Create Failure Row Sentinel"]) {
     const node = wf.nodes.find((n) => n.name === name);
     node.parameters.jsCode = node.parameters.jsCode
       .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',

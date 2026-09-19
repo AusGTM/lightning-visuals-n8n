@@ -227,7 +227,11 @@ test("ingest 2x2 mixed batch (company by domain / by name) x (update / create): 
 // =====================================================================================
 
 function armCreateDomains(wf, domainsCsv) {
-  for (const name of ["HubSpot Update Write Gate", "HubSpot Create Write Gate", "Associate Lane Sentinel"]) {
+  // Phase 74 Plan 05 Task 3 (D-74-02): "Create Failure Row Sentinel" carries the same
+  // baked write-safety constants — arm it too, or its own unarmed copy fires a marker
+  // onto "Ingest Merge Response" input 5 alongside this batch's real delivery.
+  for (const name of ["HubSpot Update Write Gate", "HubSpot Create Write Gate",
+    "Associate Lane Sentinel", "Create Failure Row Sentinel"]) {
     const node = wf.nodes.find((n) => n.name === name);
     assert.ok(node, `node present: ${name}`);
     node.parameters.jsCode = node.parameters.jsCode

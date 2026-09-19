@@ -115,16 +115,18 @@ def test_a_declaration_the_plugin_writes_is_read_back_by_phase_27s_reader():
     observed = n8n_read.read_write_safety(armed, "ALLOW_HUBSPOT_RECORD_WRITES")
     assert observed["value"] == "true"
     assert observed["disagreement"] is None
-    # 3 declaring nodes since Phase 70 Plan 05 Task 2/3 (2026-09-10): the update gate,
-    # the create gate, and "Associate Lane Sentinel". F12's "Decide Action" precheck is
-    # deleted (D-70-06 — it predicted the gate's verdict rather than reporting it) and the
-    # association's own second gate is removed (D-70-15 — one write_request, one verdict,
-    # taken at the write it runs downstream of). The sentinel duplicates the predicate for
-    # graph plumbing ONLY (it decides whether its Merge-feeding marker is needed, never
-    # whether a write is permitted) — the same accepted pattern the review lane's BUG-30
-    # precheck uses. It must be rewritten with the gates or its marker fires while a real
-    # association is in flight and the Merge drops it.
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 3
+    # 4 declaring nodes since Phase 74 Plan 05 Task 3 (2026-09-19), up from 3 since
+    # Phase 70 Plan 05 Task 2/3 (2026-09-10): the update gate, the create gate,
+    # "Associate Lane Sentinel", and now "Create Failure Row Sentinel" (D-74-02). F12's
+    # "Decide Action" precheck is deleted (D-70-06 — it predicted the gate's verdict
+    # rather than reporting it) and the association's own second gate is removed
+    # (D-70-15 — one write_request, one verdict, taken at the write it runs downstream
+    # of). Both sentinels duplicate a gate's predicate for graph plumbing ONLY (deciding
+    # whether their own Merge-feeding marker is needed, never whether a write is
+    # permitted) — the same accepted pattern the review lane's BUG-30 precheck uses.
+    # Each must be rewritten with its gate or its marker fires while a real write is in
+    # flight and the Merge drops it.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 4
 
     allowlist = n8n_read.read_write_safety(armed, "TEST_RECORD_IDS")
     assert allowlist["value"] == "12345,67890"
@@ -144,16 +146,18 @@ def test_maintenance_workflow_rewrite_counts():
 
 def test_contact_ingest_rewrite_counts_create_leads_by_one():
     """CREATE still leads RECORD_WRITES by one, for the reason the test name says — but
-    both fell by two in Phase 70 Plan 05 Task 2/3 (2026-09-10). RECORD_WRITES is declared
-    by the two write gates only: F12's "Decide Action" precheck is deleted (D-70-06) and
-    the association's own second gate is removed (D-70-15). CREATE is declared by those
-    same two gates PLUS "Decide Action", which still bakes that one constant alone — it
-    routes create-vs-review, a decision about WHAT the row is, never whether it may be
+    both fell by two in Phase 70 Plan 05 Task 2/3 (2026-09-10), then both rose by one
+    again in Phase 74 Plan 05 Task 3 (2026-09-19, D-74-02). RECORD_WRITES is declared by
+    the two write gates, "Associate Lane Sentinel", and now "Create Failure Row
+    Sentinel": F12's "Decide Action" precheck is deleted (D-70-06) and the association's
+    own second gate is removed (D-70-15). CREATE is declared by those same four nodes
+    PLUS "Decide Action", which still bakes that one constant alone — it routes
+    create-vs-review, a decision about WHAT the row is, never whether it may be
     written."""
     workflow = _workflow("wf_contact_ingest_cloud.json")
     _, counts = n8n_arming.set_write_safety(
         workflow, {"ALLOW_HUBSPOT_RECORD_WRITES": True, "ALLOW_HUBSPOT_CREATE": True})
-    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 3, "ALLOW_HUBSPOT_CREATE": 4}
+    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 4, "ALLOW_HUBSPOT_CREATE": 5}
 
 
 def test_rewrite_counts_are_derived_across_every_committed_cloud_workflow():
@@ -220,8 +224,8 @@ def test_an_armed_workflow_can_be_set_back_and_the_rescan_passes():
 
     assert n8n_read.read_write_safety(disarmed, "ALLOW_HUBSPOT_RECORD_WRITES")["value"] == "false"
     assert n8n_read.read_write_safety(disarmed, "TEST_RECORD_IDS")["value"] == ""
-    # 3 declaring nodes since Phase 70 Plan 05 Task 2/3 — see the round-trip test above.
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 3
+    # 4 declaring nodes since Phase 74 Plan 05 Task 3 — see the round-trip test above.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 4
 
 
 def test_the_input_workflow_is_never_mutated():

@@ -2373,23 +2373,37 @@ Phase 70's positional-merge refactor had already superseded. Two more nodes now 
 
 | Node | Does |
 | --- | --- |
-| `Pair Create Outcome To Row` | `n8n/code/pairCreateOutcome.js::pairCreateOutcome` — the ACTUAL identity join: `Create Carry Merge` is append-mode now (not `combine`), so a create rejected on HubSpot Create's error output (below) shrinks the success array without shifting anything out of alignment. Classifies every item by shape (a carried row always carries `action`; a success response always carries `id`; anything else is an error item) and joins on the SAME ladder `columnMap.js`'s `requiredIdentity` encodes for CSV completeness — email, then firstname+lastname+company, then linkedin_url — never by position. Fails closed: an uncomputable or ambiguous key is refused, never guessed. |
-| `Build Create Failure Row` | Fed by `Pair Create Outcome To Row`'s own classification (it cannot sit upstream of it). Emits one `create_failed` refusal row per rejected create, reading at most a message/description/status code off the raw HubSpot error — never the whole error object, which can carry the outbound request's own Authorization header. Emits its own sentinel marker when the batch had no rejections at all, so `Ingest Merge Response`'s dedicated input for this lane never starves. |
+| `Pair Create Outcome To Row` | `n8n/code/pairCreateOutcome.js::pairCreateOutcome` — the ACTUAL identity join: `Create Carry Merge` is append-mode now (not `combine`), so a create rejected on HubSpot Create's error output (below) shrinks the success array without shifting anything out of alignment. Classification is by an explicit `_create_error` stamp FIRST (D-74-04, below), falling back to shape (a carried row always carries `action`; a success response always carries `id`; anything else is an error item) only for an unstamped item. Joins on the SAME ladder `columnMap.js`'s `requiredIdentity` encodes for CSV completeness — email, then firstname+lastname+company, then linkedin_url — never by position. Fails closed: an uncomputable or ambiguous key is refused, never guessed. |
+| `Build Create Failure Row` | Fed by `Pair Create Outcome To Row`'s own classification (it cannot sit upstream of it). Emits one `create_failed` row per HubSpot rejection, and one `create_unconfirmed` row (D-74-06) per row whose create outcome was `none`/`refused` — reading at most a message/description/status code off the raw HubSpot error, never the whole error object, which can carry the outbound request's own Authorization header. Emits its own sentinel marker only when the batch had NO non-success outcome at all, so `Ingest Merge Response`'s dedicated input for this lane never starves on a batch this node actually ran for. |
 
-`HubSpot Create` itself carries `onError: "continueErrorOutput"` (the ingest lane's ONLY
-write node with this setting — `HubSpot Update` keeps `onError: null`, per the BUG 11 rule
-that a write node never gets `continueRegularOutput`) plus `alwaysOutputData: true`. The
-second flag is load-bearing, not decorative: without it, `Create Carry Merge`'s error input
-never delivers at all on a zero-rejection batch (the common case), which makes that merge
-itself drain-only rather than normally-completing — and that timing change silently starved
-`Build Association Request Merge`'s downstream completion (an immediate write-gate sentinel
-let it drain with only the Update-side input filled, before the delayed Create-side content
-ever arrived). `alwaysOutputData` gives the error branch a real (marker) delivery during
-NORMAL processing whenever it would otherwise be empty, so the merge completes exactly as it
-did before this plan. No starved-lane sentinel was added to that input — a `_add_starved_
-lane_sentinel` there would have been a SECOND producer and double-fired the lane under v1.
-Stays `[documented]` only, per D-73-19: the create-error lane is proven offline (`node --test
-tests/n8n/ingestCreateErrorLane.test.mjs`), never live, until a real race occurs.
+**Amended 2026-09-19 (Phase 74 Plan 05, D-74-01 as ruled/D-74-02/D-74-04) — corrects the
+prior "`alwaysOutputData` gives the error branch a real delivery" paragraph, which
+execution `12522` proved false; see CLAUDE.md §13.0.3 for the two rows this amendment
+adds there.** `HubSpot Create` itself still carries `onError: "continueErrorOutput"`
+(the ingest lane's ONLY write node with this setting — `HubSpot Update` keeps
+`onError: null`, per the BUG 11 rule that a write node never gets
+`continueRegularOutput`) plus `alwaysOutputData: true` — but `alwaysOutputData` rescues
+ONLY output index 0 (`ensureAlwaysOutputData`'s own guard), never output 1 (the error
+branch). ~~`alwaysOutputData` gives the error branch a real (marker) delivery during
+NORMAL processing whenever it would otherwise be empty, so the merge completes exactly
+as it did before this plan.~~ On a zero-rejection batch the error branch simply makes
+NO delivery at all — `Create Error Stamp` (D-74-04, the ONLY producer of the
+`_create_error` marker `pairCreateOutcome.js` reads first) is fed zero items and never
+runs — and `Create Carry Merge` still completes normally, in one pass, via the v1
+end-of-run drain (`requiredInputs: 1` on an append Merge), exactly as `12522` shows:
+input 2 absent, the merge drains once with 42 items, nothing lost. `alwaysOutputData`
+is kept for a DIFFERENT reason — it rescues output 0 on an all-rejected batch, which
+does need it. No starved-lane sentinel sits on `Create Carry Merge`'s own error input —
+a `_add_starved_lane_sentinel` there would have been a SECOND producer and
+double-fired the lane under v1 (unchanged from the original reasoning). `Ingest Merge
+Response`'s OWN create-failure-row input is a different story: it now carries a
+DEDICATED starved-lane sentinel, `Create Failure Row Sentinel` (D-74-02), keyed on "no
+create-routed row is permitted" — the one write-gated input on this lane that had
+none before Phase 74 Plan 05. Stays `[documented]` only, per D-73-19: the create-error
+lane's real n8n error-item shape is proven offline (`node --test
+tests/n8n/ingestCreateErrorLane.test.mjs`, `tests/n8n/pairCreateOutcome.test.mjs`),
+never live, until a real race occurs — the hand-written stub is tagged `UNOBSERVED`
+(D-74-05) for exactly this reason.
 
 Resolution order: **manual `company_id` column, then exact email-domain match (freemail and
 AU ISP domains resolve nothing), then exact company-name match** (a name matching two
