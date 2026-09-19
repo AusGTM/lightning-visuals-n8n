@@ -3,9 +3,9 @@ phase: "74"
 slug: "code-review-follow-ups-from-phase-73"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-09-19"
 ---
 
@@ -62,7 +62,7 @@ requirement ids to probe). The Requirement column carries the phase's locked dec
 | 74-06-01 | 06 | 4 | D-74-11 | T-74-06-01 / T-74-06-02 / T-74-06-03 | No armed body is ever deployed; only the two changed workflows ship | committed-body assertion + live read-back | `node -e "const a=require('./n8n/wf_contact_ingest_cloud.json'),b=require('./n8n/wf_enrichment_cloud.json');const flagRe=/const\s+(ALLOW_HUBSPOT_[A-Z_]+\|ALLOW_N8N_[A-Z_]+)\s*=\s*(\"[^\"]*\"\|true\|false)\s*;/g;const bad=[];for(const wf of[a,b])for(const n of wf.nodes){const code=(n.parameters\|\|{}).jsCode;if(typeof code!=='string')continue;let m;flagRe.lastIndex=0;while((m=flagRe.exec(code))){if(m[2]!=='\"false\"')bad.push(n.name+': '+m[1]+'='+m[2]);}}if(bad.length){console.error('armed literal',bad);process.exit(1)}console.log('every ALLOW_HUBSPOT_*/ALLOW_N8N_* declaration reads false in both committed bodies')"` (corrected from the plan's original loose regex — see `74-UAT.md` Task 1 "false-positive" note: the original `/ALLOW_(HUBSPOT\|N8N)/` + `/=\s*true/` co-occurrence check has no declaration-scoping and flagged an unrelated `row.lookup_failed === true` comparison in `Decide Action`; this declaration-scoped form was independently cross-checked against `bounce_n8n_workflows.py`'s own `_flag_values()` live read-back, which agrees) | ✅ | ✅ green |
 | 74-06-02 | 06 | 4 | D-74-11 | T-74-06-04 / T-74-06-05 / T-74-06-07 | Proof runData reaches git only through the widened scrubber; the send spends nothing | guard + live read-back | `node --test tests/n8n/frozenFixtureSecrets.test.mjs tests/n8n/walkerEngineFidelityV1.test.mjs tests/n8n/v1RuntimeRecordings.test.mjs` | ✅ | ✅ green (13/13, incl. the two new exec_12676/exec_12677 fixtures) |
 | 74-06-03 | 06 | 4 | D-74-12, D-74-13 | T-74-06-06 | No open question is closed on a phase-id match; the release names every behaviour change | full suites + triage | `.venv/bin/python scripts/todo_triage.py && .venv/bin/python -m pytest -q --tb=short -p no:cacheprovider && node --test tests/n8n/*.test.mjs` | ✅ | ✅ green (pytest 5170 passed/160 skipped; node 1321/1321; todo_triage 0 untriaged) |
-| 74-06-04 | 06 | 4 | D-74-11 | T-74-06-01 / T-74-06-03 | Human confirms the execution ceiling held and nothing is armed | manual (checkpoint:human-verify) | manual — see Manual-Only Verifications | n/a | ⬜ pending (operator confirmation) |
+| 74-06-04 | 06 | 4 | D-74-11 | T-74-06-01 / T-74-06-03 | Human confirms the execution ceiling held and nothing is armed | manual (checkpoint:human-verify) | manual — see Manual-Only Verifications | n/a | ✅ confirmed (operator replied "confirmed" 2026-09-19; `74-UAT.md` § Operator confirmation; six items independently re-checked read-only by the orchestrator) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -101,7 +101,29 @@ No framework install, no conftest change, no new runner.
 - [x] Wave 0 covers all MISSING references (none — the two new artifacts are created in-phase)
 - [x] No watch-mode flags
 - [x] Feedback latency < 60s (pytest ~36 s, node ~9 s; per-task commands are subsets)
-- [ ] `nyquist_compliant: true` set in frontmatter — set by `/gsd-validate-phase`, not by the
-      planner
+- [x] `nyquist_compliant: true` set in frontmatter — set by `/gsd-validate-phase` 2026-09-19
 
-**Approval:** pending
+**Approval:** validated 2026-09-19
+
+---
+
+## Validation Audit 2026-09-19
+
+| Metric | Count |
+|--------|-------|
+| Tasks mapped | 19 |
+| Automated, green | 18 |
+| Manual-only | 1 (74-06-04, operator-confirmed 2026-09-19) |
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+Audit method (State A): every per-task command is a subset of the full-suite command, which
+was re-run green four times by the execute-phase post-merge gate (final: pytest 5170 passed /
+160 skipped, node 1321 pass / 0 fail) and once more by the phase verifier; the two non-suite
+commands (74-06-01's declaration-scoped flag assertion, 74-06-03's `todo_triage.py`) and the
+regeneration-idempotence check (`build_cloud_workflows.py && git diff --quiet -- n8n/`) were
+re-run directly by the orchestrator during this audit, all green. No MISSING or PARTIAL
+requirement; the single manual-only behaviour (the live execution ceiling and disarmed state,
+D-74-11) is by design unautomatable offline and is closed by the operator's recorded
+confirmation. No test file generated; no auditor spawned.
