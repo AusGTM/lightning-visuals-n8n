@@ -632,7 +632,7 @@ reason each. Regenerate JSON, suites green, disarmed deploy is the operator's st
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on decisions D-74-01..D-74-14 and the
 `73-REVIEW.md` finding ids CR-01..04 / WR-01..12.
 **Depends on:** Phase 73
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -643,7 +643,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 74-04-PLAN.md — D-74-03 walker pads output 0 only + WR-08 JSDoc, D-74-14 enrichment research-error branch, §13.0.3 rows, D-74-12 MN-01 search (wave 2)
+- [x] 74-04-PLAN.md — D-74-03 walker pads output 0 only + WR-08 JSDoc, D-74-14 enrichment research-error branch, §13.0.3 rows, D-74-12 MN-01 search (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
