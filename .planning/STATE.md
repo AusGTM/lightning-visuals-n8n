@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: "73.1"
-current_phase_name: Provider-backed contact discovery as source tier 2 (INSERTED)
-status: executing
-stopped_at: Completed 73.1-11-PLAN.md
-last_updated: "2026-09-18T13:58:11.547Z"
-last_activity: 2026-09-18
-last_activity_desc: Phase 73.1 execution started
-state_head: f6bd41a788e37e7ebe53d4d9a1345a226addf929
+current_phase: 74
+current_phase_name: Code-review follow-ups from phase 73
+status: planning
+stopped_at: Phase 73.1 complete, ready to plan Phase 74
+last_updated: "2026-09-19T02:29:46.887Z"
+last_activity: 2026-09-19
+last_activity_desc: Phase 73.1 complete, transitioned to Phase 74
+state_head: 8d559e2de58676f4e0164325e2f533146a31403f
 progress:
   total_phases: 12
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 67
   completed_plans: 67
-  percent: 17
+  percent: 25
 ---
 
 # Project State
@@ -358,10 +358,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 73.1 (Provider-backed contact discovery as source tier 2 (INSERTED)) — EXECUTING
-Plan: 3 of 11
-Status: Ready to execute
-Last activity: 2026-09-18 — Phase 73.1 execution started
+Phase: 74 — Code-review follow-ups from phase 73
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-19 — Phase 73.1 complete, transitioned to Phase 74
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██░░░░░░░░] 17% — every phase on disk complete (49/49 plans across the roadmap's tracked phases; Phase 72 closed 2026-09-13 with 8 plans + 4 gap-closure plans, verification `passed` 22/22). `roadmap_complete` true; no next phase exists — the next step is `/gsd-complete-milestone` or a new phase. (Superseded: the `33% — v1.1 (phases 53–63)` bar below, retained as history.)
+Progress: [████████████████████] 67/67 plans (100%)
 
 Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-18T13:57:50.602Z
-**Stopped at:** Completed 73.1-11-PLAN.md
+**Last session:** 2026-09-19T02:31:05Z
+**Stopped at:** Phase 73.1 complete, ready to plan Phase 74
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -1056,6 +1056,12 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase ?]: 49-06: Domain-based arming fails for existing records whose stored domain carries a prefix n8n's search normalization strips -- use --ids + a bare event (fetch-by-id lane) instead.
 - [Phase ?]: Phase 49 Plan 07: D-11 Artifact deferral resolved -- orchestrator published https://claude.ai/code/artifact/2ac2d25f-586c-4123-9c23-2e6cc7634d2b, operator approved 2026-08-13; Phase 46-03's carried-forward D-09 discharged through the same publish event, not re-deferred
 
+- [Phase 73.1]: D-12 — discovery lane searches ZoomInfo only; Apollo/Lusha dropped from search, untouched on stage-2 enrich (measured live, rounds 2-4)
+- [Phase 73.1]: D-11/D-11a closed live on execution 12671 (rung-1 200, 5 real people, titles_used 9 / dropped 0); the 400 on 12670 was n8n's URL-embedded query string — pagination now rides the httpRequest `qs` option
+- [Phase 73.1]: CR-01 — one ZoomInfo mint per round (`executeOnce` + `combineAll` carry merge) observed live on execution 12675 with two gap companies both at 200
+- [Phase 73.1]: D-11b RULED 2026-09-19 — classifier gate stays; negative token `assistant` added to `role_classify.classify_title` (plugin 0.51.2)
+- [Phase 73.1]: COVERAGE.md normalised for the api-coverage gate and rewritten to the D-12 outcome (bare INTEGRATE/OPT-OUT cells, reasons under 200 chars)
+
 ### Blockers
 
 open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met its own scope; see WINDOWS.md id 5 and Decisions above).
@@ -1064,6 +1070,8 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 - lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
 - Open UAT item: 70-02 Task 2's disarmed Merge-semantics probe (Gate 1, deferred per operator ruling 2026-09-09) must be exercised in the end-of-phase UAT — see .planning/phases/70-one-merge-one-result-channel-n8n-runtime-truth/70-DEFERRED-GATES.md.
+- [Phase 73.1] Enrich-lane ZoomInfo token cache: a later mint invalidates the earlier token, so `_zoom_split_gate_js`'s 24h cross-execution cache can be killed mid-lifetime by any other mint — `kind: design` todo `2026-09-18-zoominfo-mint-invalidates-prior-token-enrich-lane-cache-risk.md`, operator decision needed; any option (b) must mirror BOTH the cache-free gate AND `executeOnce`+`combineAll`.
+- [Phase 73.1] Operator-owned residuals from `73.1-SECURITY.md` Unregistered Flags: nine real people's names in `73.1-UAT.md`/`73.1-11-SUMMARY.md` (redact or accept as public-role data); `n8n_api_key`/`webhook_secret` rotation not yet confirmed in any artifact.
 - ~~F72-1~~ CLOSED 2026-09-13 by gap plan 72-09 (`CANDIDATE_ALIASES`), proven live on contact `352522004980` / execution `12414`. Residual closed 2026-09-15: DELETE of `352522004980` returned `204`.
 
 ### Quick Tasks Completed
@@ -1150,7 +1158,10 @@ across the next plugin update — it fails silently, which is the dangerous dire
 ## Operator Next Steps
 
 - ~~Confirm the restorable DELETE of UAT contact `352522004980`~~ done 2026-09-15 (`204`).
-- Phase 72 was the last roadmap phase: run `/gsd-complete-milestone`, or add a new phase with `/gsd-add-phase`.
+- ~~Phase 72 was the last roadmap phase~~ superseded: Phase 73.1 inserted and completed 2026-09-19; Phase 74 (code-review follow-ups from phase 73) is next and has no CONTEXT.md yet.
+- Rule on the enrich-lane token-cache design todo (see Blockers) before any plan touches `_zoom_split_gate_js`.
+- Decide on the real names in `73.1-UAT.md`/`73.1-11-SUMMARY.md`; confirm `n8n_api_key`/`webhook_secret` rotation.
+- Plugin 0.51.2 is cut on master but NOT pushed and the marketplace clone is NOT refreshed (release trap: bump + push + refresh + restart before the next live round).
 
 ## Deferred Items
 

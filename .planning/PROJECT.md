@@ -9,7 +9,20 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
-## Current State (as of 2026-09-13)
+## Current State (as of 2026-09-19)
+
+**Phase 73.1 — Provider-backed contact discovery as source tier 2: COMPLETE 2026-09-19** (9 plans
++ 2 gap-closure plans, verification 31/31, UAT 2/2, security 61/61 closed, Nyquist-compliant). A
+sixth cloud workflow, `LV Suggest Discovery (Cloud template)` (`VJJBZ2oJ0079MSzG`, 26 nodes,
+read-only, zero HubSpot nodes, nothing to arm), answers "who works at this company?" for a
+`gap: true` company by searching ZoomInfo's `/gtm/data/v1/contacts/search` with a role-family
+title filter. ZoomInfo is the only search provider by operator ruling D-12 (Apollo obfuscates the
+surname on preview, Lusha returns no name or title and bills 1 credit per request). Live-proven
+on executions `12671` (5 named Tennis Australia executives) and `12675` (two gap companies in one
+round, one token mint — the CR-01 fix `executeOnce` + `combineAll` observed live). D-11b ruled:
+the plugin's `classify_title` still gates every provider hit and now vetoes on the negative token
+`assistant`. Plugin 0.51.2. Open: enrich-lane token-cache design todo (a later ZoomInfo mint
+invalidates the earlier token), real names in two planning docs, credential rotation.
 
 **Phase 72 — Enrichment extras land in HubSpot: COMPLETE 2026-09-13** (8 plans + 4 gap-closure
 plans, 23+3 operator decisions, verification 22/22). Every field the waterfall pays for now reaches
@@ -258,6 +271,10 @@ archived at the v1.1 close and a fresh one is written by the next `/gsd-new-mile
 
 ### Validated
 
+- ✓ **Provider-backed contact discovery as source tier 2** — Phase 73.1 (2026-09-19). A company
+  with no people on it can be asked of ZoomInfo directly, by role family, before the website
+  crawl; the lane is read-only and mints its own token per execution. Live-proven on executions
+  `12671` and `12675`.
 - ✓ **Unattended session runs** — v1.1. An operator opens a bounded, revocable write grant in
   conversation; a batch is refused before it starts if it cannot afford its own ceiling; every
   run leaves a durable account of what landed; unconfident rows are held rather than guessed.
@@ -378,6 +395,9 @@ Requirements are defined by `/gsd-new-milestone`. The candidate scope carried ou
 | **(Phase 72, 2026-09-12)** Provider-named `source_by_field` fields get provider-grade confidence (85) on the ingest lane; CSV-typed stay 80 (D-72-22) | The flat csv/80 could never clear `fill_blank_only@85` for mobile or LinkedIn even into a blank; no `min_confidence` moved (SAFE-01) | Shipped 72-01; the key-rename miss it left (F72-1) closed by `CANDIDATE_ALIASES` in 72-09 |
 | **(Phase 72, 2026-09-12)** Overflow-slot properties created live in plan 05, not the end-of-phase gate (D-72-23) | The BUG-14 schema-coverage guard correctly refuses JSON that references a property the portal does not hold; declare-now/create-later was novel and broke plan 06 | Shipped; undo-manifest `481a5c99` |
 | **(Phase 72, 2026-09-13)** Identity fields on a matched UPDATE row are CRM-owned; a mobile duplicating `phone` is acceptable; the second-email fallback is pinned offline (D-72-24..26) | No live dual-email case exists to spend credits on; a spreadsheet must not rename an existing person; `fill_blank_only` behaved | Recorded; phase verification passed 22/22 |
+| **(Phase 73.1, 2026-09-18)** The discovery lane searches ZoomInfo only (D-12); Apollo and Lusha stay on stage-2 enrich | Measured live: only ZoomInfo's search preview carries a real name and title at 0 credits; Apollo obfuscates the surname; Lusha bills 1 credit per request for IDs only | Shipped; `73.1-D12-VERDICT.json` |
+| **(Phase 73.1, 2026-09-19)** The discovery lane mints a ZoomInfo token per execution, exactly once per round (`executeOnce` + `combineAll`), never from a cross-run cache | A later mint invalidates the earlier token outright (`73.1-TOKEN-REPLAY-VERDICT.json`); a cached token 401'd on executions 12668/12669 and a per-item mint would have 401'd every gap company but the last (CR-01) | Observed live on execution 12675; enrich-lane cache decision open as a `kind: design` todo |
+| **(Phase 73.1, 2026-09-19)** `classify_title` keeps gating every provider hit and vetoes on the negative token `assistant` (D-11b RULED) | ZoomInfo's title filter is substring-loose — 2 of 4 AFL hits under a CEO filter were assistants, and longest-wins alone classified one as the CEO's family | Shipped, plugin 0.51.2 |
 
 ## Risks & Open Items
 
@@ -426,7 +446,8 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-02 — current-state refresh: Phase 57 complete (2026-09-01), Phase 62
+*Last updated: 2026-09-19 after Phase 73.1 (provider-backed contact discovery complete; three
+decisions logged). Previously: 2026-09-02 — current-state refresh: Phase 57 complete (2026-09-01), Phase 62
 executed but not complete (verification `human_needed`, UAT partial), Phase 63 numbered and
 unplanned; v1.1 still in flight, first live unattended credit-spending batch still has not run.
 Previously updated 2026-08-30 after Phase 61 closed. Before that, 2026-08-11 after the v0.8

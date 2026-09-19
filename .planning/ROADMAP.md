@@ -66,7 +66,7 @@ carrying its live evidence.
 - [x] Phase 71: A held new person lands in HubSpot with one reply (added 2026-09-12 after quick batch 260911-w6n) (completed 2026-09-12)
 - [x] Phase 72: Enrichment extras land in HubSpot (added 2026-09-12 after Phase 71 F71-5; 8 plans + 4 gap-closure plans) (completed 2026-09-13)
 - [x] Phase 73: GA fix list from stress attempt 2 (added 2026-09-15 after stress attempt 2; 7 plans; attempt 3 A–F PASS) (completed 2026-09-18)
-- [ ] Phase 73.1: Provider-backed contact discovery as source tier 2 (inserted 2026-09-18 by operator ruling; runs before 74)
+- [x] Phase 73.1: Provider-backed contact discovery as source tier 2 (inserted 2026-09-18 by operator ruling; runs before 74) (completed 2026-09-19)
 - [ ] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
@@ -577,7 +577,7 @@ Out of scope: crawling LinkedIn (blocked, ToS); following a 301 to a different h
 refusal per D-62-03); changing the email-domain partition rule.
 **Requirements**: TBD — plans are keyed on `73.1-CONTEXT.md` decision ids (D-01 … D-16d) instead
 **Depends on:** Phase 73
-**Plans:** 11/11 plans executed (9 executed; 2 gap-closure plans added 2026-09-18 after `73.1-VERIFICATION.md` reported `gaps_found` on D-11 and D-11a)
+**Plans:** 11/11 plans complete
 
 Plans:
 **Wave 1** *(four parallel plans, no file overlap)*
