@@ -908,6 +908,80 @@ def test_the_contacts_provenance_property_behaves_exactly_like_the_companies_one
     assert result["mismatched"] == []
 
 
+# --- WR-09: leg 1 tests presence before value equality ---------------------------------
+#
+# `_as_hubspot_text(None) -> ""` is deliberately kept for leg 2 (a HubSpot read genuinely
+# omits a blank property), but that reasoning does not hold for leg 1: `would_write` is a
+# patch the backend itself COMPOSED, not a HubSpot read, so a key silently missing from it
+# is a real divergence from the approved patch, not a storage artefact.
+
+
+def test_leg1_flags_a_key_absent_from_the_backends_patch_even_when_both_sides_normalise_empty():
+    """The de-queue clear case (WR-09): lv_enrichment_review_reason was approved as the
+    empty string, but the backend's own submit-time patch never mentions it at all.
+    Before the fix, _as_hubspot_text(None) == _as_hubspot_text("") hid this as
+    agreement."""
+    intended = dict(APPROVE_WRITE, lv_enrichment_review_reason="")
+    would_write = dict(APPROVE_WRITE)  # never sent this key
+    response = {
+        "available": True, "outcome": "applied", "message": "m",
+        "would_write": would_write,
+        "verified_properties": dict(would_write), "verified": True,
+    }
+
+    result = review_decision.verify_decision(intended, response)
+
+    assert result["status"] == "failed"
+    assert "lv_enrichment_review_reason" in result["mismatched"]
+    assert "absent" in result["message"]
+
+
+def test_leg1_does_not_flag_a_key_present_in_both_with_equal_normalised_values():
+    intended = dict(APPROVE_WRITE, lv_enrichment_needs_review=False)
+    would_write = dict(APPROVE_WRITE, lv_enrichment_needs_review="false")
+    response = {
+        "available": True, "outcome": "applied", "message": "m",
+        "would_write": would_write,
+        "verified_properties": dict(would_write), "verified": True,
+    }
+
+    result = review_decision.verify_decision(intended, response)
+
+    assert result["status"] == "verified"
+    assert "lv_enrichment_needs_review" not in result["mismatched"]
+
+
+def test_leg1_still_flags_a_key_present_in_both_with_a_genuinely_different_value():
+    intended = dict(APPROVE_WRITE, lv_org_type="governing_body_league")
+    would_write = dict(APPROVE_WRITE, lv_org_type="broadcaster")
+    response = {
+        "available": True, "outcome": "applied", "message": "m",
+        "would_write": would_write,
+        "verified_properties": dict(would_write), "verified": True,
+    }
+
+    result = review_decision.verify_decision(intended, response)
+
+    assert result["status"] == "failed"
+    assert "lv_org_type" in result["mismatched"]
+    assert "differs" in result["message"]
+
+
+def test_leg1_never_reports_a_key_absent_from_both_sides():
+    intended = dict(APPROVE_WRITE)
+    would_write = dict(APPROVE_WRITE)
+    response = {
+        "available": True, "outcome": "applied", "message": "m",
+        "would_write": would_write,
+        "verified_properties": dict(would_write), "verified": True,
+    }
+
+    result = review_decision.verify_decision(intended, response)
+
+    assert result["status"] == "verified"
+    assert "lv_some_key_neither_side_mentions" not in result["mismatched"]
+
+
 # --- nothing persists ----------------------------------------------------------------
 
 def test_no_module_level_state_persists_an_arm_between_two_calls(
