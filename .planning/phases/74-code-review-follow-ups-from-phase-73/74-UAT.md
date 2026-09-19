@@ -4,7 +4,6 @@ plan: 06
 status: testing
 created: 2026-09-19
 ---
-
 # Phase 74 Plan 06 — UAT Addendum
 
 End-of-phase live gate per D-74-11 (amended): two scoped disarmed deploys, one bounce, two
@@ -20,12 +19,13 @@ Both calls made through an in-process dotenv scratchpad driver
 A dry-run (`DRY_RUN` unset) preceded each live call and reported the identical single-workflow
 diff, confirming the scoped `--only` argument narrows correctly before any write.
 
-| Call | `--only` file | Workflows to create | Workflows to update | Result |
-|---|---|---|---|---|
-| 1 (dry) | `wf_contact_ingest_cloud.json` | `[]` | `['LV Contact Ingest (Cloud template)']` | DRY RUN, `deploy_rc=0` |
-| 1 (live) | `wf_contact_ingest_cloud.json` | `[]` | `['LV Contact Ingest (Cloud template)']` | `updated workflow LV Contact Ingest (Cloud template) (200)`, `deploy_rc=0` |
-| 2 (dry) | `wf_enrichment_cloud.json` | `[]` | `['LV Enrichment (Cloud template)']` | DRY RUN, `deploy_rc=0` |
-| 2 (live) | `wf_enrichment_cloud.json` | `[]` | `['LV Enrichment (Cloud template)']` | `updated workflow LV Enrichment (Cloud template) (200)`, `deploy_rc=0` |
+
+| Call     | `--only` file                  | Workflows to create | Workflows to update                      | Result                                                                     |
+| ---------- | -------------------------------- | --------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| 1 (dry)  | `wf_contact_ingest_cloud.json` | `[]`                | `['LV Contact Ingest (Cloud template)']` | DRY RUN,`deploy_rc=0`                                                      |
+| 1 (live) | `wf_contact_ingest_cloud.json` | `[]`                | `['LV Contact Ingest (Cloud template)']` | `updated workflow LV Contact Ingest (Cloud template) (200)`, `deploy_rc=0` |
+| 2 (dry)  | `wf_enrichment_cloud.json`     | `[]`                | `['LV Enrichment (Cloud template)']`     | DRY RUN,`deploy_rc=0`                                                      |
+| 2 (live) | `wf_enrichment_cloud.json`     | `[]`                | `['LV Enrichment (Cloud template)']`     | `updated workflow LV Enrichment (Cloud template) (200)`, `deploy_rc=0`     |
 
 **Only these two workflows were deployed.** Neither call's create/update list ever named
 `LV Backend Status (Cloud template)`, `LV Review Decision (Cloud)`,
@@ -33,16 +33,18 @@ diff, confirming the scoped `--only` argument narrows correctly before any write
 cloud workflows are untouched by this plan.
 
 ### Bounce + read-back (one bounce call, per D-74-11's amended text; covers all six per
+
 `bounce_n8n_workflows.py`'s own design — deactivate/activate never alters node body content)
 
-| workflow | id | active | live nodes | committed nodes | write flags | execution order |
-|---|---|---|---|---|---|---|
-| LV Backend Status (Cloud template) | `Cj83mOgrIm59oxcX` | True | 33 | 33 | (none declared) | v1 |
-| LV Contact Ingest (Cloud template) | `AwbBeShdPgV48eiY` | True | 101 | 101 | RECORD_WRITES=[false], CREATE=[false] | v1 |
-| LV Enrichment (Cloud template) | `950HPb7a1GgSAIyZ` | True | 289 | 289 | RECORD_WRITES=[false], CREATE=[false] | v1 |
-| LV Review Decision (Cloud) | `WBJwoZOo63wzeP69` | True | 55 | 55 | RECORD_WRITES=[false], CREATE=[false] | v1 |
-| LV Scheduled Maintenance (Cloud) | `1fXPuIabz3RsAHgn` | True | 43 | 43 | RECORD_WRITES=[false], CREATE=[false] | v1 |
-| LV Suggest Discovery (Cloud template) | `VJJBZ2oJ0079MSzG` | True | 26 | 26 | (none declared) | v1 |
+
+| workflow                              | id                 | active | live nodes | committed nodes | write flags                           | execution order |
+| --------------------------------------- | -------------------- | -------- | ------------ | ----------------- | --------------------------------------- | ----------------- |
+| LV Backend Status (Cloud template)    | `Cj83mOgrIm59oxcX` | True   | 33         | 33              | (none declared)                       | v1              |
+| LV Contact Ingest (Cloud template)    | `AwbBeShdPgV48eiY` | True   | 101        | 101             | RECORD_WRITES=[false], CREATE=[false] | v1              |
+| LV Enrichment (Cloud template)        | `950HPb7a1GgSAIyZ` | True   | 289        | 289             | RECORD_WRITES=[false], CREATE=[false] | v1              |
+| LV Review Decision (Cloud)            | `WBJwoZOo63wzeP69` | True   | 55         | 55              | RECORD_WRITES=[false], CREATE=[false] | v1              |
+| LV Scheduled Maintenance (Cloud)      | `1fXPuIabz3RsAHgn` | True   | 43         | 43              | RECORD_WRITES=[false], CREATE=[false] | v1              |
+| LV Suggest Discovery (Cloud template) | `VJJBZ2oJ0079MSzG` | True   | 26         | 26              | (none declared)                       | v1              |
 
 `bounce_n8n_workflows.py`'s own row-verdict: **"OK — all active, node counts match, write flags
 false, execution order v1."** `bounce_rc=0`.
@@ -54,11 +56,13 @@ Live node counts equal the committed generated counts recorded in `74-04-SUMMARY
 ### Burst watch (post-bounce)
 
 Baseline (immediately before the bounce, `list-executions`):
+
 - Ingest (`AwbBeShdPgV48eiY`) max execution id: `12663` (2026-09-18)
 - Enrichment (`950HPb7a1GgSAIyZ`) max execution id: `12662` (2026-09-18)
 
 Re-checked after the bounce, following a 125-second background sleep plus the additional wall
 time spent on Task 1's write-up and verification work (well over two minutes elapsed total):
+
 - Ingest max execution id: **still `12663`** — no new execution.
 - Enrichment max execution id: **still `12662`** — no new execution.
 
@@ -72,6 +76,7 @@ Task 1's `<automated>` verify command greps each committed body's full stringifi
 SAME node, not scoped to the same declaration. It flagged the ingest workflow's `Decide Action`
 node as an "armed literal". Manual inspection of that node's `jsCode` shows the two matches are
 unrelated:
+
 - `ALLOW_HUBSPOT_CREATE` appears once, in its own disarmed declaration:
   `const ALLOW_HUBSPOT_CREATE = "false";`
 - The `=\s*true` match is `row.lookup_failed === true` — an identity-lookup comparison with no
@@ -119,8 +124,7 @@ execution):**
 
 - `Ingest Merge Response` (6 declared input slots) **fired once**, with `source` showing
   exactly one delivery per input index: index 0 `Decide Action Snapshot` (the 3 real rows),
-  index 1 `Set Review` (0 items — no review-routed rows), index 2 `Associate Lane Sentinel
-  Gate` (association lane unreached — refused before any association attempt), index 3
+  index 1 `Set Review` (0 items — no review-routed rows), index 2 `Associate Lane Sentinel Gate` (association lane unreached — refused before any association attempt), index 3
   `HubSpot Update Refusal Pass-Through` (the 3 `write_blocked` update refusals), index 4
   `HubSpot Create Gate Unreached Sentinel Gate` (create lane never reached — zero create rows),
   index 5 `Create Failure Row Sentinel Gate` (the D-74-02 sentinel: fired because the
@@ -134,11 +138,8 @@ execution):**
 **A documented divergence from D-74-11's literal wording ("confirm the create carry merge
 fires once"), corrected on re-review (the sentinel attribution below was wrong in this
 document's first cut — `Create Carry Merge`'s own consumer chain and `Ingest Merge Response`
-input 5 are covered by TWO DIFFERENT sentinels, not one):** the node literally named `Create
-Carry Merge` **did not run at all** in this execution — it has zero entries in `runData`.
-Tracing why: its three declared producer inputs (`HubSpot Create` output 0, `HubSpot Create
-Permitted Pass-Through`, `Create Error Stamp`) are all downstream of `HubSpot Create Write Gate
-IF`, which itself never ran because the whole create branch received **zero items** upstream
+input 5 are covered by TWO DIFFERENT sentinels, not one):** the node literally named `Create Carry Merge` **did not run at all** in this execution — it has zero entries in `runData`.
+Tracing why: its three declared producer inputs (`HubSpot Create` output 0, `HubSpot Create Permitted Pass-Through`, `Create Error Stamp`) are all downstream of `HubSpot Create Write Gate IF`, which itself never ran because the whole create branch received **zero items** upstream
 (an all-update batch routes 0 rows down the create lane) — per the platform fact already
 recorded in CLAUDE.md §13.0.3 ("a node fed zero items does not run at all, and so contributes
 no delivery to anything it feeds"), `Create Carry Merge` never received ANY delivery on any of
@@ -190,19 +191,15 @@ enrichment send's double-fire analysis below for the full trace.
 - **Ack:** `{"run_id": "5d84ca096fe24cac869b49bbebfe46d0", "accepted": true, "row_ids": []}`
 
 **Zero provider/Anthropic spend — proven from the node list, not assumed.** The full list of
-64 nodes that ran contains **no** `ZoomInfo Mint Company`, `Apollo Org`, `Lusha Company`,
-`Claude Web Research`, or `Judge Call` — only the three credit-skip nodes (`Apollo Credit
-Skipped`, `Lusha Credit Skipped`, `ZoomInfo Credit Skipped`), which are bypass markers, not
-provider calls. **Positive half (the intended lane was actually taken):** `IF Company
-Recompute` ran and its true-branch pass-through (`IF Company Recompute -> Decide Company
-Action Merge Pass-Through`) ran, routing straight to `Decide Company Action` — bypassing the
+71 nodes that ran (counted from `tests/n8n/fixtures/frozen/exec_12677.runData.json`'s own
+`runData` key count) contains **no** `ZoomInfo Mint Company`, `Apollo Org`, `Lusha Company`,
+`Claude Web Research`, or `Judge Call` — only the three credit-skip nodes (`Apollo Credit Skipped`, `Lusha Credit Skipped`, `ZoomInfo Credit Skipped`), which are bypass markers, not
+provider calls. **Positive half (the intended lane was actually taken):** `IF Company Recompute` ran and its true-branch pass-through (`IF Company Recompute -> Decide Company Action Merge Pass-Through`) ran, routing straight to `Decide Company Action` — bypassing the
 entire provider waterfall.
 
-**Response merge stages converged.** `Build Response Merge Stage 1` (1 run, 6 items), `Build
-Response Merge Stage 3` (1 run, 2 items), `Filter Build Response Rows` (2 runs — see below),
+**Response merge stages converged.** `Build Response Merge Stage 1` (1 run, 6 items), `Build Response Merge Stage 3` (1 run, 2 items), `Filter Build Response Rows` (2 runs — see below),
 and `Build Response` (1 run, **exactly 1 item** — the single company sent) all completed.
-`HubSpot Company Update Write Gate` refused the write (disarmed), routing through `HubSpot
-Company Update All Refused Sentinel` rather than the real `HubSpot Company Update` node (which
+`HubSpot Company Update Write Gate` refused the write (disarmed), routing through `HubSpot Company Update All Refused Sentinel` rather than the real `HubSpot Company Update` node (which
 never ran — 0 credits, 0 writes, matching the post-send re-read below).
 
 **A double-fire on two Merge nodes — the ALREADY-DOCUMENTED v1 pattern, not a new one.**
@@ -211,8 +208,7 @@ never ran — 0 credits, 0 writes, matching the post-send re-read below).
 each is a genuine full completion (every declared input delivered from its real producer in
 one pass); run 1 on each has **exactly one** input filled (by `Build Response Merge Stage 2`'s
 own second run, and by `Recompute Requested Sentinel Gate` respectively) with every other
-input `null` — the same shape CLAUDE.md §13.0.3 already records for `Decide Company Action
-Merge`'s Gate-11 double-fire (a v1 end-of-run drain firing on a single arrived input,
+input `null` — the same shape CLAUDE.md §13.0.3 already records for `Decide Company Action Merge`'s Gate-11 double-fire (a v1 end-of-run drain firing on a single arrived input,
 `requiredInputs: 1` under `append` mode). This execution's own `Decide Company Action Merge`
 shows the identical pattern in miniature: it ran once with both its 2 inputs filled together
 (`IF Company Recompute -> ... Pass-Through` and `Recompute Requested Sentinel Gate`, both
@@ -220,8 +216,7 @@ delivering in the SAME run because `Recompute Requested Sentinel Gate`'s single 
 to multiple consumers simultaneously). **`Filter Build Response Rows` ran twice
 (`item_counts=[1, 0]`)** — its second run correctly emitted **zero** items, so the drained
 marker from `Build Response Merge`'s second run never reaches `Build Response` a second time.
-**No undrained pending run, no row lost, no phantom row in the final response** (`Build
-Response` = 1 item, matching the 1 company sent).
+**No undrained pending run, no row lost, no phantom row in the final response** (`Build Response` = 1 item, matching the 1 company sent).
 
 **MN-01 (the folded todo) — reconfirmed, not resolved; correctly stays open.** This execution's
 double-fires are ANOTHER live instance of the walker's already-modelled "one full completion +
@@ -236,11 +231,11 @@ evidence reconfirms rather than contradicts the existing model).
 
 Both executions frozen via `scripts/freeze_execution_rundata.py 12676 12677` (its own
 `load_dotenv()`, no scratchpad driver needed for this read-only step):
+
 - `tests/n8n/fixtures/frozen/exec_12676.runData.json`
 - `tests/n8n/fixtures/frozen/exec_12677.runData.json`
 
-`node --test tests/n8n/frozenFixtureSecrets.test.mjs tests/n8n/walkerEngineFidelityV1.test.mjs
-tests/n8n/v1RuntimeRecordings.test.mjs` → **13/13 pass**, 0 fail. The D-74-09 guard's in-scope
+`node --test tests/n8n/frozenFixtureSecrets.test.mjs tests/n8n/walkerEngineFidelityV1.test.mjs tests/n8n/v1RuntimeRecordings.test.mjs` → **13/13 pass**, 0 fail. The D-74-09 guard's in-scope
 file count picked up both new files automatically (directory is read at test-load time); no raw
 item, header, or token value survived redaction (spot-checked: `headers` keys read the fixed
 placeholder string).
@@ -305,3 +300,51 @@ either send.
   commit rather than amending the commit that shipped the error, per this run's no-amend
   git-safety rule. Commit `fbe6491a`'s own message carries the original misattribution and is
   left as-is (git history is not rewritten); this file is the corrected record.
+
+## Task 4 — Operator confirmation
+
+**Operator replied "confirmed" on 2026-09-19.** Per the task's `<resume-signal>`, all six items
+from `<how-to-verify>` are confirmed:
+
+1. **Two execution ids, running total 2.** `12676` (ingest) and `12677` (enrichment) — exactly 2
+   for this plan.
+2. **Live node counts equal committed generated counts.** Ingest 101 = 101 (`74-05-SUMMARY.md`);
+   enrichment 289 = 289 (`74-04-SUMMARY.md`).
+3. **Write-safety flags read false after both sends.** `ALLOW_HUBSPOT_RECORD_WRITES=['false']`,
+   `ALLOW_HUBSPOT_CREATE=['false']` on both live bodies, unchanged from the pre-send read.
+4. **Only two workflows deployed.** Neither deploy call's create/update list ever named the
+   other four cloud workflows (Task 1's deploy table).
+5. **No HubSpot record created or updated by either send.** Melbourne Racing Club
+   (`9604614548`) re-read byte-identical after the send; the three ingest contacts all returned
+   `write_blocked`.
+6. **Research-error branch not exercised live, stays documented-only.** The recompute lane
+   bypassed the entire provider/research path by design; `IF Research Errored` /
+   `Companies Research Errored Sentinel` (D-74-14) never ran.
+
+**Independent re-verification (read-only, 2026-09-19, performed by the orchestrator after the
+checkpoint was returned, before the operator's "confirmed" reply) — cited here as corroborating
+evidence, not a substitute for the operator's own confirmation:**
+
+- **Item 1:** instance-wide execution list, ids > 12663 (the pre-Task-1 baseline) on 2026-09-19:
+  only `12676` (ingest, 10:00:09Z) and `12677` (enrichment, 10:02:13Z); nothing after 12677.
+  Total exactly 2.
+- **Item 2:** live node counts ingest 101 / enrichment 289 equal committed; node-name sets equal;
+  the other four workflows also equal committed (33/55/43/26).
+- **Item 3:** every `ALLOW_HUBSPOT_RECORD_WRITES` / `ALLOW_HUBSPOT_CREATE` /
+  `ALLOW_HUBSPOT_REVIEW_WRITES` declaration on both live bodies reads the `"false"` literal.
+- **Item 4:** only ingest (`updatedAt` 2026-09-19T09:54:45Z) and enrichment (09:54:58Z) changed
+  today; the other four workflows' `updatedAt` are 2026-09-18.
+- **Item 5:** contacts `701`/`951`/`901` `lastmodifieddate` 2026-09-07 / 2026-07-17 / 2026-09-18
+  — all before send 1; company `9604614548` `hs_lastmodifieddate` 2026-09-17T21:46Z — before
+  send 2; `lv_org_type`/`lv_icp_tier` unchanged. Frozen `12676`/`12677` runData contain no
+  `HubSpot Update`, `HubSpot Create`, or `HubSpot Company Update` run.
+- **Item 6:** frozen `12677` has no `IF Research Errored` / `Companies Research Errored Sentinel`
+  run and zero provider/judge/research nodes.
+- **Extras:** `node --test tests/n8n/frozenFixtureSecrets.test.mjs` 2 pass / 0 fail;
+  `plugin.json` carries `"version": "0.52.0"` once; CHANGELOG newest entry
+  `## [0.52.0] - 2026-09-19`.
+
+No secret, token, header, or credential value is reproduced above — only execution ids,
+timestamps, node counts, and property values already stated elsewhere in this document.
+
+**The plan is closed.**
