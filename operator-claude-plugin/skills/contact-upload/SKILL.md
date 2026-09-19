@@ -738,6 +738,7 @@ be sent, and — only when explicitly armed — send it.
     disk.
 
     For a file-path batch (step 2c ran), also delete `deduped_path` and `collapsed_path`
-    — step 2c's own outputs land beside whatever file step 2b handed it, not in the
-    scratch directory, so they are not covered by the paragraph above. Same end-of-batch
-    rule, dispatched or declined alike.
+    — step 2c's own outputs land beside whatever file it was given: the operator's own
+    file when step 2b wrote nothing, step 2b's scratch copy otherwise. Either way that is
+    not reliably the paragraph above's scratch directory, so it does not cover them. Same
+    end-of-batch rule, dispatched or declined alike.

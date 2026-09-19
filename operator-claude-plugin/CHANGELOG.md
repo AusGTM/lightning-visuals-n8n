@@ -21,10 +21,11 @@ over the same n8n system, so its version says nothing about backend capability.
 ### Changed
 - **`skills/contact-upload/SKILL.md` (WR-13): step 10's cleanup now names the dedupe
   artifacts step 2c writes.** WR-12 (`0.52.0`) moved `apply_dedupe`'s default output
-  location from the plugin's gitignored `scratch/` directory to beside the operator's own
-  input file, so `deduped_path` and `collapsed_path` land wherever that file lives — not
-  in `scratch/`, and not covered by step 10's existing "same scratch directory" sentence.
-  Nothing deleted them. Step 10 now says so explicitly for a file-path batch.
+  location from a fixed plugin-relative `scratch/` directory to beside whatever file it
+  is given — the operator's own input when step 2b wrote nothing, step 2b's scratch copy
+  otherwise. Either way, `deduped_path` and `collapsed_path` were not reliably covered by
+  step 10's existing "same scratch directory" sentence, and nothing deleted them. Step 10
+  now says so explicitly for a file-path batch.
 
 ## [0.52.0] - 2026-09-19
 
