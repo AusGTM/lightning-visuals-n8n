@@ -145,6 +145,102 @@ for (const id of EXECUTIONS) {
   });
 }
 
+// --- D-74-03 pin: execution 12522 (ingest lane, zero-rejection create batch) --------------
+//
+// Two-part pin, deliberately NOT a full 46-row graph replay of 12522 (unlike the
+// enrichment-lane family above, seeding this graph's real "Webhook Trigger" would require
+// reproducing the whole multipart request envelope column-mapping config drives on, not
+// just the extracted rows — out of scope for pinning one padding rule). Part 1 reads the
+// recording directly (no walk) for the raw shape 74-CONTEXT.md's D-74-01 citation records.
+// Part 2 drives the SAME committed graph with the corrected walker on a small synthetic
+// create-only batch (the same idiom ingestCreateErrorLane.test.mjs's "zero-rejection
+// batch" test already uses) and asserts the walker's OWN prediction agrees with the
+// recording on the three points D-74-03 is actually about: alwaysOutputData rescues output
+// 0 only, output 1 makes no delivery when empty, and the Merge drains exactly once.
+const INGEST_WF_PATH = path.join(HERE, "..", "..", "n8n", "wf_contact_ingest_cloud.json");
+
+test("execution 12522 (ingest lane, D-74-03): the RAW recording shows HubSpot Create " +
+  "outs [21, 0] and Create Carry Merge drains once with 42 items, input 2 absent", () => {
+  const recording = loadRecording(12522);
+  const rd = recording.runData;
+
+  assert.equal(rd["HubSpot Create"].length, 1, "HubSpot Create ran exactly once");
+  assert.deepEqual((rd["HubSpot Create"][0].data.main || []).map((b) => (b || []).length), [21, 0],
+    "output 0 (success) carries 21 items, output 1 (error) is empty — [VERIFIED live, " +
+    "74-CONTEXT.md D-74-01]");
+
+  assert.equal(rd["Create Carry Merge"].length, 1,
+    "Create Carry Merge fired exactly once — the v1 end-of-run drain, not the main loop " +
+    "(input 2 never delivered to complete it there)");
+  assert.equal(rd["Create Carry Merge"][0].data.main[0].length, 42,
+    "21 (HubSpot Create output 0) + 21 (Permitted Pass-Through) + 0 (output 1) = 42");
+
+  assert.equal(rd["Build Association Request Merge"][0].data.main[0].length, 22);
+  assert.equal(rd["Ingest Merge Response"].length, 1,
+    "Ingest Merge Response fired once with every input delivered or sentinel-covered");
+  assert.equal(rd["Build Ingest Response"][0].data.main[0].length, 46,
+    "every one of the 46 input rows returned exactly once");
+});
+
+test("execution 12522 (ingest lane, D-74-03): the corrected walker's own prediction for " +
+  "this same graph agrees — output 0 padded, output 1 makes no delivery, one drain run", () => {
+  const wf = JSON.parse(fs.readFileSync(INGEST_WF_PATH, "utf8"));
+  const decide = wf.nodes.find((n) => n.name === "Decide Action");
+  decide.parameters.jsCode = decide.parameters.jsCode.replace(
+    'const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
+  for (const name of ["HubSpot Create Write Gate", "Associate Lane Sentinel"]) {
+    const node = wf.nodes.find((n) => n.name === name);
+    node.parameters.jsCode = node.parameters.jsCode
+      .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+        'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+      .replace('const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";')
+      .replace('const TEST_RECORD_DOMAINS = "";', 'const TEST_RECORD_DOMAINS = "one.example,two.example";');
+  }
+  const items = [
+    { email: "one@one.example", firstname: "One", lastname: "Row", company: "One Co" },
+    { email: "two@two.example", firstname: "Two", lastname: "Row", company: "Two Co" },
+  ];
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: items,
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: items.map((r) => ({ email: r.email, status: "VALID" })) }],
+      "HubSpot Search by Email": items.map(() => ({ results: [] })),
+      "HubSpot Company Search by Domain": [
+        { results: [{ id: "1", properties: { domain: "one.example" } }] },
+        { results: [{ id: "2", properties: { domain: "two.example" } }] },
+      ],
+      "HubSpot Company Search by Name": items.map(() => ({ results: [] })),
+      "HubSpot Create": [
+        { id: "c1", properties: { email: "one@one.example" } },
+        { id: "c2", properties: { email: "two@two.example" } },
+      ],
+      "HubSpot Associate Company": (rows) => rows.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.equal(runData["HubSpot Create"].length, 1);
+  assert.equal(runData["HubSpot Create"][0].length, 2,
+    "output 0 (success) carries both real rows — matches the RECORDING'S own non-empty-" +
+    "output-0 shape, just at this test's own (smaller) scale");
+
+  assert.equal(runData["Create Carry Merge"].length, 1,
+    "Create Carry Merge fires exactly once — the same v1 end-of-run drain 12522 shows");
+  const mergeRuns = trace.merges["Create Carry Merge"].runs;
+  assert.equal(mergeRuns.length, 1);
+  assert.equal(mergeRuns[0].sources[2], undefined,
+    "input 2 (fed by HubSpot Create's error output) is UNFILLED — output 1 stayed empty " +
+    "and alwaysOutputData did not rescue it (D-74-03: rescues output 0 only, never " +
+    "whichever branch happens to be empty)");
+  assert.deepEqual(
+    trace.stalled.filter((s) => s.node === "Create Carry Merge"),
+    [{ node: "Create Carry Merge", reason: "merge_fired_with_unfilled_input",
+       run: 0, missingInputs: [2] }],
+    "the by-design D-70-23 shape on a zero-rejection batch — matches 12522's own shape, " +
+    "not a loss");
+  assert.deepEqual(starvedWithData(trace), [], "nothing was actually lost");
+});
+
 // MN-06 (quick task 260911-1z5): nothing kept the frozen v1 graph honest after the next
 // regeneration of n8n/wf_enrichment_cloud.json. One assertion, pinned as a digest, so a
 // future regeneration that silently diverges from what 12354/12355/12356 actually ran
