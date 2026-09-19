@@ -5,11 +5,12 @@ Uses the repo's real config/column_mapping.yaml as the mapping fixture, since D-
 requires the preview to mirror the backend's own alias table, not a hand-rolled one.
 """
 import csv
+import json
 from pathlib import Path
 
 import pytest
 
-from preview import build_preview, label_headers
+from preview import CollapsedBlockError, build_preview, label_headers, read_collapsed_block
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 REAL_MAPPING_PATH = REPO_ROOT / "config" / "column_mapping.yaml"
@@ -119,6 +120,45 @@ def test_build_preview_performs_no_network_call(sample_csv):
     # didn't.
     preview = build_preview(sample_csv, REAL_MAPPING_PATH)
     assert preview["row_count"] == 25
+
+
+# =====================================================================================
+# Phase 74 Plan 03 Task 2 — WR-04: the CLI's `--collapsed` sidecar read must fail loudly,
+# naming the path, when it was explicitly requested but could not be parsed — a swallowed
+# read renders `pre_collapse_row_count == row_count`, which reads exactly like "no
+# duplicates", the one case an operator most needs to be able to tell apart. Only the
+# case where `--collapsed` was never passed at all stays the silent absent-block path.
+# =====================================================================================
+
+
+def test_read_collapsed_block_returns_none_when_no_path_was_requested():
+    assert read_collapsed_block(None) is None
+    assert read_collapsed_block("") is None
+
+
+def test_read_collapsed_block_raises_naming_the_path_for_a_missing_file(tmp_path):
+    missing = tmp_path / "does-not-exist.json"
+
+    with pytest.raises(CollapsedBlockError) as excinfo:
+        read_collapsed_block(str(missing))
+    assert str(missing) in str(excinfo.value)
+
+
+def test_read_collapsed_block_raises_naming_the_path_on_invalid_json(tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(CollapsedBlockError) as excinfo:
+        read_collapsed_block(str(bad))
+    assert str(bad) in str(excinfo.value)
+
+
+def test_read_collapsed_block_returns_the_parsed_list_for_a_valid_file(tmp_path):
+    good = tmp_path / "good.json"
+    entry = {"row": 3, "duplicate_of": 2, "identity_key": "email", "outcome": "duplicate_in_csv"}
+    good.write_text(json.dumps([entry]), encoding="utf-8")
+
+    assert read_collapsed_block(str(good)) == [entry]
 
 
 # =====================================================================================

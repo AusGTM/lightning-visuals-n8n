@@ -433,3 +433,43 @@ def test_apply_dedupe_default_output_does_not_collide_across_directories_sharing
         Path(result_b["deduped_path"]).read_text(encoding="utf-8")
     assert "a@example.com" in Path(result_a["deduped_path"]).read_text(encoding="utf-8")
     assert "b@example.com" in Path(result_b["deduped_path"]).read_text(encoding="utf-8")
+
+
+# ========================================================================================
+# Phase 74 Plan 03 Task 2 — WR-03: the CLI resolves column_mapping_path through the SAME
+# canonical config-gate reader preview.py's own __main__ already calls, never a second
+# resolver for the same config key.
+# ========================================================================================
+
+
+def test_cli_resolves_the_configured_column_mapping_same_as_preview(monkeypatch):
+    import config_gate
+
+    monkeypatch.setattr(
+        config_gate, "load_config",
+        lambda: {"column_mapping_path": str(REAL_MAPPING_PATH)})
+
+    # What preview.py's own __main__ resolves for the identical configuration — the one
+    # canonical reader both CLIs must agree with.
+    expected = config_gate.load_config().get("column_mapping_path")
+
+    assert csv_dedupe._resolve_configured_mapping_path() == expected == str(REAL_MAPPING_PATH)
+
+
+def test_cli_with_no_mapping_configured_behaves_exactly_as_today(monkeypatch):
+    import config_gate
+
+    monkeypatch.setattr(config_gate, "load_config", lambda: {})
+
+    assert csv_dedupe._resolve_configured_mapping_path() is None
+
+
+def test_cli_with_config_unavailable_degrades_to_none_not_a_crash(monkeypatch):
+    import config_gate
+
+    def _raise():
+        raise config_gate.ConfigError("no config")
+
+    monkeypatch.setattr(config_gate, "load_config", _raise)
+
+    assert csv_dedupe._resolve_configured_mapping_path() is None
