@@ -73,7 +73,7 @@ created: "2026-09-19"
 | T-74-06-06 | Repudiation | claiming a live property the sends never exercised | medium | mitigate | D-74-14's research-error branch is explicitly NOT exercised and stays documented-only; stated in the SUMMARY and the UAT addendum | closed — `exec_12677.runData.json` has no `IF Research Errored` / `Companies Research Errored Sentinel` key |
 | T-74-06-07 | Denial of Service (cost) | an enrichment send that silently spends provider credits or Anthropic calls | medium | mitigate | the zero-cost request shape is named; the acceptance criterion requires proving from runData that no provider or Anthropic node ran | closed — `exec_12677.runData.json` (71 keys) has no provider/judge/research node; no `HubSpot *Update`/`Create` node in either fixture |
 | T-74-06-SC | Tampering | npm/pip/cargo installs | low | accept | No package install is in this plan's scope; no dependency is added | closed (accepted — R-74-SC) — no dependency added (R-74-SC) |
-| T-74-07-01 | Information Disclosure (data hygiene) | `csv_dedupe.py` WR-12 fix writes `deduped-<stem>.csv` / `dedupe-report-<stem>.json` (PII-bearing) beside the operator's input file, outside repo control, with no cleanup step in `contact-upload/SKILL.md` | medium | mitigate | `74-REVIEW.md` WR-13: add the two artifacts to the skill's cleanup step, or return the write location to a gitignored scratch dir with disambiguated names | open — below high threshold (non-blocking); surfaced by the Phase 74 code review, not by any plan register |
+| T-74-07-01 | Information Disclosure (data hygiene) | `csv_dedupe.py` WR-12 fix writes `deduped-<stem>.csv` / `dedupe-report-<stem>.json` (PII-bearing) beside the operator's input file, outside repo control, with no cleanup step in `contact-upload/SKILL.md` | medium | mitigate | `74-REVIEW.md` WR-13: add the two artifacts to the skill's cleanup step, or return the write location to a gitignored scratch dir with disambiguated names | closed — `operator-claude-plugin/skills/contact-upload/SKILL.md` step 10 now names `deduped_path`/`collapsed_path` for deletion, pinned by `test_skill_cleanup_step_names_the_dedupe_artifacts_for_deletion`; plugin 0.52.1 (`7c5d174a`, `86df95ac`, `/gsd-code-review 74 --fix` 2026-09-20) |
 
 *Status: open · closed · open — below high threshold (non-blocking)*
 *Severity: critical > high > medium > low — only open threats at or above workflow.security_block_on (`high`) count toward threats_open*
@@ -101,7 +101,8 @@ Register origin: 41 threats authored at plan time (six `<threat_model>` blocks, 
 
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
-| 2026-09-19 | 42 | 41 | 1 (medium, non-blocking: T-74-07-01) | gsd-security-auditor (sonnet) — `## SECURED`, 41/41 plan-time threats verified at file:line with suites re-run live (node 1321/0, pytest 5170/160); orchestrator added T-74-07-01 from `74-REVIEW.md` WR-13 |
+| 2026-09-19 | 42 | 41 | 1 (medium, non-blocking: T-74-07-01) |
+| 2026-09-20 | 42 | 42 | 0 | orchestrator — T-74-07-01 closed by the `--fix` pass (WR-13, plugin 0.52.1); no auditor re-spawn needed for a doc-only mitigation | gsd-security-auditor (sonnet) — `## SECURED`, 41/41 plan-time threats verified at file:line with suites re-run live (node 1321/0, pytest 5170/160); orchestrator added T-74-07-01 from `74-REVIEW.md` WR-13 |
 
 Auditor notes carried forward, non-blocking: `74-REVIEW.md` IN-01 (a hypothetical third
 `WRITE_SAFETY_GATE_JS` sentinel could drift hand-rolled test arm-lists; the production setter
@@ -115,7 +116,7 @@ closed, not open).
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [x] `threats_open: 0` confirmed (one medium threat open, below the `high` block threshold)
+- [x] `threats_open: 0` confirmed (all 42 closed as of 2026-09-20)
 - [x] `status: verified` set in frontmatter
 
 **Approval:** verified 2026-09-19
