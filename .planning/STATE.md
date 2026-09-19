@@ -5,17 +5,17 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 74
 current_phase_name: Code-review follow-ups from phase 73
 status: executing
-stopped_at: Completed 74-01-PLAN.md
-last_updated: "2026-09-19T07:46:38.081Z"
+stopped_at: Completed 74-02-PLAN.md
+last_updated: "2026-09-19T08:10:30.749Z"
 last_activity: 2026-09-19
 last_activity_desc: Phase 74 execution started
-state_head: f3504fa29998d7d5074576ce6ef64778fea9a737
+state_head: b35924a907b06d7beb1e002ab3d9dcb8b5e3c38f
 progress:
   total_phases: 12
-  completed_phases: 3
+  completed_phases: 2
   total_plans: 73
   completed_plans: 68
-  percent: 25
+  percent: 17
 ---
 
 # Project State
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 74 (Code-review follow-ups from phase 73) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-09-19 — Phase 74 execution started
 
@@ -492,7 +492,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [████████████████████] 67/67 plans ([███░░░░░░░] 25%)
+Progress: [████████████████████] 67/67 plans ([██░░░░░░░░] 17%)
 
 Progress: [███░░░░░░░] 33% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-19T07:46:37.842Z
-**Stopped at:** Completed 74-01-PLAN.md
+**Last session:** 2026-09-19T08:10:30.523Z
+**Stopped at:** Completed 74-02-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -695,6 +695,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 73.1 P10 | 15min | 2 tasks | 5 files |
 | Phase 73.1 P11 | 24min | 3 tasks | 10 files |
 | Phase 74 P01 | 55min | 3 tasks | 13 files |
+| Phase 74 P02 | 23min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -906,6 +907,8 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 73.1]: 73.1-11: [Rule 1] execution 12670 returned an unanticipated 400 (not 200/401); applied the 401-branch's prescribed request-construction fix anyway per the plan's own reasoning, confirmed by execution 12671's live 200 -- D-11 and D-11a both closed live — The plan's own objective states "a malformed query string yields 400, not 401" -- an offline Python replay of the byte-identical request succeeded, isolating the defect to n8n's own httpRequest URL-embedded query string construction, not the account.
 - [Phase 74]: 74-01: widened freeze_execution_rundata.py's _SENSITIVE_KEYS beyond D-74-07's literal five (headers/error/request/options/config) to also cover zoom_token/access_token -- the five alone never reached the live ZoomInfo OAuth JWT actually committed in exec_12434/exec_12449. — Traced every eyJ-prefixed value in both fixtures back to its parent key before implementing -- all 56 occurrences sit under zoom_token or access_token, siblings of json, never nested under any of the five specified keys. A scrub built to the letter of D-74-07 would leave the plan's own acceptance criteria unsatisfiable on the real data.
 - [Phase 74]: 74-01: added a --rescrub CLI mode to freeze_execution_rundata.py to re-redact the 7 pre-existing committed fixtures in place, with no live n8n credentials or network call. — Re-fetching 7 already-committed executions from n8n purely to re-apply a scrub would be wasteful (18 fresh GETs for the run_6891d018 excerpt alone) and matches the task's own instruction to re-scrub "through the freezer's own re-scrub path -- never a hand edit of the JSON."
+- [Phase 74]: 74-02: dispatch_and_recover's recovery bound now resolves through watch.resolve_bound_seconds (including its per-row scaling floor), not a flat config-key read, since this async recovery path watches the same no-batching-node workflow that floor was built for.
+- [Phase 74]: 74-02: D-74-13's unchecked-count surfacing is a no-op -- run_manifest.py already carries UNCHECKED in ALLOWED_VERDICTS and persists it per-row, so the count is already derivable with no new code; only the recovery-bound override wiring needed a real fix.
 
 ### Roadmap Evolution
 
