@@ -11,6 +11,105 @@ programmatically). No web research was needed or performed — this is a pure in
 phase with a fully locked CONTEXT.md; the job here is exact current-state grounding, not stack
 selection.
 
+<user_constraints>
+## User Constraints (from CONTEXT.md)
+
+### Locked Decisions
+
+**Create-error lane convergence (CR-01, WR-07)**
+- **D-74-01:** `Create Carry Merge` input 2 gets a REAL producer: a Code node on `HubSpot
+  Create`'s error edge that emits exactly one marker item per run unconditionally (a marker when
+  the error branch is empty, the error items when it is not), so the input always receives and
+  the merge completes normally instead of via the v1 end-of-run drain. The
+  `set_always_output_data(["HubSpot Create"])` mechanism and its comment block are retired —
+  n8n pads output 0 only, `[observed live]` on execution `12522` (`HubSpot Create` outs
+  `[21, 0]`, input 2 never delivered, association still landed via the drain).
+  — **Reversibility:** costly — the producer sits inside the Phase 70 carry-merge idiom; removing
+  it means re-splicing the create lane and re-running the walker suite.
+- **D-74-02:** `Ingest Merge Response` input 5 (`Build Create Failure Row`) gets a gated
+  starved-lane sentinel keyed on "the decided-row set contains zero create-routed rows". That is
+  knowable before any write, so it is not a second producer in the dangerous (double-fire)
+  sense. No all-update batch is left drain-only.
+- **D-74-03:** Walker fidelity: `tests/n8n/lib/walkWorkflow.mjs` pads output index 0 only under
+  `alwaysOutputData`; execution `12522`'s runData is frozen (through the CR-04-widened freezer)
+  as `tests/n8n/fixtures/frozen/exec_12522.runData.json` and a fidelity test pins the rule
+  against it; CLAUDE.md §13.0.3 gains the row (file+symbol `[documented]` plus `12522`
+  `[observed live]`). WR-08's JSDoc is corrected in the same edit.
+
+**Error-item shape (CR-02, CR-03)**
+- **D-74-04:** Classification becomes explicit, not structural: a one-line Code node on the
+  error edge (it can be the same node as D-74-01's producer) stamps `_create_error: true`;
+  `pairCreateOutcome` tests that flag FIRST, ahead of `_isCarriedRow`. No armed execution is
+  spent to observe the real n8n error-item shape — the lane stays `[documented]` per D-73-19
+  until a real race occurs.
+- **D-74-05:** The single hand-written stub in `tests/n8n/ingestCreateErrorLane.test.mjs` is
+  kept and tagged `UNOBSERVED` in the same register `walkWorkflow.mjs` uses for D-70-30 rule
+  (c), naming the shape question. Correctness rests on the stamp, not the stub's shape.
+- **D-74-06:** `create_outcome` `none` / `refused` are consumed in `BUILD_INGEST_RESPONSE` as
+  `action: "create_unconfirmed"`, mapped to `FAILED` in `written_records.ACTION_TO_OUTCOME`
+  (never `created_id_unknown`). The operator-facing `reason` passes `create_outcome_reason`
+  through verbatim so the two sub-cases stay distinguishable ("no create response joined to this
+  row" vs the ambiguity text).
+
+**Fixture redaction guard (CR-04)**
+- **D-74-07:** `scripts/freeze_execution_rundata.py` replaces ANY `headers`, `error`, `request`,
+  `options` or `config` key at any depth with the placeholder, applied per node run so
+  `run.error` is covered — the same non-enumerating idiom the tool already argues for. Error
+  fixtures lose their message text by design.
+- **D-74-08:** The 7 committed runData fixtures that match a naive pattern today (5 Phase-70
+  fixtures carrying the superseded `x-enrichment-secret`; `exec_12434` / `exec_12449` carrying
+  JWT-shaped strings) are RE-REDACTED IN PLACE by the widened scrubber and the rewritten bytes
+  committed. No path exemptions. (The secret was rotated 2026-09-11; the JWTs have a 24h
+  lifetime; git history is not rewritten.)
+- **D-74-09:** A guard test over `tests/n8n/fixtures/frozen/` refuses VALUE shapes:
+  `pat-na\d-…`, `Bearer <token>`, `x-enrichment-secret` followed by a value, and JWT bodies
+  `eyJ[A-Za-z0-9_-]{20,}`. The header NAME inside node jsCode (present in the 4 frozen workflow
+  bodies) must not trip it.
+
+**Warnings and the end-of-phase gate**
+- **D-74-10:** WR-03, WR-04, WR-08, WR-09, WR-10, WR-11, WR-12 are ALL fixed in code with a test
+  each, using the fixes `73-REVIEW.md` supplies. No accept-with-reason rows this phase.
+  WR-01/02/05/06 follow the roadmap's stated shape (lane-invariant `executions = 1` hoisted out
+  of the `try`; per-lane `executions_projection_basis` and `providers` taken from the estimate;
+  ledger keyed by `(lane, id)` with ambiguous ids skipped; `excluded_marker_count` returned and
+  reported when non-zero).
+- **D-74-11:** End-of-phase gate is IN-PHASE and disarmed: regenerate, deploy
+  `--only wf_contact_ingest_cloud.json`, bounce, send ONE all-update batch (zero creates) and
+  read runData: `Create Carry Merge` and `Ingest Merge Response` both complete normally with no
+  `merge_fired_with_unfilled_input`; freeze the execution. One execution, nothing armed, every
+  `ALLOW_*` flag read back `false`. The other five cloud workflows are not deployed.
+  — **Reversibility:** reversible — a disarmed deploy of one workflow; the committed JSON stays
+  the source of truth.
+
+**Folded Todos**
+- `2026-09-11-merge-multi-run-drain-and-grouping-unobserved.md` (MN-01 / NF-MJ-01, `kind:
+  question`) — **D-74-12:** answer MN-01 from frozen runData: search `exec_12522` (once frozen),
+  `exec_12434` and `exec_12449` for any Merge left with two partially-filled pending runs. If
+  found, record the answer in §13.0.3 and close the todo with a dated RESOLVED block; if not,
+  keep it open with its trigger and say so in the SUMMARY. Never close it on a `resolves_phase`
+  match alone.
+- `2026-09-17-stage-d-match-chunk-unchecked-rate.md` (`kind: question`) — **D-74-13:** read the
+  recovery bound in `operator-claude-plugin/scripts/chunking.py` against stress attempt 3's
+  timings, parametrise or raise it, add a test, and surface `unchecked_count` in the run report.
+  No live Stage D run this phase; the todo's trigger ("next Stage D run") stays until one does.
+
+### Claude's Discretion
+- Whether D-74-01's producer and D-74-04's stamp are one Code node or two.
+- Exact wording of the `UNOBSERVED` tag and of the §13.0.3 rows.
+- Plan/wave grouping; the roadmap's fix order (CR-03, CR-02, CR-04, CR-01, then WR) is the
+  default unless a shared file makes another order cheaper.
+
+### Deferred Ideas (OUT OF SCOPE)
+- Observing the real n8n error-item shape with an armed duplicate-email create — explicitly not
+  this phase (D-74-04); the trigger stays "a real race occurs" (D-73-19).
+- Deploying the other cloud workflows — only the ingest lane changes graph shape this phase.
+- The 8 other pending-todo keyword matches reviewed during discuss-phase (enrichment throughput
+  ceiling, company-domain candidate source, property-history hop, `rows_to_resume` fingerprint
+  branch, CSV-only ingest thresholds, racing-club `produces_content` veto, suggest-contacts
+  stage-2 script, ZoomInfo enrich-lane token cache) — unrelated to the 16 findings; left pending
+  with their own triggers.
+</user_constraints>
+
 ## Summary
 
 This phase closes 16 findings from `73-REVIEW.md` with the fix shapes already locked in
@@ -213,13 +312,39 @@ The table `CLAUDE.md` §13.0.3 already contains the pattern to extend — e.g. t
 starting "**A node fed zero items does not run at all...**" cites both an HTTP-node case
 (`12200`) and a Code/NoOp gate case (`12203`, `12206`) as *separately observed*, not assumed
 identical. The new row should follow the same two-tag convention:
-`[documented]` — cite `packages/core/src/execution-engine/workflow-execute.ts`'s
-`ensureAlwaysOutputData` symbol (file+symbol only, per the table's own rule — this document
-cannot itself confirm which index the real n8n source pads without reading that file, which is
-outside this repo) — plus `[observed live]` execution `12522` once frozen (`HubSpot Create` outs
-`[21, 0]`, input 2 never delivered, association still landed via the v1 end-of-run drain — this
-half is already given as fact in `74-CONTEXT.md`'s D-74-01 bullet, tag it `[observed live]`
-citing `12522` once the fixture exists).
+
+`[documented]` half — the upstream n8n source is public; fetched
+`https://raw.githubusercontent.com/n8n-io/n8n/master/packages/core/src/execution-engine/
+workflow-execute.ts` this session (`[CITED: n8n-io/n8n master, workflow-execute.ts,
+ensureAlwaysOutputData — not independently run, this repo's own copy of n8n was not inspected]`).
+The fetched body:
+```typescript
+private ensureAlwaysOutputData(
+    nodeSuccessData: INodeExecutionData[][] | null | undefined,
+    executionData: IExecuteData,
+): INodeExecutionData[][] | null | undefined {
+    if (nodeSuccessData?.[0]?.[0]) return nodeSuccessData;
+    if (executionData.node.alwaysOutputData !== true) return nodeSuccessData;
+    // ... collects pairedItem from all input items ...
+    nodeSuccessData ??= [];
+    nodeSuccessData[0] = [{ json: {}, pairedItem }];
+    return nodeSuccessData;
+}
+```
+Two things this confirms directly, both matching CR-01's guess rather than the walker's current
+(wrong) behaviour: (1) the guard `nodeSuccessData?.[0]?.[0]` means the substitution only fires
+when **output 0** is empty — an empty output 1 (the error branch, non-empty output 0) never
+triggers it at all; (2) the write target is hardcoded `nodeSuccessData[0] = [...]` — even in the
+hypothetical case both outputs were empty, only index 0 gets the marker. This settles CR-01's own
+open question in the direction `74-CONTEXT.md`'s D-74-01 already assumes ("n8n pads output 0
+only") — cite this fetch alongside the file+symbol per the table's convention. This is `[CITED]`,
+not `[VERIFIED]` — no test in this repo executed the real n8n engine to confirm it; treat it as
+strong corroboration for the walker fix, not a substitute for the live `12522` observation below.
+
+`[observed live]` half — execution `12522` once frozen (`HubSpot Create` outs `[21, 0]`, input 2
+never delivered, association still landed via the v1 end-of-run drain — this half is already
+given as fact in `74-CONTEXT.md`'s D-74-01 bullet; tag it `[observed live]` citing `12522` once
+the fixture exists).
 
 ## WR-08 — the JSDoc fix rides along with D-74-03
 
@@ -323,17 +448,60 @@ D-74-06 wants an analogous `unconfirmed`/`unconfByEmail` block, and the returned
 `action`/`outcome`/`reason` fields (currently `fail ? "create_failed" : (block ? "write_blocked"
 : row.action)` at `[VERIFIED: scripts/build_cloud_workflows.py:962]`) extended with a third
 branch for `create_unconfirmed`, per the exact ternary shape `74-CONTEXT.md`/`73-REVIEW.md`
-already specify. **Important**: `"none"`/`"refused"` never reach `BUILD_INGEST_RESPONSE` as a
-separate item with `create_outcome` set on it in the way `failed` items do — they are properties
-of the *carried row itself* (`pairCreateOutcome` returns one item per carried row, stamping
-`create_outcome` directly onto it: `return { ...row, create_outcome: "refused", ... }`). That
-means the `_decided_snapshot`-tagged carried row and the `create_outcome`-stamped row are the
-**same item's two different appearances on two different Merge inputs** (one via `Decide Action
-Snapshot`'s literal fan-out, one via the write path through `Create Carry Merge` →
-`Pair Create Outcome To Row`). The join key connecting them in `BUILD_INGEST_RESPONSE` must be
-the same email-based join `failed`/`failedByEmail` already use, not a fresh lookup on the decided
-snapshot's own fields (which never carry `create_outcome` — that field is stamped downstream of
-the write, after the snapshot was already forked off).
+already specify.
+
+**Corrected trace (the review's fix snippet, taken literally, filters an empty set — traced this
+session, catches a gap the review itself did not flag).** `pairCreateOutcome`'s `"none"`/
+`"refused"` items are `{ ...row, create_outcome: "none" }` / `{ ...row, create_outcome:
+"refused", create_outcome_reason }` — the carried row's own fields, with **no `id`** ever
+attached (no response joined). Both of `Pair Create Outcome To Row`'s two fan-out consumers drop
+such an item today:
+- `Build Association Request`'s wrapper `[VERIFIED: scripts/build_cloud_workflows.py:769-806]`:
+  `const contactId = row.id != null ? String(row.id) : (row.hs_object_id ? String(row.hs_object_id)
+  : null); if (!contactId) return null;` — a create's `hs_object_id` is null pre-write, and no
+  `id` was ever joined, so `contactId` is null and the row is dropped (`.filter(Boolean)` at the
+  end of the map). CLAUDE.md §13.0.1's own docstring at
+  `scripts/build_cloud_workflows.py:1816-1818` already documents this drop rule generally
+  ("`Build Association Request` drops any row with no resolved company") — the SAME drop also
+  fires here for a different reason (no contact id, not no company id).
+- `BUILD_CREATE_FAILURE_ROW_JS`'s filter `[VERIFIED: scripts/build_cloud_workflows.py:850]`:
+  `const errors = allItems.filter((row) => row.create_outcome === "error");` — `"none"`/
+  `"refused"` fail this test too (only `"error"` passes).
+
+**No item carrying `create_outcome: "none"`/`"refused"` reaches `Ingest Merge Response` in any
+form today** — it is dropped by both of its only two possible routes, silently. The review's
+own `BUILD_INGEST_RESPONSE` fix snippet (`const unconfirmed = allItems.filter((row) =>
+row._decided_snapshot !== true && row.create_outcome && row.create_outcome !== "success")`)
+would filter an **empty set** if applied as written, because `allItems` (everything arriving at
+`Ingest Merge Response`) never contains an item with `create_outcome` set at all — that field
+only ever exists on items inside `Pair Create Outcome To Row`'s own output, one hop upstream of
+both drops above.
+
+**The actual fix belongs one hop earlier, in `BUILD_CREATE_FAILURE_ROW_JS`, not in
+`BUILD_INGEST_RESPONSE`'s filter alone:**
+1. Widen `BUILD_CREATE_FAILURE_ROW_JS`'s filter from `row.create_outcome === "error"` to
+   `row.create_outcome !== "success"` — this now also admits `"none"`/`"refused"` items (which
+   `Build Association Request` would otherwise have silently swallowed).
+2. Stamp the emitted row's `action`/`outcome` conditionally: `"create_failed"` when
+   `row.create_outcome === "error"` (unchanged), `"create_unconfirmed"` otherwise — using
+   `reason: row.create_outcome_reason || "no create response joined to this row"` (the exact
+   text `73-REVIEW.md`'s own `written_records.ACTION_TO_OUTCOME` fix comment specifies for the
+   `"none"` sub-case, vs. the review's `create_outcome_reason` value for `"refused"` — these are
+   the "two sub-cases" `74-CONTEXT.md`'s D-74-06 bullet says must "stay distinguishable").
+3. `BUILD_INGEST_RESPONSE` then joins these rows by email exactly as `failed`/`failedByEmail`
+   already do today (no filter on `create_outcome` needed there at all — the row already arrives
+   pre-classified with `action: "create_failed"` or `action: "create_unconfirmed"`, mirroring how
+   `block`/`fail` already work).
+
+**Interaction with D-74-02 this widening creates (flag for the plan, not resolved here):** once
+`BUILD_CREATE_FAILURE_ROW_JS` emits rows for `"none"`/`"refused"` too, its own zero-rejection
+sentinel-marker branch (`if (errors.length === 0) return [{ json: {
+__SENTINEL_MARKER_KEY__: true } }];`, `[VERIFIED: scripts/build_cloud_workflows.py:855-857]`)
+must change its condition from "zero `error` items" to "zero non-`success` items," or a batch
+whose only create outcome is `"none"`/`"refused"` (no HubSpot rejection, but also no confirmed
+success) would still emit the marker instead of the unconfirmed row it should now produce. Land
+this widening and D-74-02's sentinel together, or write D-74-02's sentinel condition against the
+POST-widening behavior from the start.
 
 `written_records.ACTION_TO_OUTCOME`'s insertion point
 `[VERIFIED: operator-claude-plugin/scripts/written_records.py:184-201]`:
@@ -864,9 +1032,11 @@ falsify without live credentials or a full trace of every touched file's test su
 ## Sources
 
 ### Primary (HIGH confidence — read/executed this session)
-- `scripts/build_cloud_workflows.py` (multiple ranges: 166-182, 546-580 [n/a, wrong file—see
-  write_grant below], 820-1010, 1745-1760, 2085-2250, 9931-9970, 10306-10460, 10494-10520,
-  10592-10650, 10700-10800) — direct `Read`/`sed` this session
+- `scripts/build_cloud_workflows.py` (multiple ranges: 166-182, 769-806, 820-1010, 1745-1825,
+  2085-2250, 9931-9970, 10306-10460, 10494-10520, 10592-10650, 10700-10800) — direct `Read`/`sed`
+  this session
+- `operator-claude-plugin/scripts/write_grant.py` (lines 540-580, 634-644, 715-740) — direct
+  `sed` this session
 - `n8n/wf_contact_ingest_cloud.json` — loaded and its `connections` table walked programmatically
   this session (the strongest evidence in this document — a generated artifact, not source code)
 - `n8n/code/pairCreateOutcome.js` — full file read this session
@@ -889,6 +1059,10 @@ falsify without live credentials or a full trace of every touched file's test su
   workflows.py && git diff --quiet -- n8n/` (clean) — all executed this session
 
 ### Secondary (MEDIUM confidence)
+- `https://raw.githubusercontent.com/n8n-io/n8n/master/packages/core/src/execution-engine/
+  workflow-execute.ts` — fetched this session via WebFetch, `ensureAlwaysOutputData` quoted
+  above; corroborates (does not independently prove, since not executed) that n8n pads output
+  index 0 only
 - `.planning/phases/73-ga-fix-list-from-stress-attempt-2/73-UAT.md`, `73-REVIEW.md`,
   `73-CONTEXT.md` — read in full, but these are prior-phase planning artifacts (self-reported by
   a prior agent), not independently re-verified against a live execution by this research pass
