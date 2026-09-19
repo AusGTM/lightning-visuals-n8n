@@ -373,12 +373,17 @@ def _as_hubspot_text(value) -> str:
     2026-09-18, both boolean fields holding the string "false").
 
     `None` renders as the empty string because both spell the same absence. ONE narrow
-    consequence, accepted deliberately: a key whose intended value is already blank and
-    which is absent from `would_write` or from the refetch now compares EQUAL where before
-    it did not. Both patches originate in the same `clearPatch`, and HubSpot omits a blank
-    property from a read, so there is nothing for that comparison to catch. A key whose
-    value is non-blank still fails when it goes missing. No sentinel type is introduced to
-    tell absent from blank apart.
+    consequence, accepted deliberately, and scoped to LEG 2 (the refetch) only — see
+    `verify_decision`: a key whose intended value is already blank and which is absent
+    from the refetch compares EQUAL where before it did not, because HubSpot omits a
+    blank property from a read, so there is nothing for that comparison to catch.
+    LEG 1 (the backend's own submit-time patch, `would_write`) does NOT get this
+    consequence (WR-09): `would_write` is a patch the backend COMPOSED, not a HubSpot
+    read, so a key silently absent from it is a real divergence — leg 1 tests presence
+    before ever calling this function on a key's value. A key whose value is non-blank
+    still fails when it goes missing from either leg. No sentinel type is introduced to
+    tell absent from blank apart within this function itself; the presence check that
+    makes the distinction lives in `verify_decision`'s leg 1, not here.
 
     What this does NOT do: blank is never equal to false. A blank reads as `unknown` to
     `src/icp_scoring.py` and to `Company Gate`'s REQUIRED set, so a genuinely dropped write
@@ -494,21 +499,39 @@ def verify_decision(intended, response) -> dict:
     would_write = response.get("would_write")
     would_write = would_write if isinstance(would_write, dict) else {}
     leg1_keys = (set(intended) | set(would_write)) - PREVIEW_UNPINNABLE_KEYS
-    # HubSpot stores and returns every property as a string, so compare stringwise through
-    # `_as_hubspot_text` on BOTH sides: a boolean or numeric intent must not read as a
-    # mismatch against its own stored form. Lowercasing a boolean there is REQUIRED, not
-    # incidental — Python renders `False` with a capital F and HubSpot stores "false", and
-    # a bare `str()` on both sides made every such approve report failed (F-S5).
-    intent_mismatched = [key for key in leg1_keys
-                         if _as_hubspot_text(would_write.get(key))
-                         != _as_hubspot_text(intended.get(key))]
+    # Presence is tested BEFORE value equality (WR-09): a key present on one side and
+    # absent from the other is a mismatch even when `_as_hubspot_text` would normalise
+    # both sides to the same empty string. The docstring's "ONE narrow consequence,
+    # accepted deliberately" paragraph reasons only about leg 2's refetch (a HubSpot
+    # read genuinely omits a blank property) — `would_write` is a patch the backend
+    # itself COMPOSED, where a silently dropped key is a real divergence, not a storage
+    # artefact. `lv_enrichment_review_reason: ""` and
+    # `lv_enrichment_review_candidate_json: ""` — the de-queue clears `reviewApply`'s
+    # `clearPatch` mints — are exactly the keys this exists to catch going missing.
+    # `_as_hubspot_text` is still the comparator once both sides are present: HubSpot
+    # stores and returns every property as a string, so a boolean or numeric intent
+    # must not read as a mismatch against its own stored form (lowercasing a boolean is
+    # REQUIRED, not incidental — Python renders `False` with a capital F and HubSpot
+    # stores "false", and a bare `str()` on both sides made every such approve report
+    # failed, F-S5).
+    intent_mismatch_reasons = {}
+    for key in leg1_keys:
+        would_present = key in would_write
+        intended_present = key in intended
+        if would_present != intended_present:
+            missing_from = "the backend's submitted patch" if intended_present else "the approved patch"
+            intent_mismatch_reasons[key] = f"absent from {missing_from}"
+        elif _as_hubspot_text(would_write.get(key)) != _as_hubspot_text(intended.get(key)):
+            intent_mismatch_reasons[key] = "value differs from the approved patch"
+    intent_mismatched = sorted(intent_mismatch_reasons)
 
     if intent_mismatched:
+        detail = "; ".join(f"{key} ({intent_mismatch_reasons[key]})" for key in intent_mismatched)
         return _verdict(
             "failed", response,
             f"The backend's own submitted patch does not match what was previewed and "
-            f"approved: {len(intent_mismatched)} field(s) differ: "
-            f"{', '.join(sorted(intent_mismatched))}. Nothing here confirms the record.",
+            f"approved: {len(intent_mismatched)} field(s) differ: {detail}. Nothing here "
+            f"confirms the record.",
             intent_mismatched,
         )
 
