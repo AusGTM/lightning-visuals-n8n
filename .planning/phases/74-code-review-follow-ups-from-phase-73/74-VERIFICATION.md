@@ -22,7 +22,7 @@ covered_files:
   - .planning/phases/74-code-review-follow-ups-from-phase-73/74-RESEARCH.md
   - .planning/phases/74-code-review-follow-ups-from-phase-73/74-UAT.md
   - .planning/phases/74-code-review-follow-ups-from-phase-73/74-VALIDATION.md
-covered_digest: "v1:sha256:05bebab261a632aace8866e084ba370da8fdd73ec7a8823298278bed67235833"
+covered_digest: "v1:sha256:94b5ba9d295b73214785069d914049a9b01f81655d68efe9996c467e99c13a4a"
 behavior_unverified: 0
 overrides_applied: 0
 ---
