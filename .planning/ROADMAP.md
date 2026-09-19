@@ -635,10 +635,20 @@ reason each. Regenerate JSON, suites green, disarmed deploy is the operator's st
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 74-01-PLAN.md — CR-04: widen the freezer's scrub, re-redact the 7 fixtures, add the value-shape guard, freeze execution 12522 (wave 1)
 - [ ] 74-02-PLAN.md — WR-01/02 grant-preview execution basis, WR-05 ledger keying, WR-06 + D-74-13 excluded-marker count and recovery bound (wave 1)
 - [ ] 74-03-PLAN.md — WR-11/12/03 csv_dedupe, WR-04 preview collapsed-block error, WR-09 review-intent comparison (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 74-04-PLAN.md — D-74-03 walker pads output 0 only + WR-08 JSDoc, D-74-14 enrichment research-error branch, §13.0.3 rows, D-74-12 MN-01 search (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 74-05-PLAN.md — create-error lane cluster: D-74-04/05 stamp, D-74-06 create_unconfirmed, D-74-02 sentinel, D-74-01 comment, WR-10, one ingest regeneration (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 74-06-PLAN.md — D-74-11 gate: two scoped disarmed deploys, two proof sends (ceiling 2 executions), two freezes, plugin 0.52.0, operator confirmation (wave 4)
