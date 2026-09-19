@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 19
+open_count: 24
 waived_count: 3
 fixed_count: 8
-total_count: 30
-last_updated: 2026-09-12T14:17:06.368Z
+total_count: 35
+last_updated: 2026-09-19T09:53:42.457Z
 ---
 
 # Broken Windows Ledger
@@ -45,6 +45,11 @@ last_updated: 2026-09-12T14:17:06.368Z
 | 28 | 49 | deviation | scripts/rescore_population.py |  | Phase 49's W1 armed window made one undeclared batch_update_companies() call directly against 4 company ids, OUTSIDE the driver's own two-key (DRY_RUN=false + ALLOW_SCORE_BACKFILL=true) arming ceremony -- a plain Python call in a diagnostic shell with no arm keys set. Genuinely disclosed at the time in 49-W1-ARM-RECORD.md:200-210 and 49-RUN-REPORT.md:23, and the declared-vs-actual accounting tables correctly recorded HubSpot batch calls Declared 2 / Actual 3, but it was never registered in this cross-phase ledger -- the register /gsd-ship actually gates on. Same shape as id 16, whose closing sentence is the precedent: a per-phase disclosure is not a ledger entry. Recorded retrospectively 2026-09-03 by the cross-phase secure-phase sweep (49-SECURITY.md Divergence 2), 21 days late. NO RECORD WAS HARMED: the bypass call mutated nothing (byte-identical values, confirmed by an unchanged hs_lastmodifieddate before and after) and the values sent were the five legitimate component properties. The gate was not defeated -- it was bypassed by not using the driver. MECHANISM NOW CLOSED (2026-09-03, commit a4de6f4, threat T-49-43): src/hubspot_client.py::batch_update_companies gained the generalized two-key arm gate (DRY_RUN=false AND one of four registered arm keys, BATCH_WRITE_ARM_KEYS) plus a FORBIDDEN_PROPS disjointness floor, both unconditional ValueError raises on the live-POST path, so the gate now travels with the write and this exact call would be refused today. Five refusal tests, all perturbation-proved RED-then-GREEN. The historical call itself is not undone -- it cannot be; what is fixed is the reachable path. NOT registered here and left to operator judgement: the same run report's W2 arm-cycle excess (2) and Anthropic call excess (2 vs 1). | open |  | 2026-09-03T07:16:45.755Z |  |
 | 29 | 72 | deviation | scripts/build_cloud_workflows.py |  | Enrichment-lane contacts branch and companies branch have no HubSpot property-history hop (only contact ingest does) -- industry/enrichment-lane jobtitle recency stay unobservable, needs_review always. Decision needed: add the hop there too, or accept lv_<field>_verified_at cache keys as a narrower substitute. | open |  | 2026-09-12T11:04:05.336Z |  |
 | 30 | 72 | unmet-truth | scripts/build_cloud_workflows.py |  | F72-1: lv_linkedin_url does not land on the ingest CREATE path (confidenceByField keyed pre-PN1-rename); D-72-04's dual write incomplete on create, gap-closure pending | open |  | 2026-09-12T14:17:06.368Z |  |
+| 31 | 74 | deviation | tests/n8n/ingestCarryMerge.test.mjs |  | Four hand-rolled test arming helpers needed Create Failure Row Sentinel added to their arm-lists (ingestCarryMerge, ingestCreateErrorLane, walkerEngineFidelityV1, ingestMixedBatch) | open |  | 2026-09-19T09:53:41.820Z |  |
+| 32 | 74 | deviation | operator-claude-plugin/tests/test_control_flag_parity.py |  | Hardcoded ALLOW_HUBSPOT_RECORD_WRITES/ALLOW_HUBSPOT_CREATE declaration counts (3,4) went stale once Create Failure Row Sentinel became a fourth/fifth declaring node; updated to 4,5 | open |  | 2026-09-19T09:53:41.989Z |  |
+| 33 | 74 | deviation | tests/n8n/ingestCreateErrorLane.test.mjs |  | Task 3's acceptance criteria required each batch shape asserted by its own walker run, not inferred; initial implementation only proved response correctness, not the sentinel's own gate delivery -- closed with 3 direct assertions | open |  | 2026-09-19T09:53:42.147Z |  |
+| 34 | 74 | deviation | tests/n8n/ingestCarryMerge.test.mjs |  | By-name-reader structural assertion (D-70-03) needed updating: HubSpot Create's error output now feeds Create Error Stamp before the carry merge, not the merge directly | open |  | 2026-09-19T09:53:42.303Z |  |
+| 35 | 74 | deviation | tests/n8n/ingestCreateErrorLane.test.mjs |  | Post-completion advisor review found the 'disarmed batch containing create-routed rows' sentinel test vacuous -- plain disarmed graph routes net_new to action:review not action:create, so D-74-02's writesNotPermitted-with-create-rows disjunct was never exercised; fixed by arming only Decide Action's ALLOW_HUBSPOT_CREATE plus a non-vacuity assertion | open |  | 2026-09-19T09:53:42.457Z |  |
 
 ````json
 [
@@ -406,6 +411,66 @@ last_updated: 2026-09-12T14:17:06.368Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-12T14:17:06.368Z",
+    "resolved_at": null
+  },
+  {
+    "id": 31,
+    "kind": "deviation",
+    "phase": "74",
+    "file": "tests/n8n/ingestCarryMerge.test.mjs",
+    "line": null,
+    "description": "Four hand-rolled test arming helpers needed Create Failure Row Sentinel added to their arm-lists (ingestCarryMerge, ingestCreateErrorLane, walkerEngineFidelityV1, ingestMixedBatch)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-19T09:53:41.820Z",
+    "resolved_at": null
+  },
+  {
+    "id": 32,
+    "kind": "deviation",
+    "phase": "74",
+    "file": "operator-claude-plugin/tests/test_control_flag_parity.py",
+    "line": null,
+    "description": "Hardcoded ALLOW_HUBSPOT_RECORD_WRITES/ALLOW_HUBSPOT_CREATE declaration counts (3,4) went stale once Create Failure Row Sentinel became a fourth/fifth declaring node; updated to 4,5",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-19T09:53:41.989Z",
+    "resolved_at": null
+  },
+  {
+    "id": 33,
+    "kind": "deviation",
+    "phase": "74",
+    "file": "tests/n8n/ingestCreateErrorLane.test.mjs",
+    "line": null,
+    "description": "Task 3's acceptance criteria required each batch shape asserted by its own walker run, not inferred; initial implementation only proved response correctness, not the sentinel's own gate delivery -- closed with 3 direct assertions",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-19T09:53:42.147Z",
+    "resolved_at": null
+  },
+  {
+    "id": 34,
+    "kind": "deviation",
+    "phase": "74",
+    "file": "tests/n8n/ingestCarryMerge.test.mjs",
+    "line": null,
+    "description": "By-name-reader structural assertion (D-70-03) needed updating: HubSpot Create's error output now feeds Create Error Stamp before the carry merge, not the merge directly",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-19T09:53:42.303Z",
+    "resolved_at": null
+  },
+  {
+    "id": 35,
+    "kind": "deviation",
+    "phase": "74",
+    "file": "tests/n8n/ingestCreateErrorLane.test.mjs",
+    "line": null,
+    "description": "Post-completion advisor review found the 'disarmed batch containing create-routed rows' sentinel test vacuous -- plain disarmed graph routes net_new to action:review not action:create, so D-74-02's writesNotPermitted-with-create-rows disjunct was never exercised; fixed by arming only Decide Action's ALLOW_HUBSPOT_CREATE plus a non-vacuity assertion",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-19T09:53:42.457Z",
     "resolved_at": null
   }
 ]

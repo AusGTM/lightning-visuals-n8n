@@ -368,23 +368,43 @@ test("all-update batch (zero create-routed rows): the sentinel delivers a marker
 });
 
 test("disarmed batch containing create-routed rows: the sentinel delivers a marker and no merge stalls", () => {
-  // Deliberately NOT armed for create — mirrors the committed (shipped-disarmed) build.
+  // Armed ONLY at "Decide Action" so the three net-new rows actually route to
+  // action:"create" (the committed disarmed build routes net_new -> "review" instead,
+  // per contactCreateGateFlow.test.mjs — a plain disarmed graph would exercise the
+  // sentinel's OTHER disjunct, zeroCreateRows, vacuously covered by the sibling test
+  // above). Every WRITE_SAFETY_GATE_JS node — "HubSpot Create Write Gate", "Associate
+  // Lane Sentinel", "Create Failure Row Sentinel" — stays disarmed, so this batch
+  // exercises D-74-02's OTHER disjunct: writesNotPermitted with create rows present.
   const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
+  const decide = wf.nodes.find((n) => n.name === "Decide Action");
+  assert.ok(decide, "node present: Decide Action");
+  decide.parameters.jsCode = decide.parameters.jsCode.replace(
+    'const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
+
   const { runData, trace } = walkWorkflow(wf, {
     triggerNode: "Webhook Trigger",
     triggerItems: triggerItems(),
     httpStubs: {
       ...commonStubs(),
       // Unstubbed on purpose: if the graph wrongly routed a row to "HubSpot Create"
-      // while disarmed, this fixture throws rather than silently passing.
+      // while every write gate stays disarmed, this fixture throws rather than
+      // silently passing.
     },
   });
+  assert.equal(
+    nodeItems(runData, "Decide Action").filter((r) => r.action === "create").length, 3,
+    "non-vacuity: all three rows must actually route to action:create this run");
   assert.deepEqual(starvedWithData(trace), [], "no merge may stall on a disarmed batch with create-routed rows");
   assert.ok(sentinelFired(runData),
     "the sentinel must deliver a marker: every create-routed row is refused pre-write");
   assert.equal(nodeItems(runData, "HubSpot Create").length, 0, "the write gate must have refused every create");
   assert.equal(nodeItems(runData, "Build Create Failure Row").length, 0,
     "Create Carry Merge never fires on a fully-refused create batch");
+  const response = nodeItems(runData, "Build Ingest Response");
+  assert.equal(response.length, 3, "all three rows reach the response");
+  for (const row of response) {
+    assert.equal(row.action, "write_blocked", `row for ${row.email} must be write_blocked, not silently dropped`);
+  }
 });
 
 test("permitted create batch: the sentinel does NOT deliver a marker — the real producer is the only delivery", () => {

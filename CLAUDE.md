@@ -2378,8 +2378,8 @@ Phase 70's positional-merge refactor had already superseded. Two more nodes now 
 
 **Amended 2026-09-19 (Phase 74 Plan 05, D-74-01 as ruled/D-74-02/D-74-04) — corrects the
 prior "`alwaysOutputData` gives the error branch a real delivery" paragraph, which
-execution `12522` proved false; see CLAUDE.md §13.0.3 for the two rows this amendment
-adds there.** `HubSpot Create` itself still carries `onError: "continueErrorOutput"`
+execution `12522` proved false; see CLAUDE.md §13.0.3 for the two rows Phase 74 Plan 04
+added there.** `HubSpot Create` itself still carries `onError: "continueErrorOutput"`
 (the ingest lane's ONLY write node with this setting — `HubSpot Update` keeps
 `onError: null`, per the BUG 11 rule that a write node never gets
 `continueRegularOutput`) plus `alwaysOutputData: true` — but `alwaysOutputData` rescues
