@@ -473,3 +473,24 @@ def test_cli_with_config_unavailable_degrades_to_none_not_a_crash(monkeypatch):
     monkeypatch.setattr(config_gate, "load_config", _raise)
 
     assert csv_dedupe._resolve_configured_mapping_path() is None
+
+
+# ========================================================================================
+# Phase 74 code-review follow-up — WR-13: apply_dedupe's default output location (WR-12)
+# writes deduped_path/collapsed_path beside the operator's own input file, not into the
+# repo's gitignored scratch/ dir. SKILL.md's cleanup step must name both artifacts for
+# deletion, the same end-of-batch rule step 10 already applies to step 2b's outputs.
+# ========================================================================================
+
+
+def test_skill_cleanup_step_names_the_dedupe_artifacts_for_deletion():
+    skill_path = REPO_ROOT / "operator-claude-plugin" / "skills" / "contact-upload" / "SKILL.md"
+    text = skill_path.read_text(encoding="utf-8")
+    cleanup = text.split("10. **Clean up.**", 1)[1]
+    normalized = " ".join(cleanup.split())
+    assert "deduped_path" in normalized, (
+        "cleanup step must name deduped_path (step 2c's output) for deletion"
+    )
+    assert "collapsed_path" in normalized, (
+        "cleanup step must name collapsed_path (step 2c's report) for deletion"
+    )

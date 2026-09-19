@@ -736,3 +736,8 @@ be sent, and — only when explicitly armed — send it.
     it is not a durable record, the scratch directory is gitignored so it never reaches
     history, and deleting the file is what keeps it from outliving the conversation on
     disk.
+
+    For a file-path batch (step 2c ran), also delete `deduped_path` and `collapsed_path`
+    — step 2c's own outputs land beside whatever file step 2b handed it, not in the
+    scratch directory, so they are not covered by the paragraph above. Same end-of-batch
+    rule, dispatched or declined alike.
