@@ -221,6 +221,59 @@ test("ingest 2x2 mixed batch (company by domain / by name) x (update / create): 
 });
 
 // =====================================================================================
+// Phase 74 Plan 05 Task 2 (D-74-06, CR-03) — a mixed batch: one ordinary update and one
+// create whose HubSpot response never joins. The unconfirmed create must not disturb the
+// update's own report, and the response Merge must not stall on either row.
+// =====================================================================================
+
+function armCreateDomains(wf, domainsCsv) {
+  for (const name of ["HubSpot Update Write Gate", "HubSpot Create Write Gate", "Associate Lane Sentinel"]) {
+    const node = wf.nodes.find((n) => n.name === name);
+    assert.ok(node, `node present: ${name}`);
+    node.parameters.jsCode = node.parameters.jsCode
+      .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+        'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+      .replace('const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";')
+      .replace('const TEST_RECORD_DOMAINS = "";', `const TEST_RECORD_DOMAINS = "${domainsCsv}";`)
+      .replace('const TEST_RECORD_IDS = "";', `const TEST_RECORD_IDS = "${CONTACT_DOMAIN_UPDATE}";`);
+  }
+  const decide = wf.nodes.find((n) => n.name === "Decide Action");
+  assert.ok(decide, "node present: Decide Action");
+  decide.parameters.jsCode = decide.parameters.jsCode.replace(
+    'const ALLOW_HUBSPOT_CREATE = "false";', 'const ALLOW_HUBSPOT_CREATE = "true";');
+  return wf;
+}
+
+test("ingest mixed batch, armed for both actions: an ordinary update and a create whose response never joins both return exactly once", () => {
+  const wf = armCreateDomains(loadWorkflow({}), "acme-domain.example");
+  const emails = [R_DOMAIN_UPDATE, R_DOMAIN_CREATE];
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: triggerRows(emails),
+    httpStubs: {
+      ...stubs(emails),
+      // The create row's own response never arrives — no success, no error at all —
+      // while the update row's write proceeds normally.
+      "HubSpot Create": [],
+    },
+  });
+  const rows = nodeItems(runData, "Build Ingest Response");
+
+  assert.deepEqual(starvedWithData(trace), [], "no merge may lose a row on this batch");
+  assertEveryRowExactlyOnce(rows, emails);
+
+  const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));
+  assert.equal(byEmail[R_DOMAIN_UPDATE].action, "update",
+    "the unconfirmed create on the OTHER row must not disturb this row's own report");
+  assert.equal(byEmail[R_DOMAIN_UPDATE].contact_id, CONTACT_DOMAIN_UPDATE);
+  assert.equal(byEmail[R_DOMAIN_UPDATE].association, "associated");
+
+  assert.equal(byEmail[R_DOMAIN_CREATE].action, "create_unconfirmed");
+  assert.equal(byEmail[R_DOMAIN_CREATE].reason, "no create response joined to this row");
+  assert.notEqual(byEmail[R_DOMAIN_CREATE].association, "associated");
+});
+
+// =====================================================================================
 // The D-70-17 addendum case: a SINGLE-lane batch. The 2x2 shape exercises every lane by
 // construction and so cannot catch a Merge waiting on an input that never fires — which
 // is both the common real shape and Gate 1's hang probe (70-DEFERRED-GATES.md).

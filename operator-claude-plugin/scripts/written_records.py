@@ -204,6 +204,16 @@ ACTION_TO_OUTCOME = {
     # (there is nothing queued for review; the row simply never landed) -- FAILED is the
     # honest word: the create was attempted and HubSpot itself said no.
     "create_failed": FAILED,
+    # Phase 74 Plan 05 Task 2 (D-74-06, CR-03): a create whose HubSpot response never
+    # joined to its own row at all ("none"), or whose own identity was uncomputable or
+    # ambiguous ("refused") -- "Build Create Failure Row"'s OTHER row shape. Never a
+    # success-shaped outcome (this repo has no proof the create ever landed) and never
+    # `created_id_unknown` (that word is reserved for a write this module DID confirm was
+    # attempted with a known write path -- an unconfirmed create never reached that
+    # confidence at all). FAILED, same as `create_failed`, and the same honest reason:
+    # the operator gets no confirmation either way, and a value nobody can confirm is
+    # never reported as if it succeeded.
+    "create_unconfirmed": FAILED,
 }
 
 # The review endpoint's seven outcome words (review_decision.OUTCOMES), mapped onto

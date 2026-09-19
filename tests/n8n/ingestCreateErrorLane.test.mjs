@@ -190,3 +190,136 @@ test("zero-rejection batch: the response is unchanged in shape and Create Carry 
   assert.equal(failureRowRuns.length, 1);
   assert.equal(failureRowRuns[0]._gsd_sentinel_marker, true);
 });
+
+// =====================================================================================
+// Phase 74 Plan 05 Task 2 (D-74-06, CR-03) — a create that is neither a confirmed
+// success nor a HubSpot rejection must still reach the operator, as an unconfirmed
+// create, never silently carrying its stale pre-write "create" action.
+// =====================================================================================
+
+test("a create whose HubSpot response never joins at all reaches the response as create_unconfirmed, naming that no response joined", () => {
+  const wf = armGraphForCreate(
+    JSON.parse(fs.readFileSync(WF_PATH, "utf8")),
+    ["laneone.example", "lanetwo.example", "lanethree.example"]
+  );
+
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: triggerItems(),
+    httpStubs: {
+      ...commonStubs(),
+      // The short-return shape (mirrors ingestCarryMerge.test.mjs's own "short-return
+      // case"): three rows in, only TWO responses leave — row 2's create silently
+      // returned nothing, neither a success item nor an error item.
+      "HubSpot Create": (items) => items
+        .filter((it) => it.email !== EMAIL_2)
+        .map((it) => ({
+          id: it.email === EMAIL_1 ? CREATED_1 : CREATED_3,
+          properties: { email: it.email },
+        })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), [], "no merge may lose a row on this batch");
+
+  const rows = nodeItems(runData, "Build Ingest Response");
+  const byEmail = Object.fromEntries(rows.map((r) => [r.email, r]));
+
+  assert.equal(byEmail[EMAIL_1].action, "create");
+  assert.equal(byEmail[EMAIL_3].action, "create");
+
+  assert.equal(byEmail[EMAIL_2].action, "create_unconfirmed",
+    "never the stale pre-write 'create' action, and never silently swallowed");
+  assert.equal(byEmail[EMAIL_2].outcome, "create_unconfirmed");
+  assert.equal(byEmail[EMAIL_2].reason, "no create response joined to this row");
+  assert.notEqual(byEmail[EMAIL_2].association, "associated");
+  assert.equal(rows.length, 3, "every input row returns exactly once — no row lost");
+});
+
+test("a refused (ambiguous-identity) create reaches the response as create_unconfirmed, carrying its own reason distinct from the no-response-joined text", () => {
+  const wf = armGraphForCreate(
+    JSON.parse(fs.readFileSync(WF_PATH, "utf8")),
+    ["dupdomain.example"]
+  );
+  // Two rows sharing the SAME email — both net-new, both route to create, and
+  // pairCreateOutcome's own identity ladder (email first) computes the SAME key for
+  // both carried rows, so `keyCounts.get(key) > 1` refuses BOTH rather than guessing
+  // which one a create response belongs to.
+  const dupEmail = "duplicate@dupdomain.example";
+  const items = [
+    { email: dupEmail, firstname: "First", lastname: "Row", company: "Dup Domain Co" },
+    { email: dupEmail, firstname: "Second", lastname: "Row", company: "Dup Domain Co" },
+  ];
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: items,
+    httpStubs: {
+      "Verify Emails (batch)": [{
+        results: items.map((r) => ({ email: r.email, status: "VALID" })),
+      }],
+      "HubSpot Search by Email": items.map(() => ({ results: [] })),
+      "HubSpot Company Search by Domain": items.map(() => (
+        { results: [{ id: "9401", properties: { domain: "dupdomain.example" } }] }
+      )),
+      "HubSpot Company Search by Name": items.map(() => ({ results: [] })),
+      "HubSpot Create": (rows) => rows.map((r) => ({ id: `hs-${r.firstname}`, properties: { email: r.email } })),
+      "HubSpot Associate Company": (rows) => rows.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), [], "no merge may lose a row on this batch");
+
+  const rows = nodeItems(runData, "Build Ingest Response");
+  assert.equal(rows.length, 2, "both duplicate-identity rows still return, never collapsed to one");
+  for (const row of rows) {
+    assert.equal(row.action, "create_unconfirmed");
+    assert.equal(row.outcome, "create_unconfirmed");
+    assert.equal(row.reason, "identity key matches more than one carried row");
+    assert.notEqual(row.reason, "no create response joined to this row",
+      "the two create_unconfirmed sub-cases must stay distinguishable by reason text");
+    assert.notEqual(row.association, "associated");
+  }
+});
+
+test("a batch whose only create outcomes are unconfirmed emits those rows, never the zero-rejection marker", () => {
+  const wf = armGraphForCreate(
+    JSON.parse(fs.readFileSync(WF_PATH, "utf8")),
+    ["laneone.example", "lanethree.example"]
+  );
+  const items = [triggerItems()[0], triggerItems()[2]]; // EMAIL_1, EMAIL_3 — no EMAIL_2
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: items,
+    httpStubs: {
+      "Verify Emails (batch)": [{
+        results: items.map((r) => ({ email: r.email, status: "VALID" })),
+      }],
+      "HubSpot Search by Email": items.map(() => ({ results: [] })),
+      "HubSpot Company Search by Domain": [
+        { results: [{ id: COMPANY_1, properties: { domain: "laneone.example" } }] },
+        { results: [{ id: COMPANY_3, properties: { domain: "lanethree.example" } }] },
+      ],
+      "HubSpot Company Search by Name": items.map(() => ({ results: [] })),
+      // Neither create ever returns a response — no success, no error at all.
+      "HubSpot Create": [],
+      "HubSpot Associate Company": (rows) => rows.map(() => ({ status: "ok" })),
+    },
+  });
+
+  assert.deepEqual(starvedWithData(trace), [], "no merge may lose a row on this batch");
+
+  const rows = nodeItems(runData, "Build Ingest Response");
+  assert.equal(rows.length, 2, "no row is lost, and neither is replaced by a marker");
+  for (const row of rows) {
+    assert.equal(row.action, "create_unconfirmed");
+    assert.notEqual(row.action, "create", "never the stale pre-write action");
+  }
+
+  // "Build Create Failure Row" ran and emitted REAL rows, never its own zero-rejection
+  // sentinel marker — the whole point of widening its filter (D-74-06).
+  const failureRowRuns = nodeItems(runData, "Build Create Failure Row");
+  assert.equal(failureRowRuns.length, 2);
+  for (const item of failureRowRuns) {
+    assert.notEqual(item._gsd_sentinel_marker, true);
+  }
+});

@@ -850,6 +850,18 @@ return $input.all().map((it) => ({ json: { ...it.json, _create_error: true } }))
 # its OWN sentinel marker on the common (zero-rejection) case rather than relying on a
 # SEPARATE starved-lane sentinel, which would be a second producer on the same "Ingest
 # Merge Response" input and double-fire the lane under v1 (CLAUDE.md §13.0.3).
+#
+# Phase 74 Plan 05 Task 2 (D-74-06, CR-03): widened from "outcome === error" to
+# "outcome is not success" — pairCreateOutcome's own "none" (no create response ever
+# joined to this row's identity key) and "refused" (uncomputable or ambiguous identity
+# key) outcomes were previously dropped SILENTLY by both of this node's only two
+# consumers — this node's own OLD filter, and "Build Association Request"'s own
+# `if (!contactId) return null` (74-RESEARCH.md's own corrected trace) — so a create
+# that was neither a confirmed success nor a HubSpot rejection reached the operator
+# still carrying its stale pre-write "create" action. The zero-rejection marker branch's
+# own condition widens the same way, in the same edit, or a batch whose only create
+# outcomes are "none"/"refused" would still emit the marker instead of the unconfirmed
+# rows it must now produce.
 BUILD_CREATE_FAILURE_ROW_JS = r"""// Build Create Failure Row — the create-error lane's own contribution to "Ingest
 // Merge Response", the same way "Set Review"'s own contribution reaches it.
 //
@@ -869,22 +881,38 @@ function _createFailureReason(err) {
 }
 
 const allItems = $input.all().map((it) => it.json).filter(Boolean);
-const errors = allItems.filter((row) => row.create_outcome === "error");
+const nonSuccess = allItems.filter((row) => row.create_outcome !== "success");
 
-if (errors.length === 0) {
+if (nonSuccess.length === 0) {
   return [{ json: { __SENTINEL_MARKER_KEY__: true } }];
 }
 
-return errors.map((row) => ({ json: {
-  action: "create_failed",
-  outcome: "create_failed",
-  contact_id: null,
-  hs_object_id: null,
-  email: String(row.email || (row.properties && row.properties.email) || "").toLowerCase() || null,
-  company_id: row.company_id || null,
-  company_match: row.company_match || null,
-  reason: _createFailureReason(row.create_error),
-}}));
+return nonSuccess.map((row) => {
+  const base = {
+    contact_id: null,
+    hs_object_id: null,
+    email: String(row.email || (row.properties && row.properties.email) || "").toLowerCase() || null,
+    company_id: row.company_id || null,
+    company_match: row.company_match || null,
+  };
+  if (row.create_outcome === "error") {
+    return { json: { ...base,
+      action: "create_failed",
+      outcome: "create_failed",
+      reason: _createFailureReason(row.create_error),
+    }};
+  }
+  // D-74-06: "none" (no create response ever joined) / "refused" (uncomputable or
+  // ambiguous identity key) both reach the operator as an unconfirmed create — never
+  // silently carrying the row's stale pre-write "create" action. The two sub-cases
+  // stay distinguishable: "refused" always sets `create_outcome_reason`, "none" never
+  // does, so the fallback text below fires only for the true "no response at all" case.
+  return { json: { ...base,
+    action: "create_unconfirmed",
+    outcome: "create_unconfirmed",
+    reason: row.create_outcome_reason || "no create response joined to this row",
+  }};
+});
 """.replace("__SENTINEL_MARKER_KEY__", SENTINEL_MARKER_KEY)
 
 BUILD_INGEST_RESPONSE = ROW_IDENTITY_KEYS_JS + r"""// Build Ingest Response — the lane's per-row report, now read from the settled
@@ -947,6 +975,18 @@ const failedByEmail = {};
 for (const row of failed) {
   if (row.email) failedByEmail[String(row.email).toLowerCase()] = row;
 }
+// Phase 74 Plan 05 Task 2 (D-74-06): "Build Create Failure Row"'s OTHER contribution —
+// a create whose HubSpot response never joined at all ("none") or whose own identity
+// was uncomputable/ambiguous ("refused"). Joined by email, the same way `failed` is
+// (the same reasons apply: no `row_id` on this lane, a create's `hs_object_id` is null
+// pre-write). Never both `fail` and `unconfirmed` for the same row — a row only ever
+// reaches one of "Build Create Failure Row"'s two branches.
+const unconfirmed = allItems.filter((row) =>
+  row._decided_snapshot !== true && row.action === "create_unconfirmed");
+const unconfirmedByEmail = {};
+for (const row of unconfirmed) {
+  if (row.email) unconfirmedByEmail[String(row.email).toLowerCase()] = row;
+}
 const byRowId = {};
 const byContactId = {};
 const byEmail = {};
@@ -969,6 +1009,9 @@ return decided.map((row) => {
                 (row.hs_object_id && blockedByContactId[String(row.hs_object_id)]) ||
                 (email && blockedByEmail[email]) || null;
   const fail = (email && failedByEmail[email]) || null;
+  // D-74-06: an unconfirmed create — no response ever joined, or its own identity was
+  // uncomputable/ambiguous. Never set alongside `fail` for the same row.
+  const unconf = (email && unconfirmedByEmail[email]) || null;
   let association;
   if (!row.company_id) {
     association = "none";
@@ -978,18 +1021,19 @@ return decided.map((row) => {
     association = "not_confirmed";  // never reached the write gate, or HubSpot refused it
   }
   return { json: {
-    action: fail ? "create_failed" : (block ? "write_blocked" : row.action),
-    outcome: fail ? "create_failed" : (block ? "write_blocked" : (row.outcome || null)),
+    action: fail ? "create_failed" : (unconf ? "create_unconfirmed" : (block ? "write_blocked" : row.action)),
+    outcome: fail ? "create_failed" : (unconf ? "create_unconfirmed" : (block ? "write_blocked" : (row.outcome || null))),
     contact_id: contactId,
     hs_object_id: contactId,
     email: email || null,
     company_id: row.company_id || null,
     company_match: row.company_match || null,
     // A refused write never reached the association lane either — one verdict covers
-    // both (D-70-15), so it cannot report "associated". A rejected create is the same
-    // story from HubSpot's own side, not the gate's — same rule applies.
-    association: (fail || (block && association === "associated")) ? "not_confirmed" : association,
-    reason: (fail && fail.reason) || (block && block.write_blocked_reason) || row.reason || null,
+    // both (D-70-15), so it cannot report "associated". A rejected or unconfirmed
+    // create is the same story from HubSpot's own side, not the gate's — same rule
+    // applies.
+    association: (fail || unconf || (block && association === "associated")) ? "not_confirmed" : association,
+    reason: (fail && fail.reason) || (unconf && unconf.reason) || (block && block.write_blocked_reason) || row.reason || null,
     email_status: row.email_status || null,
     // 73.1-06 (D-16d): `row` here is the decided snapshot -- "Decide Action" already
     // stamped `resolved_by` on it, so this is a straight carry, never a re-derivation.

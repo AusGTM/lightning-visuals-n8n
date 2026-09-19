@@ -125,6 +125,23 @@ def test_an_unrecognised_action_is_failed_and_reason_is_preserved():
     assert entry["reason"] == "never seen this"
 
 
+def test_create_unconfirmed_is_failed_never_a_success_shaped_outcome():
+    """Phase 74 Plan 05 Task 2 (D-74-06, CR-03): a create whose HubSpot response never
+    joined to its own row at all, or whose own identity was uncomputable/ambiguous --
+    "Build Create Failure Row"'s OTHER row shape (`create_failed`'s own sibling). Never
+    WRITTEN/WRITE_ATTEMPTED/CREATED_ID_UNKNOWN (this module has no proof the create ever
+    reached HubSpot at all) -- FAILED is the honest word, same as `create_failed`."""
+    entry = written_records.classify_item(
+        {"action": "create_unconfirmed", "reason": "no create response joined to this row"}
+    )
+    assert entry["outcome"] == written_records.FAILED
+    assert entry["outcome"] not in {
+        written_records.WRITTEN, written_records.WRITE_ATTEMPTED,
+        written_records.CREATED_ID_UNKNOWN, written_records.WRITTEN_ID_UNKNOWN,
+    }
+    assert entry["reason"] == "no create response joined to this row"
+
+
 def test_a_bare_queue_needs_review_body_with_no_action_is_held_not_failed():
     """F1 (uat-batch-review-row-reads-failed, run 377a913c…, execution 12147): before the
     backend fix, `Set Review`'s dead-end wiring meant the webhook responded with its bare
@@ -159,13 +176,15 @@ def test_a_queue_field_with_a_real_action_present_is_unaffected():
 
 def test_the_eleven_real_action_values_are_extracted_from_the_builder_not_hardcoded():
     """REVIEW-57-M: circularity guard. The set is read FROM
-    `scripts/build_cloud_workflows.py`, not typed out here — a twelfth action added
+    `scripts/build_cloud_workflows.py`, not typed out here — a thirteenth action added
     there fails this test in the client, which is the point. Phase 70 Plan 03 Task 2
     (D-70-07) added `list_expansion_refused` and `scale_up_dispatched`, "Build Refusal
     Row"'s two shapes; Phase 70 Plan 13 (D-70-24) deleted the fan-out lane and with it
     the second of those, leaving eleven. Phase 73 Plan 06 Task 3 (D-73-01) added a
-    twelfth, "Build Create Failure Row"'s own `create_failed` — the test name is kept
-    (renaming it is not the point the test makes) but the count is now twelve."""
+    twelfth, "Build Create Failure Row"'s own `create_failed`. Phase 74 Plan 05 Task 2
+    (D-74-06) added a thirteenth, that same node's `create_unconfirmed` sibling — the
+    test name is kept (renaming it is not the point the test makes) but the count is
+    now thirteen."""
     extracted = _action_literals_from_builder()
     assert extracted == set(written_records.ACTION_TO_OUTCOME) | written_records.WRITE_ACTIONS
 
@@ -173,7 +192,7 @@ def test_the_eleven_real_action_values_are_extracted_from_the_builder_not_hardco
 @pytest.mark.parametrize("action", [
     "create", "update", "enrich", "write_blocked", "review", "needs_match_review",
     "research_failed", "recompute_refused", "skip", "proposed",
-    "list_expansion_refused", "create_failed",
+    "list_expansion_refused", "create_failed", "create_unconfirmed",
 ])
 def test_every_one_of_the_eleven_real_actions_is_exercised(action):
     """Non-circular per-value exercise — the literals above are typed here only to
