@@ -632,7 +632,7 @@ reason each. Regenerate JSON, suites green, disarmed deploy is the operator's st
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on decisions D-74-01..D-74-14 and the
 `73-REVIEW.md` finding ids CR-01..04 / WR-01..12.
 **Depends on:** Phase 73
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -647,7 +647,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 74-05-PLAN.md — create-error lane cluster: D-74-04/05 stamp, D-74-06 create_unconfirmed, D-74-02 sentinel, D-74-01 comment, WR-10, one ingest regeneration (wave 3)
+- [x] 74-05-PLAN.md — create-error lane cluster: D-74-04/05 stamp, D-74-06 create_unconfirmed, D-74-02 sentinel, D-74-01 comment, WR-10, one ingest regeneration (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
