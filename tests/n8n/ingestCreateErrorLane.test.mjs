@@ -329,3 +329,84 @@ test("a batch whose only create outcomes are unconfirmed emits those rows, never
     assert.notEqual(item._gsd_sentinel_marker, true);
   }
 });
+
+// =====================================================================================
+// Phase 74 Plan 05 Task 3 (D-74-02) — "Create Failure Row Sentinel" itself. Every other
+// behavior test above proves the RESPONSE is correct; these prove the MECHANISM is: the
+// sentinel's own gate delivers a marker on exactly the batch shapes where "Build Create
+// Failure Row" never runs at all, and stays silent otherwise — each asserted directly,
+// not inferred from the response.
+// =====================================================================================
+
+function sentinelFired(runData) {
+  return nodeItems(runData, "Create Failure Row Sentinel Gate").length > 0;
+}
+
+test("all-update batch (zero create-routed rows): the sentinel delivers a marker and no merge stalls", () => {
+  // Deliberately the PLAIN disarmed graph — "zero create-routed rows" is satisfied by
+  // the row's own action (never "create"), independent of any gate's own arming state.
+  const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
+  const updateEmail = "onlyupdate@laneone.example";
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: [{ email: updateEmail, firstname: "Only", lastname: "Update", company: "Lane One Co" }],
+    httpStubs: {
+      "Verify Emails (batch)": [{ results: [{ email: updateEmail, status: "VALID" }] }],
+      "HubSpot Search by Email": [{ results: [{ id: "35551", properties: { email: updateEmail } }] }],
+      "HubSpot Contact History": [{ propertiesWithHistory: {} }],
+      "HubSpot Company Search by Domain": [{ results: [{ id: COMPANY_1, properties: { domain: "laneone.example" } }] }],
+      "HubSpot Company Search by Name": [{ results: [] }],
+      // Unstubbed on purpose: an unarmed update never reaches the write, so if the
+      // graph wrongly routed it there, this fixture throws rather than silently
+      // passing.
+    },
+  });
+  assert.deepEqual(starvedWithData(trace), [], "no merge may stall");
+  assert.ok(sentinelFired(runData), "the sentinel must deliver a marker: zero create-routed rows this execution");
+  assert.equal(nodeItems(runData, "Build Create Failure Row").length, 0,
+    "the real producer never runs at all on this batch — Create Carry Merge never fires");
+});
+
+test("disarmed batch containing create-routed rows: the sentinel delivers a marker and no merge stalls", () => {
+  // Deliberately NOT armed for create — mirrors the committed (shipped-disarmed) build.
+  const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: triggerItems(),
+    httpStubs: {
+      ...commonStubs(),
+      // Unstubbed on purpose: if the graph wrongly routed a row to "HubSpot Create"
+      // while disarmed, this fixture throws rather than silently passing.
+    },
+  });
+  assert.deepEqual(starvedWithData(trace), [], "no merge may stall on a disarmed batch with create-routed rows");
+  assert.ok(sentinelFired(runData),
+    "the sentinel must deliver a marker: every create-routed row is refused pre-write");
+  assert.equal(nodeItems(runData, "HubSpot Create").length, 0, "the write gate must have refused every create");
+  assert.equal(nodeItems(runData, "Build Create Failure Row").length, 0,
+    "Create Carry Merge never fires on a fully-refused create batch");
+});
+
+test("permitted create batch: the sentinel does NOT deliver a marker — the real producer is the only delivery", () => {
+  const wf = armGraphForCreate(
+    JSON.parse(fs.readFileSync(WF_PATH, "utf8")),
+    ["laneone.example", "lanetwo.example", "lanethree.example"]
+  );
+  const { runData, trace } = walkWorkflow(wf, {
+    triggerNode: "Webhook Trigger",
+    triggerItems: triggerItems(),
+    httpStubs: {
+      ...commonStubs(),
+      "HubSpot Create": [
+        { id: CREATED_1, properties: { email: EMAIL_1 } },
+        { id: "hs-created-2", properties: { email: EMAIL_2 } },
+        { id: CREATED_3, properties: { email: EMAIL_3 } },
+      ],
+    },
+  });
+  assert.deepEqual(starvedWithData(trace), [], "no merge may stall");
+  assert.equal(nodeItems(runData, "Create Failure Row Sentinel Gate").length, 0,
+    "the sentinel must never deliver on a batch where at least one create is permitted");
+  assert.equal(nodeItems(runData, "Build Create Failure Row").length, 1,
+    "the real producer is the only delivery on this input");
+});
