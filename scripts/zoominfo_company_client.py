@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from scripts.check_provider_credits import _check_zoominfo, _mint_zoominfo_token  # noqa: E402
+from src.icp_scoring import region_aliases  # noqa: E402
 from src.normalizer import normalize_revenue_band  # noqa: E402
 
 GTM_ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/companies/enrich"
@@ -108,18 +109,18 @@ def zoominfo_country_region(value):
     """Mirrors the JS `normalizeCountryRegion` contract (n8n/code/normalizeProviders.js),
     NOT src.normalizer.normalize_country_region: a blank/whitespace-only/absent value
     returns None (never the truthy sentinel string "Unknown" the src normalizer emits,
-    which compute_icp_score misreads as a non-ANZ hard-veto determination)."""
+    which compute_icp_score misreads as a non-ANZ hard-veto determination). Phase 75
+    (D-75-06/D-75-08): the mapped-country lookup now shares config/icp_scoring.yaml's
+    regions.aliases (via src.icp_scoring.region_aliases()) with the other two lanes --
+    the single source, no hand-typed literal list -- while this lane's own blank-sentinel
+    contract (None, not "Unknown") is unchanged."""
     if value is None:
         return None
     v = str(value).strip()
     if not v:
         return None
     v = v.lower()
-    if v in ("australia", "au", "aus"):
-        return "AU"
-    if v in ("new zealand", "nz"):
-        return "NZ"
-    return "Other"
+    return region_aliases().get(v, "Other")
 
 
 def enrich_company(domain: str, token: str) -> dict:

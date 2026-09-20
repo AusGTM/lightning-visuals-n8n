@@ -19,6 +19,12 @@ regions:
     - SG
     - AE
     - IN
+  # Phase 75 (D-75-08): the SINGLE country-name/ISO2 -> region-code table in the system.
+  # Superset of the union of: n8n/code/normalizeProviders.js's deleted _COUNTRY_ISO2 map,
+  # normalizeCountryRegion's/normalize_country_region's/zoominfo_country_region's own
+  # literal lists, plus a self-alias for every regions.home code. Keys are lowercase; every
+  # lookup lowercases its input first. tests/n8n/regionAliasParity.test.mjs pins this
+  # against a frozen historical key list.
   aliases:
     australia: AU
     au: AU
@@ -28,6 +34,28 @@ regions:
     anz: ANZ
     us: US
     united states: US
+    united states of america: US
+    canada: CA
+    ca: CA
+    united kingdom: GB
+    great britain: GB
+    england: GB
+    gb: GB
+    ireland: IE
+    republic of ireland: IE
+    ie: IE
+    south africa: ZA
+    za: ZA
+    hong kong: HK
+    hong kong sar: HK
+    hk: HK
+    singapore: SG
+    sg: SG
+    united arab emirates: AE
+    uae: AE
+    ae: AE
+    india: IN
+    in: IN
 
 base_score:
   org_type:

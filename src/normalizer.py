@@ -8,6 +8,7 @@ from typing import Any, List
 import phonenumbers
 from email_validator import validate_email, EmailNotValidError
 
+from .icp_scoring import region_aliases
 from .schemas import ProviderResult, CandidateValue
 
 
@@ -78,14 +79,14 @@ def normalize_employee_band(value: Any):
 
 
 def normalize_country_region(value: Any):
+    # Phase 75 (D-75-06/D-75-08): reads config/icp_scoring.yaml's regions.aliases via
+    # src.icp_scoring.region_aliases() -- the single source, no hand-typed literal list.
+    # This lane's blank sentinel ("Unknown") is unchanged -- a real, documented difference
+    # from the JS lane's null and the ZoomInfo lane's None.
     if not value:
         return "Unknown"
     v = str(value).strip().lower()
-    if v in ["australia", "au", "aus"]:
-        return "AU"
-    if v in ["new zealand", "nz"]:
-        return "NZ"
-    return "Other"
+    return region_aliases().get(v, "Other")
 
 
 def normalize_phone(value: Any, region: str = "AU"):

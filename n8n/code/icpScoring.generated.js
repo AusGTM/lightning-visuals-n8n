@@ -32,7 +32,29 @@ const REGION_ALIASES = {
   "nz": "NZ",
   "anz": "ANZ",
   "us": "US",
-  "united states": "US"
+  "united states": "US",
+  "united states of america": "US",
+  "canada": "CA",
+  "ca": "CA",
+  "united kingdom": "GB",
+  "great britain": "GB",
+  "england": "GB",
+  "gb": "GB",
+  "ireland": "IE",
+  "republic of ireland": "IE",
+  "ie": "IE",
+  "south africa": "ZA",
+  "za": "ZA",
+  "hong kong": "HK",
+  "hong kong sar": "HK",
+  "hk": "HK",
+  "singapore": "SG",
+  "sg": "SG",
+  "united arab emirates": "AE",
+  "uae": "AE",
+  "ae": "AE",
+  "india": "IN",
+  "in": "IN"
 };
 
 const HARD_VETO_REASONS = {

@@ -15,19 +15,22 @@
 
 const { normalizePhoneAU, normalizePhone } = require("./normalizePhone");
 const { normalizeEmailBasic } = require("./normalizeEmail");
+const { REGION_ALIASES } = require("./icpScoring.generated");
 
-// Country NAME -> ISO2 (Apollo returns names like "United States"; Lusha gives country_iso2
-// directly). Unmapped -> undefined, so normalizePhone falls back to its AU heuristic.
-const _COUNTRY_ISO2 = {
-  australia: "AU", "new zealand": "NZ", "united states": "US", "united states of america": "US",
-  canada: "CA", "united kingdom": "GB", "great britain": "GB", england: "GB", ireland: "IE",
-  india: "IN", singapore: "SG",
-};
+// Country NAME/ISO2 -> ISO2 (Apollo returns names like "United States"; Lusha gives
+// country_iso2 directly). Phase 75 (D-75-08): reads the generated REGION_ALIASES table
+// (config/icp_scoring.yaml regions.aliases via scripts/gen_icp_scoring_js.py) instead of
+// a second hand-typed map. The guard below is load-bearing: REGION_ALIASES also carries
+// non-ISO2 aliases (e.g. anz -> ANZ), and returning a 3-letter pseudo-ISO2 to
+// normalizePhone would change today's behaviour (today _iso2("ANZ") is undefined and the
+// AU heuristic runs). Unmapped -> undefined, so normalizePhone falls back to its AU
+// heuristic.
 function _iso2(nameOrCode) {
   if (!nameOrCode) return undefined;
   const v = String(nameOrCode).trim();
   if (/^[A-Za-z]{2}$/.test(v)) return v.toUpperCase();  // already ISO2
-  return _COUNTRY_ISO2[v.toLowerCase()];
+  const alias = REGION_ALIASES[v.toLowerCase()];
+  return /^[A-Z]{2}$/.test(alias || "") ? alias : undefined;
 }
 
 // 260826-20w Task 2: hs_country_region_code / hs_state_code candidates are derived ONLY
@@ -143,12 +146,13 @@ function _numericHeadcount(value) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Phase 75 (D-75-06/D-75-08): reads config/icp_scoring.yaml's regions.aliases via the
+// generated REGION_ALIASES constant (scripts/gen_icp_scoring_js.py) — the single source,
+// no hand-typed literal list. Blank/absent stays this lane's unchanged sentinel: null.
 function normalizeCountryRegion(value) {
   if (!value) return null;
   const v = String(value).trim().toLowerCase();
-  if (["australia", "au", "aus"].includes(v)) return "AU";
-  if (["new zealand", "nz"].includes(v)) return "NZ";
-  return "Other";
+  return REGION_ALIASES[v] || "Other";
 }
 
 function _clamp01(n) {

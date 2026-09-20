@@ -6,6 +6,8 @@
 # Tier cutoffs are hard-coded here (>=70 A, >=40 B, >=15 C, else Unscored) and
 # CONFIRMED to agree with config/icp_scoring.yaml `tier_rules` (A min 70,
 # B 40-69, C 15-39) — config and code are consistent for the MVP.
+import functools
+
 import yaml
 from .schemas import HubSpotRecord, ICPScoreResult
 
@@ -13,6 +15,20 @@ from .schemas import HubSpotRecord, ICPScoreResult
 def load_yaml(path: str) -> dict:
     with open(path, "r") as f:
         return yaml.safe_load(f)
+
+
+# Phase 75 (D-75-08): the single loader src/normalizer.py and scripts/zoominfo_company_
+# client.py both reuse -- no second YAML parser. lru_cache means a config edit during the
+# same process (e.g. a test that monkeypatches the yaml) needs cache_clear(); production
+# code never mutates config/icp_scoring.yaml mid-process.
+@functools.lru_cache(maxsize=1)
+def regions_home() -> list:
+    return load_yaml("config/icp_scoring.yaml")["regions"]["home"]
+
+
+@functools.lru_cache(maxsize=1)
+def region_aliases() -> dict:
+    return load_yaml("config/icp_scoring.yaml")["regions"]["aliases"]
 
 
 def boolish(value):
