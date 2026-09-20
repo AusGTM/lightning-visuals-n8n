@@ -68,7 +68,7 @@ carrying its live evidence.
 - [x] Phase 73: GA fix list from stress attempt 2 (added 2026-09-15 after stress attempt 2; 7 plans; attempt 3 A–F PASS) (completed 2026-09-18)
 - [x] Phase 73.1: Provider-backed contact discovery as source tier 2 (inserted 2026-09-18 by operator ruling; runs before 74) (completed 2026-09-19)
 - [x] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking) (completed 2026-09-19)
-- [ ] Phase 75: Config-driven region whitelist and scoring-version staleness (added 2026-09-20 — client now pursues international targets; keep the veto, whitelist moves to config/icp_scoring.yaml)
+- [x] Phase 75: Config-driven region whitelist and scoring-version staleness (added 2026-09-20 — client now pursues international targets; keep the veto, whitelist moves to config/icp_scoring.yaml) (completed 2026-09-20)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -687,7 +687,7 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 6/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
