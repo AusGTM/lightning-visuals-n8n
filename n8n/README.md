@@ -35,6 +35,11 @@ orientation, and **the committed `wf_*.json` as authority** for what a node cont
 
 **Two further currency facts, both load-bearing:**
 
+- **Corrected 2026-09-20 (Phase 75 plan 06):** SIX cloud workflows are live (suggest discovery
+  added 2026-09-18, Phase 73.1) and committed/live are level at enrichment 289 / ingest 101 /
+  review 55 / maintenance 43 / backend status 33 / discovery 26 nodes, `executionOrder: v1` on
+  all six, all four `ALLOW_HUBSPOT_*` flags `false` (CLAUDE.md §10.3.3). The paragraph below
+  is the 2026-09-10 moment it describes.
 - **Committed and live are LEVEL as of Gate 10, 2026-09-10** (CLAUDE.md §13.0.2's dated
   addendum): all five cloud workflows run the committed v1 bodies — 287/69/55/43/30 nodes,
   `settings.executionOrder: "v1"` read back on every one — active and disarmed. Gate 11

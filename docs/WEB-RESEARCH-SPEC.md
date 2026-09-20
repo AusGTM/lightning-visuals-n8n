@@ -544,7 +544,7 @@ Golden set = the five live prospect accounts, which between them cover every bra
 | Racing NSW | `governing_body_league` + content `true` w/ evidence → Tier A/B |
 | Melbourne Racing Club | provider text is filler → research carries the classification alone |
 | Australian Turf Club | `individual_club_team` — Tier B path (`46-DECISION.md` D-01: club weight raised 5→15) |
-| FanDuel | `gambling_operator` + non-ANZ → veto (non-ANZ hard veto only; gambling itself no longer carries a scoring deduction, `46-DECISION.md` D-03) |
+| FanDuel | `gambling_operator` + non-ANZ → veto (non-ANZ hard veto only; gambling itself no longer carries a scoring deduction, `46-DECISION.md` D-03). **Stale as of Phase 75 (2026-09-20):** `US` is in `regions.home`, so the geography veto no longer fires for FanDuel — this row now asserts only the `gambling_operator` classification; whether it vetoes depends on `lv_produces_content` alone |
 | Harvey Norman | entity resolution — franchise/group split detected |
 
 **AT-1.** Synthetic "obscure club, no web presence" MUST yield `null`, never `false`.

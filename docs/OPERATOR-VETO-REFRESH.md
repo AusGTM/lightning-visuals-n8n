@@ -43,6 +43,17 @@ inputs listed under "What changed" are now effectively four: the veto fires on
 `lv_is_hardware_vendor === true` **OR** `lv_org_type === "hardware_vendor"`. Retroactive —
 Simtech LED moved Tier B → D on execution `11861` with no input write at all.
 
+**4. Phase 75 (2026-09-20) — the geography predicate is config-driven and the reason string
+changed.** The veto fires for a KNOWN region outside `config/icp_scoring.yaml`'s `regions.home`
+(12 codes: `AU NZ ANZ US GB IE CA ZA HK SG AE IN`); blank never vetoes; the reason is
+`Outside target regions` (was `Non-ANZ geography` — the legacy string on already-vetoed
+records is refreshed only by the bump sweep in `docs/OPERATOR-RESCORE.md`). Decide also stamps
+`lv_icp_scoring_version` (live property). A FOURTH kill switch,
+`ALLOW_HUBSPOT_RECOMPUTE_WRITES`, grants a `recompute`-classified write with no allowlist —
+ships `"false"`, not flipped, `disarm()` cannot touch it. While it is `"false"` the recompute
+lane above still returns `write_blocked` (executions `12682`, `12683`, 2026-09-20). CLAUDE.md
+§10.3.3.
+
 Full record: `.planning/phases/47.5-veto-recompute-path/` (`47.5-CONTEXT.md`, `47.5-RUN-REPORT.md`).
 
 ---

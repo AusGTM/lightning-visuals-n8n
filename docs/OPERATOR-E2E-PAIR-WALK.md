@@ -26,6 +26,10 @@ refactor and Phase 72's ingest widening moved them to Contact Ingest 78 nodes, E
 write flag still `"false"` — CLAUDE.md §13.0.2 "Phase 72 gate" addendum). Re-verify live node
 counts before trusting this precondition rather than relying on any number in this file.
 
+**Corrected again 2026-09-20 (Phase 75):** six cloud workflows now — Contact Ingest 101,
+Enrichment 289, Review Decision 55, Scheduled Maintenance 43, Backend Status 33, Suggest
+Discovery 26 — all `v1`, all four `ALLOW_HUBSPOT_*` flags `"false"` (CLAUDE.md §10.3.3).
+
 ```bash
 git push origin master
 git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master

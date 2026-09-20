@@ -6,6 +6,73 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-20
+
+### Added
+- **Config-driven region whitelist (Phase 75, D-75-05/06/08).** `config/icp_scoring.yaml`
+  carries `regions.home` (`AU NZ ANZ US GB IE CA ZA HK SG AE IN`) and `regions.aliases`, the
+  SINGLE country-name/ISO2 → region-code table. `scripts/gen_icp_scoring_js.py` renders it to
+  `n8n/code/icpScoring.generated.js` (inlined ahead of `normalizeProviders.js` at all three
+  call sites; `_COUNTRY_ISO2` deleted). Both scoring engines key geography on set membership —
+  `home` / `other` / `unknown` — with blank never vetoing. Parity pinned by
+  `tests/n8n/regionAliasParity.test.mjs` and `tests/test_icp_scoring_generated_currency.py`.
+- **`lv_icp_scoring_version` company property, live (D-75-03).** Created 2026-09-20 (POST 201,
+  undo manifest `7ee513f4-644d-4788-8b1f-fcda558fb767`), stamped by both engines. Stale is
+  `lv_icp_scoring_version != config.version` (opaque string, `lv-icp-v0.2` today).
+- **Fourth `ALLOW_HUBSPOT_*` kill switch: `ALLOW_HUBSPOT_RECOMPUTE_WRITES` (D-75-16/17/18/19).**
+  Grants a `recompute`-classified write on this flag alone (exactly `lv_anti_icp_flag`,
+  `lv_anti_icp_flag_num`, `lv_anti_icp_reason`, `lv_icp_scoring_version`; no status property,
+  no allowlist). Ships `"false"`; `n8n_arming.py::disarm()` cannot touch it
+  (`tests/test_recompute_flag_isolation.py`); `bounce_n8n_workflows.py` prints it every run.
+  **Not flipped** — the D-75-17 flip is an operator procedure in `docs/OPERATOR-RESCORE.md`.
+- **Version-stale recompute reroute (D-75-12)** as a GATE-DERIVED marker, not a request flag:
+  `Company Gate` sets `row.recompute = true` / `row.recompute_reason = "version_stale"` on a
+  `skip` verdict whose stamp differs from `config.version`; the existing `IF Company Recompute`
+  routes it to `Decide`. Zero nodes added; guarded by `!row.lookup_failed` and baked off on
+  `wf_enrichment_local_live.json`. `tests/n8n/companyVersionStaleRecompute.test.mjs`.
+- **SJ-2 monthly backstop selects version-stale companies (D-75-13/15)** — two filter groups
+  anchored on `HAS_PROPERTY lv_org_type`; dispatch keeps the `enrich` classification, so its
+  write stays allowlist-gated (`.planning/todos/pending/2026-09-20-sj2-version-stale-backstop-is-armed-only.md`).
+- **`scripts/gen_geography_flow.py`** regenerates HubSpot flow `4626722240 Geography Score`'s
+  branch from `regions.home`; `scripts/sync_hubspot_properties.py` classifies enum option
+  ADD/HIDE separately from the delete refusal (D-75-07/11).
+
+### Changed
+- **`hard_vetoes.non_anz` → `hard_vetoes.outside_home_regions`; reason `"Non-ANZ geography"` →
+  `"Outside target regions"` (D-75-01/02).** All three hard-veto reason strings now come from
+  the yaml in both engines. Records still carrying the legacy string are refreshed by the bump
+  sweep only (D-75-03) — no remediation script exists or should.
+- `config/icp_scoring.yaml` `version` `lv-icp-v0.1` → `lv-icp-v0.2`.
+- `lv_country_region_normalized` carries 16 options live, `UK` hidden not deleted (forward-only);
+  `scripts/gen_hubspot_enums_js.py` repointed to
+  `config/hubspot_migration/baseline/portal-schema-companies-phase75.json` and
+  `hubspotEnums.generated.js` regenerated; `tests/fixtures/companies_jscode_frozen.json`
+  explicitly re-baselined (`b7a6ddde`).
+- HubSpot flow `4626722240` PUT live (revision 13 → 14). True rollback body is
+  `config/hubspot_flows/4626722240-geography-score.pre75.json` — Phase 40's `.before.json` is
+  NOT a rollback.
+- `docs/OPERATOR-RESCORE.md` top amendment: the bump sweep (D-75-14) and the standing-flag flip
+  (D-75-17). CLAUDE.md §10.3.3 records the as-built delta.
+
+### Fixed
+- **`scripts/check_schema_drift.py` compared the geography flow against the `GET
+  /automation/v4/flows` LIST response, which carries no `actions`** — every live run reported
+  `ambiguous_branch, found 0`. Now fetches the single-flow body (RED `4a73ae7a`, GREEN
+  `0221804a`); live run `in_sync`, exit 0.
+
+### Verified live (2026-09-20, Phase 75 plans 05/06)
+- Schema: `lv_icp_scoring_version` POST 201; region options PATCH 200 (8 → 16, `UK` hidden);
+  read-backs in `config/hubspot_migration/baseline/portal-schema-{companies,contacts}-phase75.json`.
+- Four cloud bodies deployed disarmed via `--only` and bounced (`bounce_exit=0`): live nodes
+  enrichment 289 / maintenance 43 / ingest 101 / review 55 = committed; `executionOrder: v1`;
+  all four `ALLOW_HUBSPOT_*` flags `false`. Backend status (33) and discovery (26) unchanged
+  since 2026-09-18.
+- Two recompute proofs, exactly two executions (`12682` MRC `AU` → flag false, reason blank;
+  `12683` Jam TV `Other` → flag true, reason `Outside target regions`), both `write_blocked`,
+  0 provider credits, burst watch clean. Frozen redacted at
+  `tests/n8n/fixtures/frozen/exec_1268{2,3}.runData.json`. No company record written. Nothing
+  armed. Records: `75-SCHEMA-RECORD.md`, `75-DEPLOY-RECORD.md`, `75-UAT.md`.
+
 ### Fixed
 - **`reviewApply` now stringifies a boolean `canonicalPatch` value, completing D-07**
   (quick task 260918-322, F-S5). `mergeCompanies` mints a boolean candidate's

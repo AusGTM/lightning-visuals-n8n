@@ -84,6 +84,8 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 
 **Scoring model** 
 
+> **Amended 2026-09-20 (Phase 75).** "ANZ" below reads as *home region*: the whitelist is now `config/icp_scoring.yaml` `regions.home` — `AU NZ ANZ US GB IE CA ZA HK SG AE IN` — with +10 inside it, the hard veto `Outside target regions` for a known region outside it, and no veto for a blank/unknown region. The rubric version is `lv-icp-v0.2`, stamped on each scored company as `lv_icp_scoring_version`.
+
 | Signal / attribute | Points |
 | :---- | :---- |
 | Org: governing-body / league | \+40 |
@@ -92,7 +94,7 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 | Org: regulator | –20 |
 | Other | 0 |
 | Produces broadcast/streaming content | \+20 (none \= hard veto) |
-| Geography: ANZ | \+10 (non-ANZ \= hard veto) |
+| Geography: home region (ANZ; 12-code whitelist from Phase 75) | \+10 (outside \= hard veto) |
 | Revenue: $5–500M | \+10 (see decay table for \>$500M) |
 
 **Graduated deductions** (negative exponential decay scoring model, don’t set lv\_anti\_icp\_flag; applied after base points):

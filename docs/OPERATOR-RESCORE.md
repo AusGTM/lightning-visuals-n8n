@@ -216,7 +216,8 @@ produced by `scripts/rescore_population.py --plan` against the live portal.
 
 ## Step 1 — classify the change (do this first, before any write)
 
-Did the rubric change touch a **hard-veto predicate** — non-ANZ geography, no
+Did the rubric change touch a **hard-veto predicate** — non-ANZ geography (since Phase 75:
+"outside `regions.home`", the 12-code whitelist in `config/icp_scoring.yaml`), no
 broadcast/streaming content, or hardware-vendor?
 
 ```
@@ -256,17 +257,25 @@ lives entirely in the n8n `Decide Company Action` node, keyed on `lv_country_reg
 of which Phase 46 edited. **This NO answer is specific to Phase 46's own change. It is not
 a general rule.** A different rubric edit — adding an org type, changing what counts as
 ANZ, changing the no-content or hardware-vendor logic — must be re-classified against
-Step 1 above; do not assume NO by default.
+Step 1 above; do not assume NO by default. **Phase 75 (2026-09-20) was a YES** — it changed
+what counts as a home region and renamed the reason string — and the veto branch it implies
+is the bump sweep in the top amendment, deliberately not run yet.
 
 ---
 
 ## Why the whole population, every time
 
-There is no `lv_icp_scoring_version` property on any company record, and there will not
-be one — a standing no-new-properties constraint for this project. That means a record
-scored under a superseded rubric cannot be segmented out in a HubSpot list; there is no
+> **SUPERSEDED 2026-09-20 (Phase 75, D-75-03).** `lv_icp_scoring_version` now EXISTS live
+> (created 2026-09-20), both engines stamp it, and a version-stale population CAN be selected
+> (`lv_icp_scoring_version` NEQ the new version, or `HAS_PROPERTY` false). The bump sweep in
+> the top amendment is the segmented path. Until the first sweep runs, no record carries the
+> stamp, so the whole-population reasoning below still describes the current portal state.
+
+~~There is no `lv_icp_scoring_version` property on any company record, and there will not
+be one — a standing no-new-properties constraint for this project.~~ That meant a record
+scored under a superseded rubric could not be segmented out in a HubSpot list; there was no
 field to filter on that says "scored before the last weight change." Any rubric change
-therefore re-scores the **entire scored population**, wholesale, every time. That is the
+therefore re-scored the **entire scored population**, wholesale, every time. That is the
 reason RESCORE-02 exists, stated in plain language rather than left as a cross-reference.
 
 ---

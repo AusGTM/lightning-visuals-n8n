@@ -465,7 +465,9 @@ of those four diff-clean. The shared engines make a diff-clean non-ingest body i
 
 Then bounce (deactivate → activate) every cloud workflow the deploy touched. Read back, for
 each: the node count matches the committed JSON, `settings.executionOrder` reads `"v1"`, and
-both write-safety flags (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`) read `"false"`.
+every write-safety flag (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`,
+`ALLOW_HUBSPOT_REVIEW_WRITES` and, since Phase 75, `ALLOW_HUBSPOT_RECOMPUTE_WRITES`) reads
+`"false"` — `scripts/bounce_n8n_workflows.py` prints all four.
 A workflow whose regenerated JSON is byte-identical to what is already live is not
 redeployed — confirm which ones actually changed from the deploy script's own dry-run diff
 before running the armed form.
@@ -488,8 +490,9 @@ per-record and operator-directed, never unattended or scheduled (see `n8n-legacy
 project memory: the bounce script itself exits 1 while any workflow is armed, which is the
 mechanical backstop against leaving one open).
 
-After the send completes, disarm and confirm — read back `ALLOW_HUBSPOT_RECORD_WRITES` and
-`ALLOW_HUBSPOT_CREATE` on every workflow touched: **both must read `"false"` again.** Do not
+After the send completes, disarm and confirm — read back `ALLOW_HUBSPOT_RECORD_WRITES`,
+`ALLOW_HUBSPOT_CREATE`, `ALLOW_HUBSPOT_REVIEW_WRITES` and `ALLOW_HUBSPOT_RECOMPUTE_WRITES` on
+every workflow touched: **all four must read `"false"` again.** Do not
 proceed to step 4 until this reads clean.
 
 ### Step 4 — re-read the created contact
