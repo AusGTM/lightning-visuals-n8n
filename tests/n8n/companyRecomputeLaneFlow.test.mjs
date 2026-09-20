@@ -28,9 +28,16 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 
+const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
+// Phase 75 Plan 03 (D-75-12): completeRecord()'s "complete" now also means "not
+// version-stale" -- an omitted lv_icp_scoring_version would make every fixture here read
+// as stale (undefined !== VERSION) and reroute into the recompute lane, breaking every
+// assertion below that depends on the ORIGINAL request-level recompute lane in isolation.
+const { VERSION } = require(path.join(ROOT, "n8n/code/icpScoring.generated.js"));
 
 // Nodes that cost money or time. None may appear on the recompute lane.
 const COSTLY_NODES = [
@@ -106,7 +113,13 @@ const FRESH = new Date(Date.now() - 86400000).toISOString();
 // every assertion below that depends on a genuine skip verdict is testing the wrong thing.
 // Only lv_org_type/lv_produces_content carry a stale_after_days TTL in POLICY, so only
 // those two need a _verified_at stamp — the other 11 just need to be non-blank.
-function completeRecord(region) {
+//
+// Phase 75 Plan 03 (D-75-12): defaults lv_icp_scoring_version to the CURRENT VERSION, so
+// every existing case below stays scoped to the request-level recompute lane this file
+// tests, unaffected by the version-stale reroute added in Plan 03 (that reroute's own
+// coverage lives in tests/n8n/companyVersionStaleRecompute.test.mjs). A caller wanting a
+// version-stale fixture passes an explicit scoringVersion.
+function completeRecord(region, scoringVersion = VERSION) {
   return {
     hs_object_id: "18047161864",
     name: "Recompute Fixture Co",
@@ -126,6 +139,7 @@ function completeRecord(region) {
     lv_sponsorship_reliant: "false",
     lv_is_hardware_vendor: "false",
     lv_is_gambling_operator: "false",
+    lv_icp_scoring_version: scoringVersion,
   };
 }
 
@@ -253,6 +267,20 @@ test("without the recompute intent a complete record terminates observably at Bu
   assert.deepEqual(
     targetsOf(r.wf, "IF Company Skip", 0), ["IF Company Skip -> Build Response Merge Pass-Through"]);
   assert.deepEqual(targetsOf(r.wf, "IF Company Skip", 1), ["Build Company Requests"]);
+});
+
+// Phase 75 Plan 03 (D-75-12): the explicit regression guard for the version-stale
+// reroute's OFF path -- a version-FRESH skip must behave EXACTLY as the pre-Plan-03 test
+// above (never rerouted, never reaches Decide Company Action), even though this file's
+// completeRecord() now stamps a real lv_icp_scoring_version by default. Full coverage of
+// the reroute's ON path lives in tests/n8n/companyVersionStaleRecompute.test.mjs.
+test("Phase 75 Plan 03: a version-fresh skip still reaches Build Response and does NOT reach Decide Company Action", () => {
+  const r = runLane({ existingRecord: completeRecord("US", VERSION), recompute: false });
+
+  assert.equal(r.gate.action, "skip", "version-fresh, so the version-stale reroute never fires");
+  assert.equal(r.recomputeLane, false, "IF Company Recompute takes the false lane");
+  assert.equal(r.skipLane, true, "IF Company Skip takes the true lane -> Build Response");
+  assert.equal(r.decided, null, "Decide Company Action never ran on this row");
 });
 
 // --- behaviour 3: recompute + create verdict is REFUSED (BUG-19 shape) --------------------

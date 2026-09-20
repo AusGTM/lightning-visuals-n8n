@@ -3851,7 +3851,24 @@ return $input.all().map((it) => {
 # present-but-unstamped ICP field reads as stale (enrichmentGate: unknown freshness ==
 # needs validation). That is the conservative direction; it stops being noisy once the
 # metadata props are created.
-ENRICH_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
+def _enrich_co_gate(version_stale_reroute: bool) -> str:
+    """Phase 75 Plan 03 (D-75-12): ENRICH_CO_GATE is SHARED between build_enrichment_cloud()
+    and build_enrichment_local_live() (the SAME jsCode string, embedded on both lanes'
+    "Company Gate" node). The version-stale reroute must fire on the cloud lane (where a
+    version-stale skip -> enrich rewrite is safe: `IF Company Recompute` routes it to
+    `Decide Company Action`, zero provider/research/judge/merge nodes) but must NOT fire
+    on the local-live preview lane, which has NO `IF Company Recompute` node at all
+    (verified during planning: zero occurrences in n8n/wf_enrichment_local_live.json) —
+    an unguarded rewrite there would push a version-stale row straight into the LIVE
+    provider waterfall via "Build Company Requests", spending real provider credits on a
+    row this phase never intended to touch. `version_stale_reroute` is a build-time
+    literal, not a runtime flag: `True` for the cloud build, `False` for local-live, baked
+    as `const VERSION_STALE_REROUTE` and ANDed into `VERSION_RECOMPUTE` below."""
+    return (
+        inline("icpScoring.generated.js", "normalizeEmail.js", "normalizePhone.js",
+               "enrichmentGate.js")
+        + f"\nconst VERSION_STALE_REROUTE = {json.dumps(version_stale_reroute)};\n"
+        + r"""
 
 // --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
 // Phase 66 Plan 02 (D-66-01 companies half, RICH-02, RICH-05): REQUIRED is DERIVED from
@@ -3912,6 +3929,11 @@ const NOW = new Date().toISOString();
 return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((it) => {
   const row = it.json;
   const RECOMPUTE_REQUESTED = row.recompute === true;
+  // Phase 75 Plan 03 (D-75-12): the version-stale segmentation mechanism.
+  // `undefined !== VERSION` is intentionally true — a company never scored under the
+  // current rubric version is stale by definition, exactly like one scored under an
+  // older version. VERSION comes from icpScoring.generated.js (inlined above).
+  const VERSION_STALE = (row.existingRecord || {}).lv_icp_scoring_version !== VERSION;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
   let action = gate.action;
   // D-73-20: a two-hit domain resolution is never a review route — surface the choice
@@ -3921,6 +3943,29 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   }
   // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
   if (row.lookup_failed === true && action === "create") action = "skip";
+  // Phase 75 Plan 03 (D-75-12): computed AFTER the lookup_failed override above, so a
+  // genuine transport error still wins over version staleness -- literally, via the
+  // `!row.lookup_failed` conjunct: a lookup-failed row's `existingRecord` is `{}` (we do
+  // not know whether the record exists, let alone its scoring version), so treating its
+  // `undefined` lv_icp_scoring_version as "stale and known" would reroute a row this
+  // system has NO real existingRecord for into a recompute derived from nothing. Found
+  // by the full-suite run (bareEventChainFlow.test.mjs, companyNameOnlyOutcome.test.mjs):
+  // both a zero-result fetch-by-id and a genuine HTTP failure on the name search leave
+  // `existingRecord: {}`, and without this conjunct they were rerouted from their correct
+  // fail-closed "skip" into "enrich" purely because `{}.lv_icp_scoring_version` reads
+  // `undefined`. Gating on `action === "skip"` is separately load-bearing — a `create`
+  // verdict must NEVER be rerouted (there is no existing record to recompute).
+  // `!RECOMPUTE_REQUESTED` keeps the two intents mutually exclusive by construction: an
+  // operator-requested recompute already takes the `RECOMPUTE_REQUESTED` branch below
+  // regardless of version, and `recompute_reason` (on the return object) is what keeps
+  // the two distinguishable in the response rather than silently merged (D-75-19 / the
+  // security register's T-75-14). `VERSION_STALE_REROUTE` is the per-lane build-time
+  // literal _enrich_co_gate() bakes — true on the cloud lane, false on local-live, so
+  // this can never fire on the preview lane that has no `IF Company Recompute` node to
+  // route it through.
+  const VERSION_RECOMPUTE =
+    !RECOMPUTE_REQUESTED && !row.lookup_failed && VERSION_STALE &&
+    action === "skip" && VERSION_STALE_REROUTE;
   // Phase 47.5 (RECOMP-01) — exactly two mappings, and only under the request-level intent
   // resolved above:
   //   skip   -> enrich            a COMPLETE record is otherwise frozen: Normalize + Score
@@ -3930,9 +3975,24 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   //                               through both write IFs to Build Response.
   // `enrich` is untouched. `gate` itself is left intact apart from the refusal reason —
   // the reason string is what makes the outcome readable in the response.
-  if (RECOMPUTE_REQUESTED) {
+  //
+  // Phase 75 Plan 03 (D-75-12): the condition now ALSO admits VERSION_RECOMPUTE — a
+  // version-stale skip takes the SAME skip -> enrich mapping an operator-requested
+  // recompute already takes, riding the existing lane rather than a new one. The
+  // create -> recompute_refused arm is unreachable under VERSION_RECOMPUTE by
+  // construction (VERSION_RECOMPUTE's own predicate requires action === "skip"), so no
+  // new refusal path is introduced; RECOMPUTE_REQUESTED and VERSION_RECOMPUTE are
+  // mutually exclusive (see VERSION_RECOMPUTE's own `!RECOMPUTE_REQUESTED` conjunct), so
+  // the version-stale reason clause below can never fire on an operator-requested row.
+  if (RECOMPUTE_REQUESTED || VERSION_RECOMPUTE) {
     if (action === "skip") {
       action = "enrich";
+      if (VERSION_RECOMPUTE) {
+        const stampWas = JSON.stringify((row.existingRecord || {}).lv_icp_scoring_version ?? null);
+        gate.reason = (gate.reason ? gate.reason + " -- " : "") +
+          "version-stale: lv_icp_scoring_version was " + stampWas +
+          ", current rubric version is " + JSON.stringify(VERSION);
+      }
     } else if (action === "create") {
       action = "recompute_refused";
       gate.reason =
@@ -3955,9 +4015,21 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
       ? "name-only row: no existing company matched by exact name; no domain — supply one to create"
       : `name-only row: ${row.name_search_hit_count} companies share this exact name, target could not be isolated; no domain — supply one`;
   }
-  return { json: { ...row, gate, action } };
+  // Phase 75 Plan 03 (D-75-12/D-75-19): `recompute` is what makes the existing
+  // `IF Company Recompute` node ("$json.recompute === true") route this row —
+  // `Company Gate` is that node's immediate upstream Code node, so it reads `$json` bare
+  // with no HTTP hop between them. `recompute_reason` keeps the operator-requested and
+  // version-stale intents distinguishable in the response rather than silently merged.
+  return { json: { ...row, gate, action,
+    recompute: RECOMPUTE_REQUESTED || VERSION_RECOMPUTE,
+    recompute_reason: RECOMPUTE_REQUESTED ? "requested" : (VERSION_RECOMPUTE ? "version_stale" : null) } };
 });
 """
+    )
+
+
+ENRICH_CO_GATE_CLOUD = _enrich_co_gate(True)
+ENRICH_CO_GATE_LOCAL_LIVE = _enrich_co_gate(False)
 
 # SJ-2's own companies gate — Phase 66 REVIEW-FIX (WR-02). SJ-2's job (CLAUDE.md §19.5,
 # "monthly stale ICP refresh") is narrowly "confirm the ICP org-type/produces-content
@@ -5339,7 +5411,17 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
     reason: freemailReviewReason ?? ((row.gate && row.gate.reason) || null),
     // D-70-12: the canonical shape the spliced "HubSpot Company Create/Update Write Gate"
     // reads. Companies carry no email identity — the allowlist matches on id or domain.
-    write_request: _buildWriteRequest(action, hs_object_id, domain || null, null),
+    // Phase 75 Plan 03 (D-75-16): write_request.action is "recompute" ONLY on a
+    // version-stale row that stayed action==="enrich" — the row's OWN top-level `action`
+    // (above, and everywhere else on this return object) is untouched, so "IF Enrich"
+    // routing and the client-visible outcome are unchanged; only the write gate's
+    // authority classification moves (see _write_gate_js's own D-75-16 comment for the
+    // other half of this wiring). The two are deliberately different values: `action`
+    // answers "what is this row", `write_request.action` answers "which authority may
+    // write it".
+    write_request: _buildWriteRequest(
+      row.recompute === true && action === "enrich" ? "recompute" : action,
+      hs_object_id, domain || null, null),
   }};
 });
 """
@@ -5623,7 +5705,9 @@ def build_enrichment_local_live():
     cx += 230
     nodes.append(code_node("Adapt Company Search", ENRICH_ADAPT_CO_SEARCH, cx, cy))
     cx += 230
-    nodes.append(code_node("Company Gate", ENRICH_CO_GATE, cx, cy))
+    # Phase 75 Plan 03 (D-75-12): VERSION_STALE_REROUTE=false on this lane — see
+    # _enrich_co_gate's own docstring for why (no `IF Company Recompute` node here).
+    nodes.append(code_node("Company Gate", ENRICH_CO_GATE_LOCAL_LIVE, cx, cy))
     cx += 230
     nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
     cx += 230
@@ -7847,7 +7931,9 @@ def build_enrichment_cloud():
     cx += 220
     nodes.append(code_node("Adapt Company Name Search", ENRICH_ADAPT_CO_NAME_SEARCH, cx, cy))
     cx += 220
-    nodes.append(code_node("Company Gate", ENRICH_CO_GATE, cx, cy))
+    # Phase 75 Plan 03 (D-75-12): VERSION_STALE_REROUTE=true on this lane — a version-stale
+    # skip reroutes into "IF Company Recompute" -> "Decide Company Action" for free.
+    nodes.append(code_node("Company Gate", ENRICH_CO_GATE_CLOUD, cx, cy))
     cx += 220
     nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
 
@@ -10286,13 +10372,24 @@ def _write_gate_js(action: str) -> str:
         "\n// Reads ONLY the canonical `write_request` shape (D-70-12). A row with no\n"
         "// write_request is refused, not rescued by any fallback. Empty allowlist denies all.\n"
         "// D-70-14: maps every item to a verdict — never filters. Output count == input count.\n"
+        "// Phase 75 Plan 03 (D-75-16): a row whose write_request.action is 'recompute'\n"
+        "// (set ONLY by Decide Company Action, ONLY on a version-stale row that stayed\n"
+        "// action==='enrich') is classified 'recompute' here regardless of this gate's own\n"
+        "// static, per-node-type action -- the ONLY override this gate ever applies. Every\n"
+        "// other row keeps the node's own classification unchanged; 'HubSpot Company\n"
+        "// Create Write Gate' and 'HubSpot Update Write Gate' can never see a 'recompute'\n"
+        "// write_request (only ENRICH_DECIDE_CO_CLOUD emits one, and only on the\n"
+        "// companies-update path), so this override is dormant everywhere else.\n"
         "return $input.all().map((it) => {\n"
         "  var wr = it.json.write_request;\n"
-        f"  var allowed = !!wr && _writeSafetyAllows({action!r}, wr.hs_object_id || null, wr.domain || null);\n"
+        f"  var _action = (wr && wr.action === 'recompute') ? 'recompute' : {action!r};\n"
+        "  var allowed = !!wr && _writeSafetyAllows(_action, wr.hs_object_id || null, wr.domain || null);\n"
         "  if (allowed) return { json: { ...it.json, write_allowed: true } };\n"
         "  var reason = !wr\n"
         "    ? 'no write_request emitted for this row'\n"
-        "    : 'allowlist denied this write (test-record allowlist empty or non-matching)';\n"
+        "    : (_action === 'recompute'\n"
+        "        ? 'recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)'\n"
+        "        : 'allowlist denied this write (test-record allowlist empty or non-matching)');\n"
         "  return { json: { ...it.json, write_allowed: false, action: 'write_blocked', write_blocked_reason: reason } };\n"
         "});\n"
     )

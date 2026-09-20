@@ -19,7 +19,9 @@ from build_cloud_workflows import (  # noqa: E402
     ENRICH_ADAPT_CO_SEARCH,
     ENRICH_ADAPT_SEARCH,
     ENRICH_GATE,
-    ENRICH_CO_GATE,
+    # Phase 75 Plan 03: ENRICH_CO_GATE became a per-lane function (_enrich_co_gate); this
+    # file tests the cloud lane specifically, so ENRICH_CO_GATE_CLOUD is the equivalent.
+    ENRICH_CO_GATE_CLOUD,
     WRITE_SAFETY_DEFAULTS,
 )
 
@@ -142,7 +144,7 @@ def test_adapt_step_preserves_hs_object_id_and_tags_lookup_failed(adapt_js, labe
     assert "lookup_failed" in adapt_js, f"Adapt ({label}) does not tag lookup_failed"
 
 
-@pytest.mark.parametrize("gate_js,label", [(ENRICH_GATE, "contacts"), (ENRICH_CO_GATE, "companies")])
+@pytest.mark.parametrize("gate_js,label", [(ENRICH_GATE, "contacts"), (ENRICH_CO_GATE_CLOUD, "companies")])
 def test_gate_never_routes_a_lookup_failed_row_to_create(gate_js, label):
     """Fail-closed (review #8): decideAction({}) returns "create" (enrichmentGate.js:61,
     frozen) — indistinguishable from a genuinely absent record unless the wrapper

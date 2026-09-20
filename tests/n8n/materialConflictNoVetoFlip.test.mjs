@@ -27,8 +27,16 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 
+const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+// Phase 75 Plan 03 (D-75-12): fullyRequiredCompanyRecord()'s "fully required" now also
+// means "not version-stale" -- an omitted lv_icp_scoring_version reads `undefined !==
+// VERSION` (stale), which reroutes this fixture's genuinely-complete "skip" verdict into
+// the recompute lane, exactly the class of drift Plan 01/02 already documented fixing
+// for the geography-veto rename elsewhere in this repo.
+const { VERSION } = require(path.join(ROOT, "n8n/code/icpScoring.generated.js"));
 
 function loadNodeJsCode(name) {
   const wf = JSON.parse(fs.readFileSync(path.join(ROOT, "n8n/wf_enrichment_cloud.json"), "utf8"));
@@ -254,6 +262,7 @@ function fullyRequiredCompanyRecord() {
     lv_sponsorship_reliant: false,
     lv_is_hardware_vendor: false,
     lv_is_gambling_operator: false,
+    lv_icp_scoring_version: VERSION,
   };
 }
 
