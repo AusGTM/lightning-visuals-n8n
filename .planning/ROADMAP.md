@@ -687,7 +687,7 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -704,7 +704,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 75-04-PLAN.md — `scripts/gen_geography_flow.py`, enum-option update path in `sync_hubspot_properties.py`, live flow drift check, deploy/bounce read-backs learn the fourth flag
+- [x] 75-04-PLAN.md — `scripts/gen_geography_flow.py`, enum-option update path in `sync_hubspot_properties.py`, live flow drift check, deploy/bounce read-backs learn the fourth flag
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
