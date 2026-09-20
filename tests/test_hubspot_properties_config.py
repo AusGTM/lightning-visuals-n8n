@@ -158,8 +158,12 @@ def test_exact_counts_guard_against_manifest_drift():
     # companies.lv_phone_2 (34 -> 35), contacts.lv_phone_2 and
     # contacts.lv_mobilephone_2 (17 -> 19). None declared yet -- Task 3 declares and
     # dry-runs only; plan 08 creates them live.
+    # Phase 75 Plan 02 (D-75-07) added exactly one company property,
+    # lv_icp_scoring_version, bumping 35 -> 36. Contacts and the group counts are
+    # untouched -- this plan's eight new lv_country_region_normalized OPTIONS (not
+    # counted here) and the UK hide are on an existing property.
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 35
+    assert len(cfg["companies"]["properties"]) == 36
     assert len(cfg["contacts"]["properties"]) == 19
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1

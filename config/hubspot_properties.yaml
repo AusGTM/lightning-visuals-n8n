@@ -131,10 +131,12 @@ companies:
       value: US
       displayOrder: 3
       hidden: false
+    # Phase 75 (D-75-07): UK is HIDDEN, never deleted -- a live HubSpot enum option
+    # delete is destructive and would orphan every record already carrying it.
     - label: UK
       value: UK
       displayOrder: 4
-      hidden: false
+      hidden: true
     - label: EU
       value: EU
       displayOrder: 5
@@ -146,6 +148,41 @@ companies:
     - label: Unknown
       value: Unknown
       displayOrder: 7
+      hidden: false
+    # Phase 75 (D-75-05/D-75-07): the eight new target-region codes. Region token for
+    # the United Kingdom is GB (ISO2, matches the existing phone map) -- UK above is
+    # hidden, not reused.
+    - label: GB
+      value: GB
+      displayOrder: 8
+      hidden: false
+    - label: IE
+      value: IE
+      displayOrder: 9
+      hidden: false
+    - label: CA
+      value: CA
+      displayOrder: 10
+      hidden: false
+    - label: ZA
+      value: ZA
+      displayOrder: 11
+      hidden: false
+    - label: HK
+      value: HK
+      displayOrder: 12
+      hidden: false
+    - label: SG
+      value: SG
+      displayOrder: 13
+      hidden: false
+    - label: AE
+      value: AE
+      displayOrder: 14
+      hidden: false
+    - label: IN
+      value: IN
+      displayOrder: 15
       hidden: false
   - name: lv_is_hardware_vendor
     label: LV Is Hardware Vendor
@@ -469,6 +506,17 @@ companies:
     type: number
     fieldType: number
     groupName: companyinformation
+    options: []
+  # Phase 75 Plan 02 (D-75-03/D-75-12): the property CLAUDE.md §5.2 has documented
+  # since Phase 0 but that was never created live (scripts/check_schema_drift.py's
+  # D04_COMPANY_PROPERTY_SCOPE already names it). Declared here, created live in
+  # Plan 05 (D-72-23 declare-now/create-later precedent) -- SHIPPED INERT until then,
+  # see 75-02-SUMMARY.md.
+  - name: lv_icp_scoring_version
+    label: LV ICP Scoring Version
+    type: string
+    fieldType: text
+    groupName: lv_enrichment
     options: []
 contacts:
   groups:
