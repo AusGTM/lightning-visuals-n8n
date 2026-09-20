@@ -56,4 +56,63 @@ Exactly **two** new n8n executions on `LV Enrichment (Cloud template)` `950HPb7a
 
 ## Observed
 
-_(pending — filled after the sends)_
+Sends (`scripts/remediate_veto_companies.post_webhook_event(cid, True, cfg, recompute=True)`,
+operator shell, cfg = `N8N_URL` + `N8N_ENRICHMENT_WEBHOOK_SECRET`, secret never printed):
+
+| company | status | run_id | ack |
+| --- | --- | --- | --- |
+| `9604614548` Melbourne Racing Club | 200 | `8e22341377d049dfb172adcae28b42ec` | `{"accepted": true, "row_ids": []}` |
+| `17317850381` Jam TV | 200 | `2d591712527e4f789c43f9d6098f59b9` | `{"accepted": true, "row_ids": []}` |
+
+Executions: `12682` (MRC, `2026-09-20T11:06:11.816Z`, success) and `12683` (Jam TV, success) on
+`950HPb7a1GgSAIyZ`. Both frozen, redacted, as NEW fixtures
+`tests/n8n/fixtures/frozen/exec_12682.runData.json` / `exec_12683.runData.json`
+(`freeze_execution_rundata.py`, `freeze_rc=0`; `frozenFixtureSecrets` + walker fidelity +
+v1 recordings guards 13/13). No existing frozen file modified.
+
+### (a) `9604614548` — observed vs expected: **MATCH**
+
+From `exec_12682.runData.json` (71 nodes ran): `IF Company Recompute` and its
+`-> Decide Company Action Merge Pass-Through` ran; `Decide Company Action` ran once, 1 item:
+`properties.lv_anti_icp_flag = "false"`, `properties.lv_anti_icp_reason = ""` (NO geography
+reason), `properties.lv_icp_scoring_version = "lv-icp-v0.2"` (the stamp, D-75-03). `HubSpot
+Company Update Write Gate` refused → `HubSpot Company Update All Refused Sentinel`; the real
+`HubSpot Company Update` node never ran. `Build Response`: 1 item, `action: "write_blocked"`,
+`hs_object_id: "9604614548"`. Provider/research/judge nodes that ran: **none** (no `ZoomInfo
+Mint`, `Apollo Org`, `Lusha Company`, `Claude Web Research`, `Judge Call`).
+
+### (b) `17317850381` — observed vs expected: **MATCH**
+
+From `exec_12683.runData.json` (71 nodes ran): same lane. `Decide Company Action` 1 item:
+`lv_anti_icp_flag = "true"`, `lv_anti_icp_reason = "Outside target regions"` — exactly one
+reason, byte-equal to the D-75-01 string; `lv_icp_scoring_version = "lv-icp-v0.2"`. Write
+`write_blocked`; provider/research/judge nodes: **none**.
+
+Decide's own row `action`/`reason` reads `enrich` / "missing: lv_sponsorship_reliant,
+lv_is_hardware_vendor, lv_is_gambling_operator" (and for MRC "all required fields present,
+fresh and valid") — the D-75-12 routing reuses the gate's classification; the veto is derived
+regardless and the write is what the flag blocks. Not a finding.
+
+### Both — **MATCH**
+
+Exactly two new executions (`12682`, `12683`; baseline `12677`), none on maintenance (`12681`
+before and after). Post-send watch (`sleep 130` inside the operator's command, then re-list):
+enrichment max `12683`, maintenance `12681` — no burst. 0 provider credits, 0 Anthropic calls.
+
+### Post-send record re-read
+
+_(pending — operator read-only GET of both records)_
+
+## Summary
+
+total: 3
+passed: 3
+issues: 0
+pending: 0 (record re-read is confirmatory)
+skipped: 0
+blocked: 0
+
+## Gaps
+
+None. No FINDING raised: every observed verdict equals the expectation written before sending.
+

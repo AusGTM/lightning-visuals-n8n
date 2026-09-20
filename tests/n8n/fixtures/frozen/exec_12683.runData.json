@@ -1,0 +1,3867 @@
+{
+  "execution_id": "12683",
+  "graph": {
+    "node_count": 289,
+    "note": "workflowData dropped; the live graph at freeze time carried this many nodes under this workflow id. This fixture is READ for its runData, never walked, so no committed graph copy is needed beside it."
+  },
+  "mode": "webhook",
+  "redaction": "any `headers`/`error`/`request`/`options`/`config`/`zoom_token`/`access_token` key, at any depth of a whole node-run entry, was replaced wholesale with a fixed placeholder before this fixture was committed (T-73-01-01, repo memory n8n-rundata-carries-webhook-secret; CR-04/D-74-07/D-74-08) \u2014 never a key-by-key scrub at one fixed path.",
+  "runData": {
+    "Adapt Company Fetch By Id": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "3072000",
+                    "city": "Segrate",
+                    "country": "Italy",
+                    "createdate": "2023-09-14T05:18:41.757Z",
+                    "domain": "www.jamtv.it",
+                    "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                    "hs_object_id": "17317850381",
+                    "hs_state_code": null,
+                    "industry": "BROADCAST_MEDIA",
+                    "lusha_company_id": null,
+                    "lv_content_type": "streaming;live_broadcast",
+                    "lv_country_region_normalized": "Other",
+                    "lv_employee_band": "10-50",
+                    "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": null,
+                    "lv_is_hardware_vendor": null,
+                    "lv_org_type": "broadcaster",
+                    "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                    "lv_revenue_band": "1-5M",
+                    "lv_sponsorship_reliant": null,
+                    "name": "Jam TV",
+                    "num_associated_contacts": "0",
+                    "numberofemployees": "20",
+                    "phone": null,
+                    "state": "Lombardy"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "identity_keys": {
+                    "companyName": "Jam TV",
+                    "domain": "jamtv.it"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 10,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Fetch By Id Carry Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377447
+      }
+    ],
+    "Apollo Credit Skipped": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "apollo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 27,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Apollo Credit Requested",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377720
+      }
+    ],
+    "Build Ack": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "accepted": true,
+                  "row_ids": [],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 21,
+        "executionStatus": "success",
+        "executionTime": 23,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377648
+      }
+    ],
+    "Build Company Identity": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 5,
+        "executionStatus": "success",
+        "executionTime": 34,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Route By Object Type",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376676
+      }
+    ],
+    "Build Credits Summary": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "remaining_credits": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 31,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Collect Credits",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377764
+      }
+    ],
+    "Build Response": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "candidate_count": 0,
+                  "contactability": null,
+                  "contactability_fields": null,
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "judge_adjudicated_fields": null,
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "material_conflicts": null,
+                  "mode": null,
+                  "needs_review": false,
+                  "num_associated_contacts": null,
+                  "object_type": "companies",
+                  "outcome_contract_version": 2,
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "provider_agreement": null,
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "remaining_credits": [],
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 70,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credits Broadcast",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378382
+      }
+    ],
+    "Build Response Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 1
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 2
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 3
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 4
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 5
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 1
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 2
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 3
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 4
+                }
+              },
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 5
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 6
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 1
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 67,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Response Merge Stage 1",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Build Response Merge Stage 2",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Build Response Merge Stage 3",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378359
+      },
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 72,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          null,
+          {
+            "previousNode": "Build Response Merge Stage 2",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 1
+          },
+          null
+        ],
+        "startTime": 1789902378411
+      }
+    ],
+    "Build Response Merge Stage 1": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 3,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 4,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 5,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 38,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377880
+      }
+    ],
+    "Build Response Merge Stage 2": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 3,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 4,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "input": 5,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 6,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 63,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies None Skip Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies NonCreate All Enrich Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies None Create Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "HubSpot Company Update All Refused Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies None Create Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378302
+      },
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 71,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "startTime": 1789902378405
+      }
+    ],
+    "Build Response Merge Stage 3": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 66,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Unsupported Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Refusal Row Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378358
+      }
+    ],
+    "Collect Credits": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "lusha",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "apollo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "zoominfo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 30,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Lusha Credit Skipped",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Apollo Credit Skipped",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "ZoomInfo Credit Skipped",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377763
+      }
+    ],
+    "Companies Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 39,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377882
+      }
+    ],
+    "Companies All Create Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 59,
+        "executionStatus": "success",
+        "executionTime": 22,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378215
+      }
+    ],
+    "Companies Lane BareEvent Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 11,
+        "executionStatus": "success",
+        "executionTime": 20,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Company Identity",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377468
+      }
+    ],
+    "Companies Lane DomainSearch Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 12,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Company Identity",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377488
+      }
+    ],
+    "Companies Lane DomainSearch Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 13,
+        "executionStatus": "success",
+        "executionTime": 29,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies Lane DomainSearch Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377507
+      }
+    ],
+    "Companies NonCreate All Enrich Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 61,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378263
+      }
+    ],
+    "Companies NonCreate All Enrich Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 62,
+        "executionStatus": "success",
+        "executionTime": 20,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies NonCreate All Enrich Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378282
+      }
+    ],
+    "Companies NonCreate None Enrich Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 60,
+        "executionStatus": "success",
+        "executionTime": 25,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378237
+      }
+    ],
+    "Companies None Create Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 57,
+        "executionStatus": "success",
+        "executionTime": 18,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378178
+      }
+    ],
+    "Companies None Create Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 58,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies None Create Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378196
+      }
+    ],
+    "Companies None Skip Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 19,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377610
+      }
+    ],
+    "Companies None Skip Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 20,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies None Skip Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377629
+      }
+    ],
+    "Companies Waterfall Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 18,
+        "executionStatus": "success",
+        "executionTime": 22,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377588
+      }
+    ],
+    "Company Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "3072000",
+                    "city": "Segrate",
+                    "country": "Italy",
+                    "createdate": "2023-09-14T05:18:41.757Z",
+                    "domain": "www.jamtv.it",
+                    "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                    "hs_object_id": "17317850381",
+                    "hs_state_code": null,
+                    "industry": "BROADCAST_MEDIA",
+                    "lusha_company_id": null,
+                    "lv_content_type": "streaming;live_broadcast",
+                    "lv_country_region_normalized": "Other",
+                    "lv_employee_band": "10-50",
+                    "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": null,
+                    "lv_is_hardware_vendor": null,
+                    "lv_org_type": "broadcaster",
+                    "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                    "lv_revenue_band": "1-5M",
+                    "lv_sponsorship_reliant": null,
+                    "name": "Jam TV",
+                    "num_associated_contacts": "0",
+                    "numberofemployees": "20",
+                    "phone": null,
+                    "state": "Lombardy"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "enrich",
+                    "invalidFields": [],
+                    "missingFields": [
+                      "lv_sponsorship_reliant",
+                      "lv_is_hardware_vendor",
+                      "lv_is_gambling_operator"
+                    ],
+                    "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Jam TV",
+                    "domain": "jamtv.it"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 15,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377539
+      }
+    ],
+    "Company Gate Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "3072000",
+                    "city": "Segrate",
+                    "country": "Italy",
+                    "createdate": "2023-09-14T05:18:41.757Z",
+                    "domain": "www.jamtv.it",
+                    "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                    "hs_object_id": "17317850381",
+                    "hs_state_code": null,
+                    "industry": "BROADCAST_MEDIA",
+                    "lusha_company_id": null,
+                    "lv_content_type": "streaming;live_broadcast",
+                    "lv_country_region_normalized": "Other",
+                    "lv_employee_band": "10-50",
+                    "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": null,
+                    "lv_is_hardware_vendor": null,
+                    "lv_org_type": "broadcaster",
+                    "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                    "lv_revenue_band": "1-5M",
+                    "lv_sponsorship_reliant": null,
+                    "name": "Jam TV",
+                    "num_associated_contacts": "0",
+                    "numberofemployees": "20",
+                    "phone": null,
+                    "state": "Lombardy"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "identity_keys": {
+                    "companyName": "Jam TV",
+                    "domain": "jamtv.it"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 14,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Adapt Company Fetch By Id",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies Lane DomainSearch Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377537
+      }
+    ],
+    "Contacts Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 32,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377783
+      }
+    ],
+    "Contacts Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 33,
+        "executionStatus": "success",
+        "executionTime": 23,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377803
+      }
+    ],
+    "Credit Request": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 23,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377672
+      }
+    ],
+    "Credits Broadcast": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "binary": {},
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "remaining_credits": [],
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": [
+                  {
+                    "item": 0
+                  },
+                  {
+                    "input": 1,
+                    "item": 0
+                  }
+                ]
+              }
+            ]
+          ]
+        },
+        "executionIndex": 69,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Filter Build Response Rows",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Build Credits Summary",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378381
+      }
+    ],
+    "Decide Company Action": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 48,
+        "executionStatus": "success",
+        "executionTime": 26,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378042
+      }
+    ],
+    "Decide Company Action Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "3072000",
+                    "city": "Segrate",
+                    "country": "Italy",
+                    "createdate": "2023-09-14T05:18:41.757Z",
+                    "domain": "www.jamtv.it",
+                    "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                    "hs_object_id": "17317850381",
+                    "hs_state_code": null,
+                    "industry": "BROADCAST_MEDIA",
+                    "lusha_company_id": null,
+                    "lv_content_type": "streaming;live_broadcast",
+                    "lv_country_region_normalized": "Other",
+                    "lv_employee_band": "10-50",
+                    "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": null,
+                    "lv_is_hardware_vendor": null,
+                    "lv_org_type": "broadcaster",
+                    "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                    "lv_revenue_band": "1-5M",
+                    "lv_sponsorship_reliant": null,
+                    "name": "Jam TV",
+                    "num_associated_contacts": "0",
+                    "numberofemployees": "20",
+                    "phone": null,
+                    "state": "Lombardy"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "enrich",
+                    "invalidFields": [],
+                    "missingFields": [
+                      "lv_sponsorship_reliant",
+                      "lv_is_hardware_vendor",
+                      "lv_is_gambling_operator"
+                    ],
+                    "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Jam TV",
+                    "domain": "jamtv.it"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 47,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Recompute -> Decide Company Action Merge Pass-Through",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378041
+      }
+    ],
+    "Enrichment Gate": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 37,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Enrichment Gate Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377859
+      }
+    ],
+    "Enrichment Gate Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 3,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 4,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 36,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377857
+      }
+    ],
+    "Filter Build Response Rows": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 11
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 68,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Response Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378360
+      },
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 73,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Response Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 1
+          }
+        ],
+        "startTime": 1789902378412
+      }
+    ],
+    "HubSpot Company Fetch By Id": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 7,
+        "executionStatus": "success",
+        "executionTime": 713,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Bare Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376712
+      }
+    ],
+    "HubSpot Company Fetch By Id Carry Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "binary": {},
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": [
+                  {
+                    "item": 0
+                  },
+                  {
+                    "input": 1,
+                    "item": 0
+                  },
+                  {
+                    "input": 1,
+                    "item": 0
+                  }
+                ]
+              }
+            ]
+          ]
+        },
+        "executionIndex": 9,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Fetch By Id",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377445
+      }
+    ],
+    "HubSpot Company Update All Refused Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 55,
+        "executionStatus": "success",
+        "executionTime": 20,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378132
+      }
+    ],
+    "HubSpot Company Update All Refused Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 56,
+        "executionStatus": "success",
+        "executionTime": 25,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update All Refused Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378153
+      }
+    ],
+    "HubSpot Company Update No Refusal Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 54,
+        "executionStatus": "success",
+        "executionTime": 22,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378110
+      }
+    ],
+    "HubSpot Company Update Write Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 51,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Enrich",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378070
+      }
+    ],
+    "HubSpot Company Update Write Gate IF": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 52,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378089
+      }
+    ],
+    "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 53,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate IF",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378090
+      }
+    ],
+    "IF Apollo Credit Requested": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 26,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credit Request",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377718
+      }
+    ],
+    "IF Company Bare Event": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 6,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Company Identity",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376711
+      }
+    ],
+    "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 8,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Bare Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377425
+      }
+    ],
+    "IF Company Create": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 49,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378068
+      }
+    ],
+    "IF Company Enrich": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "gap_flag": false,
+                  "hs_object_id": "17317850381",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "true",
+                    "lv_anti_icp_flag_num": "1",
+                    "lv_anti_icp_reason": "Outside target regions",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                  "row_id": null,
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "jamtv.it",
+                    "email": null,
+                    "hs_object_id": "17317850381"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 50,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Create",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378069
+      }
+    ],
+    "IF Company Recompute": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "3072000",
+                    "city": "Segrate",
+                    "country": "Italy",
+                    "createdate": "2023-09-14T05:18:41.757Z",
+                    "domain": "www.jamtv.it",
+                    "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                    "hs_object_id": "17317850381",
+                    "hs_state_code": null,
+                    "industry": "BROADCAST_MEDIA",
+                    "lusha_company_id": null,
+                    "lv_content_type": "streaming;live_broadcast",
+                    "lv_country_region_normalized": "Other",
+                    "lv_employee_band": "10-50",
+                    "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": null,
+                    "lv_is_hardware_vendor": null,
+                    "lv_org_type": "broadcaster",
+                    "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                    "lv_revenue_band": "1-5M",
+                    "lv_sponsorship_reliant": null,
+                    "name": "Jam TV",
+                    "num_associated_contacts": "0",
+                    "numberofemployees": "20",
+                    "phone": null,
+                    "state": "Lombardy"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "enrich",
+                    "invalidFields": [],
+                    "missingFields": [
+                      "lv_sponsorship_reliant",
+                      "lv_is_hardware_vendor",
+                      "lv_is_gambling_operator"
+                    ],
+                    "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Jam TV",
+                    "domain": "jamtv.it"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 16,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377563
+      }
+    ],
+    "IF Company Recompute -> Decide Company Action Merge Pass-Through": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "3072000",
+                    "city": "Segrate",
+                    "country": "Italy",
+                    "createdate": "2023-09-14T05:18:41.757Z",
+                    "domain": "www.jamtv.it",
+                    "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                    "hs_object_id": "17317850381",
+                    "hs_state_code": null,
+                    "industry": "BROADCAST_MEDIA",
+                    "lusha_company_id": null,
+                    "lv_content_type": "streaming;live_broadcast",
+                    "lv_country_region_normalized": "Other",
+                    "lv_employee_band": "10-50",
+                    "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": null,
+                    "lv_is_hardware_vendor": null,
+                    "lv_org_type": "broadcaster",
+                    "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                    "lv_revenue_band": "1-5M",
+                    "lv_sponsorship_reliant": null,
+                    "name": "Jam TV",
+                    "num_associated_contacts": "0",
+                    "numberofemployees": "20",
+                    "phone": null,
+                    "state": "Lombardy"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "enrich",
+                    "invalidFields": [],
+                    "missingFields": [
+                      "lv_sponsorship_reliant",
+                      "lv_is_hardware_vendor",
+                      "lv_is_gambling_operator"
+                    ],
+                    "reason": "missing: lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Jam TV",
+                    "domain": "jamtv.it"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2023-09-14T05:18:41.757Z",
+                      "id": "17317850381",
+                      "properties": {
+                        "annualrevenue": "3072000",
+                        "city": "Segrate",
+                        "country": "Italy",
+                        "createdate": "2023-09-14T05:18:41.757Z",
+                        "domain": "www.jamtv.it",
+                        "hs_lastmodifieddate": "2026-09-03T03:39:03.221Z",
+                        "hs_object_id": "17317850381",
+                        "hs_state_code": null,
+                        "industry": "BROADCAST_MEDIA",
+                        "lusha_company_id": null,
+                        "lv_content_type": "streaming;live_broadcast",
+                        "lv_country_region_normalized": "Other",
+                        "lv_employee_band": "10-50",
+                        "lv_enrichment_provenance": "{\"lv_content_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":[\"streaming\",\"live_broadcast\"],\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_country_region_normalized\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"Other\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"10-50\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_org_type\":{\"confidence\":85,\"evidence_url\":\"https://jamtv.it/\",\"source\":\"claude_web\",\"validation_status\":\"provider_only\",\"value\":\"content_producer\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_produces_content\":{\"confidence\":65,\"evidence_url\":\"https://x.com/jamtvit\",\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"true\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"hubspot_native\",\"validation_status\":\"provider_only\",\"value\":\"1-5M\",\"verified_at\":\"2026-08-12T01:42:45.225Z\"},\"lv_sponsorship_reliant\":{\"confidence\":65,\"source\":\"june_2026\",\"validation_status\":\"human_review_required\",\"value\":\"false\",\"verified_at\":\"2026-08-12T01:42:45.226Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": null,
+                        "lv_is_hardware_vendor": null,
+                        "lv_org_type": "broadcaster",
+                        "lv_org_type_verified_at": "2026-08-12T22:34:46.191Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+                        "lv_revenue_band": "1-5M",
+                        "lv_sponsorship_reliant": null,
+                        "name": "Jam TV",
+                        "num_associated_contacts": "0",
+                        "numberofemployees": "20",
+                        "phone": null,
+                        "state": "Lombardy"
+                      },
+                      "updatedAt": "2026-09-03T03:39:03.221Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+                    }
+                  ],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 17,
+        "executionStatus": "success",
+        "executionTime": 23,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Recompute",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377565
+      }
+    ],
+    "IF List Input": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "body": [
+                    {
+                      "objectId": "17317850381",
+                      "objectType": "company",
+                      "occurredAt": 1789902375935,
+                      "propertyName": "lv_country_region_normalized",
+                      "recompute": true,
+                      "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                      "subscriptionType": "company.propertyChange"
+                    }
+                  ],
+                  "executionMode": "production",
+                  "headers": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
+                  "params": {},
+                  "query": {},
+                  "webhookUrl": "https://alexherman.app.n8n.cloud/webhook/hubspot/enrichment/event"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 1,
+        "executionStatus": "success",
+        "executionTime": 3,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Webhook Trigger",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376637
+      }
+    ],
+    "IF Lusha Credit Requested": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 24,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credit Request",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377696
+      }
+    ],
+    "IF Object Type Supported": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 3,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376673
+      }
+    ],
+    "IF ZoomInfo Credit Requested": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 28,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credit Request",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377741
+      }
+    ],
+    "Lusha Credit Skipped": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "lusha",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 25,
+        "executionStatus": "success",
+        "executionTime": 20,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Lusha Credit Requested",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377698
+      }
+    ],
+    "Merge Company": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 46,
+        "executionStatus": "success",
+        "executionTime": 29,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Merge Company Fan-In",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378011
+      }
+    ],
+    "Merge Company Fan-In": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 45,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378009
+      }
+    ],
+    "Merge Winners": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 35,
+        "executionStatus": "success",
+        "executionTime": 28,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Merge Winners Fan-In",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377829
+      }
+    ],
+    "Merge Winners Fan-In": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 34,
+        "executionStatus": "success",
+        "executionTime": 3,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377826
+      }
+    ],
+    "Parse HubSpot Event": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 2,
+        "executionStatus": "success",
+        "executionTime": 32,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF List Input",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376641
+      }
+    ],
+    "Recompute Not Requested Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 42,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377945
+      }
+    ],
+    "Recompute Requested Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 43,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377964
+      }
+    ],
+    "Recompute Requested Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 44,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Recompute Requested Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377985
+      }
+    ],
+    "Refusal Row Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 64,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378304
+      }
+    ],
+    "Refusal Row Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 65,
+        "executionStatus": "success",
+        "executionTime": 29,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Refusal Row Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902378328
+      }
+    ],
+    "Respond to Webhook": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "accepted": true,
+                  "row_ids": [],
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 22,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Ack",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377671
+      }
+    ],
+    "Route By Object Type": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "event_id": "sub:17317850381:1789902375935",
+                  "event_type": "company.propertyChange",
+                  "mode": null,
+                  "objectId": "17317850381",
+                  "objectType": "company",
+                  "object_id": "17317850381",
+                  "object_type": "companies",
+                  "occurredAt": 1789902375935,
+                  "occurred_at": 1789902375935,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 4,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Object Type Supported",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376675
+      }
+    ],
+    "Unsupported Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 40,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377901
+      }
+    ],
+    "Unsupported Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 41,
+        "executionStatus": "success",
+        "executionTime": 20,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Unsupported Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377925
+      }
+    ],
+    "Webhook Trigger": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "body": [
+                    {
+                      "objectId": "17317850381",
+                      "objectType": "company",
+                      "occurredAt": 1789902375935,
+                      "propertyName": "lv_country_region_normalized",
+                      "recompute": true,
+                      "run_id": "2d591712527e4f789c43f9d6098f59b9",
+                      "subscriptionType": "company.propertyChange"
+                    }
+                  ],
+                  "executionMode": "production",
+                  "headers": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
+                  "params": {},
+                  "query": {},
+                  "webhookUrl": "https://alexherman.app.n8n.cloud/webhook/hubspot/enrichment/event"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 0,
+        "executionStatus": "success",
+        "executionTime": 0,
+        "hints": [],
+        "source": [],
+        "startTime": 1789902376637
+      }
+    ],
+    "ZoomInfo Credit Skipped": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "zoominfo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 29,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF ZoomInfo Credit Requested",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902377743
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "started_at": "2026-09-20T11:06:16.556Z",
+  "status": "success",
+  "stopped_at": "2026-09-20T11:06:18.431Z",
+  "workflow_id": "950HPb7a1GgSAIyZ",
+  "workflow_name": "LV Enrichment (Cloud template)",
+  "workflow_version_id": "f374614c-a237-4ba9-8b41-fc5318f2dc8a"
+}

@@ -1,0 +1,3851 @@
+{
+  "execution_id": "12682",
+  "graph": {
+    "node_count": 289,
+    "note": "workflowData dropped; the live graph at freeze time carried this many nodes under this workflow id. This fixture is READ for its runData, never walked, so no committed graph copy is needed beside it."
+  },
+  "mode": "webhook",
+  "redaction": "any `headers`/`error`/`request`/`options`/`config`/`zoom_token`/`access_token` key, at any depth of a whole node-run entry, was replaced wholesale with a fixed placeholder before this fixture was committed (T-73-01-01, repo memory n8n-rundata-carries-webhook-secret; CR-04/D-74-07/D-74-08) \u2014 never a key-by-key scrub at one fixed path.",
+  "runData": {
+    "Adapt Company Fetch By Id": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "206078000",
+                    "city": "Flemington",
+                    "country": "Australia",
+                    "createdate": "2022-09-16T01:28:19.145Z",
+                    "domain": "mrc.racing.com",
+                    "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                    "hs_object_id": "9604614548",
+                    "hs_state_code": null,
+                    "industry": "ENTERTAINMENT",
+                    "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                    "lv_content_type": "unknown",
+                    "lv_country_region_normalized": "AU",
+                    "lv_employee_band": "201-500",
+                    "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": "false",
+                    "lv_is_hardware_vendor": "false",
+                    "lv_org_type": "individual_club_team",
+                    "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                    "lv_revenue_band": "50-500M",
+                    "lv_sponsorship_reliant": "true",
+                    "name": "Melbourne Racing Club",
+                    "num_associated_contacts": "4",
+                    "numberofemployees": "1000",
+                    "phone": "(03) 9258 4258",
+                    "state": "Victoria"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "identity_keys": {
+                    "companyName": "Melbourne Racing Club",
+                    "domain": "mrc.racing.com"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 10,
+        "executionStatus": "success",
+        "executionTime": 25,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Fetch By Id Carry Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375551
+      }
+    ],
+    "Apollo Credit Skipped": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "apollo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 27,
+        "executionStatus": "success",
+        "executionTime": 20,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Apollo Credit Requested",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375847
+      }
+    ],
+    "Build Ack": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "accepted": true,
+                  "row_ids": [],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 21,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375777
+      }
+    ],
+    "Build Company Identity": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 5,
+        "executionStatus": "success",
+        "executionTime": 23,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Route By Object Type",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902373700
+      }
+    ],
+    "Build Credits Summary": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "remaining_credits": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 31,
+        "executionStatus": "success",
+        "executionTime": 36,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Collect Credits",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375898
+      }
+    ],
+    "Build Response": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "candidate_count": 0,
+                  "contactability": null,
+                  "contactability_fields": null,
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "judge_adjudicated_fields": null,
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "material_conflicts": null,
+                  "mode": null,
+                  "needs_review": false,
+                  "num_associated_contacts": null,
+                  "object_type": "companies",
+                  "outcome_contract_version": 2,
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "provider_agreement": null,
+                  "reason": "all required fields present, fresh and valid",
+                  "remaining_credits": [],
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 70,
+        "executionStatus": "success",
+        "executionTime": 22,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credits Broadcast",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376766
+      }
+    ],
+    "Build Response Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 1
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 2
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 3
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 4
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 5
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 1
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 2
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 3
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 4
+                }
+              },
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 5
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 6
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 1
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 67,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Response Merge Stage 1",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Build Response Merge Stage 2",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Build Response Merge Stage 3",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376739
+      },
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 72,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          null,
+          {
+            "previousNode": "Build Response Merge Stage 2",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 1
+          },
+          null
+        ],
+        "startTime": 1789902376797
+      }
+    ],
+    "Build Response Merge Stage 1": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 3,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 4,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 5,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 38,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376116
+      }
+    ],
+    "Build Response Merge Stage 2": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 3,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 4,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "input": 5,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 6,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 63,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies None Skip Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies NonCreate All Enrich Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies None Create Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "HubSpot Company Update All Refused Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies None Create Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376680
+      },
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 71,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "startTime": 1789902376791
+      }
+    ],
+    "Build Response Merge Stage 3": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 66,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Unsupported Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Refusal Row Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376738
+      }
+    ],
+    "Collect Credits": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "lusha",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "apollo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "zoominfo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 30,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Lusha Credit Skipped",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Apollo Credit Skipped",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "ZoomInfo Credit Skipped",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375896
+      }
+    ],
+    "Companies Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 39,
+        "executionStatus": "success",
+        "executionTime": 26,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376119
+      }
+    ],
+    "Companies All Create Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 59,
+        "executionStatus": "success",
+        "executionTime": 18,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376562
+      }
+    ],
+    "Companies Lane BareEvent Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 11,
+        "executionStatus": "success",
+        "executionTime": 23,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Company Identity",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375576
+      }
+    ],
+    "Companies Lane DomainSearch Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 12,
+        "executionStatus": "success",
+        "executionTime": 22,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Company Identity",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375599
+      }
+    ],
+    "Companies Lane DomainSearch Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 13,
+        "executionStatus": "success",
+        "executionTime": 33,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies Lane DomainSearch Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375622
+      }
+    ],
+    "Companies NonCreate All Enrich Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 61,
+        "executionStatus": "success",
+        "executionTime": 31,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376610
+      }
+    ],
+    "Companies NonCreate All Enrich Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 62,
+        "executionStatus": "success",
+        "executionTime": 39,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies NonCreate All Enrich Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376641
+      }
+    ],
+    "Companies NonCreate None Enrich Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 60,
+        "executionStatus": "success",
+        "executionTime": 30,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376580
+      }
+    ],
+    "Companies None Create Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 57,
+        "executionStatus": "success",
+        "executionTime": 18,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376524
+      }
+    ],
+    "Companies None Create Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 58,
+        "executionStatus": "success",
+        "executionTime": 18,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies None Create Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376543
+      }
+    ],
+    "Companies None Skip Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 19,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375735
+      }
+    ],
+    "Companies None Skip Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 20,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Companies None Skip Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375756
+      }
+    ],
+    "Companies Waterfall Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 18,
+        "executionStatus": "success",
+        "executionTime": 22,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375713
+      }
+    ],
+    "Company Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "206078000",
+                    "city": "Flemington",
+                    "country": "Australia",
+                    "createdate": "2022-09-16T01:28:19.145Z",
+                    "domain": "mrc.racing.com",
+                    "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                    "hs_object_id": "9604614548",
+                    "hs_state_code": null,
+                    "industry": "ENTERTAINMENT",
+                    "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                    "lv_content_type": "unknown",
+                    "lv_country_region_normalized": "AU",
+                    "lv_employee_band": "201-500",
+                    "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": "false",
+                    "lv_is_hardware_vendor": "false",
+                    "lv_org_type": "individual_club_team",
+                    "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                    "lv_revenue_band": "50-500M",
+                    "lv_sponsorship_reliant": "true",
+                    "name": "Melbourne Racing Club",
+                    "num_associated_contacts": "4",
+                    "numberofemployees": "1000",
+                    "phone": "(03) 9258 4258",
+                    "state": "Victoria"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "skip",
+                    "invalidFields": [],
+                    "missingFields": [],
+                    "reason": "all required fields present, fresh and valid",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Melbourne Racing Club",
+                    "domain": "mrc.racing.com"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 15,
+        "executionStatus": "success",
+        "executionTime": 30,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375656
+      }
+    ],
+    "Company Gate Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "206078000",
+                    "city": "Flemington",
+                    "country": "Australia",
+                    "createdate": "2022-09-16T01:28:19.145Z",
+                    "domain": "mrc.racing.com",
+                    "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                    "hs_object_id": "9604614548",
+                    "hs_state_code": null,
+                    "industry": "ENTERTAINMENT",
+                    "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                    "lv_content_type": "unknown",
+                    "lv_country_region_normalized": "AU",
+                    "lv_employee_band": "201-500",
+                    "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": "false",
+                    "lv_is_hardware_vendor": "false",
+                    "lv_org_type": "individual_club_team",
+                    "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                    "lv_revenue_band": "50-500M",
+                    "lv_sponsorship_reliant": "true",
+                    "name": "Melbourne Racing Club",
+                    "num_associated_contacts": "4",
+                    "numberofemployees": "1000",
+                    "phone": "(03) 9258 4258",
+                    "state": "Victoria"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "identity_keys": {
+                    "companyName": "Melbourne Racing Club",
+                    "domain": "mrc.racing.com"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 14,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Adapt Company Fetch By Id",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Companies Lane DomainSearch Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375655
+      }
+    ],
+    "Contacts Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 32,
+        "executionStatus": "success",
+        "executionTime": 38,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375935
+      }
+    ],
+    "Contacts Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 33,
+        "executionStatus": "success",
+        "executionTime": 60,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375973
+      }
+    ],
+    "Credit Request": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 23,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375803
+      }
+    ],
+    "Credits Broadcast": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "binary": {},
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "remaining_credits": [],
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": [
+                  {
+                    "item": 0
+                  },
+                  {
+                    "input": 1,
+                    "item": 0
+                  }
+                ]
+              }
+            ]
+          ]
+        },
+        "executionIndex": 69,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Filter Build Response Rows",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Build Credits Summary",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376764
+      }
+    ],
+    "Decide Company Action": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 48,
+        "executionStatus": "success",
+        "executionTime": 30,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376384
+      }
+    ],
+    "Decide Company Action Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "206078000",
+                    "city": "Flemington",
+                    "country": "Australia",
+                    "createdate": "2022-09-16T01:28:19.145Z",
+                    "domain": "mrc.racing.com",
+                    "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                    "hs_object_id": "9604614548",
+                    "hs_state_code": null,
+                    "industry": "ENTERTAINMENT",
+                    "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                    "lv_content_type": "unknown",
+                    "lv_country_region_normalized": "AU",
+                    "lv_employee_band": "201-500",
+                    "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": "false",
+                    "lv_is_hardware_vendor": "false",
+                    "lv_org_type": "individual_club_team",
+                    "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                    "lv_revenue_band": "50-500M",
+                    "lv_sponsorship_reliant": "true",
+                    "name": "Melbourne Racing Club",
+                    "num_associated_contacts": "4",
+                    "numberofemployees": "1000",
+                    "phone": "(03) 9258 4258",
+                    "state": "Victoria"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "skip",
+                    "invalidFields": [],
+                    "missingFields": [],
+                    "reason": "all required fields present, fresh and valid",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Melbourne Racing Club",
+                    "domain": "mrc.racing.com"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 47,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Recompute -> Decide Company Action Merge Pass-Through",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376382
+      }
+    ],
+    "Enrichment Gate": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 37,
+        "executionStatus": "success",
+        "executionTime": 34,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Enrichment Gate Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376082
+      }
+    ],
+    "Enrichment Gate Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 3,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 4,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 36,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376080
+      }
+    ],
+    "Filter Build Response Rows": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 11
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 68,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Response Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376740
+      },
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 73,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Response Merge",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 1
+          }
+        ],
+        "startTime": 1789902376798
+      }
+    ],
+    "HubSpot Company Fetch By Id": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 7,
+        "executionStatus": "success",
+        "executionTime": 1798,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Bare Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902373725
+      }
+    ],
+    "HubSpot Company Fetch By Id Carry Merge": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "binary": {},
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": [
+                  {
+                    "item": 0
+                  },
+                  {
+                    "input": 1,
+                    "item": 0
+                  },
+                  {
+                    "input": 1,
+                    "item": 0
+                  }
+                ]
+              }
+            ]
+          ]
+        },
+        "executionIndex": 9,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Fetch By Id",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375549
+      }
+    ],
+    "HubSpot Company Update All Refused Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 55,
+        "executionStatus": "success",
+        "executionTime": 18,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376487
+      }
+    ],
+    "HubSpot Company Update All Refused Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 56,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update All Refused Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376505
+      }
+    ],
+    "HubSpot Company Update No Refusal Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 54,
+        "executionStatus": "success",
+        "executionTime": 27,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376460
+      }
+    ],
+    "HubSpot Company Update Write Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 51,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Enrich",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376418
+      }
+    ],
+    "HubSpot Company Update Write Gate IF": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 52,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376439
+      }
+    ],
+    "HubSpot Company Update Write Gate IF -> Build Response Merge Pass-Through": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "write_blocked",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_allowed": false,
+                  "write_blocked_reason": "recompute writes disabled (ALLOW_HUBSPOT_RECOMPUTE_WRITES is false)",
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 53,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "HubSpot Company Update Write Gate IF",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376441
+      }
+    ],
+    "IF Apollo Credit Requested": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 26,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credit Request",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375845
+      }
+    ],
+    "IF Company Bare Event": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 6,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Company Identity",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902373724
+      }
+    ],
+    "IF Company Bare Event -> HubSpot Company Fetch By Id Carry Merge Pass-Through": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "identity_keys": {
+                    "companyName": null,
+                    "domain": null
+                  },
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 8,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Bare Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375524
+      }
+    ],
+    "IF Company Create": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 49,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Decide Company Action",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376415
+      }
+    ],
+    "IF Company Enrich": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "gap_flag": false,
+                  "hs_object_id": "9604614548",
+                  "match": {
+                    "auto": false,
+                    "candidates": [],
+                    "reason": "company identity resolves upstream by domain, then exact company name \u2014 see this row's own hs_object_id/action for the outcome",
+                    "tier": "unknown"
+                  },
+                  "mode": null,
+                  "needs_review": false,
+                  "object_type": "companies",
+                  "properties": {
+                    "lv_anti_icp_flag": "false",
+                    "lv_anti_icp_flag_num": "0",
+                    "lv_anti_icp_reason": "",
+                    "lv_icp_scoring_version": "lv-icp-v0.2"
+                  },
+                  "reason": "all required fields present, fresh and valid",
+                  "row_id": null,
+                  "write_request": {
+                    "action": "recompute",
+                    "domain": "mrc.racing.com",
+                    "email": null,
+                    "hs_object_id": "9604614548"
+                  }
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 50,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Create",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376417
+      }
+    ],
+    "IF Company Recompute": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "206078000",
+                    "city": "Flemington",
+                    "country": "Australia",
+                    "createdate": "2022-09-16T01:28:19.145Z",
+                    "domain": "mrc.racing.com",
+                    "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                    "hs_object_id": "9604614548",
+                    "hs_state_code": null,
+                    "industry": "ENTERTAINMENT",
+                    "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                    "lv_content_type": "unknown",
+                    "lv_country_region_normalized": "AU",
+                    "lv_employee_band": "201-500",
+                    "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": "false",
+                    "lv_is_hardware_vendor": "false",
+                    "lv_org_type": "individual_club_team",
+                    "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                    "lv_revenue_band": "50-500M",
+                    "lv_sponsorship_reliant": "true",
+                    "name": "Melbourne Racing Club",
+                    "num_associated_contacts": "4",
+                    "numberofemployees": "1000",
+                    "phone": "(03) 9258 4258",
+                    "state": "Victoria"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "skip",
+                    "invalidFields": [],
+                    "missingFields": [],
+                    "reason": "all required fields present, fresh and valid",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Melbourne Racing Club",
+                    "domain": "mrc.racing.com"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 16,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Company Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375687
+      }
+    ],
+    "IF Company Recompute -> Decide Company Action Merge Pass-Through": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "action": "enrich",
+                  "domain_variants": [
+                    "no-company-domain.invalid"
+                  ],
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "existingRecord": {
+                    "annualrevenue": "206078000",
+                    "city": "Flemington",
+                    "country": "Australia",
+                    "createdate": "2022-09-16T01:28:19.145Z",
+                    "domain": "mrc.racing.com",
+                    "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                    "hs_object_id": "9604614548",
+                    "hs_state_code": null,
+                    "industry": "ENTERTAINMENT",
+                    "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                    "lv_content_type": "unknown",
+                    "lv_country_region_normalized": "AU",
+                    "lv_employee_band": "201-500",
+                    "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                    "lv_icp_scoring_version": null,
+                    "lv_is_gambling_operator": "false",
+                    "lv_is_hardware_vendor": "false",
+                    "lv_org_type": "individual_club_team",
+                    "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                    "lv_phone_2": null,
+                    "lv_produces_content": "true",
+                    "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                    "lv_revenue_band": "50-500M",
+                    "lv_sponsorship_reliant": "true",
+                    "name": "Melbourne Racing Club",
+                    "num_associated_contacts": "4",
+                    "numberofemployees": "1000",
+                    "phone": "(03) 9258 4258",
+                    "state": "Victoria"
+                  },
+                  "fetch_diagnostic": "ok: matched via search envelope",
+                  "gate": {
+                    "action": "skip",
+                    "invalidFields": [],
+                    "missingFields": [],
+                    "reason": "all required fields present, fresh and valid",
+                    "staleFields": []
+                  },
+                  "identity_keys": {
+                    "companyName": "Melbourne Racing Club",
+                    "domain": "mrc.racing.com"
+                  },
+                  "lookup_failed": false,
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "recompute_reason": "requested",
+                  "results": [
+                    {
+                      "archived": false,
+                      "createdAt": "2022-09-16T01:28:19.145Z",
+                      "id": "9604614548",
+                      "properties": {
+                        "annualrevenue": "206078000",
+                        "city": "Flemington",
+                        "country": "Australia",
+                        "createdate": "2022-09-16T01:28:19.145Z",
+                        "domain": "mrc.racing.com",
+                        "hs_lastmodifieddate": "2026-09-17T21:46:14.997Z",
+                        "hs_object_id": "9604614548",
+                        "hs_state_code": null,
+                        "industry": "ENTERTAINMENT",
+                        "lusha_company_id": "v1.5auSREkOgH_SYd6poDA66c0vO9K_cbll",
+                        "lv_content_type": "unknown",
+                        "lv_country_region_normalized": "AU",
+                        "lv_employee_band": "201-500",
+                        "lv_enrichment_provenance": "{\"city\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Caulfield East\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"country\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Australia\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"industry\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"waterfall\",\"validation_status\":\"human_approved\",\"value\":\"ENTERTAINMENT\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_content_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"unknown\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_country_region_normalized\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"AU\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_employee_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"201-500\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_is_gambling_operator\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_is_hardware_vendor\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":false,\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_org_type\":{\"confidence\":100,\"reason\":\"promote enriched org/content classification\",\"source\":\"human\",\"superseded_source\":\"claude_web\",\"validation_status\":\"human_approved\",\"value\":\"individual_club_team\",\"verified_at\":\"2026-09-17T14:33:05.661Z\"},\"lv_produces_content\":{\"confidence\":85,\"evidence_url\":\"https://www.gravitymedia.com/category/horse-racing/\",\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_revenue_band\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"50-500M\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"lv_sponsorship_reliant\":{\"confidence\":85,\"source\":\"june_2026\",\"validation_status\":\"provider_only\",\"value\":\"true\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"numberofemployees\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":394,\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"phone\":{\"confidence\":85,\"source\":\"apollo\",\"validation_status\":\"provider_only\",\"value\":\"+61354484209\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"},\"state\":{\"confidence\":85,\"source\":\"waterfall\",\"validation_status\":\"provider_only\",\"value\":\"Victoria\",\"verified_at\":\"2026-09-15T09:08:48.022Z\"}}",
+                        "lv_icp_scoring_version": null,
+                        "lv_is_gambling_operator": "false",
+                        "lv_is_hardware_vendor": "false",
+                        "lv_org_type": "individual_club_team",
+                        "lv_org_type_verified_at": "2026-09-15T05:34:47.086Z",
+                        "lv_phone_2": null,
+                        "lv_produces_content": "true",
+                        "lv_produces_content_verified_at": "2026-09-15T09:08:48.022Z",
+                        "lv_revenue_band": "50-500M",
+                        "lv_sponsorship_reliant": "true",
+                        "name": "Melbourne Racing Club",
+                        "num_associated_contacts": "4",
+                        "numberofemployees": "1000",
+                        "phone": "(03) 9258 4258",
+                        "state": "Victoria"
+                      },
+                      "updatedAt": "2026-09-17T21:46:14.997Z",
+                      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/9604614548"
+                    }
+                  ],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange",
+                  "total": 1
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 17,
+        "executionStatus": "success",
+        "executionTime": 24,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Company Recompute",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375689
+      }
+    ],
+    "IF List Input": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "body": [
+                    {
+                      "objectId": "9604614548",
+                      "objectType": "company",
+                      "occurredAt": 1789902370997,
+                      "propertyName": "lv_country_region_normalized",
+                      "recompute": true,
+                      "run_id": "8e22341377d049dfb172adcae28b42ec",
+                      "subscriptionType": "company.propertyChange"
+                    }
+                  ],
+                  "executionMode": "production",
+                  "headers": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
+                  "params": {},
+                  "query": {},
+                  "webhookUrl": "https://alexherman.app.n8n.cloud/webhook/hubspot/enrichment/event"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 1,
+        "executionStatus": "success",
+        "executionTime": 4,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Webhook Trigger",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902371868
+      }
+    ],
+    "IF Lusha Credit Requested": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 24,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credit Request",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375822
+      }
+    ],
+    "IF Object Type Supported": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 3,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902373697
+      }
+    ],
+    "IF ZoomInfo Credit Requested": [
+      {
+        "data": {
+          "main": [
+            [],
+            [
+              {
+                "json": {
+                  "providers_requested": []
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 28,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Credit Request",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375868
+      }
+    ],
+    "Lusha Credit Skipped": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "lusha",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 25,
+        "executionStatus": "success",
+        "executionTime": 21,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Lusha Credit Requested",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375824
+      }
+    ],
+    "Merge Company": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 46,
+        "executionStatus": "success",
+        "executionTime": 39,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Merge Company Fan-In",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376343
+      }
+    ],
+    "Merge Company Fan-In": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 45,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Recompute Requested Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376341
+      }
+    ],
+    "Merge Winners": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 35,
+        "executionStatus": "success",
+        "executionTime": 44,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Merge Winners Fan-In",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376036
+      }
+    ],
+    "Merge Winners Fan-In": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 1,
+                  "item": 0
+                }
+              },
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "input": 2,
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 34,
+        "executionStatus": "success",
+        "executionTime": 2,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          },
+          {
+            "previousNode": "Contacts Absent Sentinel Gate",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376034
+      }
+    ],
+    "Parse HubSpot Event": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 2,
+        "executionStatus": "success",
+        "executionTime": 1824,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF List Input",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902371872
+      }
+    ],
+    "Recompute Not Requested Sentinel": [
+      {
+        "data": {
+          "main": [
+            []
+          ]
+        },
+        "executionIndex": 42,
+        "executionStatus": "success",
+        "executionTime": 28,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376201
+      }
+    ],
+    "Recompute Requested Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 43,
+        "executionStatus": "success",
+        "executionTime": 60,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376229
+      }
+    ],
+    "Recompute Requested Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 44,
+        "executionStatus": "success",
+        "executionTime": 52,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Recompute Requested Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376289
+      }
+    ],
+    "Refusal Row Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 64,
+        "executionStatus": "success",
+        "executionTime": 37,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376681
+      }
+    ],
+    "Refusal Row Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 65,
+        "executionStatus": "success",
+        "executionTime": 19,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Refusal Row Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376718
+      }
+    ],
+    "Respond to Webhook": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "accepted": true,
+                  "row_ids": [],
+                  "run_id": "8e22341377d049dfb172adcae28b42ec"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 22,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Build Ack",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375802
+      }
+    ],
+    "Route By Object Type": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "event_id": "sub:9604614548:1789902370997",
+                  "event_type": "company.propertyChange",
+                  "mode": null,
+                  "objectId": "9604614548",
+                  "objectType": "company",
+                  "object_id": "9604614548",
+                  "object_type": "companies",
+                  "occurredAt": 1789902370997,
+                  "occurred_at": 1789902370997,
+                  "propertyName": "lv_country_region_normalized",
+                  "property_name": "lv_country_region_normalized",
+                  "provider_enabled": {
+                    "apollo": false,
+                    "lusha": false,
+                    "zoominfo": false
+                  },
+                  "providers_requested": [],
+                  "recompute": true,
+                  "run_id": "8e22341377d049dfb172adcae28b42ec",
+                  "subscriptionType": "company.propertyChange"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ],
+            []
+          ]
+        },
+        "executionIndex": 4,
+        "executionStatus": "success",
+        "executionTime": 1,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF Object Type Supported",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902373699
+      }
+    ],
+    "Unsupported Absent Sentinel": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {},
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 40,
+        "executionStatus": "success",
+        "executionTime": 26,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Parse HubSpot Event",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376145
+      }
+    ],
+    "Unsupported Absent Sentinel Gate": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "_gsd_sentinel_marker": true
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 41,
+        "executionStatus": "success",
+        "executionTime": 30,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "Unsupported Absent Sentinel",
+            "previousNodeOutput": 0,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902376171
+      }
+    ],
+    "Webhook Trigger": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "body": [
+                    {
+                      "objectId": "9604614548",
+                      "objectType": "company",
+                      "occurredAt": 1789902370997,
+                      "propertyName": "lv_country_region_normalized",
+                      "recompute": true,
+                      "run_id": "8e22341377d049dfb172adcae28b42ec",
+                      "subscriptionType": "company.propertyChange"
+                    }
+                  ],
+                  "executionMode": "production",
+                  "headers": "<redacted \u2014 see tests/n8n/fixtures/frozen/README.md 'Redaction rule'>",
+                  "params": {},
+                  "query": {},
+                  "webhookUrl": "https://alexherman.app.n8n.cloud/webhook/hubspot/enrichment/event"
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 0,
+        "executionStatus": "success",
+        "executionTime": 0,
+        "hints": [],
+        "source": [],
+        "startTime": 1789902371868
+      }
+    ],
+    "ZoomInfo Credit Skipped": [
+      {
+        "data": {
+          "main": [
+            [
+              {
+                "json": {
+                  "credits": null,
+                  "provider": "zoominfo",
+                  "requested": false
+                },
+                "pairedItem": {
+                  "item": 0
+                }
+              }
+            ]
+          ]
+        },
+        "executionIndex": 29,
+        "executionStatus": "success",
+        "executionTime": 26,
+        "hints": [],
+        "source": [
+          {
+            "previousNode": "IF ZoomInfo Credit Requested",
+            "previousNodeOutput": 1,
+            "previousNodeRun": 0
+          }
+        ],
+        "startTime": 1789902375869
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "started_at": "2026-09-20T11:06:11.816Z",
+  "status": "success",
+  "stopped_at": "2026-09-20T11:06:16.817Z",
+  "workflow_id": "950HPb7a1GgSAIyZ",
+  "workflow_name": "LV Enrichment (Cloud template)",
+  "workflow_version_id": "f374614c-a237-4ba9-8b41-fc5318f2dc8a"
+}
