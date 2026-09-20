@@ -687,7 +687,7 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 2/6 plans executed
+**Plans:** 3/6 plans executed
 
 Plans:
 **Wave 1**
@@ -700,7 +700,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 75-03-PLAN.md — version stamp + fetch lists, `ALLOW_HUBSPOT_RECOMPUTE_WRITES` and its `_writeSafetyAllows` branch, version-stale skip→recompute reroute, SJ-2 backstop
+- [x] 75-03-PLAN.md — version stamp + fetch lists, `ALLOW_HUBSPOT_RECOMPUTE_WRITES` and its `_writeSafetyAllows` branch, version-stale skip→recompute reroute, SJ-2 backstop
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
