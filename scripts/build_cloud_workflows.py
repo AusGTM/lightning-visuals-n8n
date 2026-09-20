@@ -63,6 +63,13 @@ import provider_registry  # noqa: E402 — Phase 16.1 (reviews A3): SIDE-EFFECT-
 (CODE / "escalation.generated.js").write_text(gen_escalation_js.render())
 (CODE / "icpScoring.generated.js").write_text(gen_icp_scoring_js.render())
 
+# Phase 75 Plan 03 (D-75-13/D-75-15): the current rubric version, at BUILD time, for
+# SJ-2 Search's NEQ filter value below -- derived from gen_icp_scoring_js's own loader
+# (the generator module this builder already imports), never a hand-typed literal that
+# could drift the moment the yaml's version bumps again.
+_ICP_SCORING_CFG = gen_icp_scoring_js.load_yaml("config/icp_scoring.yaml")
+CURRENT_ICP_SCORING_VERSION = _ICP_SCORING_CFG["version"]
+
 # June-2026 validation dataset (Phase 41, 41-CONTEXT.md D-08): read at module scope, same
 # discipline as the two codegen writes above -- the "Merge Company" node inlines the
 # `rows` object as a JS constant so this builder can never emit a workflow carrying a
@@ -4056,7 +4063,8 @@ ENRICH_CO_GATE_LOCAL_LIVE = _enrich_co_gate(False)
 # (e.g. a producer-less companies signal) would re-trigger every month forever, the same
 # shape of over-triggering this fix removes. `SJ-2 Search`'s existing 6-field fetch already
 # covers this narrower REQUIRED in full — no fetch-list change needed here.
-SJ2_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + WRITE_REQUEST_JS + r"""
+SJ2_CO_GATE = inline("icpScoring.generated.js", "normalizeEmail.js", "normalizePhone.js",
+                      "enrichmentGate.js") + WRITE_REQUEST_JS + r"""
 
 // --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
 // SJ-2-specific REQUIRED/POLICY — deliberately NOT ENRICH_CO_GATE's 13-field completeness
@@ -4079,6 +4087,25 @@ return $input.all().map((it) => {
   let action = gate.action;
   // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
   if (row.lookup_failed === true && action === "create") action = "skip";
+  // Phase 75 Plan 03 (D-75-13): the SJ-2 half of the version-stale BACKSTOP. This is a
+  // SEPARATE trigger from D-75-12's recompute-lane reroute -- SJ-2 has no
+  // `Parse HubSpot Event` node and can never carry a request-level intent, so
+  // RECOMPUTE_REQUESTED above stays `false` and its whole block is left untouched. This
+  // gate simply stops treating a version-stale-but-input-fresh record as "skip", so
+  // `write_request: _buildWriteRequest("enrich", ...)` below (also UNCHANGED — SJ-2's
+  // dispatch keeps its plain "enrich" classification, never "recompute" -- see this
+  // task's own SUMMARY for why widening D-75-16's authority onto a monthly unattended
+  // write was deliberately refused) reaches "SJ-2 Set Requested" for it. Same
+  // `!row.lookup_failed` guard as ENRICH_CO_GATE's VERSION_RECOMPUTE, for the identical
+  // reason: a lookup-failed row has no real existingRecord to be "stale" about.
+  const VERSION_STALE = (row.existingRecord || {}).lv_icp_scoring_version !== VERSION;
+  if (action === "skip" && !row.lookup_failed && VERSION_STALE) {
+    action = "enrich";
+    const stampWas = JSON.stringify((row.existingRecord || {}).lv_icp_scoring_version ?? null);
+    gate.reason = (gate.reason ? gate.reason + " -- " : "") +
+      "version-stale: lv_icp_scoring_version was " + stampWas +
+      ", current rubric version is " + JSON.stringify(VERSION);
+  }
   if (RECOMPUTE_REQUESTED) {
     if (action === "skip") {
       action = "enrich";
@@ -11230,10 +11257,42 @@ def build_scheduled_maintenance_cloud():
               "value": "={{ $json.cutoff_ms }}"}],
             [{"propertyName": "lv_produces_content_verified_at", "operator": "LT",
               "value": "={{ $json.cutoff_ms }}"}],
+            # Phase 75 Plan 03 (D-75-13/D-75-15): the version-stale BACKSTOP groups. Two,
+            # not four -- HubSpot's own documented cap (developers.hubspot.com/docs/api/
+            # crm/search, fetched and grepped live during this task: "a maximum of five
+            # filterGroups with up to 6 filters in each group, with a maximum of 18
+            # filters in total") admits at most 5 groups total; this search already has 2
+            # (the TTL groups above), so 4 more version groups (the org_type AND
+            # produces_content variants D-75-15's own CONTEXT sketch proposed) would make
+            # 6 -- over the cap, a live 400 VALIDATION_ERROR. `lv_org_type` is the correct
+            # single anchor: it is the field enrichment reliably lands (CLAUDE.md
+            # §10.3.1's hardware-veto-OR note), so anchoring on it alone (never
+            # lv_produces_content) is not an arbitrary halving.
+            #
+            # The NOT_HAS_PROPERTY group is required because on day one NO record carries
+            # lv_icp_scoring_version at all -- a bare NEQ may not select an unset
+            # property (HubSpot's NEQ-vs-unset semantics were the open question D-75-15
+            # named; the OR'd NOT_HAS_PROPERTY + NEQ shape is the SAME precedent
+            # "SJ-1 Search (input-gap scan)" already ships live for lv_org_type). The
+            # ANDed HAS_PROPERTY lv_org_type conjunct is LOAD-BEARING (D-75-15): without
+            # it, a never-enriched company (no lv_org_type at all) would be selected,
+            # SJ2_CO_GATE would return "enrich", and SJ-3 would spend provider credits on
+            # a record this phase never intended to touch -- the 2026-08-09
+            # execution-runaway shape.
+            [{"propertyName": "lv_icp_scoring_version", "operator": "NOT_HAS_PROPERTY"},
+             {"propertyName": "lv_org_type", "operator": "HAS_PROPERTY"}],
+            [{"propertyName": "lv_icp_scoring_version", "operator": "NEQ",
+              "value": CURRENT_ICP_SCORING_VERSION},
+             {"propertyName": "lv_org_type", "operator": "HAS_PROPERTY"}],
         ],
         # BUG 24: same as SJ-1 — `domain` is what makes the domain allowlist usable.
+        # Phase 75 Plan 03 (D-75-13): lv_icp_scoring_version fetched now -- without it,
+        # SJ2_CO_GATE's own version-staleness check (below) would read `undefined` on
+        # existingRecord and every row would look stale, same recurring bug class as
+        # every other fetch-list addition this phase makes.
         properties_csv="hs_object_id,domain,lv_org_type,lv_produces_content,"
-                       "lv_org_type_verified_at,lv_produces_content_verified_at")
+                       "lv_org_type_verified_at,lv_produces_content_verified_at,"
+                       "lv_icp_scoring_version")
     nodes.append(sj2_search)
     x2 += 220
     nodes.append(code_node("SJ-2 Adapt Search", ENRICH_ADAPT_SJ2_SEARCH, x2, y2))

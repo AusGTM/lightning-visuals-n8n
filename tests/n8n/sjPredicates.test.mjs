@@ -162,9 +162,15 @@ test("SJ-2: epoch-ms cutoff Code node feeds a two-LT-filter search on the two ve
   assert.match(epochNode.parameters.jsCode, /Date\.now\(\)\s*-\s*180\s*\*\s*86400000/,
     "cutoff must be a Code-node-computed epoch-ms value, not a date string");
 
+  // Phase 75 Plan 03 (D-75-13): this search's own scope stays the two verified-at TTL
+  // groups this test's name promises -- the two ADDITIONAL version-stale backstop
+  // groups Plan 03 adds are a separate concern with their own dedicated coverage in
+  // tests/n8n/sj2VersionStaleGate.test.mjs (filterGroups length, HAS_PROPERTY anchor,
+  // NEQ/NOT_HAS_PROPERTY operators, the HubSpot filterGroups cap). Scoped to the first
+  // two groups here rather than asserting the total count, so this test's own name
+  // ("two-LT-filter search") stays true without duplicating that coverage.
   const node = findNode(wf, "SJ-2 Search (stale refresh)");
-  const groups = filterGroups(node);
-  assert.equal(groups.length, 2, "SJ-2 predicate is two OR'd groups");
+  const groups = filterGroups(node).slice(0, 2);
   for (const g of groups) {
     assert.equal(g.length, 1);
     assert.equal(g[0].operator, "LT");

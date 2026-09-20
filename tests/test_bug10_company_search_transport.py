@@ -90,8 +90,11 @@ NODES = {
     },
     "SJ-2 Search (stale refresh)": {
         "workflow": "wf_scheduled_maintenance_cloud.json",
-        "properties_csv": "hs_object_id,domain,lv_org_type,lv_produces_content,"  # BUG 24
-                           "lv_org_type_verified_at,lv_produces_content_verified_at",
+        # BUG 24; Phase 75 Plan 03 (D-75-13): lv_icp_scoring_version appended -- fetched
+        # for SJ2_CO_GATE's own version-staleness check.
+        "properties_csv": "hs_object_id,domain,lv_org_type,lv_produces_content,"
+                           "lv_org_type_verified_at,lv_produces_content_verified_at,"
+                           "lv_icp_scoring_version",
         "body_tokens": [
             'propertyName: "lv_org_type_verified_at"', 'operator: "LT"',
             'propertyName: "lv_produces_content_verified_at"',
