@@ -439,3 +439,39 @@ def test_assert_no_secrets_wrapper_survives_pythonoptimize():
     )
     assert proc.returncode == 0, proc.stderr
     assert "GUARD FIRED" in proc.stdout, proc.stdout
+
+
+# --- Phase 75 Plan 05 Task 3 (D-75-11b, live finding 2026-09-20) --------------------------
+#
+# The first live run of check_schema_drift.py after the geography PUT reported
+# `ambiguous_branch: expected exactly one geography filter live, found 0` even though the
+# live flow (fetch_hubspot_flow.py --label post75) carried exactly one. Cause: build_report
+# was handed the `GET /automation/v4/flows` LIST response, whose entries are summaries with
+# no `actions` key at all -- the walker had nothing to walk. The comparator must read the
+# single-flow body (`GET /automation/v4/flows/{id}`), which main() now fetches separately.
+
+def _flow_list_summary(flow_id="4626722240"):
+    # Shape of one entry from GET /automation/v4/flows: id/name/isEnabled, NO actions.
+    return {"id": flow_id, "name": "Geography Score", "isEnabled": True,
+            "objectTypeId": "0-2", "flowType": "WORKFLOW"}
+
+
+def test_geography_flow_drift_uses_the_single_flow_body_not_the_list_summary():
+    from check_schema_drift import build_report
+    from src.icp_scoring import regions_home
+
+    desired = {"companies": {"properties": []}, "contacts": {"properties": []}}
+    full_body = _synthetic_geography_flow_body(list(regions_home()))
+    full_body["id"] = "4626722240"
+    report = build_report(desired, [], [], [_flow_list_summary()], "22617666",
+                         live_geography_flow=full_body)
+    assert report["geography_flow_drift"]["status"] == "in_sync"
+
+
+def test_geography_flow_drift_list_summary_alone_is_ambiguous_by_construction():
+    # Pins WHY the single-flow GET is required: a list summary has no actions to walk.
+    from check_schema_drift import geography_flow_drift_entry
+
+    entry = geography_flow_drift_entry(_flow_list_summary())
+    assert entry["status"] == "ambiguous_branch"
+    assert "found 0" in entry["detail"]
