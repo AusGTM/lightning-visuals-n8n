@@ -24,7 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # The 2026-08-03 live-verified snapshot: `industry` carries 148 options and `SPORTS` is
 # among them (tests/test_hubspot_enums_generated_currency.py pins this fidelity fact).
-SNAPSHOT = "config/hubspot_migration/baseline/portal-schema-companies-post-orgtype-enum.json"
+# Previous pin (until 2026-09-20, Phase 75 plan 05 Task 2): "config/hubspot_migration/baseline/portal-schema-companies-post-orgtype-enum.json"
+SNAPSHOT = "config/hubspot_migration/baseline/portal-schema-companies-phase75.json"
 
 # Exactly the DEFAULT_COMPANY_POLICY keys (n8n/code/mergeCompanies.js) whose snapshot
 # `type` is `enumeration`. Nothing else is emitted -- this file is inlined into every

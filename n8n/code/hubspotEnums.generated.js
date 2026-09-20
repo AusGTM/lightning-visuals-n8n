@@ -1,13 +1,13 @@
 // n8n/code/hubspotEnums.generated.js
 //
-// GENERATED FROM config/hubspot_migration/baseline/portal-schema-companies-post-orgtype-enum.json — DO NOT EDIT.
+// GENERATED FROM config/hubspot_migration/baseline/portal-schema-companies-phase75.json — DO NOT EDIT.
 // Regenerate with: .venv/bin/python scripts/gen_hubspot_enums_js.py
 //
 // Values AND labels for every HubSpot company enumeration property this repo
 // validates candidates against — see n8n/code/hubspotEnums.js for the
 // hand-written normalizer logic that consumes this module.
 
-const HUBSPOT_ENUM_SNAPSHOT = "config/hubspot_migration/baseline/portal-schema-companies-post-orgtype-enum.json";
+const HUBSPOT_ENUM_SNAPSHOT = "config/hubspot_migration/baseline/portal-schema-companies-phase75.json";
 
 const COMPANY_ENUM_PROPERTIES = {
   "industry": {
@@ -413,7 +413,15 @@ const COMPANY_ENUM_PROPERTIES = {
       "UK",
       "EU",
       "Other",
-      "Unknown"
+      "Unknown",
+      "GB",
+      "IE",
+      "CA",
+      "ZA",
+      "HK",
+      "SG",
+      "AE",
+      "IN"
     ],
     "labelToValue": {
       "au": "AU",
@@ -423,7 +431,15 @@ const COMPANY_ENUM_PROPERTIES = {
       "uk": "UK",
       "eu": "EU",
       "other": "Other",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "gb": "GB",
+      "ie": "IE",
+      "ca": "CA",
+      "za": "ZA",
+      "hk": "HK",
+      "sg": "SG",
+      "ae": "AE",
+      "in": "IN"
     }
   }
 };
