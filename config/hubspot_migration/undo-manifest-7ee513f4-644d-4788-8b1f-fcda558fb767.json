@@ -1,0 +1,172 @@
+[
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_icp_scoring_version",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "text",
+      "groupName": "lv_enrichment",
+      "label": "LV ICP Scoring Version",
+      "name": "lv_icp_scoring_version",
+      "options": [],
+      "type": "string"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property_update",
+    "name": "lv_country_region_normalized",
+    "object_type": "companies",
+    "pre_update_options": [
+      {
+        "displayOrder": 0,
+        "hidden": false,
+        "label": "AU",
+        "value": "AU"
+      },
+      {
+        "displayOrder": 1,
+        "hidden": false,
+        "label": "NZ",
+        "value": "NZ"
+      },
+      {
+        "displayOrder": 2,
+        "hidden": false,
+        "label": "ANZ",
+        "value": "ANZ"
+      },
+      {
+        "displayOrder": 3,
+        "hidden": false,
+        "label": "US",
+        "value": "US"
+      },
+      {
+        "displayOrder": 4,
+        "hidden": false,
+        "label": "UK",
+        "value": "UK"
+      },
+      {
+        "displayOrder": 5,
+        "hidden": false,
+        "label": "EU",
+        "value": "EU"
+      },
+      {
+        "displayOrder": 6,
+        "hidden": false,
+        "label": "Other",
+        "value": "Other"
+      },
+      {
+        "displayOrder": 7,
+        "hidden": false,
+        "label": "Unknown",
+        "value": "Unknown"
+      }
+    ],
+    "request_body": {
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "AU",
+          "value": "AU"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "NZ",
+          "value": "NZ"
+        },
+        {
+          "displayOrder": 2,
+          "hidden": false,
+          "label": "ANZ",
+          "value": "ANZ"
+        },
+        {
+          "displayOrder": 3,
+          "hidden": false,
+          "label": "US",
+          "value": "US"
+        },
+        {
+          "displayOrder": 4,
+          "hidden": true,
+          "label": "UK",
+          "value": "UK"
+        },
+        {
+          "displayOrder": 5,
+          "hidden": false,
+          "label": "EU",
+          "value": "EU"
+        },
+        {
+          "displayOrder": 6,
+          "hidden": false,
+          "label": "Other",
+          "value": "Other"
+        },
+        {
+          "displayOrder": 7,
+          "hidden": false,
+          "label": "Unknown",
+          "value": "Unknown"
+        },
+        {
+          "displayOrder": 8,
+          "hidden": false,
+          "label": "GB",
+          "value": "GB"
+        },
+        {
+          "displayOrder": 9,
+          "hidden": false,
+          "label": "IE",
+          "value": "IE"
+        },
+        {
+          "displayOrder": 10,
+          "hidden": false,
+          "label": "CA",
+          "value": "CA"
+        },
+        {
+          "displayOrder": 11,
+          "hidden": false,
+          "label": "ZA",
+          "value": "ZA"
+        },
+        {
+          "displayOrder": 12,
+          "hidden": false,
+          "label": "HK",
+          "value": "HK"
+        },
+        {
+          "displayOrder": 13,
+          "hidden": false,
+          "label": "SG",
+          "value": "SG"
+        },
+        {
+          "displayOrder": 14,
+          "hidden": false,
+          "label": "AE",
+          "value": "AE"
+        },
+        {
+          "displayOrder": 15,
+          "hidden": false,
+          "label": "IN",
+          "value": "IN"
+        }
+      ]
+    }
+  }
+]
