@@ -2532,6 +2532,40 @@ WRITE_SAFETY_DEFAULTS = {
     # ALLOW_JUDGE_ESCALATION / ALLOW_WEB_RESEARCH default-true precedent
     # (scripts/deploy_n8n_workflows.py's _OVERLAY_FLAG_SPEC comment).
     "ALLOW_SJ3_DRAIN_WRITES": "true",
+    # ALLOW_HUBSPOT_RECOMPUTE_WRITES (Phase 75 Plan 03, D-75-16 -- operator ruling
+    # 2026-09-20, supersedes Phase 57 / D-61-08 FOR THIS LANE ONLY): the FOURTH
+    # ALLOW_HUBSPOT_* authority, and the FIRST that is deliberately NOT session-scoped.
+    # `_writeSafetyAllows` grants a "recompute"-classified write on this flag ALONE --
+    # no TEST_RECORD_IDS/TEST_RECORD_DOMAINS allowlist required. It is UNREACHABLE from
+    # the other three ALLOW_HUBSPOT_* flags: no branch of `_writeSafetyAllows` that reads
+    # this flag reads them, and no branch that reads them reads this flag. It ships
+    # "false" here (D-75-17) -- the operator flips it "true" (deploy + bounce) only after
+    # the first supervised bump sweep (D-75-14) is reviewed, a documented runbook step,
+    # not part of this phase's exit gate.
+    #
+    # It is deliberately EXCLUDED from operator-claude-plugin/scripts/n8n_arming.py's
+    # OVERLAY_DISABLED_LITERALS / OVERLAYABLE_FLAGS / WRITE_ENABLING_FLAGS (D-75-18a) --
+    # `disarm()`/`arm_for_dispatch()` never rewrite it. A kill-everything runbook step
+    # must name it separately; disarming the other three ALLOW_HUBSPOT_* flags does NOT
+    # disarm this one.
+    #
+    # BLAST RADIUS (the actual property set, not a gesture): on a bare recompute row
+    # (row.recompute === true, no `merge` object -- so `properties` starts empty and
+    # `needsReview` is empty) ENRICH_DECIDE_CO_CLOUD's PATCH carries exactly FOUR
+    # properties: lv_anti_icp_flag, lv_anti_icp_flag_num, lv_anti_icp_reason,
+    # lv_icp_scoring_version. The status properties (lv_enrichment_status,
+    # lv_enrichment_needs_review, lv_enrichment_review_reason,
+    # lv_enrichment_review_candidate_json) do NOT ride this path -- lv_enrichment_status
+    # is set only under `else if (merge)` and the review trio only when
+    # `needsReview.length > 0`, both of which require a `merge` object a bare recompute
+    # row never carries. They are naturally absent; this comment pins that they stay
+    # absent, not that anything new suppresses them.
+    #
+    # D-75-19: with ALLOW_HUBSPOT_RECORD_WRITES = "false", a disarmed SJ-1/SJ-3 ENRICH
+    # dispatch still reaches Decide with a NON-recompute classification and is
+    # write_blocked -- the version stamp therefore lands only on recompute-classified
+    # runs and on armed enrich runs. Nobody may assume every Decide run stamps.
+    "ALLOW_HUBSPOT_RECOMPUTE_WRITES": "false",
 }
 
 
@@ -2549,6 +2583,13 @@ WRITE_SAFETY_GATE_JS = (
     "\n".join(_write_safety_const(k) for k in WRITE_SAFETY_DEFAULTS)
     + r"""
 function _writeSafetyAllows(action, hsObjectId, domain) {
+  // Phase 75 Plan 03 (D-75-16): recompute writes have their OWN standing authority,
+  // checked ALONE -- no allowlist requirement, and this branch RETURNS rather than
+  // falling through to the shared allowedDomains/allowedIds block below. Ordered FIRST,
+  // ahead of the "review" test, so it can never be shadowed by either existing branch.
+  if (action === "recompute") {
+    return String(ALLOW_HUBSPOT_RECOMPUTE_WRITES).toLowerCase() === "true";
+  }
   // Review writeback has its OWN authority (D-02): the review action never consults
   // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,
   // so arming either gate grants nothing on the other path. The allowlist below is
@@ -3664,7 +3705,15 @@ HS_CO_SEARCH_BODY_EXPR = (
     # a write; the suggestion round's zero-associated-contacts check reads this.
     '"num_associated_contacts",'
     '"lv_revenue_band","lv_employee_band","lv_country_region_normalized","country","city",'
-    '"lv_sponsorship_reliant","lv_phone_2","state","hs_state_code","phone"], '
+    '"lv_sponsorship_reliant","lv_phone_2","state","hs_state_code","phone",'
+    # Phase 75 Plan 03 (D-75-12): identical addition to ENRICH_COMPANY_SEARCH_PROPERTIES_CSV
+    # above, same non-clobber/undefined-read reason -- this is the local-live sibling that
+    # drifted from the cloud fetch list in Phase 66 (WR-01) and must take the identical
+    # addition. ENRICH_CO_GATE (shared with the cloud lane) reads
+    # existingRecord.lv_icp_scoring_version on THIS lane too; the per-lane
+    # VERSION_STALE_REROUTE literal (false here) is what actually keeps this preview lane
+    # from spending provider credits, not an unfetched property.
+    '"lv_icp_scoring_version"], '
     'limit: 5 }) }}'
 )
 
@@ -7096,7 +7145,13 @@ ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     # SAME non-clobber correctness reason as every prior addition to this constant -- an
     # unfetched property reads as absent on existingRecord, which turns mergeCompanies'
     # fill_blank_only comparison into a silent permit to overwrite a populated value.
-    "state,hs_state_code,phone"
+    "state,hs_state_code,phone,"
+    # Phase 75 Plan 03 (D-75-12): lv_icp_scoring_version fetched now -- ENRICH_CO_GATE's
+    # VERSION_RECOMPUTE comparison and ENRICH_DECIDE_CO_CLOUD's write-request classification
+    # both read `existingRecord.lv_icp_scoring_version`. Same recurring bug shape as every
+    # addition above (fix-40 VETO-01/02, 58-05, Phase 66 Plan 02): a property omitted here
+    # reads `undefined` and routes the whole population one way instead of by real staleness.
+    "lv_icp_scoring_version"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""
