@@ -2705,7 +2705,7 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
 # Normalize the 3 provider responses -> candidates, score best-per-field with
 # provenance. `providers` carries {lusha,apollo,zoominfo} raw responses (null on skip).
 ENRICH_NORMALIZE_SCORE = inline(
-    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+    "icpScoring.generated.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
 ) + r"""
 
 // --- n8n wrapper: toCandidates(all 3) -> scoreCandidates -> best-per-field ---
@@ -3173,7 +3173,7 @@ return $input.all().map((it) => {
 # CLOUD: NORMALIZE+SCORE reads the 3 provider HTTP nodes by name and re-attaches
 # the carried identity/gate context from the Gate node (HTTP nodes replace $json).
 ENRICH_NORMALIZE_SCORE_CLOUD = inline(
-    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+    "icpScoring.generated.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
 ) + r"""
 
 // --- n8n wrapper (CLOUD): score best-per-field from the row's own carried results ---
@@ -3998,7 +3998,7 @@ return $input.all().map((it) => {
 """
 
 ENRICH_NORMALIZE_SCORE_CO = inline(
-    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+    "icpScoring.generated.js", "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
 ) + r"""
 
 // --- n8n wrapper (companies): score best-per-field from the row's own carried results ---

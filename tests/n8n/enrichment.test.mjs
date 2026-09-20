@@ -475,10 +475,13 @@ test("toCandidates: ZoomInfo revenue falls back to revenue*1000 with no revenueR
   assert.equal(find(c, "lv_revenue_band", "zoominfo").normalizedValue, "50-500M");
 
   // FanDuel: 14050000 thousands == $14.05b -> top band (was "5-50M" before the fix).
+  // Phase 75 (D-75-05): "United States" moved into regions.home, so the country literal
+  // here was swapped to Germany -- the plan's own example of a genuinely outside-home-
+  // regions country -- to keep asserting the "Other" branch this test targets.
   const fd = toCandidates("zoominfo", mk({ name: "FanDuel", revenue: 14050000,
-                                           country: "United States" }), "companies");
+                                           country: "Germany" }), "companies");
   assert.equal(find(fd, "lv_revenue_band", "zoominfo").normalizedValue, "1.2B+");
-  // non-ANZ -> hard veto input
+  // outside target regions -> hard veto input
   assert.equal(find(fd, "lv_country_region_normalized", "zoominfo").normalizedValue, "Other");
 });
 

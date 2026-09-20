@@ -51,7 +51,9 @@ def test_country_region_blank_is_none():
     assert z.zoominfo_country_region("   ") is None
     assert z.zoominfo_country_region(None) is None
     assert z.zoominfo_country_region("Australia") == "AU"
-    assert z.zoominfo_country_region("United States") == "Other"
+    # Phase 75 (D-75-05): "United States" moved into regions.home -- swapped to Germany,
+    # the plan's own example of a genuinely outside-home-regions country.
+    assert z.zoominfo_country_region("Germany") == "Other"
 
     # Companion: a candidate patch built from a blank-country match omits the region
     # key entirely, and compute_icp_score on that patch does NOT set anti_icp_flag.
