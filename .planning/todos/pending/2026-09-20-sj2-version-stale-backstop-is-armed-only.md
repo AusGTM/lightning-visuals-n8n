@@ -5,7 +5,7 @@ title: SJ-2's version-stale backstop stays allowlist-gated (classified "enrich")
 area: n8n
 severity: low
 kind: question
-trigger: "the first post-bump month, once SJ-2's monthly stale-refresh run has actually selected and (while disarmed) gated a version-stale record for the first time"
+trigger: "the first monthly SJ-2 fire after the D-75-17 flip of ALLOW_HUBSPOT_RECOMPUTE_WRITES to true -- does the version-stale selection still land as an allowlist-gated enrich write (inert), or should it ride the standing recompute authority?"
 owner: operator
 ---
 

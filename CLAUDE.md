@@ -211,8 +211,10 @@ under §11–§12 (local MVP) legitimately use bare names and are left unchanged
 
 **Documented in §5 but never created:** `lv_has_broadcast_or_streaming_signals`,
 `lv_has_sports_media_fit`, `lv_cloud_fear_risk`, `lv_price_sensitivity_risk`,
-`lv_icp_scored_at`, `lv_icp_scoring_version`, `lv_icp_confidence`, `lv_recommended_motion`,
-`lv_named_account_priority`.
+`lv_icp_scored_at`, ~~`lv_icp_scoring_version`~~, `lv_icp_confidence`, `lv_recommended_motion`,
+`lv_named_account_priority`. **`lv_icp_scoring_version` moved OUT of this list on 2026-09-20
+(Phase 75 plan 05): created live, `string`/`text`, group `lv_enrichment`, read back from a fresh
+schema snapshot the same day — see §10.3.3.**
 
 `lv_named_account_priority` stays roadmap-only: calculation formulas cannot read
 enumerations on this portal -- D-20 reconfirmed live 2026-08-23 (quick 260823-ono CP1:
@@ -310,7 +312,7 @@ These are written by the scoring engine.
 | `lv_anti_icp_reason`        | Multi-line text | Reason hard veto fired                                                                          |
 | `lv_icp_score_breakdown`    | Multi-line text | Compact JSON score explanation                                                                  |
 | `lv_icp_scored_at`          | DateTime        | Last score timestamp                                                                            |
-| `lv_icp_scoring_version`    | Text            | Rubric version                                                                                  |
+| `lv_icp_scoring_version`    | Text            | Rubric version — **EXISTS live as of 2026-09-20 (Phase 75 plan 05, `[observed live]` via `portal-schema-companies-phase75.json`); written by both engines, see §10.3.3** |
 | `lv_icp_confidence`         | Number          | Confidence in score                                                                             |
 | `lv_icp_needs_review`       | Boolean         | Manual review flag                                                                              |
 | `lv_recommended_motion`     | Enumeration     | `work_direct`, `work_via_league`, `nurture`, `disqualify`, `research_more`            |
@@ -794,6 +796,14 @@ contacts:
 
 ## 10.1 Scoring config
 
+> **Stale as of Phase 75 (2026-09-20) — this listing is the ROADMAP, not an inventory (§4.0
+> discipline). The shipped yaml now carries `version: "lv-icp-v0.2"`, a `regions:` block
+> (`home`, `aliases`) that is the single source of the geography whitelist,
+> `base_score.geography` keyed `home`/`other`/`unknown` (not `ANZ`/`AU`/`NZ`/`non_anz`), and
+> `hard_vetoes.outside_home_regions` (reason `Outside target regions`) in place of
+> `hard_vetoes.non_anz`. Re-read `config/icp_scoring.yaml` before relying on any key named
+> below. See §10.3.3.**
+
 ```yaml
 # config/icp_scoring.yaml
 
@@ -893,6 +903,11 @@ recommended_motion:
 
 ## 10.3 Hard veto behavior
 
+> **Amended by Phase 75 (2026-09-20):** the geography veto is no longer "non-ANZ". It fires for
+> a KNOWN region outside `config/icp_scoring.yaml`'s `regions.home` whitelist (12 codes as of
+> this date); blank/unknown never vetoes — the 2026-08-10 three-state rule is unchanged. The
+> reason string is `Outside target regions`. See §10.3.3.
+
 Hard vetoes set:
 
 ```text
@@ -981,6 +996,87 @@ else base_score
   vocabulary driving a formula on this portal has to be a plain number.
 
 ---
+
+### 10.3.3 As-built delta — Phase 75: config-driven region whitelist and scoring-version staleness (2026-09-20)
+
+Tags follow §13.0.3's rule: `[observed live]` names the execution id or read-back this phase
+watched; `[documented]` is everything else. Decisions: `75-CONTEXT.md` D-75-01..D-75-20.
+
+**What changed.**
+
+- **The geography rule is config-driven (D-75-05/06/08).** `config/icp_scoring.yaml` carries
+  `regions.home` = `AU, NZ, ANZ, US, GB, IE, CA, ZA, HK, SG, AE, IN` and `regions.aliases`, the
+  SINGLE country-name/ISO2 → region-code table. `scripts/gen_icp_scoring_js.py` renders it to
+  `n8n/code/icpScoring.generated.js` (the `gen_escalation_js.py` precedent), inlined ahead of
+  `normalizeProviders.js` at all three call sites. Both scoring engines (`src/icp_scoring.py`,
+  `Decide Company Action` via `scripts/build_cloud_workflows.py`) key geography on a
+  set-membership test — `home` / `other` / `unknown` — and all three normalisers read the one
+  alias table (`_COUNTRY_ISO2` deleted). Parity pinned by `tests/n8n/regionAliasParity.test.mjs`
+  and `tests/test_icp_scoring_generated_currency.py`. `[observed live]`: executions `12682`
+  (`AU` → no geography reason) and `12683` (`Other` → veto).
+- **`hard_vetoes.non_anz` → `hard_vetoes.outside_home_regions`, reason `"Non-ANZ geography"` →
+  `"Outside target regions"` (D-75-01/02).** All three hard-veto reason strings now come from the
+  yaml in both engines; no reason string is hand-typed in `build_cloud_workflows.py`. The
+  legacy string on already-vetoed records is refreshed by the bump sweep alone (D-75-03,
+  `docs/OPERATOR-RESCORE.md` § 2026-09-20 amendment) — no remediation script exists or should.
+  `[observed live]`: `12683`'s `Decide Company Action` derived `lv_anti_icp_reason` byte-equal
+  to `Outside target regions`. The stored legacy string on that record is UNCHANGED (write
+  blocked) — the sweep has not run.
+- **`lv_icp_scoring_version` exists live and is written by both engines (D-75-03).** Created
+  2026-09-20 (POST 201, undo manifest `7ee513f4`, `[observed live]` read-back via
+  `config/hubspot_migration/baseline/portal-schema-companies-phase75.json`). Stale is defined
+  as `lv_icp_scoring_version != config.version` (opaque string, `lv-icp-v0.2` today; no semver,
+  no timestamp). `[observed live]`: both proof executions stamp `lv-icp-v0.2` in Decide's
+  properties; no record carries it yet because nothing is armed.
+- **`lv_country_region_normalized` carries 16 options live, `UK` hidden (D-75-07).** Eight added
+  (`GB, IE, CA, ZA, HK, SG, AE, IN`), `UK` hidden not deleted (forward-only), pinned snapshot
+  repointed and `hubspotEnums.generated.js` regenerated so `hubspotEnums.js` no longer refuses
+  the new codes. `[observed live]` (PATCH 200 + snapshot read-back). No live record carried
+  `UK`, `EU` or `Unknown` at the time (search totals 0/0/0); `Other` total 5.
+- **HubSpot flow `4626722240 Geography Score` branches on the 12 home codes (D-75-09/11).**
+  Body regenerated by `scripts/gen_geography_flow.py` from `regions.home`, PUT live (revision
+  13 → 14, `updatedAt 2026-09-20T08:50:43.543Z`), read back as
+  `config/hubspot_flows/4626722240-geography-score.post75.json`; the true rollback body is
+  `...pre75.json` (Phase 40's `.before.json` predates the lv_ fix and is NOT a rollback).
+  `scripts/check_schema_drift.py` now compares the live branch (`in_sync`, exit 0,
+  `[observed live]`) — after a plan-05 fix: it had walked the `GET /automation/v4/flows` LIST
+  response, which carries no `actions`. `shouldReEnroll: true` is event-based on
+  `lv_country_region_normalized`, so the PUT re-scored nothing by itself.
+- **The version-stale recompute reroute (D-75-12) is a GATE-DERIVED marker, not a request-level
+  flag.** `Company Gate` sets `row.recompute = true`, `row.recompute_reason = "version_stale"` on
+  a `skip` verdict whose stamp differs from `config.version`, and the EXISTING `IF Company
+  Recompute` node routes it to Decide. ZERO nodes added (enrichment body 289 before and after).
+  The literal D-75-12 IF-splice onto `IF Company Skip` was rejected: two branches able to
+  deliver zero items into `Build Response Merge Pass-Through` are the v1 Merge-starvation class
+  of §13.0.3. Guarded per lane: `wf_enrichment_local_live.json` has no `IF Company Recompute`
+  node, so the rewrite is baked off there. Also guarded by `!row.lookup_failed`. `[documented]`
+  for the reroute on a real version-stale record (both proofs used the explicit `recompute`
+  request flag); pinned offline by `tests/n8n/companyVersionStaleRecompute.test.mjs`.
+- **SJ-2 monthly backstop selects version-stale companies (D-75-13/15).** `SJ-2 Search` carries
+  two version filter groups anchored on `HAS_PROPERTY lv_org_type`, and `SJ2_CO_GATE` admits a
+  version-stale-but-input-fresh record. Its dispatch keeps the `enrich` classification, so its
+  write is allowlist-gated and inert while disarmed — `[documented]` only; the first real tick is
+  the trigger of `.planning/todos/pending/2026-09-20-sj2-version-stale-backstop-is-armed-only.md`.
+- **A FOURTH `ALLOW_HUBSPOT_*` kill switch: `ALLOW_HUBSPOT_RECOMPUTE_WRITES` (D-75-16/17/18/19;
+  see §21.1).** Grants a `recompute`-classified write on this flag alone, no allowlist; the
+  write carries exactly four properties — `lv_anti_icp_flag`, `lv_anti_icp_flag_num`,
+  `lv_anti_icp_reason`, `lv_icp_scoring_version` — and no status property. Ships `"false"` and
+  reads `false` on every live body (`[observed live]`, `bounce_n8n_workflows.py` 2026-09-20).
+  `n8n_arming.py::disarm()` deliberately cannot touch it (D-75-18a,
+  `tests/test_recompute_flag_isolation.py`); `bounce_n8n_workflows.py` prints its value against
+  the committed body on every run. **The D-75-17 flip to `"true"` has NOT been performed.**
+  Behaviour of the lane under an ARMED flag is `[documented]` only.
+
+**What did NOT change.** The hardware-veto OR predicate (§10.3.1), the no-content veto, the
+named-account floor (§10.3.2), Approach C (Decide computes no score/tier), the Phase 46 parity
+rule, `assert_no_self_dispatch`, and every frozen fixture under `tests/n8n/fixtures/frozen/`
+(two NEW ones added: `exec_12682`, `exec_12683`, redacted).
+
+**Exit evidence (plan 06, 2026-09-20).** Four cloud bodies deployed disarmed and bounced
+(`bounce_exit=0`; 289/43/101/55 nodes live = committed; `executionOrder: v1`; every flag
+`false`); two recompute proofs, 0 provider credits, exactly two executions (`12682`, `12683`),
+no burst over the two-minute watch. Records: `75-DEPLOY-RECORD.md`, `75-UAT.md`,
+`75-SCHEMA-RECORD.md`. **Nothing is armed.**
 
 # 11. Local-First MVP
 
@@ -2444,6 +2540,11 @@ would have created a second, driftable copy of the same rule. Coverage:
 with the held case asserted NOT landed).
 
 ### 13.0.2 As-built delta — the request-level flags: TWO, not three (Phase 61 / 62; `async_ack` retired by Phase 70, 2026-09-09; `scale_up` retired by Phase 70 gap closure round 2, 2026-09-10)
+
+> **Phase 75 (2026-09-20):** the version-stale recompute reroute is NOT a request-level flag. It
+> is a gate-derived marker (`row.recompute` + `row.recompute_reason = "version_stale"`, set by
+> `Company Gate`) routed by the existing `IF Company Recompute` node, zero nodes added — see
+> §10.3.3. The count below stays TWO.
 
 §13.0 documents `recompute` as **the** request-level boolean. Phase 61 added two more following
 the identical idiom, and Phase 62 added a fourth (`source_by_field`, 2026-09-02). **Phase 70
@@ -4019,6 +4120,13 @@ https://<your-n8n-cloud-subdomain>/webhook/hubspot/enrichment/event
 # 21. Safety Gates
 
 ## 21.1 Global kill switches
+
+> **Phase 75 (2026-09-20) added a fourth n8n `ALLOW_HUBSPOT_*` switch:
+> `ALLOW_HUBSPOT_RECOMPUTE_WRITES` — grants a `recompute`-classified write (exactly
+> `lv_anti_icp_flag`, `lv_anti_icp_flag_num`, `lv_anti_icp_reason`, `lv_icp_scoring_version`),
+> no allowlist; ships `"false"`, live `false` `[observed live]`; `disarm()` cannot touch it;
+> `bounce_n8n_workflows.py` prints it every run. Not flipped. See §10.3.3 and
+> `docs/OPERATOR-RESCORE.md`.
 
 ```text
 ENRICHMENT_ENABLED=true

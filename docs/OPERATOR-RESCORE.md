@@ -1,5 +1,72 @@
 # Operator procedure: re-scoring the population after an ICP rubric change
 
+## AS-BUILT AMENDMENT — 2026-09-20 (Phase 75) — the bump sweep (D-75-14) and the standing recompute flag (D-75-17)
+
+Phase 75 made the geography whitelist config-driven (`config/icp_scoring.yaml` `regions.home`,
+`hard_vetoes.outside_home_regions`, reason `Outside target regions`) and stamped every scored
+company with `lv_icp_scoring_version` (live property, created 2026-09-20). Two operator
+procedures now exist that Phase 75 deliberately did NOT run. Neither replaces the
+whole-population re-score below; both are narrower.
+
+### (a) The bump sweep — D-75-14
+
+Run after ANY `config/icp_scoring.yaml` change that moves the scoring surface (a whitelist
+edit, a veto rule, a points change):
+
+1. Bump `version:` in `config/icp_scoring.yaml` (opaque string, e.g. `lv-icp-v0.3` — no semver,
+   no timestamp). Stale is defined as `lv_icp_scoring_version != version`, nothing else.
+2. Regenerate and commit in ONE commit: `.venv/bin/python scripts/gen_icp_scoring_js.py &&
+   .venv/bin/python scripts/build_cloud_workflows.py`, then `git diff --quiet -- n8n/` must be
+   non-empty only for the regenerated bodies; both suites green.
+3. Deploy + bounce disarmed: `DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python
+   scripts/deploy_n8n_workflows.py --only wf_enrichment_cloud.json` (and
+   `--only wf_scheduled_maintenance_cloud.json`), then `.venv/bin/python
+   scripts/bounce_n8n_workflows.py` (exit 0 required).
+4. The sweep itself is a chunked recompute POST on
+   `scripts/remediate_veto_companies.py::post_webhook_event(company_id, armed, cfg,
+   recompute=True)` — the zero-cost lane (0 provider credits, 0 Anthropic calls, 1 execution
+   per company). Select the population read-only first: `lv_icp_scoring_version` NEQ the new
+   version (or `HAS_PROPERTY` false for never-stamped records). Pin the id set before sending.
+5. **Stop conditions.** Chunk size ≤ 20 companies per window; the run stays inside
+   `config/execution_budget.yaml`'s SJ-3 dispatch cap (currently `SJ3_DISPATCH_CAP = 40`
+   executions per tick, which this lane rides unchanged per D-75-18c) — a sweep larger than the
+   cap is several sittings, not one; watch two minutes after the FINAL chunk and confirm the
+   execution count equals the companies sent (the 2026-09-10 runaway shape); stop on the first
+   execution that does not report `success`, on any provider node appearing in runData, or on
+   any execution count above the companies sent.
+6. Writing needs the flag in (b). While `ALLOW_HUBSPOT_RECOMPUTE_WRITES` is `"false"` every row
+   returns `write_blocked` — deriving is free, writing is the operator's authority. The FIRST
+   sweep after a bump is therefore run twice: once disarmed to read the derived verdicts from
+   runData (`scripts/freeze_execution_rundata.py <ids>`), then armed after review.
+7. The scheduled SJ-2 monthly path is the BACKSTOP, not the mechanism: it selects
+   version-stale companies but its write stays allowlist-gated (`enrich`-classified, see the
+   pending todo `2026-09-20-sj2-version-stale-backstop-is-armed-only.md`).
+
+**D-75-03, stated plainly:** records still carrying the legacy `Non-ANZ geography` reason are
+refreshed by this sweep alone. There is no dedicated remediation script for the string and
+none should be written — the recompute lane rewrites `lv_anti_icp_reason` from the yaml.
+
+### (b) The standing-flag flip — D-75-17
+
+`ALLOW_HUBSPOT_RECOMPUTE_WRITES` is the FOURTH `ALLOW_HUBSPOT_*` write-safety authority. It
+grants exactly one thing: a `recompute`-classified write, on this flag alone, with no
+allowlist. That write carries exactly four properties — `lv_anti_icp_flag`,
+`lv_anti_icp_flag_num`, `lv_anti_icp_reason`, `lv_icp_scoring_version` — and no status property.
+
+Ships `"false"`. Flipping it to `"true"` is: edit the literal in `WRITE_SAFETY_DEFAULTS`
+(`scripts/build_cloud_workflows.py`), regenerate, commit, deploy, bounce. Taken ONLY after the
+first supervised bump sweep in (a) has been reviewed, and explicitly NOT part of Phase 75's
+exit gate (not performed as of 2026-09-20).
+
+Two facts an operator will otherwise be surprised by:
+
+- `operator-claude-plugin/scripts/n8n_arming.py::disarm()` does NOT disarm this flag
+  (D-75-18a, pinned by `tests/test_recompute_flag_isolation.py`). A kill-everything step must
+  flip it back by the same edit + regenerate + deploy + bounce route.
+- `scripts/bounce_n8n_workflows.py` prints the flag's current value on every run (a
+  `recompute flag` column) and compares it against the COMMITTED body, not a hardcoded
+  literal — that column is the routine reminder that the authority is still on.
+
 ## AS-BUILT AMENDMENT — 2026-08-23 (quick 260823-ono) — adding a named-account score floor
 
 This is a **different, narrower** write than the whole-population re-score this document
@@ -352,7 +419,8 @@ If something below turns out to be wrong or incomplete once exercised live, add 
 title, state plainly which line(s) it corrects, and leave the original prose in place
 underneath so the history of what was believed at each point stays readable.
 
-Three amendments have been made, newest first: **2026-08-23 (quick 260823-ono)**, adding
+Four amendments have been made, newest first: **2026-09-20 (Phase 75)**, adding the
+bump-sweep (D-75-14) and standing-recompute-flag (D-75-17) procedures; **2026-08-23 (quick 260823-ono)**, adding
 the narrower named-account score-floor procedure (a different write path than the
 whole-population re-score this document otherwise covers); **2026-08-19 (Phase 50
 follow-up)**, repointing the `## Acceptance` gate off the archived `lv_icp_tier` and onto
