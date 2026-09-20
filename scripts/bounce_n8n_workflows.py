@@ -33,6 +33,16 @@ WORKFLOWS = {  # committed file -> live id
 }
 WRITE_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")
 
+# Phase 75 Plan 04 (D-75-17/D-75-18b). ALLOW_HUBSPOT_RECOMPUTE_WRITES is a FOURTH write
+# authority (D-75-16), deliberately allowed to read "true" once the operator flips it
+# post-supervised-sweep — it ships "false" in every committed workflow today, but this
+# bounce must not treat "true" as a defect once the flip lands, nor silently ignore the
+# flag and call that a green run. Tracked in a SEPARATE tuple from WRITE_FLAGS, compared
+# against the COMMITTED workflow body — not a hardcoded literal in this script — so a
+# divergence in EITHER direction (live "true" while committed is "false", or the reverse)
+# is caught. WRITE_FLAGS' own all-false rule below is untouched by this addition.
+COMMITTED_TRUTH_FLAGS = ("ALLOW_HUBSPOT_RECOMPUTE_WRITES",)
+
 
 def _api(method, path, **kw):
     url = os.environ["N8N_URL"].rstrip("/") + "/api/v1" + path
@@ -42,12 +52,15 @@ def _api(method, path, **kw):
     return r.json() if r.text else {}
 
 
-def _flag_values(body):
-    """Every `const <FLAG> = "<value>";` literal across the workflow's jsCode, per flag."""
-    found = {f: set() for f in WRITE_FLAGS}
+def _flag_values(body, flags=WRITE_FLAGS):
+    """Every `const <FLAG> = "<value>";` literal across the workflow's jsCode, per flag.
+    `flags` defaults to WRITE_FLAGS (every existing call site unchanged); pass
+    COMMITTED_TRUTH_FLAGS to scan for the fourth flag instead — same scanner,
+    parameterized rather than duplicated (D-75-18b)."""
+    found = {f: set() for f in flags}
     for node in body.get("nodes", []):
         code = (node.get("parameters") or {}).get("jsCode") or ""
-        for flag in WRITE_FLAGS:
+        for flag in flags:
             marker = f"const {flag} = "
             i = code.find(marker)
             while i != -1:
@@ -57,20 +70,28 @@ def _flag_values(body):
     return {f: sorted(v) for f, v in found.items()}
 
 
-def _row_ok(live_body, expected_nodes) -> bool:
+def _row_ok(live_body, expected_nodes, committed_body=None) -> bool:
     """Pure predicate — the whole row verdict, extracted so it can be exercised offline.
 
     True only when the workflow is active, its node count matches the committed body,
-    every write flag reads the false literal (or is absent), AND its execution order
-    reads v1 (D-70-29)."""
+    every write flag reads the false literal (or is absent), its execution order reads v1
+    (D-70-29), AND — when `committed_body` is supplied — every COMMITTED_TRUTH_FLAGS
+    member's live literal equals the SAME flag's literal in the committed body (D-75-18b).
+    `committed_body=None` skips that last check rather than failing it, so an existing
+    caller with no committed body to compare against is unaffected."""
     flags = _flag_values(live_body)
     exec_order = (live_body.get("settings") or {}).get("executionOrder")
-    return (
+    ok = (
         live_body.get("active") is True
         and len(live_body.get("nodes", [])) == expected_nodes
         and all(v in ([], ["false"]) for v in flags.values())
         and exec_order == "v1"
     )
+    if committed_body is not None:
+        live_truth = _flag_values(live_body, flags=COMMITTED_TRUTH_FLAGS)
+        committed_truth = _flag_values(committed_body, flags=COMMITTED_TRUTH_FLAGS)
+        ok = ok and live_truth == committed_truth
+    return ok
 
 
 def main():
@@ -79,27 +100,35 @@ def main():
         return 0
     root = Path(__file__).resolve().parent.parent
     ok = True
-    print("| workflow | id | active | live nodes | committed nodes | write flags | execution order |")
-    print("|---|---|---|---|---|---|---|")
+    print("| workflow | id | active | live nodes | committed nodes | write flags | "
+          "recompute flag | execution order |")
+    print("|---|---|---|---|---|---|---|---|")
     for rel, wid in WORKFLOWS.items():
         if wid is None:
-            print(f"| {rel} | (unset) | - | - | - | - | - | "
+            print(f"| {rel} | (unset) | - | - | - | - | - | - | "
                   f"**REFUSED: no live id yet — run the operator's first CREATE deploy "
                   f"(plan 09) and fill in the id, or this script would 404 blindly** |")
             continue
-        expected = len(json.loads((root / rel).read_text())["nodes"])
+        committed = json.loads((root / rel).read_text())
+        expected = len(committed["nodes"])
         _api("POST", f"/workflows/{wid}/deactivate")
         _api("POST", f"/workflows/{wid}/activate")
         live = _api("GET", f"/workflows/{wid}")
         flags = _flag_values(live)
         flags_txt = ", ".join(f"{k}={v or ['-']}" for k, v in flags.items())
+        # T-75-15: surface the standing recompute flag's CURRENT value on every routine
+        # bounce, so an operator scanning output notices it is still armed weeks later.
+        recompute_flags = _flag_values(live, flags=COMMITTED_TRUTH_FLAGS)
+        recompute_txt = ", ".join(f"{k}={v or ['-']}" for k, v in recompute_flags.items())
         exec_order = (live.get("settings") or {}).get("executionOrder")
-        row_ok = _row_ok(live, expected)
+        row_ok = _row_ok(live, expected, committed_body=committed)
         ok &= row_ok
         print(f"| {live.get('name')} | `{wid}` | {live.get('active')} | "
-              f"{len(live.get('nodes', []))} | {expected} | {flags_txt} | {exec_order} |"
+              f"{len(live.get('nodes', []))} | {expected} | {flags_txt} | {recompute_txt} | "
+              f"{exec_order} |"
               f"{'' if row_ok else ' **MISMATCH**'}")
-    print("\nOK — all active, node counts match, write flags false, execution order v1." if ok
+    print("\nOK — all active, node counts match, write flags false, recompute flag matches "
+          "committed, execution order v1." if ok
           else "\nMISMATCH — see rows above; do not run UAT until resolved.")
     return 0 if ok else 1
 

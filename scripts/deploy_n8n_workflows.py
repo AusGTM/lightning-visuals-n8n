@@ -220,6 +220,21 @@ NODE_CREDENTIAL_MAP = {
 # import freely — including each entry's disabled literal, so a change to how the builder
 # bakes a constant cannot silently make the exact-literal rewrite below stop matching.
 #
+# ALLOW_HUBSPOT_RECOMPUTE_WRITES (Phase 75 Plan 04, D-75-18a) is a FOURTH exclusion, for
+# the OPPOSITE reason from the three above: it is not default-true (it ships "false" like
+# WRITE_SAFETY_DEFAULTS' other flags), but it is a STANDING authority the operator flips
+# by hand post-supervised-sweep (D-75-16/D-75-17), and this table's overlay is a
+# per-invocation, disabled->enabled-only widening meant for a bounded write-path canary.
+# Admitting it here would let `--enable-baked-flags` arm a standing authority the same way
+# it arms a one-shot canary, and — the more concrete hazard — it would give
+# `operator-claude-plugin/scripts/n8n_arming.py`'s `disarm()` something to rewrite, since
+# that module's derivation is `[flag for flag in OVERLAYABLE_FLAGS if ...]` (D-75-18a):
+# anything absent from this table can never be silently rewritten by an unattended
+# disarm. This table carries NO functional change for the fourth flag; its own
+# read-back consequence lives in scripts/bounce_n8n_workflows.py (D-75-18b) instead,
+# since this file has no separate "every ALLOW_* literal reads false" assertion of its
+# own beyond this overlay spec.
+#
 # Each entry: name -> (disabled_literal, default_enabled_literal, takes_value)
 #   disabled_literal        the EXACT JS literal the builder bakes for the safe default.
 #                           `_flag_const(..., cloud=True)` emits a BARE boolean;
