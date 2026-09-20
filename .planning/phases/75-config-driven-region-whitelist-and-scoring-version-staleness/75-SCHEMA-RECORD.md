@@ -85,3 +85,46 @@ asserted pre-call) wrote `config/hubspot_migration/baseline/portal-schema-compan
 
 No company record was written by any call in Task 1.
 
+
+## Task 2 — snapshot repointed, enum module regenerated
+
+`scripts/gen_hubspot_enums_js.py` `SNAPSHOT` → `config/hubspot_migration/baseline/portal-schema-companies-phase75.json`
+(previous pin kept as a dated comment; old baseline retained). Regenerated
+`n8n/code/hubspotEnums.generated.js` carries all sixteen region values; `build_cloud_workflows.py`
+re-run leaves `git status --porcelain -- n8n/` empty. Commit `e220bf61`. Plan 02's inert window
+for `GB, IE, CA, ZA, HK, SG, AE, IN` is closed. `tests/test_hubspot_schema_coverage.py`, red since
+plan 01 because `lv_icp_scoring_version` was not live, is green again.
+
+## Task 3 — geography flow PUT
+
+Pre-PUT disclosure (printed to the operator before the write): the committed body
+`config/hubspot_flows/4626722240-geography-score.after.json` differs from its phase-start state
+in ONLY the geography branch `operation.values`, `["AU","NZ","ANZ"]` → the 12 `regions.home`
+codes (verified by structural comparison with `values` stripped: identical). The live body
+fetched immediately before the PUT (`4626722240-geography-score.pre75.json`, read-only) equals
+the committed body except those same three values — it IS the rollback body.
+`4626722240-geography-score.before.json` (Phase 40's archive, filtering native `country` by
+name) is NOT a valid rollback for this phase and was left byte-unchanged.
+
+PUT (operator, `DRY_RUN=false ALLOW_HUBSPOT_FLOW_WRITE=true .venv/bin/python scripts/put_hubspot_flow.py --flow-id 4626722240 --file config/hubspot_flows/4626722240-geography-score.after.json`):
+response body returned (2xx) with `revisionId` 13 → 14, `updatedAt` `2026-09-20T08:50:43.543Z`
+(`createdAt` `2026-08-04T18:54:17.151Z`), `isEnabled: true`, `shouldReEnroll: true`, score actions
+unchanged (`geography_score` = 10 on the branch, 0 on default).
+
+Independent read-back `scripts/fetch_hubspot_flow.py --flow-id 4626722240 --label post75` →
+`4626722240-geography-score.post75.json`; geography branch `values`:
+`["AU","NZ","ANZ","US","GB","IE","CA","ZA","HK","SG","AE","IN"]`. Equal to the committed body
+except `revisionId` (14 vs 13).
+
+`scripts/check_schema_drift.py --out .../75-schema-drift.json`:
+- first run: `geography_flow_drift.status = ambiguous_branch, "found 0"` on a live flow that
+  carried exactly one branch — a plan-04 comparator defect (it walked the v4 flows LIST
+  response, which has no `actions`). Fixed root-cause in `0221804a` (RED `4a73ae7a`): main()
+  now GETs the single flow body.
+- second run (post-fix): `geography_flow_drift = {"status": "in_sync", "detail": "live branch
+  values match regions.home"}`, `do_not_archive.ok = True`, `summary {in_sync: 55,
+  documented_gap: 3}` (the three CLAUDE.md §4.0 never-created properties `lv_icp_confidence`,
+  `lv_icp_scored_at`, `lv_recommended_motion`), **exit 0**.
+
+`gen_geography_flow.py && git diff --quiet -- config/hubspot_flows/` → `BODY_CURRENT`.
+No company record was written; nothing on n8n was deployed, bounced or armed.
