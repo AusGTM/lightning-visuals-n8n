@@ -64,7 +64,36 @@ def test_case_4_non_anz_veto():
                "lv_country_region_normalized": "Other", "lv_revenue_band": "5-50M"})
     assert r.tier == "D"
     assert r.anti_icp_flag is True
-    assert "Non-ANZ" in r.anti_icp_reason
+    assert "Outside target regions" in r.anti_icp_reason
+
+
+def test_case_4b_region_whitelist_au_and_us_are_home_de_vetoes_blank_is_unknown():
+    """Phase 75 (D-75-01/D-75-05): config/icp_scoring.yaml's `regions.home` is the single
+    source of the geography rule. AU and the newly-whitelisted US both score 10pts and
+    fire no veto; a KNOWN non-whitelisted region (DE) scores 0 and fires exactly the
+    renamed veto reason; a blank/never-enriched region scores 0 and fires no veto (the
+    2026-08-10 three-state rule, unchanged by this plan)."""
+    results = {
+        region: score({
+            "lv_org_type": "governing_body_league",
+            "lv_produces_content": True,
+            "lv_country_region_normalized": region,
+            "lv_revenue_band": "5-50M",
+        })
+        for region in ("AU", "US", "DE", "")
+    }
+    assert results["AU"].anti_icp_flag is False
+    assert results["US"].anti_icp_flag is False
+    assert results["DE"].anti_icp_flag is True
+    assert results["DE"].anti_icp_reason == "Outside target regions"
+    assert results[""].anti_icp_flag is False
+    for region, expected_points in (("AU", 10), ("US", 10), ("DE", 0), ("", 0)):
+        for c in results[region].breakdown["components"]:
+            if c["signal"] == "geography":
+                assert c["points"] == expected_points, (region, c)
+                break
+        else:
+            raise AssertionError("no geography component in breakdown")
 
 
 def test_case_5_no_content_veto():
@@ -226,9 +255,9 @@ def test_hardware_veto_keeps_third_position_in_the_join_via_the_org_type_trigger
     # off the BOOLEAN. The new trigger must land in the same slot, or the two engines'
     # joined reason strings diverge for an org-type-only hardware vendor.
     r = score({"lv_org_type": "hardware_vendor", "lv_produces_content": False,
-               "lv_country_region_normalized": "US", "lv_revenue_band": "5-50M"})
+               "lv_country_region_normalized": "DE", "lv_revenue_band": "5-50M"})
     assert r.anti_icp_reason == "; ".join([
-        "Non-ANZ geography",
+        "Outside target regions",
         "No broadcast or streaming content",
         HARDWARE_REASON,
     ])
