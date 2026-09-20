@@ -5,16 +5,16 @@ milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 75
 current_phase_name: Config-driven region whitelist and scoring-version staleness
 status: executing
-stopped_at: Completed 75-01-PLAN.md
-last_updated: "2026-09-20T06:01:31.530Z"
+stopped_at: Completed 75-02-PLAN.md
+last_updated: "2026-09-20T06:19:34.488Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 75 execution started
-state_head: 1b3c36703fba3b2dad14362300ef74dd38efb0b0
+state_head: 2cf418dc521841083acebfaff0cf14e42d793563
 progress:
   total_phases: 13
   completed_phases: 3
   total_plans: 79
-  completed_plans: 74
+  completed_plans: 75
   percent: 23
 ---
 
@@ -359,7 +359,7 @@ predating the window. VETO-03 bar still 0.
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 75 (Config-driven region whitelist and scoring-version staleness) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-09-20 — Phase 75 execution started
 
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-20T06:01:31.274Z
-**Stopped at:** Completed 75-01-PLAN.md
+**Last session:** 2026-09-20T06:19:29.870Z
+**Stopped at:** Completed 75-02-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -701,6 +701,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 74 P05 | 95min | 3 tasks | 13 files |
 | Phase 74 P06 | 55min | 4 tasks | 6 files |
 | Phase 75 P01 | 95 min | 3 tasks | 29 files |
+| Phase 75 P02 | 16min | 3 tasks | 16 files |
 
 ## Decisions
 
@@ -925,6 +926,8 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 75]: config/icp_scoring.yaml is now the single source of the geography whitelist (regions.home) and all three hard-veto reason strings, generated into n8n/code/icpScoring.generated.js and read by both scoring engines from one commit.
 - [Phase 75]: Widened Plan 01's scope to 5 extra files (scripts/remediate_veto_companies.py, scripts/veto_remediation_report.py, scripts/simulate_rubric_weights.py, tests/test_cloud_companies_branch.py, tests/test_flow_rubric_conformance.py) the yaml key rename would otherwise have KeyError'd.
 - [Phase 75]: Kept tests/test_hubspot_schema_coverage.py red rather than weaken it or fabricate live evidence -- lv_icp_scoring_version is referenced by Decide Company Action in this plan but only created live in Plan 05 (D-75-10), same declare-now/create-later shape as the D-72-23 precedent.
+- [Phase 75]: Phase 75-02: regions.aliases in config/icp_scoring.yaml is now the single country-name/ISO2 -> region-code table, replacing n8n/code/normalizeProviders.js's hand-typed _COUNTRY_ISO2
+- [Phase 75]: Phase 75-02: config/hubspot_properties.yaml declares 8 new lv_country_region_normalized options and lv_icp_scoring_version, shipped inert until a later plan pushes them live
 
 ### Roadmap Evolution
 

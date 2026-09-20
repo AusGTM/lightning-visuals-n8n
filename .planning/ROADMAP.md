@@ -687,7 +687,7 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 **Wave 1**
@@ -696,7 +696,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 75-02-PLAN.md — `regions.aliases` becomes the one country→region table (deletes `_COUNTRY_ISO2`), all three normalisers read it, HubSpot property manifest declares the new options and `lv_icp_scoring_version`
+- [x] 75-02-PLAN.md — `regions.aliases` becomes the one country→region table (deletes `_COUNTRY_ISO2`), all three normalisers read it, HubSpot property manifest declares the new options and `lv_icp_scoring_version`
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
