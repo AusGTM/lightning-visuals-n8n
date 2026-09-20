@@ -133,6 +133,7 @@ coverage:
 | 3 | `4a73ae7a` | test(75-05): RED - geography drift comparator must read the single-flow body |
 | 3 | `0221804a` | fix(75-05): geography drift comparator reads the single-flow body |
 | 3 | `3df08750` | docs(75-05): record the geography flow PUT, read-back and drift verdict |
+| 2 | `afdebf4e` | test(75-05): re-baseline frozen companies jsCode fixture after the enum snapshot repoint |
 
 ## Deviations from Plan
 
@@ -148,7 +149,14 @@ coverage:
    (`pre75.json`), now committed and named in the record.
 3. **[Rule 3 — blocking] `check_schema_drift.py` requires `--out`.** The plan's verify command
    omitted it; run with an explicit phase-dir report path.
-4. **Operator ran every live command.** The D-75-10 fallback was the ONLY path: the subagents
+4. **[explicit re-baseline] `tests/fixtures/companies_jscode_frozen.json`.** The post-wave gate
+   failed `tests/test_companies_factory_frozen.py` (2 tests): Task 2's regeneration changed the
+   `Merge Company` node's inlined `hubspotEnums.generated.js` — snapshot header + the eight added
+   region values, cloud and local-live, nothing else (verified by per-node unified diff before
+   re-baselining). This is the deliberate change Task 2 exists to make, so the fixture was
+   re-baselined as the explicit, reviewed act the test's own header requires (precedent
+   `6e1442e8`, Phase 72). Commit noted below.
+5. **Operator ran every live command.** The D-75-10 fallback was the ONLY path: the subagents
    cannot read `.env`. The orchestrator drove the plan inline rather than spawning an executor
    that would have blocked at each token-bearing step.
 
