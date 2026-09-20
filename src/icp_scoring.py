@@ -121,7 +121,10 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
     if not region_raw:
         region_key = "unknown"
     else:
-        region_key = region if region in ["AU", "NZ", "ANZ"] else "non_anz"
+        # Phase 75 (D-75-01/D-75-05): region_key is now a set-membership test against
+        # config/icp_scoring.yaml's regions.home whitelist, not a hand-typed AU/NZ/ANZ
+        # literal set — the single source for both this engine and Decide Company Action.
+        region_key = "home" if region in cfg["regions"]["home"] else "other"
     geo_points = cfg["base_score"]["geography"].get(region_key, 0)
     score += geo_points
     breakdown["components"].append({"signal": "geography", "value": region, "points": geo_points})
@@ -172,9 +175,9 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
     anti_icp_flag = False
     anti_reasons = []
 
-    if region_key == "non_anz":
+    if region_key == "other":
         anti_icp_flag = True
-        anti_reasons.append(cfg["hard_vetoes"]["non_anz"]["reason"])
+        anti_reasons.append(cfg["hard_vetoes"]["outside_home_regions"]["reason"])
 
     if produces_content is False:
         anti_icp_flag = True

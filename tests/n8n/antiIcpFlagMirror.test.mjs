@@ -77,7 +77,7 @@ test("clean no-veto case: AU, content, non-hardware -- flag/mirror pair is false
 });
 
 test("non-ANZ trigger alone: flag/mirror pair is true/1", () => {
-  const out = runMergeThenDecide(row("US", true, false, "governing_body_league"));
+  const out = runMergeThenDecide(row("DE", true, false, "governing_body_league"));
   assertMatchingPair(out, true);
 });
 
@@ -96,12 +96,12 @@ test("hardware-vendor org-type trigger alone (Simtech LED's shape): flag/mirror 
   assertMatchingPair(out, true);
 });
 
-test("multiple triggers together (non-ANZ + no-content + hardware-vendor): flag/mirror pair is true/1", () => {
-  const out = runMergeThenDecide(row("US", false, true, "hardware_vendor"));
+test("multiple triggers together (outside-target-regions + no-content + hardware-vendor): flag/mirror pair is true/1", () => {
+  const out = runMergeThenDecide(row("DE", false, true, "hardware_vendor"));
   assertMatchingPair(out, true);
   assert.equal(
     out.properties.lv_anti_icp_reason,
-    "Non-ANZ geography; No broadcast or streaming content; Hardware/AV/LED vendor, not sports-media buyer",
+    "Outside target regions; No broadcast or streaming content; Hardware/AV/LED vendor, not sports-media buyer",
   );
 });
 

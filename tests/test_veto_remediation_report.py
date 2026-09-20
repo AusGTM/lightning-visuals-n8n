@@ -98,9 +98,9 @@ def test_classify_cleared_when_flag_not_true():
     assert m.classify(row) == "cleared"
 
 
-def test_classify_still_non_anz_when_reason_contains_non_anz_reason():
-    row = _row(PINNED_ID, lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography")
-    assert m.classify(row) == "still_non_anz"
+def test_classify_still_outside_home_when_reason_contains_outside_home_reason():
+    row = _row(PINNED_ID, lv_anti_icp_flag="true", lv_anti_icp_reason="Outside target regions")
+    assert m.classify(row) == "still_outside_home"
 
 
 def test_classify_residual_other_veto_when_reason_is_a_different_hard_veto():
@@ -111,30 +111,32 @@ def test_classify_residual_other_veto_when_reason_is_a_different_hard_veto():
     assert m.classify(row) == "residual_other_veto"
 
 
-def test_classify_correct_non_anz_for_the_d23_true_veto_record():
-    # D-23: Jam TV 17317850381 is the Italian broadcaster jamtv.it. Its non-ANZ veto is
-    # CORRECT and Phase 47 preserved it deliberately. Protective intent: without this
-    # exemption, `--mode after` REFUSES on the one record required to be in exactly this
-    # state, reporting a false failure to anyone re-running the report after Phase 47.
-    row = _row("17317850381", lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography")
-    assert m.classify(row) == "correct_non_anz"
+def test_classify_correct_outside_home_for_the_d23_true_veto_record():
+    # D-23: Jam TV 17317850381 is the Italian broadcaster jamtv.it. Its outside-target-
+    # regions veto is CORRECT and Phase 47 preserved it deliberately. Protective intent:
+    # without this exemption, `--mode after` REFUSES on the one record required to be in
+    # exactly this state, reporting a false failure to anyone re-running the report after
+    # Phase 47.
+    row = _row("17317850381", lv_anti_icp_flag="true", lv_anti_icp_reason="Outside target regions")
+    assert m.classify(row) == "correct_outside_home"
 
 
 def test_classify_d23_exemption_is_keyed_by_id_not_by_reason_text():
     # Protective intent: the exemption must NOT generalise. Any OTHER record carrying the
     # same reason string is still a real failure -- that is the whole bar of VETO-01.
-    row = _row("9604732797", lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography")
-    assert m.classify(row) == "still_non_anz"
+    row = _row("9604732797", lv_anti_icp_flag="true", lv_anti_icp_reason="Outside target regions")
+    assert m.classify(row) == "still_outside_home"
 
 
-def test_classify_still_non_anz_wins_when_reason_carries_both_vetoes():
-    # A record can carry multiple simultaneous vetoes joined with "; " -- the non-ANZ
-    # substring anywhere in the joined string is still a failing classification.
+def test_classify_still_outside_home_wins_when_reason_carries_both_vetoes():
+    # A record can carry multiple simultaneous vetoes joined with "; " -- the
+    # outside-target-regions substring anywhere in the joined string is still a failing
+    # classification.
     row = _row(
         PINNED_ID, lv_anti_icp_flag="true",
-        lv_anti_icp_reason="Hardware/AV/LED vendor, not sports-media buyer; Non-ANZ geography",
+        lv_anti_icp_reason="Hardware/AV/LED vendor, not sports-media buyer; Outside target regions",
     )
-    assert m.classify(row) == "still_non_anz"
+    assert m.classify(row) == "still_outside_home"
 
 
 def test_diff_reports_id_present_on_only_one_side_rather_than_dropping_it():
@@ -152,7 +154,7 @@ def test_diff_reports_id_present_on_only_one_side_rather_than_dropping_it():
 def test_diff_reports_changed_properties_and_classification_for_a_cleared_record():
     before_rows = [_row(
         PINNED_ID, lv_org_type=None, lv_icp_tier_derived="D",
-        lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography",
+        lv_anti_icp_flag="true", lv_anti_icp_reason="Outside target regions",
     )]
     after_rows = [_row(
         PINNED_ID, lv_org_type="individual_club_team", lv_icp_tier_derived="C",

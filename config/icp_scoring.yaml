@@ -1,6 +1,33 @@
 # config/icp_scoring.yaml
 
-version: "lv-icp-v0.1"
+version: "lv-icp-v0.2"
+
+# Phase 75 (D-75-05): the target-region whitelist. Selection criteria (record verbatim
+# here, not in code): English-speaking or native-English-audience market with a strong
+# sports-broadcasting ecosystem. Considered and NOT included: NG, KE, JM, PH.
+regions:
+  home:
+    - AU
+    - NZ
+    - ANZ
+    - US
+    - GB
+    - IE
+    - CA
+    - ZA
+    - HK
+    - SG
+    - AE
+    - IN
+  aliases:
+    australia: AU
+    au: AU
+    aus: AU
+    new zealand: NZ
+    nz: NZ
+    anz: ANZ
+    us: US
+    united states: US
 
 base_score:
   org_type:
@@ -20,10 +47,8 @@ base_score:
     unknown: 0
 
   geography:
-    ANZ: 10
-    AU: 10
-    NZ: 10
-    non_anz: 0
+    home: 10
+    other: 0
     unknown: 0
 
   revenue_band:
@@ -40,9 +65,9 @@ base_score:
 graduated_deductions: {}
 
 hard_vetoes:
-  non_anz:
+  outside_home_regions:
     enabled: true
-    reason: "Non-ANZ geography"
+    reason: "Outside target regions"
 
   no_content:
     enabled: true

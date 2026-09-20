@@ -29,6 +29,12 @@ RUNBOOK_PATH = "docs/OPERATOR-RESCORE.md"
 # individual_club_team raised 5->15, regulator dropped 0->-20, and the gambling
 # graduated deduction fully removed (graduated_deductions is pinned EMPTY on purpose --
 # a re-introduced key must also fail this guard).
+#
+# Geography re-baselined 2026-09-20 against config/icp_scoring.yaml (Phase 75, D-75-01/
+# D-75-05/D-75-20): the five hand-typed region-code keys collapsed to three, keyed on
+# whitelist membership (regions.home) rather than a hard-typed country-code set --
+# home:10, other:0, unknown:0. org_type/produces_content/revenue_band and
+# graduated_deductions are untouched by this re-baseline.
 PINNED_BASE_SCORE = {
     "org_type": {
         "governing_body_league": 40,
@@ -42,7 +48,7 @@ PINNED_BASE_SCORE = {
         "unknown": 0,
     },
     "produces_content": {True: 20, False: 0, "unknown": 0},
-    "geography": {"ANZ": 10, "AU": 10, "NZ": 10, "non_anz": 0, "unknown": 0},
+    "geography": {"home": 10, "other": 0, "unknown": 0},
     "revenue_band": {
         "<1M": 0,
         "1-5M": 0,
@@ -98,14 +104,15 @@ def assert_rubric_pinned(config: dict) -> None:
         raise AssertionError(
             "config/icp_scoring.yaml's scoring surface has changed: "
             f"{sorted(offenders)}. "
-            "A rubric weight change obliges a full-population re-score of every "
-            "record that carries lv_icp_fit_score, because no lv_icp_scoring_version "
-            "property exists to segment scored records by which rubric version scored "
-            f"them. Read {RUNBOOK_PATH} and run the re-score procedure it describes "
-            "before re-baselining this test's PINNED_BASE_SCORE / "
+            "A rubric weight change obliges a config.version bump plus the stale-record "
+            "sweep (the operator one-shot recompute sweep and the SJ-2 monthly backstop) "
+            "-- lv_icp_scoring_version IS the segmentation mechanism (Phase 75, "
+            "D-75-03/D-75-20) that lets a re-score target only records scored under a "
+            f"superseded rubric version. Read {RUNBOOK_PATH} and run the re-score "
+            "procedure it describes before re-baselining this test's PINNED_BASE_SCORE / "
             "PINNED_GRADUATED_DEDUCTIONS literals. Re-baselining this test alone, "
-            "without running that re-score, is exactly the unaccompanied change this "
-            "guard exists to block."
+            "without bumping config.version and running that sweep, is exactly the "
+            "unaccompanied change this guard exists to block."
         )
 
 
@@ -127,7 +134,7 @@ def test_pinned_rubric_matches_current_config():
             id="revenue_band_weight_changed",
         ),
         pytest.param(
-            lambda cfg: cfg["base_score"]["geography"].__setitem__("non_anz", 5),
+            lambda cfg: cfg["base_score"]["geography"].__setitem__("other", 5),
             id="geography_weight_changed",
         ),
         pytest.param(

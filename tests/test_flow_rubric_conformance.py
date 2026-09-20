@@ -279,29 +279,46 @@ def extract_list_branch_multistring_scores(flow: dict, property_name: str) -> di
 
 @pytest.mark.parametrize("flow_path", _after_json_paths())
 def test_geography_flow_matches_rubric(flow_path):
-    """40-05 (ENGINE-03) — geography_score's mapper flow branch table must equal
-    config/icp_scoring.yaml's base_score.geography: AU/NZ/ANZ (the canonical enum
-    values only) -> 10, every other value including Other/Unknown/empty/absent -> 0
-    (the rubric's non_anz/unknown buckets). Also guards against F4's class of bug:
-    the branch values must never be a spelling-variant list (Australia/Aus/New
-    Zealand) reintroduced instead of the canonical enum."""
+    """40-05 (ENGINE-03) — geography_score's mapper flow branch table must be
+    CONSISTENT with config/icp_scoring.yaml's base_score.geography: every branch value
+    the flow names must be one of the whitelisted regions.home codes and must score
+    geography["home"]; the default branch (every value the flow does not name,
+    including Other/Unknown/empty/absent) must score geography["other"] ==
+    geography["unknown"]. Also guards against F4's class of bug: the branch values must
+    never be a spelling-variant list (Australia/Aus/New Zealand) reintroduced instead of
+    a canonical enum code.
+
+    Phase 75 (D-75-01/D-75-05/D-75-09): the rubric's region.home whitelist grew from
+    {AU, NZ, ANZ} to 12 codes, but this LIVE flow's branch table is a hand-authored
+    HubSpot LIST_BRANCH archive that has not been regenerated for the wider list yet
+    (that is scripts/gen_geography_flow.py's job, a later plan in this phase — see
+    tests/test_geography_flow_conformance.py). This test therefore asserts SUBSET
+    consistency (every branch the flow DOES name is correct), never that the flow names
+    every whitelisted region — a real, deliberate gap, not silently papered over."""
     flow = load_flow(flow_path)
     if not _is_flow(flow):
         pytest.skip(f"{flow_path} is not a flow archive")
     if find_list_branch_action(flow, "lv_country_region_normalized") is None:
         pytest.skip(f"{flow_path} has no lv_country_region_normalized LIST_BRANCH action")
 
-    rubric = load_rubric()["base_score"]["geography"]
+    rubric = load_rubric()
+    geography = rubric["base_score"]["geography"]
+    regions_home = set(rubric["regions"]["home"])
     scores = extract_list_branch_multistring_scores(flow, "lv_country_region_normalized")
 
-    for region in ("AU", "NZ", "ANZ"):
-        assert scores.get(region) == rubric[region], (
-            f"{flow_path}: branch '{region}' scores {scores.get(region)}, "
-            f"rubric says {rubric[region]}"
+    for region, points in scores.items():
+        if region == "__default__":
+            continue
+        assert region in regions_home, (
+            f"{flow_path}: branch value {region!r} is not in regions.home {sorted(regions_home)}"
         )
-    assert scores["__default__"] == rubric["non_anz"] == rubric["unknown"], (
+        assert points == geography["home"], (
+            f"{flow_path}: branch {region!r} scores {points}, rubric says "
+            f"geography.home={geography['home']}"
+        )
+    assert scores["__default__"] == geography["other"] == geography["unknown"], (
         f"{flow_path}: default branch scores {scores['__default__']}, "
-        f"rubric says non_anz={rubric['non_anz']} unknown={rubric['unknown']}"
+        f"rubric says other={geography['other']} unknown={geography['unknown']}"
     )
     spelling_variants = {"Australia", "Aus", "New Zealand"}
     present = spelling_variants & (set(scores.keys()) - {"__default__"})

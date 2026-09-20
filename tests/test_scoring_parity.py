@@ -217,7 +217,7 @@ def test_blank_region_is_not_vetoed_offline():
         # lv_country_region_normalized intentionally omitted -- never enriched
     })
     assert r.anti_icp_flag is False
-    assert "Non-ANZ" not in (r.anti_icp_reason or "")
+    assert "Outside target regions" not in (r.anti_icp_reason or "")
     assert _component(r, "geography")["points"] == 0
     # This particular fixture has org_type/produces_content already known, so it lands a
     # real tier off its remaining points (5 + 20 + 0 + 0 = 25 -> C) rather than Unscored --
@@ -256,17 +256,19 @@ def test_blank_region_boundary_neighbor_empty_string_offline():
     assert r.anti_icp_flag is False
 
 
-def test_known_non_anz_region_still_vetoes_offline():
+def test_known_outside_home_region_still_vetoes_offline():
     """Companion to the two tests above: the fix must not blind the veto to a genuinely
-    non-ANZ company -- a KNOWN, different region value keeps firing it."""
+    outside-target-regions company -- a KNOWN, different region value keeps firing it.
+    Phase 75 (D-75-01/D-75-05): DE is the region used here, not US -- US moved into
+    regions.home and is no longer a genuinely non-home example."""
     r = score({
         "lv_org_type": "governing_body_league",
         "lv_produces_content": True,
         "lv_revenue_band": "5-50M",
-        "lv_country_region_normalized": "US",
+        "lv_country_region_normalized": "DE",
     })
     assert r.anti_icp_flag is True
-    assert "Non-ANZ" in r.anti_icp_reason
+    assert "Outside target regions" in r.anti_icp_reason
 
 
 # --------------------------------------------------------------------------------------
@@ -406,7 +408,7 @@ def test_f8_sub15_no_veto_is_unscored():
 
 @live
 @pytest.mark.parametrize("veto_props,reason_key", [
-    ({"lv_country_region_normalized": "US"}, "non_anz"),
+    ({"lv_country_region_normalized": "DE"}, "outside_home_regions"),
     ({"lv_produces_content": "false"}, "no_content"),
     ({"lv_is_hardware_vendor": "true"}, "hardware_vendor"),
 ])
@@ -433,14 +435,14 @@ def test_veto_set_multiple_reasons_join():
         patch_record("companies", company_id, {
             "lv_org_type": "broadcaster",
             "lv_produces_content": "false",
-            "lv_country_region_normalized": "US",
+            "lv_country_region_normalized": "DE",
             "lv_is_hardware_vendor": "true",
             "lv_revenue_band": "5-50M",
         }, dry_run=False)
         settle(company_id, "lv_anti_icp_flag")
         props = fetch_for_parity(company_id)
         expected_reason = "; ".join([
-            HARD_VETOES["non_anz"]["reason"],
+            HARD_VETOES["outside_home_regions"]["reason"],
             HARD_VETOES["no_content"]["reason"],
             HARD_VETOES["hardware_vendor"]["reason"],
         ])
@@ -910,7 +912,7 @@ def test_serialize_breakdown_sheds_component_detail_before_bytes():
         breakdown={
             "version": "lv-icp-v0.1",
             "components": big_components,
-            "hard_vetoes": ["Non-ANZ geography"],
+            "hard_vetoes": ["Outside target regions"],
             "graduated_deductions": [],
         },
         scoring_version="lv-icp-v0.1",
@@ -922,7 +924,7 @@ def test_serialize_breakdown_sheds_component_detail_before_bytes():
     assert parsed["total"] == 42
     assert parsed["version"] == "lv-icp-v0.1"
     assert parsed["truncated"] is True
-    assert parsed["hard_vetoes"] == ["Non-ANZ geography"]
+    assert parsed["hard_vetoes"] == ["Outside target regions"]
     assert len(parsed["components"]) == 300
     for c in parsed["components"]:
         assert set(c.keys()) == {"signal", "points"}

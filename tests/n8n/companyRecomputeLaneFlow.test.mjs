@@ -208,7 +208,7 @@ function runLane({ existingRecord, recompute, identity_keys }) {
 // --- behaviour 1: complete record + recompute reaches Decide, veto from existingRecord ----
 
 test("recompute carries a COMPLETE record (gate verdict skip) to Decide, veto derived from existingRecord", () => {
-  const r = runLane({ existingRecord: completeRecord("US"), recompute: true });
+  const r = runLane({ existingRecord: completeRecord("DE"), recompute: true });
 
   assert.equal(r.parsed.recompute, true, "Parse HubSpot Event normalized recompute to true");
   assert.equal(r.gate.gate.action, "skip", "decideAction's own verdict is still skip");
@@ -218,7 +218,7 @@ test("recompute carries a COMPLETE record (gate verdict skip) to Decide, veto de
   // Merge-free derivation: `row.merge` is absent, so properties is {} and the ?? chain
   // falls through to existingRecord.
   assert.equal(r.decided.properties.lv_anti_icp_flag, "true");
-  assert.equal(r.decided.properties.lv_anti_icp_reason, "Non-ANZ geography");
+  assert.equal(r.decided.properties.lv_anti_icp_reason, "Outside target regions");
   assert.notEqual(r.decided.action, "create");
   assert.notEqual(r.decided.action, "skip");
   assert.notEqual(r.decided.action, "proposed", "no mode was sent, so isReturnOnly stays false");
@@ -279,7 +279,7 @@ test("a recompute for a record that resolves to no company is refused, never cre
 
 test("an enrich verdict under the recompute intent takes the same lane (request-level, not per-verdict)", () => {
   const r = runLane({
-    existingRecord: unstampedRecord("US"),
+    existingRecord: unstampedRecord("DE"),
     recompute: true,
     identity_keys: { domain: "unstamped.example" },
   });
@@ -332,7 +332,7 @@ test("the recompute lane is a single edge into Decide Company Action — zero pr
 
 test("execution 11858's refusal survives, now emitted by the spliced gate rather than by Decide Company Action", () => {
   const { wf, byName } = loadWorkflow();
-  const r = runLane({ existingRecord: completeRecord("US"), recompute: true });
+  const r = runLane({ existingRecord: completeRecord("DE"), recompute: true });
 
   // The lane still runs end to end and still derives the veto — that is the free half.
   assert.equal(r.decided.properties.lv_anti_icp_flag, "true");

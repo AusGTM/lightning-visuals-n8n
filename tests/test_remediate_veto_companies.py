@@ -224,7 +224,7 @@ def test_settle_tier_delegates_to_settle_and_assert_with_lv_icp_tier_derived(mon
     assert value == "A"
 
 
-def test_settle_veto_passes_when_flag_true_for_a_genuine_non_non_anz_veto(monkeypatch):
+def test_settle_veto_passes_when_flag_true_for_a_genuine_different_veto(monkeypatch):
     monkeypatch.setattr(m.time, "monotonic", _fake_clock())
     reader = _reader_for(
         {"lv_anti_icp_flag": ["unknown", "true", "true"]},
@@ -240,11 +240,11 @@ def test_settle_veto_passes_when_flag_true_for_a_genuine_non_non_anz_veto(monkey
     assert value == "true"
 
 
-def test_settle_veto_fails_when_flag_true_still_carries_the_non_anz_reason(monkeypatch):
+def test_settle_veto_fails_when_flag_true_still_carries_the_outside_home_reason(monkeypatch):
     monkeypatch.setattr(m.time, "monotonic", _fake_clock())
     reader = _reader_for(
         {"lv_anti_icp_flag": ["unknown", "true", "true"]},
-        constant_by_prop={"lv_anti_icp_reason": "Non-ANZ geography"},
+        constant_by_prop={"lv_anti_icp_reason": "Outside target regions"},
     )
 
     with pytest.raises(m.SettleFailed):

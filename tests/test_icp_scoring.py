@@ -59,7 +59,7 @@ def test_case_3_au_individual_club_tier_b():
     assert r.score == 45
 
 
-def test_case_4_non_anz_veto():
+def test_case_4_outside_home_region_veto():
     r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
                "lv_country_region_normalized": "Other", "lv_revenue_band": "5-50M"})
     assert r.tier == "D"
@@ -193,8 +193,8 @@ def test_case_15_nz_geography_tier_a():
 def test_case_16_version_stamp():
     r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
                "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
-    assert r.scoring_version == "lv-icp-v0.1"
-    assert r.breakdown["version"] == "lv-icp-v0.1"
+    assert r.scoring_version == "lv-icp-v0.2"
+    assert r.breakdown["version"] == "lv-icp-v0.2"
 
 
 def test_case_17_hard_veto_survives_confidence_downgrade():

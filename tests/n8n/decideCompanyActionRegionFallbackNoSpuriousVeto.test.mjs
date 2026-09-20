@@ -76,11 +76,13 @@ test("existing AU + research matched:false: no candidate re-promotes region, " +
   assert.equal(out.properties.lv_anti_icp_reason, "");
 });
 
-test("existing US (genuinely non-ANZ) + research matched:false: the veto still fires " +
-     "correctly -- the fix must not blind the derivation to a real non-ANZ company", () => {
-  const out = runMergeThenDecide(row("US", true, false));
+test("existing DE (genuinely outside target regions) + research matched:false: the veto " +
+     "still fires correctly -- the fix must not blind the derivation to a real " +
+     "outside-target-regions company. Phase 75 (D-75-01/D-75-05): DE replaces US here " +
+     "-- US moved into regions.home and is no longer a genuinely non-home example.", () => {
+  const out = runMergeThenDecide(row("DE", true, false));
   assert.equal(out.properties.lv_anti_icp_flag, "true");
-  assert.equal(out.properties.lv_anti_icp_reason, "Non-ANZ geography");
+  assert.equal(out.properties.lv_anti_icp_reason, "Outside target regions");
 });
 
 // debug: blank-region-fires-non-anz-veto (2026-08-10) -- distinct from the two tests

@@ -488,17 +488,19 @@ def expected_score_and_tier(props: dict):
 
 
 def predicted_label(anti_icp_flag: bool, anti_icp_reason) -> str:
-    """D-16/D-17 pre-arm classification: 'clears veto', 'still predicted non-ANZ
-    (unresolved)', or a named different genuine veto (e.g. Simtech LED as
-    hardware_vendor). The non-ANZ reason string is read from config/icp_scoring.yaml,
-    never restated as a local literal (mirrors settle_veto's own predicate)."""
+    """D-16/D-17 pre-arm classification: 'clears veto', 'still predicted outside target
+    regions (unresolved)', or a named different genuine veto (e.g. Simtech LED as
+    hardware_vendor). The reason string is read from config/icp_scoring.yaml, never
+    restated as a local literal (mirrors settle_veto's own predicate). Phase 75
+    (D-75-01/D-75-02) renamed the geography hard-veto's yaml key and reason string;
+    this function follows the rename."""
     if not anti_icp_flag:
         return "clears veto"
     cfg = load_yaml("config/icp_scoring.yaml")
-    non_anz_reason = cfg["hard_vetoes"]["non_anz"]["reason"]
+    outside_home_reason = cfg["hard_vetoes"]["outside_home_regions"]["reason"]
     reason = anti_icp_reason or ""
-    if non_anz_reason in reason:
-        return "still predicted non-ANZ (unresolved)"
+    if outside_home_reason in reason:
+        return "still predicted outside target regions (unresolved)"
     return f"different genuine veto ({reason})"
 
 
@@ -580,19 +582,21 @@ def settle_tier_stable(company_id: str, timeout=120, interval=5,
 def settle_veto(company_id: str, timeout=900, interval=15, reader=get_record, sleeper=time.sleep):
     """The n8n-dependent chain: only moves once the D-18 webhook POST reaches the
     "Decide Company Action" node. Passes when lv_anti_icp_flag != "true", OR when it is
-    "true" but lv_anti_icp_reason does not carry the non-ANZ hard-veto reason string
-    (read from config/icp_scoring.yaml, never restated as a local literal) -- a
-    legitimately revealed different veto (Simtech LED as hardware_vendor is the expected
-    case) is a correct outcome (D-16), not a failure."""
+    "true" but lv_anti_icp_reason does not carry the outside-target-regions hard-veto
+    reason string (read from config/icp_scoring.yaml, never restated as a local literal)
+    -- a legitimately revealed different veto (Simtech LED as hardware_vendor is the
+    expected case) is a correct outcome (D-16), not a failure. Phase 75 (D-75-01/D-75-02)
+    renamed the geography hard-veto's yaml key and reason string; this function
+    follows the rename."""
     cfg = load_yaml("config/icp_scoring.yaml")
-    non_anz_reason = cfg["hard_vetoes"]["non_anz"]["reason"]
+    outside_home_reason = cfg["hard_vetoes"]["outside_home_regions"]["reason"]
 
     def _acceptable(flag_value):
         if flag_value != "true":
             return True
         record = reader("companies", company_id, ["lv_anti_icp_reason"])
         reason = record.get("properties", {}).get("lv_anti_icp_reason") or ""
-        return non_anz_reason not in reason
+        return outside_home_reason not in reason
 
     return settle_and_assert(company_id, "lv_anti_icp_flag", _acceptable, timeout, interval,
                               reader=reader, sleeper=sleeper)

@@ -181,7 +181,8 @@ def test_review_apply_clearpatch_boolean_keys_are_quoted_string_literals():
 def _hard_veto_reasons():
     cfg = yaml.safe_load((ROOT / "config" / "icp_scoring.yaml").read_text())
     hv = cfg["hard_vetoes"]
-    return hv["non_anz"]["reason"], hv["no_content"]["reason"], hv["hardware_vendor"]["reason"]
+    return (hv["outside_home_regions"]["reason"], hv["no_content"]["reason"],
+            hv["hardware_vendor"]["reason"])
 
 
 def _decide_company_action_jscode():
@@ -227,9 +228,9 @@ def test_decide_company_action_hardware_veto_push_keeps_third_position():
     """The reason strings are joined in list order and
     tests/test_scoring_parity.py::test_veto_set_multiple_reasons_join pins that order
     against live HubSpot state. Widening the trigger must not move the push."""
-    non_anz, no_content, hardware = _hard_veto_reasons()
+    outside_home, no_content, hardware = _hard_veto_reasons()
     code = _decide_company_action_jscode()
-    positions = [code.index(r) for r in (non_anz, no_content, hardware)]
+    positions = [code.index(r) for r in (outside_home, no_content, hardware)]
     assert positions == sorted(positions), (
         "veto reason pushes are out of order; the joined lv_anti_icp_reason would diverge "
         "from src/icp_scoring.py"
@@ -247,9 +248,9 @@ def test_decide_company_action_veto_reason_strings_match_the_rubric_yaml_verbati
     """Anti-drift guard: the three reason strings ported into the JS must be character-
     for-character equal to config/icp_scoring.yaml's hard_vetoes.*.reason — this is what
     tests/test_scoring_parity.py's veto_set cases assert against live HubSpot state."""
-    non_anz, no_content, hardware = _hard_veto_reasons()
+    outside_home, no_content, hardware = _hard_veto_reasons()
     code = _decide_company_action_jscode()
-    for reason in (non_anz, no_content, hardware):
+    for reason in (outside_home, no_content, hardware):
         assert reason in code, (
             f"reason string {reason!r} (from config/icp_scoring.yaml) not found verbatim "
             "in the built Decide Company Action jsCode"

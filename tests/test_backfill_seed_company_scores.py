@@ -238,12 +238,15 @@ def test_backfill_component_scores_produces_content_both_values():
     assert backfill.compute_components({"lv_produces_content": "false"})["produces_content_score"] == 0
 
 
-def test_backfill_component_scores_geography_all_four_region_cases():
+def test_backfill_component_scores_geography_all_five_region_cases():
+    # Phase 75 (D-75-01/D-75-05): regions.home grew from {AU, NZ, ANZ} to 12 codes
+    # including US -- DE replaces US as the genuinely non-home example here.
     backfill = _import_backfill()
     assert backfill.compute_components({"lv_country_region_normalized": "AU"})["geography_score"] == 10
     assert backfill.compute_components({"lv_country_region_normalized": "NZ"})["geography_score"] == 10
     assert backfill.compute_components({"lv_country_region_normalized": "ANZ"})["geography_score"] == 10
-    assert backfill.compute_components({"lv_country_region_normalized": "US"})["geography_score"] == 0
+    assert backfill.compute_components({"lv_country_region_normalized": "US"})["geography_score"] == 10
+    assert backfill.compute_components({"lv_country_region_normalized": "DE"})["geography_score"] == 0
 
 
 def test_backfill_component_scores_revenue_all_nine_bands():

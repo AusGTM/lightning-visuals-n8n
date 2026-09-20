@@ -24,8 +24,9 @@ def named_account_component(result):
 
 def test_base_35_floors_to_60_tier_b():
     # individual_club_team(15) + produces_content True(20) + no region signal(0, "unknown"
-    # geography -- never region_key "non_anz", so this does NOT fire the non-ANZ veto) +
-    # revenue "1-5M"(0) = 35 pre-floor -- below Tier B's 40 cutoff on its own.
+    # geography -- never region_key "other", so this does NOT fire the outside-target-
+    # regions veto) + revenue "1-5M"(0) = 35 pre-floor -- below Tier B's 40 cutoff on its
+    # own.
     r = score({
         "lv_org_type": "individual_club_team", "lv_produces_content": True,
         "lv_revenue_band": "1-5M", "lv_named_account_score_floor": 60,

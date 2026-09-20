@@ -283,7 +283,7 @@ def test_false_veto_row_keeps_live_and_oracle_columns_distinct():
         "lv_icp_fit_score": "10",
         "lv_icp_tier": "D",
         "lv_anti_icp_flag": "true",
-        "lv_anti_icp_reason": "Non-ANZ geography",
+        "lv_anti_icp_reason": "Outside target regions",
     }
     payload, exit_code = build_simulation(["1"], fetch_fn=lambda _id: props, current_cfg=CURRENT_CFG)
 

@@ -92,7 +92,7 @@ def test_country_conflict_hubspot_wins(monkeypatch):
     # (Netherlands) -- no false non-ANZ veto.
     assert row["payload"]["lv_country_region_normalized"] == "AU"
     assert row["sources"]["lv_country_region_normalized"] == "hubspot"
-    assert "Non-ANZ geography" not in (row["anti_icp_reason"] or "")
+    assert "Outside target regions" not in (row["anti_icp_reason"] or "")
 
     # The conflict is visible in the artifact, not silently resolved.
     conflict = row["country_conflict"]

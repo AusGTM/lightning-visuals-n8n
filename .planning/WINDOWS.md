@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 24
+open_count: 25
 waived_count: 3
 fixed_count: 8
-total_count: 35
-last_updated: 2026-09-19T09:53:42.457Z
+total_count: 36
+last_updated: 2026-09-20T05:57:26.257Z
 ---
 
 # Broken Windows Ledger
@@ -50,6 +50,7 @@ last_updated: 2026-09-19T09:53:42.457Z
 | 33 | 74 | deviation | tests/n8n/ingestCreateErrorLane.test.mjs |  | Task 3's acceptance criteria required each batch shape asserted by its own walker run, not inferred; initial implementation only proved response correctness, not the sentinel's own gate delivery -- closed with 3 direct assertions | open |  | 2026-09-19T09:53:42.147Z |  |
 | 34 | 74 | deviation | tests/n8n/ingestCarryMerge.test.mjs |  | By-name-reader structural assertion (D-70-03) needed updating: HubSpot Create's error output now feeds Create Error Stamp before the carry merge, not the merge directly | open |  | 2026-09-19T09:53:42.303Z |  |
 | 35 | 74 | deviation | tests/n8n/ingestCreateErrorLane.test.mjs |  | Post-completion advisor review found the 'disarmed batch containing create-routed rows' sentinel test vacuous -- plain disarmed graph routes net_new to action:review not action:create, so D-74-02's writesNotPermitted-with-create-rows disjunct was never exercised; fixed by arming only Decide Action's ALLOW_HUBSPOT_CREATE plus a non-vacuity assertion | open |  | 2026-09-19T09:53:42.457Z |  |
+| 36 | 75 | unmet-truth | tests/test_hubspot_schema_coverage.py |  | wf_enrichment_cloud.json's Decide Company Action references lv_icp_scoring_version, which the live portal does not yet hold (no snapshot/migration-manifest evidence) -- expected per D-75-10's plan-05 sequencing (property create is Plan 05's job), same class as the D-72-23 precedent (declare-now/create-later). Closes when Plan 05 runs sync_hubspot_properties.py live. | open |  | 2026-09-20T05:57:26.257Z |  |
 
 ````json
 [
@@ -471,6 +472,18 @@ last_updated: 2026-09-19T09:53:42.457Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-19T09:53:42.457Z",
+    "resolved_at": null
+  },
+  {
+    "id": 36,
+    "kind": "unmet-truth",
+    "phase": "75",
+    "file": "tests/test_hubspot_schema_coverage.py",
+    "line": null,
+    "description": "wf_enrichment_cloud.json's Decide Company Action references lv_icp_scoring_version, which the live portal does not yet hold (no snapshot/migration-manifest evidence) -- expected per D-75-10's plan-05 sequencing (property create is Plan 05's job), same class as the D-72-23 precedent (declare-now/create-later). Closes when Plan 05 runs sync_hubspot_properties.py live.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-20T05:57:26.257Z",
     "resolved_at": null
   }
 ]

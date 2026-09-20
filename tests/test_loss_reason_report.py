@@ -23,7 +23,7 @@ def test_empty_dataset_renders_zero_counts_and_exits_success():
 
     text = render_report(report)
     assert "**Closed-lost deals examined:** 0" in text
-    assert "lv-icp-v0.1" in text
+    assert "lv-icp-v0.2" in text
 
 
 def test_no_filled_reasons_states_examined_count_and_none_carried_a_reason():

@@ -63,11 +63,13 @@ OBSERVED_PROPS = (
 )
 
 
-def _non_anz_reason() -> str:
-    """The non-ANZ hard-veto reason string, read from config/icp_scoring.yaml -- never
-    restated as a local literal (mirrors remediate_veto_companies.settle_veto)."""
+def _outside_home_reason() -> str:
+    """The outside-target-regions hard-veto reason string, read from
+    config/icp_scoring.yaml -- never restated as a local literal (mirrors
+    remediate_veto_companies.settle_veto). Phase 75 (D-75-01/D-75-02) renamed the
+    geography hard-veto's yaml key and reason string; this function follows the rename."""
     cfg = load_yaml("config/icp_scoring.yaml")
-    return cfg["hard_vetoes"]["non_anz"]["reason"]
+    return cfg["hard_vetoes"]["outside_home_regions"]["reason"]
 
 
 # --- Task 1: per-ID before/after cohort report ----------------------------------------
@@ -99,33 +101,34 @@ def predict(row, candidate_inputs):
     return expected_score_and_tier(merged)
 
 
-# D-23 (2026-08-12): Jam TV is the ITALIAN broadcaster jamtv.it. Its non-ANZ veto is
-# CORRECT and Phase 47 deliberately preserved it, writing lv_country_region_normalized
-# = "Other" so the record also falls outside VETO-03's blank-region search. Phase 46
-# mislabelled it `false_veto` only because that field was blank, and blank means
-# never-determined, not determined-to-be-ANZ.
+# D-23 (2026-08-12): Jam TV is the ITALIAN broadcaster jamtv.it. Its outside-target-
+# regions veto is CORRECT and Phase 47 deliberately preserved it, writing
+# lv_country_region_normalized = "Other" so the record also falls outside VETO-03's
+# blank-region search. Phase 46 mislabelled it `false_veto` only because that field was
+# blank, and blank means never-determined, not determined-to-be-home-region.
 #
-# Without this exemption `classify` returns `still_non_anz` for the one record required
-# to be in exactly that state, and `--mode after` REFUSES on a correct end state -- a
-# false failure for anyone re-running the report after Phase 47. Keyed by id, not by
-# reason text, because the reason is genuinely the non-ANZ one.
-TRUE_NON_ANZ_VETO_IDS = frozenset({"17317850381"})  # Jam TV (IT) -- D-23
+# Without this exemption `classify` returns `still_outside_home` for the one record
+# required to be in exactly that state, and `--mode after` REFUSES on a correct end
+# state -- a false failure for anyone re-running the report after Phase 47. Keyed by id,
+# not by reason text, because the reason is genuinely the outside-target-regions one.
+# Phase 75 (D-75-01/D-75-02): renamed from TRUE_NON_ANZ_VETO_IDS.
+TRUE_OUTSIDE_HOME_VETO_IDS = frozenset({"17317850381"})  # Jam TV (IT) -- D-23
 
 
 def classify(row) -> str:
-    """`cleared` | `residual_other_veto` | `correct_non_anz` | `still_non_anz`, from a
-    single row's lv_anti_icp_flag/lv_anti_icp_reason. `still_non_anz` is the only failing
-    classification -- `residual_other_veto` covers a legitimate different hard veto, and
-    `correct_non_anz` covers a D-23 record whose non-ANZ veto is true (see
-    TRUE_NON_ANZ_VETO_IDS)."""
+    """`cleared` | `residual_other_veto` | `correct_outside_home` | `still_outside_home`,
+    from a single row's lv_anti_icp_flag/lv_anti_icp_reason. `still_outside_home` is the
+    only failing classification -- `residual_other_veto` covers a legitimate different
+    hard veto, and `correct_outside_home` covers a D-23 record whose outside-target-
+    regions veto is true (see TRUE_OUTSIDE_HOME_VETO_IDS)."""
     flag = row.get("lv_anti_icp_flag")
     if flag != "true":
         return "cleared"
     reason = row.get("lv_anti_icp_reason") or ""
-    if _non_anz_reason() in reason:
-        if str(row.get("id")) in TRUE_NON_ANZ_VETO_IDS:
-            return "correct_non_anz"
-        return "still_non_anz"
+    if _outside_home_reason() in reason:
+        if str(row.get("id")) in TRUE_OUTSIDE_HOME_VETO_IDS:
+            return "correct_outside_home"
+        return "still_outside_home"
     return "residual_other_veto"
 
 
@@ -222,7 +225,7 @@ def main(argv=None) -> int:
         _write_out(args.out, result)
         failing = any(
             not entry["present_before"] or not entry["present_after"]
-            or entry["classification"] == "still_non_anz"
+            or entry["classification"] == "still_outside_home"
             for entry in result.values()
         )
         return 1 if failing else 0
@@ -248,9 +251,9 @@ def main(argv=None) -> int:
     _write_out(args.out, rows)
 
     if args.mode == "after":
-        failing_ids = [r["id"] for r in rows if classify(r) == "still_non_anz"]
+        failing_ids = [r["id"] for r in rows if classify(r) == "still_outside_home"]
         if failing_ids:
-            print(f"REFUSED: {len(failing_ids)} record(s) still classify still_non_anz "
+            print(f"REFUSED: {len(failing_ids)} record(s) still classify still_outside_home "
                   f"after remediation: {failing_ids}")
             return 1
 

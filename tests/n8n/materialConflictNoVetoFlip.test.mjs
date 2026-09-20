@@ -158,7 +158,7 @@ test("11983 shape, judge adjudicated a non-ANZ value: the adjudicated value prom
   assert.equal(out.properties.lv_anti_icp_flag, "true",
     "a genuinely-adjudicated non-ANZ verdict must still be able to fire the veto -- " +
     "suppression is suppress-UNLESS-adjudicated, never a blanket ban");
-  assert.equal(out.properties.lv_anti_icp_reason, "Non-ANZ geography");
+  assert.equal(out.properties.lv_anti_icp_reason, "Outside target regions");
 });
 
 test("an agreeing multi-source lv_country_region_normalized still promotes and is not flagged", () => {

@@ -51,6 +51,9 @@ _REFRESHABLE_CONTACT_PROPS = tuple(refreshable_contact_props())
 # sys.path[0], so the plain import resolves.
 import gen_taxonomy_js  # noqa: E402
 import gen_escalation_js  # noqa: E402
+import gen_icp_scoring_js  # noqa: E402 — Phase 75 (D-75-05/D-75-02): config-driven
+# region whitelist + hard-veto reason strings, same generator precedent as
+# gen_escalation_js above.
 import provider_registry  # noqa: E402 — Phase 16.1 (reviews A3): SIDE-EFFECT-FREE, no
 # codegen write happens on this import (unlike gen_taxonomy_js/gen_escalation_js above) —
 # a read-only importer (Plan 02's check_provider_credits.py) can pull PROVIDER_REGISTRY
@@ -58,6 +61,7 @@ import provider_registry  # noqa: E402 — Phase 16.1 (reviews A3): SIDE-EFFECT-
 
 (CODE / "taxonomy.generated.js").write_text(gen_taxonomy_js.render())
 (CODE / "escalation.generated.js").write_text(gen_escalation_js.render())
+(CODE / "icpScoring.generated.js").write_text(gen_icp_scoring_js.render())
 
 # June-2026 validation dataset (Phase 41, 41-CONTEXT.md D-08): read at module scope, same
 # discipline as the two codegen writes above -- the "Merge Company" node inlines the
@@ -5038,7 +5042,8 @@ return $input.all().map((it) => {
 # DEFAULT_COMPANY_POLICY has no score_output/veto_output entries for those (they were
 # removed in Phase 15), so this node cannot emit them even if it tried.
 ENRICH_DECIDE_CO_CLOUD = inline(
-    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js",
+    "icpScoring.generated.js", "taxonomy.generated.js", "hubspotEnums.generated.js",
+    "hubspotEnums.js", "mergeCompanies.js",
     "matchProposal.js") + "\n\n" + extract_js_const("companyLink.js", "FREEMAIL_DOMAINS") + r"""
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
@@ -5111,12 +5116,15 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   // HubSpot property-history live evidence traced 17 real companies (13 AU racing clubs +
   // 1 NZ club) that were PATCHed lv_anti_icp_flag="true"/"Non-ANZ geography" by this exact
   // node (sourceType INTEGRATION) while lv_country_region_normalized had never been set.
-  // "unknown" is a third state, distinct from "non_anz" (a KNOWN, different value, e.g.
-  // "US") — mirrors src/icp_scoring.py's region_raw/region_key split.
+  // "unknown" is a third state, distinct from "other" (a KNOWN, different value, e.g.
+  // "DE") — mirrors src/icp_scoring.py's region_raw/region_key split.
+  //
+  // Phase 75 (D-75-01/D-75-05): REGIONS_HOME is the generated whitelist from
+  // config/icp_scoring.yaml (icpScoring.generated.js, inlined above) — the single
+  // source for both engines, replacing the hand-typed AU/NZ/ANZ literal set.
   function _regionKey(v) {
-    if (v === "AU" || v === "NZ" || v === "ANZ") return v;
     if (v === undefined || v === null || v === "") return "unknown";
-    return "non_anz";
+    return REGIONS_HOME.includes(v) ? "home" : "other";
   }
   function _boolish(v) {
     if (typeof v === "boolean") return v;
@@ -5142,9 +5150,9 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   const orgType = properties.lv_org_type ?? existing.lv_org_type;
 
   const vetoReasons = [];
-  if (region === "non_anz") vetoReasons.push("Non-ANZ geography");
-  if (producesContent === false) vetoReasons.push("No broadcast or streaming content");
-  if (isHardwareVendor === true || orgType === "hardware_vendor") vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
+  if (region === "other") vetoReasons.push(HARD_VETO_REASONS.outside_home_regions);
+  if (producesContent === false) vetoReasons.push(HARD_VETO_REASONS.no_content);
+  if (isHardwareVendor === true || orgType === "hardware_vendor") vetoReasons.push(HARD_VETO_REASONS.hardware_vendor);
 
   // Phase 50 Plan 06 (D-20): the veto is derived ONCE into flagIsSet and BOTH properties
   // are assigned from it, adjacent, in this same block — the structural guarantee that a
@@ -5159,6 +5167,10 @@ return $input.all().filter((it) => Object.keys(it.json || {}).length > 0).map((i
   properties.lv_anti_icp_flag = flagIsSet ? "true" : "false";
   properties.lv_anti_icp_flag_num = flagIsSet ? "1" : "0";
   properties.lv_anti_icp_reason = flagIsSet ? vetoReasons.join("; ") : "";
+  // D-75-03/D-75-20: unconditional on every company this node decides (recompute rows
+  // included) -- the version bump + the scheduled/on-demand sweep are the only refresh
+  // mechanism a stale record needs; there is no dedicated remediation script.
+  properties.lv_icp_scoring_version = VERSION;
 
   if (needsReview.length > 0) {
     // D-07 (43-01, PIPE-01, row 3): string literal, never a bare JS boolean — same class

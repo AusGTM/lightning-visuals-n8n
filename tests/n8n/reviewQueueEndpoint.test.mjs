@@ -252,7 +252,7 @@ const TWO_FLAGGED = envelope([
       name: "Other Co", domain: "other.example",
       [P_NEEDS_REVIEW]: "false", [P_ICP_NEEDS_REVIEW]: "true",
       [P_CANDIDATE_JSON]: "", [P_PROVENANCE]: "",
-      lv_icp_tier: "D", lv_anti_icp_reason: "Non-ANZ geography",
+      lv_icp_tier: "D", lv_anti_icp_reason: "Outside target regions",
     },
   },
 ], 7);
@@ -286,7 +286,7 @@ test("Review Queue Rows: stored strings reach the client UNPARSED and unmodified
   // Identity and the ICP narrative pass through as stored, too.
   assert.equal(row.name, "Example Racing League");
   assert.equal(row.lv_icp_tier, "B");
-  assert.equal(env.rows[1].lv_anti_icp_reason, "Non-ANZ geography");
+  assert.equal(env.rows[1].lv_anti_icp_reason, "Outside target regions");
 });
 
 test("Review Queue Rows: an EMPTY queue still answers — zero rows, zero total, search_ok", () => {

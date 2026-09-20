@@ -100,9 +100,11 @@ SCENARIOS = [
 ]
 PRIMARY_SCENARIO_NAME = "club_15"
 
-# config/icp_scoring.yaml hard_vetoes.non_anz.reason -- the literal string the oracle
-# (and, historically, the live pipeline) writes to lv_anti_icp_reason for a non-ANZ veto.
-NON_ANZ_VETO_REASON = "Non-ANZ geography"
+# config/icp_scoring.yaml hard_vetoes.outside_home_regions.reason -- the literal string
+# the oracle (and, historically, the live pipeline) writes to lv_anti_icp_reason for an
+# outside-target-regions veto. Phase 75 (D-75-01/D-75-02) renamed the geography
+# hard-veto's constant, yaml key and reason string; this mirrors that rename.
+OUTSIDE_HOME_VETO_REASON = "Outside target regions"
 
 
 def _has_credentials() -> bool:
@@ -184,7 +186,7 @@ def _row_flags(props: dict) -> list:
         flags.append("blank_org_type")
     if (
         str(props.get("lv_anti_icp_flag")) == "true"
-        and NON_ANZ_VETO_REASON in (props.get("lv_anti_icp_reason") or "")
+        and OUTSIDE_HOME_VETO_REASON in (props.get("lv_anti_icp_reason") or "")
         and not props.get("lv_country_region_normalized")
     ):
         flags.append("false_veto")
