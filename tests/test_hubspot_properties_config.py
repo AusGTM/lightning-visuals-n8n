@@ -289,3 +289,22 @@ def test_lv_country_region_normalized_appears_in_the_company_fetch_property_list
     from build_cloud_workflows import ENRICH_COMPANY_SEARCH_PROPERTIES_CSV  # noqa: E402
 
     assert "lv_country_region_normalized" in ENRICH_COMPANY_SEARCH_PROPERTIES_CSV.split(",")
+
+
+def test_lv_icp_scoring_version_appears_in_the_company_fetch_property_list():
+    """Phase 75 Plan 03 (D-75-12): same bug shape as fix-40 VETO-01/02, 58-05 Task 1/2 and
+    Phase 66 Plan 02 above -- a property omitted from ENRICH_COMPANY_SEARCH_PROPERTIES_CSV
+    (the ONE list feeding both "HubSpot Company Search" and "HubSpot Company Fetch By Id")
+    reads as `undefined` on `existingRecord`, which is indistinguishable from blank and
+    would route every record the same way. Here that means every company would compare
+    `undefined !== VERSION` and be treated as version-stale, or the reroute could never
+    fire at all depending on the comparison direction -- either way the whole population
+    routes one way instead of by its real staleness."""
+    import sys
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(root / "scripts"))
+    from build_cloud_workflows import ENRICH_COMPANY_SEARCH_PROPERTIES_CSV  # noqa: E402
+
+    assert "lv_icp_scoring_version" in ENRICH_COMPANY_SEARCH_PROPERTIES_CSV.split(",")
