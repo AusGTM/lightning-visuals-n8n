@@ -355,7 +355,13 @@ def _compute_do_not_archive(live_companies_by_name: dict, live_flows_by_id: dict
 
 
 def build_report(desired: dict, live_companies: list, live_contacts: list, live_flows: list,
-                  portal_id: str | None) -> dict:
+                  portal_id: str | None, live_geography_flow: dict | None = None) -> dict:
+    """`live_flows` is the GET /automation/v4/flows LIST response -- summaries (id / name /
+    isEnabled) with NO `actions`, enough for do_not_archive but nothing the geography
+    walker can walk. `live_geography_flow` is the SINGLE-flow body
+    (GET /automation/v4/flows/{id}) main() fetches for GEOGRAPHY_FLOW_ID; when None, the
+    list entry is used and the comparator can only ever report `ambiguous_branch` /
+    `flow_absent` (Phase 75 plan 05 Task 3 live finding, 2026-09-20)."""
     live_companies_by_name = {p["name"]: p for p in live_companies}
     live_contacts_by_name = {p["name"]: p for p in live_contacts}
     live_flows_by_id = {str(f.get("id")): f for f in live_flows}
@@ -403,7 +409,9 @@ def build_report(desired: dict, live_companies: list, live_contacts: list, live_
         "do_not_archive": do_not_archive,
         "properties": properties_report,
         "accepted_divergences": ACCEPTED_DIVERGENCES,
-        "geography_flow_drift": geography_flow_drift_entry(live_flows_by_id.get(GEOGRAPHY_FLOW_ID)),
+        "geography_flow_drift": geography_flow_drift_entry(
+            live_geography_flow if live_geography_flow is not None
+            else live_flows_by_id.get(GEOGRAPHY_FLOW_ID)),
         "summary": dict(summary),
     }
     report["exit_code"] = exit_code_for(report)
@@ -439,6 +447,20 @@ def _get_live_flows() -> list:
     return r.json().get("results", [])
 
 
+def _get_live_flow(flow_id: str) -> dict | None:
+    """GET /automation/v4/flows/{id} -- the full body (actions, enrollmentCriteria), which
+    the LIST endpoint above does not carry. Returns None on 404 so an absent flow stays
+    the do_not_archive finding rather than a crash."""
+    import requests
+    from src.hubspot_client import hs_headers, BASE_URL
+
+    r = requests.get(f"{BASE_URL}/automation/v4/flows/{flow_id}", headers=hs_headers(), timeout=30)
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True,
@@ -460,9 +482,11 @@ def main(argv=None) -> int:
     live_companies = _get_live_properties("companies")
     live_contacts = _get_live_properties("contacts")
     live_flows = _get_live_flows()
+    live_geography_flow = _get_live_flow(GEOGRAPHY_FLOW_ID)
 
     report = build_report(desired, live_companies, live_contacts, live_flows,
-                           os.getenv("HUBSPOT_PORTAL_ID"))
+                           os.getenv("HUBSPOT_PORTAL_ID"),
+                           live_geography_flow=live_geography_flow)
 
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     _assert_no_secrets(text)
