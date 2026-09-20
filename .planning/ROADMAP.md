@@ -687,12 +687,12 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 6 plans
+**Plans:** 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 75-01-PLAN.md — tracer: yaml `regions.*` + `scripts/gen_icp_scoring_js.py` + both scoring engines read the generated constants; veto-reason rename blast radius; rubric guard re-baselined
+- [x] 75-01-PLAN.md — tracer: yaml `regions.*` + `scripts/gen_icp_scoring_js.py` + both scoring engines read the generated constants; veto-reason rename blast radius; rubric guard re-baselined
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

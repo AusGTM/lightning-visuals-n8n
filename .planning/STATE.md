@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 75
 current_phase_name: Config-driven region whitelist and scoring-version staleness
-status: completed
-stopped_at: Phase 75 context gathered
-last_updated: "2026-09-20T05:31:05.282Z"
-last_activity: 2026-09-19
-last_activity_desc: Phase 74 complete
-state_head: 1fe8a0ca598e0cd29da054dcc47412b1310b47a1
+status: executing
+stopped_at: Completed 75-01-PLAN.md
+last_updated: "2026-09-20T06:01:31.530Z"
+last_activity: 2026-09-20
+last_activity_desc: Phase 75 execution started
+state_head: 1b3c36703fba3b2dad14362300ef74dd38efb0b0
 progress:
   total_phases: 13
   completed_phases: 3
   total_plans: 79
-  completed_plans: 73
+  completed_plans: 74
   percent: 23
 ---
 
@@ -358,10 +358,10 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 75 (Config-driven region whitelist and scoring-version staleness) — READY TO EXECUTE
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-09-19 — Phase 74 complete
+Phase: 75 (Config-driven region whitelist and scoring-version staleness) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-09-20 — Phase 75 execution started
 
 *The v1.1 retained sections below are history, not current position.*
 
@@ -503,8 +503,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-20T04:27:27.146Z
-**Stopped at:** Phase 75 context gathered
+**Last session:** 2026-09-20T06:01:31.274Z
+**Stopped at:** Completed 75-01-PLAN.md
 **Previous stop:** F2 RULED 2026-09-11 and filed as quick batch **260911-w6n** (4 items w6o..w6r; recreated from 260911-w2i after base divergence) — resume with `/gsd-quick-batch --resume 260911-w6n`. 0.46.0 pushed, marketplace clone refreshed, plugin updated. Second-round `contact-upload` CSVs on Desktop (UAT doc §1d), not yet run.
 **Previous stop:** Quick batch 260911-ss3 complete (4/4): F1 `match_state` store + single `match_batch` fence (ss4), F9 `match_handoff` store + `enrichment_scope_row_count` (ss5), F11 step-10 `close_grant` (ss6), F10 Lusha first-time rate 1→7 + contract amendment + **plugin 0.46.0 cut** (ss7). Suites: plugin 2953/5 skipped, root 1861, n8n 1101/0. NOT pushed, marketplace clone NOT refreshed. Next: push master, refresh the marketplace clone, Update plugin to 0.46.0 + restart; then F2 ruling (todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row`); then the `contact-upload` re-run with the six UAT rows + `jbusteed@australianturfclub.com.au`.
 **Previous stop:** First live supervised batch RUN 2026-09-11 (plugin 0.45.0, backend v1 level): run `a254d1eda71246a2a964922cdf5c2bd2`, executions 12365-12376, **0 HubSpot writes** — `enrich-before-ingest` holds every create and hands every match to `enrich-records`, so its ingest send was 0 rows by construction. Record `.planning/UAT-autonomous-batch-2026-09-09.md` (status partial, 9 findings). Next: (1) decide F2 = todo `2026-09-11-no-plugin-path-turns-an-approved-held-row-into-a-sent-row` with real held rows in hand; (2) fix F1 (persist the step-2 match outcome per run_id — 6 propose re-sends of one 4-row batch); (3) re-run the write half via `contact-upload` with the same 6 rows + Jimmy Busteed's revealed email (the D-70-17 shape on the lane that creates). MN-01 trigger not met by 12372.
@@ -514,7 +514,7 @@ pre-gate anyWrite check needs to account for gate refusal once the ingest preche
 is traced there in full but not yet fixed. Prior session context (still true): checkpoints
 `blocked` (operator could not run a live test) on an earlier phase's UAT; Phase 62 verified
 13/13 but awaiting live UAT.
-**Resume file:** .planning/phases/75-config-driven-region-whitelist-and-scoring-version-staleness/75-CONTEXT.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -700,6 +700,7 @@ is traced there in full but not yet fixed. Prior session context (still true): c
 | Phase 74 P04 | 2h 05min | 3 tasks | 8 files |
 | Phase 74 P05 | 95min | 3 tasks | 13 files |
 | Phase 74 P06 | 55min | 4 tasks | 6 files |
+| Phase 75 P01 | 95 min | 3 tasks | 29 files |
 
 ## Decisions
 
@@ -921,6 +922,9 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 74]: D-74-01 ruled B': the create-error stamp node (D-74-04) lands on HubSpot Create's error edge with no additional producer on Create Carry Merge; alwaysOutputData is kept (rescues output 0 only) and the merge keeps three declared inputs, matching what execution 12522 observed live.
 - [Phase 74]: D-74-02: Create Failure Row Sentinel composes WRITE_SAFETY_GATE_JS with a zero-create-rows literal predicate in one node, closing the one write-gated Ingest Merge Response input that had no starved-lane sentinel; every hand-rolled test arming helper that arms CREATE writes on this graph now arms the sentinel too.
 - [Phase 74]: Phase 74's end-of-phase live gate (D-74-11) closed: two scoped disarmed deploys, one bounce, exactly 2 proof-send executions (12676, 12677), both frozen and guard-clean, nothing armed at any point. — Operator confirmed all six checkpoint items on 2026-09-19; independently re-verified read-only by the orchestrator (execution list, node counts, flag read-backs, property read-backs). MN-01 and Stage D todos both reconfirmed open, unchanged trigger conditions.
+- [Phase 75]: config/icp_scoring.yaml is now the single source of the geography whitelist (regions.home) and all three hard-veto reason strings, generated into n8n/code/icpScoring.generated.js and read by both scoring engines from one commit.
+- [Phase 75]: Widened Plan 01's scope to 5 extra files (scripts/remediate_veto_companies.py, scripts/veto_remediation_report.py, scripts/simulate_rubric_weights.py, tests/test_cloud_companies_branch.py, tests/test_flow_rubric_conformance.py) the yaml key rename would otherwise have KeyError'd.
+- [Phase 75]: Kept tests/test_hubspot_schema_coverage.py red rather than weaken it or fabricate live evidence -- lv_icp_scoring_version is referenced by Decide Company Action in this plan but only created live in Plan 05 (D-75-10), same declare-now/create-later shape as the D-72-23 precedent.
 
 ### Roadmap Evolution
 
@@ -1093,6 +1097,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - [Phase 73.1] Enrich-lane ZoomInfo token cache: a later mint invalidates the earlier token, so `_zoom_split_gate_js`'s 24h cross-execution cache can be killed mid-lifetime by any other mint — `kind: design` todo `2026-09-18-zoominfo-mint-invalidates-prior-token-enrich-lane-cache-risk.md`, operator decision needed; any option (b) must mirror BOTH the cache-free gate AND `executeOnce`+`combineAll`.
 - [Phase 73.1] Operator-owned residuals from `73.1-SECURITY.md` Unregistered Flags: nine real people's names in `73.1-UAT.md`/`73.1-11-SUMMARY.md` (redact or accept as public-role data); `n8n_api_key`/`webhook_secret` rotation not yet confirmed in any artifact.
 - ~~F72-1~~ CLOSED 2026-09-13 by gap plan 72-09 (`CANDIDATE_ALIASES`), proven live on contact `352522004980` / execution `12414`. Residual closed 2026-09-15: DELETE of `352522004980` returned `204`.
+- tests/test_hubspot_schema_coverage.py is red: wf_enrichment_cloud.json's Decide Company Action references lv_icp_scoring_version, which the live HubSpot portal does not yet hold. Deliberate per D-75-10 (property CREATE is Plan 05's job); tracked in .planning/WINDOWS.md (unmet-truth). Closes when Plan 05 runs sync_hubspot_properties.py live.
 
 ### Quick Tasks Completed
 
