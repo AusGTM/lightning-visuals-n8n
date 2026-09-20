@@ -687,7 +687,7 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -708,7 +708,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 75-05-PLAN.md — live HubSpot schema + flow window (D-75-10): property create, enum options, `UK` hidden, snapshot refresh, flow PUT
+- [x] 75-05-PLAN.md — live HubSpot schema + flow window (D-75-10): property create, enum options, `UK` hidden, snapshot refresh, flow PUT
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
