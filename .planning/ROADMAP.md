@@ -68,6 +68,7 @@ carrying its live evidence.
 - [x] Phase 73: GA fix list from stress attempt 2 (added 2026-09-15 after stress attempt 2; 7 plans; attempt 3 A–F PASS) (completed 2026-09-18)
 - [x] Phase 73.1: Provider-backed contact discovery as source tier 2 (inserted 2026-09-18 by operator ruling; runs before 74) (completed 2026-09-19)
 - [x] Phase 74: Code-review follow-ups from phase 73 (added 2026-09-18 from 73-REVIEW.md, 4 blocker / 12 warning, none breaking) (completed 2026-09-19)
+- [ ] Phase 75: Config-driven region whitelist and scoring-version staleness (added 2026-09-20 — client now pursues international targets; keep the veto, whitelist moves to config/icp_scoring.yaml)
 
 **Binding on all six** (`SAFE-01`..`SAFE-05`): no `min_confidence` lowered, no
 `fill_blank_only` weakened, no drop path softened; a refusal stays terminal; fetch and search
@@ -652,3 +653,42 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 74-06-PLAN.md — D-74-11 gate: two scoped disarmed deploys, two proof sends (ceiling 2 executions), two freezes, plugin 0.52.0, operator confirmation (wave 4)
+
+### Phase 75: Config-driven region whitelist and scoring-version staleness
+
+**Goal:** move the ANZ-only geography rule out of code into `config/icp_scoring.yaml` as a
+whitelist — `regions.home` (earn geography points, never veto), `regions.aliases`
+(country name/ISO2 → region code), `hard_vetoes.outside_home_regions` replacing `non_anz`,
+`base_score.geography` as `home`/`other`/`unknown` — so expanding target markets (the client
+now pursues international accounts) is a one-file edit. The hard veto STAYS: a KNOWN region
+outside the whitelist vetoes; blank/unknown never vetoes (2026-08-10 three-state rule
+unchanged). Generate `n8n/code/icpScoring.generated.js` from the yaml via a new
+`scripts/gen_icp_scoring_js.py` on the `gen_escalation_js.py` precedent, and make both
+scoring engines (`src/icp_scoring.py`; `Decide Company Action` in
+`scripts/build_cloud_workflows.py` — `_regionKey` and the three hard-coded reason strings)
+plus all three region normalisers (`n8n/code/normalizeProviders.js::normalizeCountryRegion`,
+`src/normalizer.py::normalize_country_region`,
+`scripts/zoominfo_company_client.py::zoominfo_country_region`) read the generated/loaded
+constants, with a yaml-vs-JS parity test (Phase 46 parity rule: one commit). Stamp the rubric
+version on every scored record: create the `lv_icp_scoring_version` company property
+(CLAUDE.md §5.2, never created live — armed schema create is the operator's), write it from
+both engines, define stale as `lv_icp_scoring_version != config.version` (opaque bumped
+string — no semver, no timestamp), and add that filter to the `SJ-2 Search (stale refresh)`
+so stale records sweep through the zero-cost recompute lane. Rulings needed at discuss:
+(1) keep the legacy `"Non-ANZ geography"` reason string for one bump or rename it (5
+byte-asserted sites: `tests/test_scoring_parity.py:220,269,913,925`,
+`tests/n8n/antiIcpFlagMirror.test.mjs:104`; a rename churns `lv_anti_icp_reason` on every
+recompute); (2) the initial whitelist contents and any new `lv_country_region_normalized`
+enum options (regenerate `hubspotEnums.generated.js`); (3) the HubSpot-native
+`geography_score` writer (`backfill_seed_company_scores.py` / HubSpot scoring workflows),
+which the engines cannot reach — retire it or have the pipeline write it from the same table.
+Exit: JSON regenerated, both suites green, disarmed deploy + bounce of the enrichment and
+scheduled-maintenance workflows, one recompute proof each for a whitelisted and a
+non-whitelisted company (0 credits, 2 executions), nothing armed.
+**Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
+**Depends on:** Phase 74
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 75 to break down)

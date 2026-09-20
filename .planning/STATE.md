@@ -922,6 +922,7 @@ T-66-04 economics reason it stays out of ENRICH_GATE's REQUIRED despite having o
 - [Phase 74]: Phase 74's end-of-phase live gate (D-74-11) closed: two scoped disarmed deploys, one bounce, exactly 2 proof-send executions (12676, 12677), both frozen and guard-clean, nothing armed at any point. — Operator confirmed all six checkpoint items on 2026-09-19; independently re-verified read-only by the orchestrator (execution list, node counts, flag read-backs, property read-backs). MN-01 and Stage D todos both reconfirmed open, unchanged trigger conditions.
 
 ### Roadmap Evolution
+- Phase 75 added (2026-09-20): Config-driven region whitelist and scoring-version staleness — keep the non-home-region hard veto, move the whitelist and aliases into `config/icp_scoring.yaml` (generated into n8n via `gen_icp_scoring_js.py`), stamp `lv_icp_scoring_version`, stale = version mismatch (no semver/timestamp). Trigger: end-client UAT — international targets are now in scope.
 
 - Phase 73 added (2026-09-15): GA fix list from stress attempt 2 — F-A6, F-A5, F-E1, F-B7, F-B3, F-B5, F-A3r, F-A1/A2/B1/B6
 
