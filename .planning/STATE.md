@@ -2,17 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
-current_phase: 74
+current_phase: 75
+current_phase_name: Config-driven region whitelist and scoring-version staleness
 status: completed
 stopped_at: Phase 75 context gathered
-last_updated: "2026-09-20T04:27:27.748Z"
+last_updated: "2026-09-20T05:31:05.282Z"
 last_activity: 2026-09-19
 last_activity_desc: Phase 74 complete
-state_head: 2dbd003c5281eb45cf74df22f66c866f76986238
+state_head: 1fe8a0ca598e0cd29da054dcc47412b1310b47a1
 progress:
   total_phases: 13
   completed_phases: 3
-  total_plans: 73
+  total_plans: 79
   completed_plans: 73
   percent: 23
 ---
@@ -357,7 +358,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
-Phase: 74
+Phase: 75 (Config-driven region whitelist and scoring-version staleness) — READY TO EXECUTE
 Plan: Not started
 Status: All phases complete
 Last activity: 2026-09-19 — Phase 74 complete

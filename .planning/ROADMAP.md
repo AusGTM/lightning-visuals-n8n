@@ -690,10 +690,26 @@ non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 75-01-PLAN.md — tracer: yaml `regions.*` + `scripts/gen_icp_scoring_js.py` + both scoring engines read the generated constants; veto-reason rename blast radius; rubric guard re-baselined
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 75-02-PLAN.md — `regions.aliases` becomes the one country→region table (deletes `_COUNTRY_ISO2`), all three normalisers read it, HubSpot property manifest declares the new options and `lv_icp_scoring_version`
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 75-03-PLAN.md — version stamp + fetch lists, `ALLOW_HUBSPOT_RECOMPUTE_WRITES` and its `_writeSafetyAllows` branch, version-stale skip→recompute reroute, SJ-2 backstop
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 75-04-PLAN.md — `scripts/gen_geography_flow.py`, enum-option update path in `sync_hubspot_properties.py`, live flow drift check, deploy/bounce read-backs learn the fourth flag
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 75-05-PLAN.md — live HubSpot schema + flow window (D-75-10): property create, enum options, `UK` hidden, snapshot refresh, flow PUT
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 75-06-PLAN.md — exit UAT: disarmed deploy + bounce, two zero-cost recompute proofs, runbook procedures for the bump sweep and the standing-flag flip, todo triage
