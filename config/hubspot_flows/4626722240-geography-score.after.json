@@ -30,7 +30,16 @@
                       "values": [
                         "AU",
                         "NZ",
-                        "ANZ"
+                        "ANZ",
+                        "US",
+                        "GB",
+                        "IE",
+                        "CA",
+                        "ZA",
+                        "HK",
+                        "SG",
+                        "AE",
+                        "IN"
                       ]
                     },
                     "property": "lv_country_region_normalized"

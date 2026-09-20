@@ -168,6 +168,60 @@ ACCEPTED_DIVERGENCES = [
 _FAILURE_STATUSES = {"enum_mismatch", "type_mismatch", "missing_from_yaml", "fabricated_entry"}
 _COSMETIC_FIELDS = ("label", "displayOrder", "description")
 
+# Phase 75 Plan 04 (D-75-11b) -- the geography-score flow's branch VALUES are a SEPARATE,
+# ordinary-drift finding (exit 1) from its presence/enabled state, which stays in
+# DO_NOT_ARCHIVE_FLOW_IDS/exit 2 above, unchanged. geography_flow_drift_entry() reuses
+# gen_geography_flow.py's own filter-location walker -- one walker, not two.
+GEOGRAPHY_FLOW_ID = "4626722240"
+_GEOGRAPHY_FAILURE_STATUSES = {"branch_mismatch", "ambiguous_branch"}
+
+
+def geography_flow_drift_entry(live_flow_body: dict | None) -> dict:
+    """Compares the live geography-score flow's branch `values` against the CURRENT
+    config/icp_scoring.yaml regions.home. Ordinary drift only -- a mismatch contributes to
+    exit 1, never exit 2; the flow's presence/enabled state is a separate finding (see
+    DO_NOT_ARCHIVE_FLOW_IDS / _compute_do_not_archive) that this function does not
+    reclassify. Pure/offline-testable: no network call of its own."""
+    # Local imports: scripts/ must already be on sys.path (true both when this script runs
+    # directly -- Python auto-adds its own directory -- and when a test inserts
+    # ROOT / "scripts" before importing this module), and this keeps the geography-flow
+    # walker/loader out of every other code path's import graph, same discipline as the
+    # requests/hs_headers imports below.
+    from gen_geography_flow import _find_geography_filters
+    from src.icp_scoring import regions_home
+
+    if live_flow_body is None:
+        # Flow absence is already exit-2 territory via do_not_archive -- report it here
+        # too (for visibility) without double-classifying it as ordinary drift.
+        return {
+            "flow_id": GEOGRAPHY_FLOW_ID,
+            "status": "flow_absent",
+            "detail": "flow not present live -- see do_not_archive for this condition",
+        }
+
+    matches = _find_geography_filters(live_flow_body)
+    if len(matches) != 1:
+        return {
+            "flow_id": GEOGRAPHY_FLOW_ID,
+            "status": "ambiguous_branch",
+            "detail": f"expected exactly one geography filter live, found {len(matches)}",
+        }
+
+    live_values = matches[0].get("operation", {}).get("values") or []
+    expected_values = list(regions_home())
+    if live_values == expected_values:
+        return {
+            "flow_id": GEOGRAPHY_FLOW_ID,
+            "status": "in_sync",
+            "detail": "live branch values match regions.home",
+        }
+    return {
+        "flow_id": GEOGRAPHY_FLOW_ID,
+        "status": "branch_mismatch",
+        "detail": f"live branch values differ from regions.home -- live={live_values} "
+                   f"expected={expected_values}",
+    }
+
 
 def _has_credentials() -> bool:
     return bool(os.getenv("HUBSPOT_PRIVATE_APP_TOKEN"))
@@ -253,11 +307,15 @@ def _detail_for(status: str, declared: dict | None, live: dict | None) -> str:
 def exit_code_for(report: dict) -> int:
     """Pure, offline-testable. 2 if the do-not-archive invariant is violated (the live
     scoring engine itself is damaged -- a distinct, more urgent condition than drift). 1 if
-    any in-scope property carries a failure status. 0 otherwise -- cosmetic_only,
+    any in-scope property carries a failure status, OR the geography flow's branch values
+    have drifted from regions.home (D-75-11b; absent when the report predates this key --
+    backward compatible with every pre-Phase-75 report/test). 0 otherwise -- cosmetic_only,
     documented_gap, and anything in accepted_divergences never contribute a non-zero code."""
     if not report["do_not_archive"]["ok"]:
         return 2
     if any(p["status"] in _FAILURE_STATUSES for p in report["properties"]):
+        return 1
+    if (report.get("geography_flow_drift") or {}).get("status") in _GEOGRAPHY_FAILURE_STATUSES:
         return 1
     return 0
 
@@ -345,6 +403,7 @@ def build_report(desired: dict, live_companies: list, live_contacts: list, live_
         "do_not_archive": do_not_archive,
         "properties": properties_report,
         "accepted_divergences": ACCEPTED_DIVERGENCES,
+        "geography_flow_drift": geography_flow_drift_entry(live_flows_by_id.get(GEOGRAPHY_FLOW_ID)),
         "summary": dict(summary),
     }
     report["exit_code"] = exit_code_for(report)

@@ -327,6 +327,94 @@ def test_assert_no_secrets_wrapper_raises_on_leaked_token_env_var_name():
         raise AssertionError("expected ValueError for a leaked token env var name")
 
 
+# --- Phase 75 Plan 04 (D-75-11b): geography_flow_drift_entry ---------------------------
+#
+# scripts/gen_geography_flow.py's own filter-location walker is reused here (imported
+# lazily inside the function under test, matching check_schema_drift.py's own local-import
+# discipline for network-adjacent helpers) -- offline, against a synthetic body, never a
+# live call.
+
+def _synthetic_geography_flow_body(values):
+    return {
+        "actions": [
+            {
+                "listBranches": [
+                    {
+                        "filterBranch": {
+                            "filterBranches": [
+                                {
+                                    "filters": [
+                                        {
+                                            "property": "lv_country_region_normalized",
+                                            "operation": {
+                                                "operator": "IS_EQUAL_TO",
+                                                "values": values,
+                                            },
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+
+def test_geography_flow_drift_reported_when_live_values_differ():
+    from check_schema_drift import geography_flow_drift_entry
+
+    live_body = _synthetic_geography_flow_body(["AU", "NZ", "ANZ"])
+    entry = geography_flow_drift_entry(live_body)
+    assert entry["status"] == "branch_mismatch"
+    assert entry["flow_id"] == "4626722240"
+
+
+def test_geography_flow_drift_absent_when_live_values_match():
+    from check_schema_drift import geography_flow_drift_entry
+    from src.icp_scoring import regions_home
+
+    live_body = _synthetic_geography_flow_body(list(regions_home()))
+    entry = geography_flow_drift_entry(live_body)
+    assert entry["status"] == "in_sync"
+
+
+def test_geography_flow_drift_ambiguous_when_zero_or_two_filters_match():
+    from check_schema_drift import geography_flow_drift_entry
+
+    zero_match_body = _synthetic_geography_flow_body(["AU"])
+    zero_match_body["actions"][0]["listBranches"][0]["filterBranch"]["filterBranches"][0][
+        "filters"
+    ][0]["property"] = "some_other_property"
+    assert geography_flow_drift_entry(zero_match_body)["status"] == "ambiguous_branch"
+
+
+def test_geography_flow_drift_absent_flow_reports_flow_absent_not_a_failure_status():
+    from check_schema_drift import geography_flow_drift_entry
+
+    entry = geography_flow_drift_entry(None)
+    assert entry["status"] == "flow_absent"
+
+
+def test_exit_code_1_when_geography_flow_drift_is_branch_mismatch():
+    from check_schema_drift import exit_code_for
+
+    report = _report(properties=[{"name": "lv_org_type", "status": "in_sync"}])
+    report["geography_flow_drift"] = {"status": "branch_mismatch"}
+    assert exit_code_for(report) == 1
+
+
+def test_exit_code_0_when_geography_flow_drift_key_absent():
+    """Backward compatible: a report built before this plan (or a test's own hand-built
+    report) never carried this key. exit_code_for must not KeyError or false-positive."""
+    from check_schema_drift import exit_code_for
+
+    report = _report(properties=[{"name": "lv_org_type", "status": "in_sync"}])
+    assert "geography_flow_drift" not in report
+    assert exit_code_for(report) == 0
+
+
 def test_assert_no_secrets_wrapper_survives_pythonoptimize():
     import os
     import subprocess
