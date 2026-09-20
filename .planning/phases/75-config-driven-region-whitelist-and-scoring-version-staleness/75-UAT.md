@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 75-config-driven-region-whitelist-and-scoring-version-staleness
 source: [75-06-PLAN.md]
 started: 2026-09-20
@@ -101,7 +101,45 @@ enrichment max `12683`, maintenance `12681` — no burst. 0 provider credits, 0 
 
 ### Post-send record re-read
 
-_(pending — operator read-only GET of both records)_
+Operator read-only `get_record` after the watch — both byte-equal to their pre-send values:
+`9604614548`: `AU`, flag `false`, reason `null`, score `60`, version `null`,
+`hs_lastmodifieddate 2026-09-17T21:46:14.997Z` (unchanged). `17317850381`: `Other`, flag `true`,
+reason `"Non-ANZ geography"`, score `40`, version `null`, `hs_lastmodifieddate
+2026-09-03T03:39:03.221Z` (unchanged). **No HubSpot company record was written.**
+
+## Task 2 — sizing (read-only, D-75-05)
+
+Query (1): `filterGroups=[{filters:[{propertyName:"lv_country_region_normalized",operator:"EQ",value:"Other"}]}]`,
+properties `name,country,lv_anti_icp_flag,lv_anti_icp_reason,lv_org_type`, limit 100 →
+**total 5**: `17317850381` Jam TV (Italy), `17663335094` Daktronics (United States),
+`22798600364` New York Racing Association (United States), `288078696952` Megapro Holdings
+(South Africa), `288763144650` National Federation of State High School Associations (United
+States). Classified offline against `regions.aliases`: **4 of 5** have a native `country` inside
+`regions.home` (US, ZA) — the population the whitelist cannot rescue by recompute alone.
+
+Query (2): `filters:[{lv_anti_icp_flag EQ "true"},{lv_anti_icp_reason CONTAINS_TOKEN "Non-ANZ"}]`
+→ **total 5** (the same five). All vetoed (`lv_anti_icp_flag EQ "true"`): **20**.
+
+Flip count by recompute alone: **0** (stored region `Other` stays a known non-home code). The
+bump sweep will rewrite the reason string on 5 records and clear no geography veto. Fork
+resolved as RE-ENRICH — reasoning in
+`.planning/todos/pending/2026-09-20-other-stamped-records-cannot-be-rescued-by-recompute.md`.
+
+## Exit criteria (ROADMAP § Phase 75) — evidence
+
+| Exit criterion | Evidence |
+| --- | --- |
+| JSON regenerated | `build_cloud_workflows.py` re-run leaves `git status --porcelain -- n8n/` empty (plans 01–05, re-checked in plan 06) |
+| Both suites green | final run recorded in `75-06-SUMMARY.md` (pytest / node counts) |
+| Disarmed deploy + bounce of enrichment and scheduled-maintenance | `75-DEPLOY-RECORD.md`: 4 cloud bodies PUT 200, `bounce_exit=0`, 289/43 live = committed, `v1`, every flag `false` incl. `ALLOW_HUBSPOT_RECOMPUTE_WRITES` |
+| One recompute proof each, whitelisted + non-whitelisted | executions `12682` (AU → no geography reason) and `12683` (Other → `Outside target regions`), both `write_blocked`, both stamped `lv-icp-v0.2` |
+| 0 credits, 2 executions | no provider/research/judge node in either runData; exactly two new executions; watch clean |
+| Nothing armed | bounce read-back; D-75-17 flip not performed |
+
+## Findings
+
+None. Every observed verdict equals its pre-stated expectation; no FINDING id was raised.
+
 
 ## Summary
 
