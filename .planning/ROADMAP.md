@@ -687,7 +687,7 @@ scheduled-maintenance workflows, one recompute proof each for a whitelisted and 
 non-whitelisted company (0 credits, 2 executions), nothing armed.
 **Requirements**: none (no REQUIREMENTS.md ids) — keyed on the D-75-NN decisions discuss-phase records
 **Depends on:** Phase 74
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -712,4 +712,4 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 75-06-PLAN.md — exit UAT: disarmed deploy + bounce, two zero-cost recompute proofs, runbook procedures for the bump sweep and the standing-flag flip, todo triage
+- [x] 75-06-PLAN.md — exit UAT: disarmed deploy + bounce, two zero-cost recompute proofs, runbook procedures for the bump sweep and the standing-flag flip, todo triage

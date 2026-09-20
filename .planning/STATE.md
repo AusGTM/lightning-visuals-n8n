@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Yield and Friction (Phases 64–69) — ACTIVE
 current_phase: 75
 current_phase_name: Config-driven region whitelist and scoring-version staleness
-status: executing
+status: verifying
 stopped_at: context exhaustion at 83% (2026-09-20)
-last_updated: "2026-09-20T10:40:20.778Z"
+last_updated: "2026-09-20T11:16:49.020Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 75 execution started
-state_head: 3df08750a21f669ec61b9a08720ab16109494b34
+state_head: 340eeeabe1cc83af39d8a88a9d598c077e2cbd84
 progress:
   total_phases: 13
   completed_phases: 3
   total_plans: 79
-  completed_plans: 78
+  completed_plans: 79
   percent: 23
 ---
 
@@ -360,7 +360,7 @@ predating the window. VETO-03 bar still 0.
 Milestone: v1.2 Yield and Friction (Phases 64-69), ACTIVE
 Phase: 75 (Config-driven region whitelist and scoring-version staleness) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-20 — Phase 75 execution started
 
 *The v1.1 retained sections below are history, not current position.*
