@@ -16,6 +16,21 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.52.2] - 2026-09-20
+
+### Changed
+- **`skills/contact-upload/SKILL.md` (WR-13 follow-up, commit `86df95ac`): corrected the
+  cleanup-step location wording** — the dedupe artefacts are named at the step that produces
+  them, not at the step the previous entry pointed to. Wording only; no behaviour change.
+
+### Notes
+- **Backend `0.22.0` (Phase 75, 2026-09-20) — vocabulary the review queue surfaces changed.**
+  `review_queue.py` shows `lv_anti_icp_reason` verbatim; a geography veto derived after this
+  release reads `Outside target regions` (the whitelist is now 12 home regions, `US`/`GB`/`IE`/
+  `CA`/`ZA`/`HK`/`SG`/`AE`/`IN` included), while records vetoed earlier keep `Non-ANZ geography`
+  until the operator's bump sweep runs (`docs/OPERATOR-RESCORE.md`). No client code changed;
+  the client reads the string, it never interprets it.
+
 ## [0.52.1] - 2026-09-20
 
 ### Changed
