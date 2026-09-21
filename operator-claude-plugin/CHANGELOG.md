@@ -16,6 +16,14 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.53.1] - 2026-09-21
+
+### Fixed
+- **`install/install.sh` no longer prints a PEP 668 "externally-managed-environment" wall
+  before its `--break-system-packages` retry succeeds** (seen on the 0.53.0 smoke run on a
+  Homebrew Python: packages imported fine, but the first attempt's stderr read as a
+  failure). First attempt's stderr is silenced; the retry's is not.
+
 ## [0.53.0] - 2026-09-21
 
 ### Added

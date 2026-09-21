@@ -113,9 +113,11 @@ fi
 step "Installing Python packages"
 REQ="$INSTALLED/requirements.txt"
 if [ -f "$REQ" ]; then
-  python3 -m pip install --quiet --user -r "$REQ" || python3 -m pip install --quiet --user --break-system-packages -r "$REQ" || echo "  (pip install failed — install openpyxl, requests, PyYAML by hand)"
+  # First try is silenced: on Homebrew Python it fails loudly with PEP 668 text before the
+  # --break-system-packages retry succeeds, and that wall of red scares an operator.
+  python3 -m pip install --quiet --user -r "$REQ" 2>/dev/null || python3 -m pip install --quiet --user --break-system-packages -r "$REQ" || echo "  (pip install failed — install openpyxl, requests, PyYAML by hand)"
 else
-  python3 -m pip install --quiet --user openpyxl requests PyYAML || python3 -m pip install --quiet --user --break-system-packages openpyxl requests PyYAML || echo "  (pip install failed — install openpyxl, requests, PyYAML by hand)"
+  python3 -m pip install --quiet --user openpyxl requests PyYAML 2>/dev/null || python3 -m pip install --quiet --user --break-system-packages openpyxl requests PyYAML || echo "  (pip install failed — install openpyxl, requests, PyYAML by hand)"
 fi
 python3 - <<'PY' || fail "a Python package is still missing (see above)"
 import importlib
