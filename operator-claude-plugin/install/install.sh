@@ -87,9 +87,18 @@ done
 [ -f "$SETTINGS_SRC" ] || fail "operator.local.json is missing next to this script ($HERE). Ask your admin for the bundle again."
 
 step "Registering marketplace $MARKETPLACE_NAME"
+# A refresh that was interrupted, or two refreshes at once, leaves a staging directory
+# `<clone>..clone` that makes the next refresh fail with "directory refilled during
+# removal". Clear it and retry once before falling back to the local copy.
+STAGING="${CLONE_DIR}..clone"
 if claude plugin marketplace list 2>/dev/null | grep -q "$MARKETPLACE_NAME"; then
-  claude plugin marketplace update "$MARKETPLACE_NAME" || echo "  (marketplace update failed — continuing with the local copy)"
+  if ! claude plugin marketplace update "$MARKETPLACE_NAME"; then
+    rm -rf "$STAGING"
+    echo "  (retrying the marketplace refresh once)"
+    claude plugin marketplace update "$MARKETPLACE_NAME" || echo "  (marketplace update failed twice — continuing with the local copy; a version WARNING below means run this script again)"
+  fi
 else
+  rm -rf "$STAGING"
   claude plugin marketplace add "$MARKETPLACE_URL"
 fi
 

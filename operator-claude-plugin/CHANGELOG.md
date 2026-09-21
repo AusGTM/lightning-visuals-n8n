@@ -16,6 +16,16 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.53.5] - 2026-09-22
+
+### Fixed
+- **`install/install.sh` recovers from a leftover marketplace staging directory.** Two
+  refreshes at once (seen 2026-09-22: admin and operator runs overlapping) leave
+  `~/.claude/plugins/marketplaces/lightning-visuals-operator..clone`, and the next refresh
+  fails with "directory refilled during removal" asking for a manual delete. The installer
+  now removes that directory and retries the refresh once before falling back to the local
+  copy.
+
 ## [0.53.4] - 2026-09-22
 
 ### Changed
