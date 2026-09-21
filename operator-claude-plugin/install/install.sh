@@ -61,8 +61,19 @@ for p in json.load(sys.stdin):
 }
 
 step "Checking prerequisites"
+# A fresh Mac has neither git nor a working python3 until Apple's free Command Line Tools
+# are installed; the first `git`/`python3` call pops the install dialog. No admin needed.
+for tool in git python3; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    if [ "$(uname)" = "Darwin" ]; then
+      xcode-select --install >/dev/null 2>&1 || true
+      fail "'$tool' is missing. A dialog to install Apple's Command Line Tools should have opened — click Install, wait for it to finish (several minutes), then run this script again."
+    fi
+    fail "'$tool' is not on PATH. Install it, then run this again."
+  fi
+done
+command -v claude >/dev/null 2>&1 || fail "'claude' (Claude Code) is not on PATH. Install Claude Code first — https://claude.com/claude-code — open a Terminal, check 'claude --version' works, then run this script again."
 for tool in claude git python3; do
-  command -v "$tool" >/dev/null 2>&1 || fail "'$tool' is not on PATH. Install it, then run this again. (claude: https://claude.com/claude-code)"
   printf '  %s: %s\n' "$tool" "$(command -v "$tool")"
 done
 [ -f "$SETTINGS_SRC" ] || fail "operator.local.json is missing next to this script ($HERE). Ask your admin for the bundle again."

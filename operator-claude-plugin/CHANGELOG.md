@@ -16,6 +16,14 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.53.3] - 2026-09-22
+
+### Changed
+- **`install/install.sh` on a fresh Mac:** if `git` or `python3` is missing it triggers
+  `xcode-select --install` (Apple's free Command Line Tools — the dialog needs no admin
+  rights) and tells the operator to re-run after it finishes, instead of a bare "not on
+  PATH". A missing `claude` gets a pointed message to install Claude Code first.
+
 ## [0.53.2] - 2026-09-22
 
 ### Changed
