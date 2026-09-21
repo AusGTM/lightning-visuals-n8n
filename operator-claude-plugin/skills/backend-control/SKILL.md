@@ -119,12 +119,25 @@ It delegates to the lane's own dispatch path with its preview, cost guard, and a
 gate fully intact — this skill adds no shortcut around them. A lane whose dispatcher
 hasn't shipped is refused by name with the reason; offer what does work.
 
-**Enabling live writes for a send** — presented to the operator as **one action**, not
-three. The consequence covers the whole cycle: live writes on for this send only,
-bounded to exactly the records in this batch (the backend cannot write any record
+**Enabling live writes for a send** (`arm_dispatch`) — **admin-only; never offer it to an
+operator, and never route an operator here to "arm" a batch.** This action arms without a
+grant and is therefore gated on the shell variable `ALLOW_N8N_ARM`, which no one in a
+conversation can set. An operator whose run came back `write_blocked`, or who asks to
+"arm creation", "turn writes on", or "let it write", is asking for the batch skill's own
+path: re-run the same request through `contact-upload`, `enrich-records`,
+`enrich-before-ingest` or `suggest-contacts` — under `allow_write_grants` each send arms
+its own bounded window (creates included when the rows resolve to `create`) with no
+extra step. Say that, name the skill, and stop; do not build an `arm_dispatch` proposal
+and do not relay its `ALLOW_N8N_ARM` refusal text to an operator — that text is for an
+admin at a terminal. (Found live 2026-09-21: a session on a stale plugin build routed an
+operator here and ended in exactly that refusal.)
+
+For an admin who is at a terminal and wants the one-shot form: it is presented as **one
+action**, not three. The consequence covers the whole cycle: live writes on for this send
+only, bounded to exactly the records in this batch (the backend cannot write any record
 outside that list), and off again the moment the send finishes. Do not ask three
 separate confirmations for arm, send, and disarm — one decision, one confirmation.
-If the result comes back `disarm_failed`, that is its own state, and the operator must
+If the result comes back `disarm_failed`, that is its own state, and the admin must
 be told in so many words: **live writes may still be enabled, and an admin needs to
 check n8n directly.** Never summarize that away, and never report the send as cleanly
 finished around it.
@@ -205,6 +218,12 @@ A refusal is a boundary, not a malfunction — deliver it as one:
 - **Missing configuration:** the config gate's message already names the missing key and
   what still works. Relay it; don't call the plugin broken when only one capability is
   unconfigured.
+- **An `ALLOW_N8N_ARM` refusal, from any action:** never relay it to an operator as a
+  step for them to take. It means either the caller is the admin-only `arm_dispatch`
+  action above (route to the batch skill instead) or the installed plugin is stale
+  (`bash install.sh` from the admin's bundle, then restart). The operator's write
+  authority is `allow_write_grants` in `operator.local.json`, and it never involves a
+  shell.
 
 ## Never
 
@@ -213,3 +232,4 @@ A refusal is a boundary, not a malfunction — deliver it as one:
 - Never render schedule-expression syntax to the operator, in either direction.
 - Never describe a `failed` verdict as anything but "this did not take effect".
 - Never quietly tidy a `disarm_failed` — it outranks whatever else was being reported.
+- Never tell an operator to set `ALLOW_N8N_ARM`, and never offer `arm_dispatch` to one.

@@ -118,3 +118,17 @@ def test_n8n_arming_source_never_names_an_autonomy_symbol():
     source = N8N_ARMING.read_text()
     for symbol in _AUTONOMY_SYMBOLS:
         assert symbol not in source
+
+
+def test_backend_control_marks_arm_dispatch_admin_only_and_routes_operators_to_the_grant():
+    """2026-09-21 live finding: a session on a stale build routed an operator to
+    backend-control's one-shot arm, which is env-gated, and ended in an `ALLOW_N8N_ARM`
+    refusal the operator could never clear. The skill must say the action is admin-only,
+    name the batch skills as the operator's route, and forbid relaying that refusal."""
+    from pathlib import Path
+    text = (Path(__file__).resolve().parent.parent / "skills" / "backend-control" / "SKILL.md").read_text()
+    assert "`arm_dispatch`) — **admin-only" in text
+    for skill in ("contact-upload", "enrich-records", "enrich-before-ingest", "suggest-contacts"):
+        assert f"`{skill}`" in text, f"operator route must name {skill}"
+    assert "Never tell an operator to set `ALLOW_N8N_ARM`" in text
+    assert "An `ALLOW_N8N_ARM` refusal, from any action:" in text

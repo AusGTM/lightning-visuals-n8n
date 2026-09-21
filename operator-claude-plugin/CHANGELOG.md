@@ -16,6 +16,20 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.53.2] - 2026-09-22
+
+### Changed
+- **`skills/backend-control/SKILL.md`: the one-shot "enable live writes for a send"
+  action (`arm_dispatch`) is marked admin-only.** It arms without a grant, so it is gated
+  on the shell variable `ALLOW_N8N_ARM`, which no one in a conversation can set. The skill
+  now tells Claude never to offer it to an operator, never to relay its `ALLOW_N8N_ARM`
+  refusal as a step, and to route any "arm creation" / "turn writes on" request back to the
+  batch skill (`contact-upload`, `enrich-records`, `enrich-before-ingest`,
+  `suggest-contacts`), where each send arms its own bounded window under
+  `allow_write_grants` with no extra step. A new refusal rule covers the stale-build case
+  (`bash install.sh`, restart). No code change; no new authority. Pinned by
+  `tests/test_headless_grant_boundary.py`.
+
 ## [0.53.1] - 2026-09-21
 
 ### Fixed
