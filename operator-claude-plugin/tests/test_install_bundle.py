@@ -37,6 +37,12 @@ def test_installer_never_persists_the_headless_arm_authority():
     assert '"env"' not in text
 
 
+def test_installer_installs_the_cli_when_only_the_desktop_app_is_present():
+    text = INSTALLER.read_text()
+    assert "curl -fsSL https://claude.ai/install.sh | bash" in text
+    assert "xcode-select --install" in text
+
+
 def test_installer_sweeps_only_the_registry_installed_version():
     text = INSTALLER.read_text()
     assert "claude plugin list --json" in text, "sweep must read Claude Code's own registry"

@@ -16,6 +16,16 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.53.4] - 2026-09-22
+
+### Changed
+- **`install/install.sh` installs the `claude` command-line tool when it is missing**
+  (Anthropic's documented native installer, `curl -fsSL https://claude.ai/install.sh | bash`).
+  The Claude Desktop app does not ship the CLI, and `claude plugin ...` needs it; the
+  desktop Code tab reads the same `~/.claude` plugin registry and settings file the CLI
+  writes, so a desktop-only operator ends up with the same install as a terminal user.
+  USAGE.md prerequisites say so.
+
 ## [0.53.3] - 2026-09-22
 
 ### Changed

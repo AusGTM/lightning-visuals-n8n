@@ -34,6 +34,9 @@ the settings file directly.
 
 - **Claude Code** (terminal CLI or the desktop app's Code tab) with plugins enabled. All
   commands below are typed in a terminal; the plugin itself is then used from the chat.
+  The desktop app does not include the `claude` command-line tool; `bash install.sh`
+  installs it if missing (Anthropic's native installer), and the desktop Code tab then
+  sees the same plugin and settings the CLI wrote.
 - **`git`** on your PATH — the marketplace is fetched from a public GitHub repository.
 - **Python 3** with three packages: `openpyxl`, `requests`, `PyYAML`. In the Claude Desktop
   Code-tab environment this plugin was verified against they already import; anywhere else,

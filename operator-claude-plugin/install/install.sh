@@ -72,7 +72,15 @@ for tool in git python3; do
     fail "'$tool' is not on PATH. Install it, then run this again."
   fi
 done
-command -v claude >/dev/null 2>&1 || fail "'claude' (Claude Code) is not on PATH. Install Claude Code first — https://claude.com/claude-code — open a Terminal, check 'claude --version' works, then run this script again."
+# The Claude Desktop app does NOT include the `claude` command-line tool, and this script
+# needs it for `claude plugin ...`. Install it with Anthropic's documented native installer
+# (puts the binary in ~/.local/bin, which the PATH line above already covers). The desktop
+# app's Code tab then sees the same plugin registry and settings file the CLI writes.
+if ! command -v claude >/dev/null 2>&1; then
+  echo "  'claude' command-line tool not found — installing it (Anthropic's native installer)"
+  curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 || true
+  command -v claude >/dev/null 2>&1 || fail "'claude' is still not on PATH after the native installer. Install Claude Code by hand — https://claude.com/claude-code — check 'claude --version' works in a new Terminal, then run this script again."
+fi
 for tool in claude git python3; do
   printf '  %s: %s\n' "$tool" "$(command -v "$tool")"
 done
