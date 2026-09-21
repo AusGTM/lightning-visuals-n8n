@@ -44,6 +44,14 @@ the settings file directly.
 
 ### 2. Install the plugin
 
+**With the install bundle from your admin (recommended):** open Terminal, `cd` into the
+bundle folder, run `bash install.sh`, restart Claude Code. That one script does steps 2–4
+below, removes stale plugin versions, and adds the permission rule from
+[Fewer permission prompts](#fewer-permission-prompts-optional). It does not set any
+environment variable — none is needed for this path.
+
+**By hand:**
+
 ```
 claude plugin marketplace add https://github.com/AusGTM/lightning-visuals-n8n.git
 claude plugin install operator-claude-plugin@lightning-visuals-operator
@@ -162,6 +170,7 @@ nothing else, add to `~/.claude/settings.json`:
 }
 ```
 
+`bash install.sh` from the admin's bundle adds this rule for you (backing the file up first).
 Confirm with `/permissions`. This does not loosen anything about HubSpot writes — see
 [Why it keeps asking permission](#why-it-keeps-asking-permission).
 

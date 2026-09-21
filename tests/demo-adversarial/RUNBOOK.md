@@ -19,7 +19,7 @@ Cleanup uses `../demo-run/reset.py` (not duplicated here).
 
 ## Before (operator, once)
 
-1. Install the plugin on this machine: double-click `operator-claude-plugin/install/install.command`
+1. Install the plugin on this machine: run `bash install.sh` inside `operator-claude-plugin/install/`
    from the install bundle your admin gave you (or follow `USAGE.md` steps 1–5). Restart
    Claude Code. Say **"Is the plugin configured?"** → *already set up*.
    `allow_write_grants: true` must be set in the settings file by the admin.

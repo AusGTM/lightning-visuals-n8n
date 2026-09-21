@@ -16,6 +16,42 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-09-21
+
+### Added
+- **`install/install.sh` — the operator installer is now a plain bash script run from
+  Terminal (`bash install.sh`).** Same job as the retired `.command`, plus two things a
+  non-technical operator could not do for themselves:
+  - **Stale-version sweep.** After the update it runs `claude plugin prune --force`, then
+    deletes every folder under `~/.claude/plugins/cache/lightning-visuals-operator/
+    operator-claude-plugin/` that is not the `installPath` reported by
+    `claude plugin list --json`. Never "newest folder": a live 2026-09-21 session bound to
+    `0.14.0` (2026-08-25) while `0.52.2` was current, and hit the pre-Phase-53
+    `ALLOW_N8N_ARM` refusal (finding G-2, fixed in `0.28.x`) as a result. Deletes nothing if
+    the registry read fails; never touches the settings folder. Prints a loud warning when
+    the marketplace clone offers a version other than the installed one.
+  - **Permission allowlist.** Appends `"Bash(python3 scripts/*)"` to `permissions.allow`
+    in `~/.claude/settings.json` (backed up first; no other key touched), so Claude stops
+    asking before each plugin script. Same rule USAGE.md already documented by hand.
+- `tests/test_install_bundle.py` pins the installer: parses under macOS bash 3.2, no
+  bash-4 constructs, sweeps only the registry-installed version, never persists
+  `ALLOW_N8N_ARM`, and no tracked file names the retired `.command`.
+
+### Removed
+- **`install/install.command`.** A downloaded `.command` is blocked by Gatekeeper on
+  double-click for a user who cannot grant the "open anyway" permission; `bash install.sh`
+  never goes through LaunchServices, so it needs no executable bit, no quarantine removal
+  and no admin rights.
+
+### Notes
+- **No environment variable is set persistently, by design.** The plugin needs none for
+  the interactive path: settings resolve from the durable `operator.local.json`, and the
+  write authority for that path is `allow_write_grants: true` inside it. `ALLOW_N8N_ARM`
+  remains the headless/cron authority (D-34, D-53-01); writing it into `settings.json`'s
+  `env` would pre-authorise every desktop session past the grant chain, so the installer
+  refuses to and the new test pins that. An operator who hits an `ALLOW_N8N_ARM` refusal
+  in conversation is on a stale plugin version — re-run `bash install.sh`.
+
 ## [0.52.2] - 2026-09-20
 
 ### Changed
