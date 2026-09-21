@@ -50,8 +50,8 @@ def test_no_tracked_file_still_names_the_retired_double_click_installer():
         cwd=REPO_ROOT, capture_output=True, text=True, check=True).stdout.split()
     hits = []
     for rel in tracked:
-        if rel.endswith("CHANGELOG.md"):
-            continue  # history may name it
+        if rel.endswith("CHANGELOG.md") or (REPO_ROOT / rel).resolve() == Path(__file__).resolve():
+            continue  # history may name it; this test names it by definition
         p = REPO_ROOT / rel
         try:
             if "install.command" in p.read_text():
