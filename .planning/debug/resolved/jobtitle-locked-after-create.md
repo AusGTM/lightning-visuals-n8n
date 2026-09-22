@@ -1,6 +1,6 @@
 ---
 slug: jobtitle-locked-after-create
-status: fixing
+status: resolved
 trigger: "provider_sourced_fields fix and regression test; then jobtitle lock; Apollo not master key is known - no need to investigate"
 created: 2026-09-22
 updated: 2026-09-22
@@ -18,7 +18,7 @@ the first (`mobile-dropped-partial-batch`) is independent.
 hypothesis: The contact merge engine's provider vocabulary is `{apollo, lusha, zoominfo, claude_web}` (`n8n/code/mergeContacts.js::_isProviderSource`, `src/merge_policy.py::PROVIDER_SOURCES`, `system_correctable_sources` in `config/field_policy.yaml`), but BOTH production contact callers label their candidates `"waterfall"` — the ingest lane via the plugin's `source_by_field` map, the enrichment lane via `ENRICH_MERGE`'s `{ source: "waterfall", confidence: 85, rankedByField }` with no `sourceByField`. Provenance therefore records `source: "waterfall"` for every field the pipeline writes, and on a later correction: (a) the D-72-08 system-correctable arm never fires (conjunct 2: `"waterfall"` is not on the list), and (b) the D-72-06/07 recency arm can never promote even a stale value (`candidateObservedAt` is `undefined` for a non-provider source, so no candidate is "newer"). Net: a `stale_refreshable` value the pipeline wrote is locked for the field's TTL AND beyond, unless a caller hand-labels a real provider — which is exactly what the operator's Claude did (`claude_web`) to land Renée Quirk's title.
 test: offline — `mergeContacts({jobtitle:"Program Director", lv_contact_enrichment_provenance: <entry source "waterfall", value "Program Director">}, {jobtitle:"Deputy Chairperson"}, undefined, {source:"waterfall", confidence:85, historyByField:{jobtitle: <12 min ago>}, now, rowConflicted:false})` → expect `needs_review` "Refresh candidate requires review in MVP." Then the same with `sourceByField:{jobtitle:"claude_web"}` → `promote` via the system-correctable arm ONLY if the stored entry's source is also a listed provider — it is not, so still `needs_review`; with a 2-year-old history it promotes via recency (Renée's case).
 expecting: reproduces the 1-of-4 outcome exactly: fresh + "waterfall" → refused; 2-years-stale + hand-labelled `claude_web` candidate → promoted.
-next_action: RULING RECEIVED 2026-09-22 — operator chose Option A. Write the RED tests first (tests/n8n/mergeRecencyGate.test.mjs with source "waterfall"; Python oracle parity in tests/test_merge_policy*.py), confirm RED, then implement Option A in ONE commit across n8n/code/mergeContacts.js, n8n/code/mergeCompanies.js, src/merge_policy.py, config/field_policy.yaml (+ DEFAULT_*_POLICY mirrors), regenerate n8n bodies with scripts/build_cloud_workflows.py, run both full suites.
+next_action: none — resolved. Checkpoint (frozen-fixture re-baseline vs one-commit ruling) was authorized by the orchestrator: re-baseline the fixture, ISOLATED commit immediately after the fix commit. Executed by a fresh agent instance 2026-09-22: verified all 15 files still uncommitted, re-ran both suites fresh (pytest showed the predicted exactly-2-failure state, node still 1370/1370), re-baselined only the "Merge Company" entries (cloud + local_live) in tests/fixtures/companies_jscode_frozen.json via a script that freshly builds both variants and asserts no other FROZEN_NODE_NAMES entry drifted, confirmed both suites fully green (pytest 5257 passed/0 failed/160 skipped; node 1370/1370), confirmed node counts unchanged (289/101/55/43/33/26), then made three commits: fix (f7f1b4b7), fixture re-baseline (b55ebf77), and this docs-archive move.
 bug_class: bohrbug
 reasoning_checkpoint: null
 tdd_checkpoint: null
@@ -74,6 +74,21 @@ fix: RULING 2026-09-22: Option A (operator). Options as evaluated —
   Option A (engine vocabulary, both lanes, smallest diff): treat `"waterfall"` as a provider-class source. `_isProviderSource` (mergeContacts.js AND mergeCompanies.js — byte-identical function text, both inline into one Code node), `PROVIDER_SOURCES` (src/merge_policy.py), and the `system_correctable_sources` lists for `contacts.jobtitle` / `companies.industry` (field_policy.yaml + DEFAULT_*_POLICY mirrors) gain `waterfall`. Truthfulness: the label is assigned only to fields the plugin's `provider_sourced_fields` proved came from the waterfall (post mobile-dropped-partial-batch fix: never a CSV-supplied value), and the observation time is the run time — same as `claude_web`. T-72-02 (backdated CSV column) stays closed by construction because a CSV value never receives the label.
   Option B (enrichment lane stamps real names + Option A for the ingest lane): ENRICH_MERGE derives `sourceByField[f] = ranked[f][0].source` from `row.scored.ranked` for every winner so enrichment-lane provenance names the actual provider; the ingest lane still needs Option A's `waterfall` admission because the plugin cannot know per-field providers. More honest provenance on one lane; larger diff; touches `n8n/wf_*.json` regeneration.
   Either way: RED tests first in `tests/n8n/mergeRecencyGate.test.mjs` (source `"waterfall"`, fresh value + stored `"waterfall"` entry → promote via correction; 2-year-stale + `"waterfall"` candidate → promote via recency) and the Python oracle parity test; regenerate bodies via `scripts/build_cloud_workflows.py`; do NOT deploy (operator step); plugin skill text: `enrich-before-ingest/SKILL.md` — no hand-built maps needed, and never hand-label a source the round did not use.
-verification: (planned) RED→GREEN on both engines; `node --test tests/n8n/*.test.mjs`; full pytest; `git diff --stat n8n/` shows only regenerated jsCode strings, node counts unchanged.
+verification: RED→GREEN confirmed on both engines. Final fresh runs: `.venv/bin/python -m pytest -q` → 5257 passed, 0 failed, 160 skipped; `node --test tests/n8n/*.test.mjs` → 1370 passed, 0 failed. Node counts unchanged: enrichment 289, ingest 101, review 55, maintenance 43, backend 33, discovery 26. `git diff --stat` on the fix commit shows only the two engine files + oracle + both field_policy.yaml copies + 2 test files + 7 regenerated n8n/wf_*.json (jsCode-string-only diffs, confirmed via the existing `test_committed_wf_enrichment_*_json_is_current` currency tests, which passed). Frozen fixture (`tests/fixtures/companies_jscode_frozen.json`) re-baselined for the "Merge Company" entry only, in its own isolated commit, diff limited to exactly the two reviewed hunks (industry's system_correctable_sources list + _isProviderSource body); the other 6 of 7 FROZEN_NODE_NAMES entries verified byte-identical to before.
 oracle_type: specified
-files_changed: []
+files_changed:
+  - config/field_policy.yaml
+  - operator-claude-plugin/config/field_policy.yaml
+  - n8n/code/mergeContacts.js
+  - n8n/code/mergeCompanies.js
+  - src/merge_policy.py
+  - tests/n8n/mergeRecencyGate.test.mjs
+  - tests/test_merge_policy.py
+  - n8n/wf_enrichment_cloud.json
+  - n8n/wf_enrichment_local.json
+  - n8n/wf_enrichment_local_live.json
+  - n8n/wf_contact_ingest_cloud.json
+  - n8n/wf_contact_ingest_local.json
+  - n8n/wf_review_decision_cloud.json
+  - n8n/wf_scheduled_maintenance_cloud.json
+  - tests/fixtures/companies_jscode_frozen.json
