@@ -614,6 +614,9 @@ def test_a_blank_csv_value_is_filled_from_the_provider_on_a_create_row_too():
 
 def test_provider_sourced_fields_names_a_field_answered_for_every_row_and_omits_a_partial_one():
     rows = _rows(2)
+    rows[1]["jobtitle"] = "Old Title"  # CSV-supplied -- this is the case the
+    # under-claim protects: row 1's response never answers jobtitle at all, so its
+    # final value stays the CSV's own "Old Title", and that must still veto the claim.
     responses = [
         _response(rows[0]["row_id"], {"seniority": "Director", "jobtitle": "CEO"}),
         _response(rows[1]["row_id"], {"seniority": "Manager"}),  # no jobtitle for row 1
@@ -622,6 +625,30 @@ def test_provider_sourced_fields_names_a_field_answered_for_every_row_and_omits_
     result = preingest.merge_enriched(rows, responses)
 
     assert preingest.provider_sourced_fields(result) == {"seniority"}
+
+
+def test_a_field_blank_in_every_unanswered_row_is_not_vetoed_by_partial_coverage():
+    """D-72-07's under-claim intersected over ANSWERED rows only, so a row the
+    waterfall answered without mobilephone/linkedin_url vetoed those fields for the
+    WHOLE round -- even though that row's CSV never carried a value for them either,
+    so there was nothing to protect. Reproduces the live 7-row batch: 2 rows answered
+    jobtitle only, the other 5 answered jobtitle+mobilephone+linkedin_url, and every
+    row is CSV-blank for mobilephone/linkedin_url."""
+    rows = _rows(7)
+    responses = [
+        _response(rows[i]["row_id"], {
+            "jobtitle": "Director", "mobilephone": "0400000000",
+            "lv_linkedin_url": "https://li/x",
+        })
+        for i in range(5)
+    ] + [
+        _response(rows[i]["row_id"], {"jobtitle": "Director"})
+        for i in (5, 6)
+    ]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert preingest.provider_sourced_fields(result) >= {"mobilephone", "linkedin_url"}
 
 
 def test_provider_sourced_fields_is_empty_when_nothing_was_answered():
