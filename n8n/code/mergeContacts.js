@@ -59,7 +59,7 @@ const DEFAULT_CONTACT_POLICY = {
   // material conflict; source on this list; min_confidence met). Adding this key to a
   // fill_blank_only field would weaken that class and is forbidden by SAFE-01.
   jobtitle:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 180,
-                             system_correctable_sources: ["apollo", "lusha", "zoominfo", "claude_web"] },
+                             system_correctable_sources: ["apollo", "lusha", "zoominfo", "claude_web", "waterfall"] },
   lv_linkedin_url:         { class: "fill_blank_only",   min_confidence: 85 },
   // hs_linkedin_url: fill_blank_only @ 85 (Phase 72 Plan 02, D-72-04) — a write-only
   // mirror of lv_linkedin_url for the native portal property. Deliberately NOT chased
@@ -91,11 +91,21 @@ function _nowIso() {
 
 // Phase 72 Plan 04 (D-72-07): the ONLY two legitimate observation-time sources are the
 // run's own resolved `now` and HubSpot's own property-history timestamp. A candidate
-// whose resolved source is not one of these four live providers carries NO observation
-// time at all and can therefore never win a recency comparison -- this is what closes
-// the backdated-CSV-column injection vector (T-72-02) by construction, not by policy.
+// whose resolved source is not one of these five provider-class names carries NO
+// observation time at all and can therefore never win a recency comparison -- this is
+// what closes the backdated-CSV-column injection vector (T-72-02) by construction, not
+// by policy.
+// "waterfall" (debug session jobtitle-locked-after-create, Option A, 2026-09-22): the
+// PRODUCTION label BOTH contact merge callers actually stamp (ingest lane's plugin
+// source_by_field map; enrichment lane's ENRICH_MERGE opts.source) -- neither ever
+// names apollo/lusha/zoominfo/claude_web directly. Admitted as provider-class only
+// because the plugin's provider_sourced_fields contract (post mobile-dropped-partial-
+// batch fix) guarantees the label is stamped ONLY on a value the waterfall itself
+// produced, never a CSV-supplied one -- the same truthfulness guarantee the four named
+// providers already carry. See .planning/debug/resolved/jobtitle-locked-after-create.md.
 function _isProviderSource(name) {
-  return name === "apollo" || name === "lusha" || name === "zoominfo" || name === "claude_web";
+  return name === "apollo" || name === "lusha" || name === "zoominfo" ||
+         name === "claude_web" || name === "waterfall";
 }
 
 // Phase 72 Plan 05 (D-72-11/D-72-12): closed map from a primary field to its single

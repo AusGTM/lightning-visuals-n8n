@@ -317,3 +317,87 @@ test("mergeCompanies: domain's create_seed correction under manual_protected is 
   );
   assert.equal(result.decisions.find((d) => d.field === "domain").decision, "promote");
 });
+
+// --- jobtitle-locked-after-create (debug session): "waterfall" is the PRODUCTION label -
+//
+// Both production contact merge callers stamp source "waterfall" (ingest lane via the
+// plugin's source_by_field map; enrichment lane via ENRICH_MERGE's flat opts.source) --
+// never one of the four provider names the fixtures above use. Before Option A,
+// "waterfall" was absent from _isProviderSource, so a value the pipeline itself wrote
+// was un-correctable through the lane (system-correctable arm never matched the stored
+// source; recency arm's candidate was clockless). See
+// .planning/debug/resolved/jobtitle-locked-after-create.md.
+
+const TWELVE_MIN_AGO = "2026-09-11T23:48:00.000Z"; // 12 minutes before NOW
+const TWO_YEARS_AGO = "2024-09-12T00:00:00.000Z";  // ~2 years before NOW (Renée Quirk case)
+
+test("mergeContacts system-correctable: production label 'waterfall' (fresh, 12min old) -> promote via correction", () => {
+  const result = mergeContacts(
+    { jobtitle: "Program Director",
+      lv_contact_enrichment_provenance: JSON.stringify({
+        jobtitle: { source: "waterfall", confidence: 85, verified_at: TWELVE_MIN_AGO,
+                    validation_status: "provider_only", value: "Program Director" } }) },
+    { jobtitle: "Deputy Chairperson" },
+    undefined,
+    { source: "csv", confidence: 85, now: NOW, rowConflicted: false,
+      sourceByField: { jobtitle: "waterfall" },
+      historyByField: { jobtitle: TWELVE_MIN_AGO } }
+  );
+  const d = result.decisions.find((x) => x.field === "jobtitle");
+  assert.equal(d.decision, "promote");
+  assert.equal(result.canonicalPatch.jobtitle, "Deputy Chairperson");
+});
+
+test("mergeContacts recency: production label 'waterfall' + 2-year-old history, no provenance entry -> promote via recency (Renée Quirk case)", () => {
+  const result = mergeContacts(
+    { jobtitle: "Old Title" },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "csv", confidence: 85, now: NOW,
+      sourceByField: { jobtitle: "waterfall" },
+      historyByField: { jobtitle: TWO_YEARS_AGO } }
+  );
+  const d = result.decisions.find((x) => x.field === "jobtitle");
+  assert.equal(d.decision, "promote");
+  assert.equal(result.canonicalPatch.jobtitle, "New Title");
+});
+
+test("mergeContacts: 'csv' still cannot win either arm after the 'waterfall' fix (unchanged guard)", () => {
+  const stale = mergeContacts(
+    { jobtitle: "Old Title" },
+    { jobtitle: "New Title" },
+    undefined,
+    { source: "csv", confidence: 90, now: NOW,
+      sourceByField: { jobtitle: "csv" },
+      historyByField: { jobtitle: TWO_YEARS_AGO } }
+  );
+  assert.equal(stale.decisions.find((x) => x.field === "jobtitle").decision, "needs_review");
+
+  const correctable = mergeContacts(
+    { jobtitle: "Program Director",
+      lv_contact_enrichment_provenance: JSON.stringify({
+        jobtitle: { source: "csv", confidence: 80, verified_at: TWELVE_MIN_AGO,
+                    validation_status: "provider_only", value: "Program Director" } }) },
+    { jobtitle: "Deputy Chairperson" },
+    undefined,
+    { source: "csv", confidence: 85, now: NOW, rowConflicted: false,
+      sourceByField: { jobtitle: "csv" },
+      historyByField: { jobtitle: TWELVE_MIN_AGO } }
+  );
+  assert.equal(correctable.decisions.find((x) => x.field === "jobtitle").decision, "needs_review");
+});
+
+test("mergeCompanies system-correctable: production label 'waterfall' on industry (fresh) -> promote via correction (parity with contacts)", () => {
+  const result = mergeCompanies(
+    { industry: "Sports",
+      lv_enrichment_provenance: JSON.stringify({
+        industry: { source: "waterfall", confidence: 85, verified_at: TWELVE_MIN_AGO,
+                    validation_status: "provider_only", value: "Sports" } }) },
+    { industry: "Media Production" },
+    undefined,
+    { source: "csv", confidence: 85, now: NOW, rowConflicted: false,
+      sourceByField: { industry: "waterfall" },
+      historyByField: { industry: TWELVE_MIN_AGO } }
+  );
+  assert.equal(result.decisions.find((d) => d.field === "industry").decision, "promote");
+});

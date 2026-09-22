@@ -27,11 +27,15 @@ companies:
     # system" PROMOTE clause, extended from domain's manual_protected-only use to
     # this stale_refreshable field -- same four conjuncts. Adding this key to a
     # fill_blank_only field would weaken that class and is forbidden by SAFE-01.
+    # "waterfall" (debug session jobtitle-locked-after-create, Option A, 2026-09-22):
+    # the PRODUCTION label the enrichment lane's own provider-sourced values actually
+    # carry -- the pipeline's own provider-derived label, not a real provider name.
     system_correctable_sources:
       - apollo
       - lusha
       - zoominfo
       - claude_web
+      - waterfall
 
   # 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
   # 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
@@ -274,11 +278,15 @@ contacts:
     # system" PROMOTE clause, extended from domain's manual_protected-only use to
     # this stale_refreshable field -- same four conjuncts. Adding this key to a
     # fill_blank_only field would weaken that class and is forbidden by SAFE-01.
+    # "waterfall" (debug session jobtitle-locked-after-create, Option A, 2026-09-22):
+    # the PRODUCTION label BOTH contact merge callers actually stamp -- the pipeline's
+    # own provider-derived label, not a real provider name.
     system_correctable_sources:
       - apollo
       - lusha
       - zoominfo
       - claude_web
+      - waterfall
 
   # PN-1: linkedin_url is NOT HubSpot-native (absent from the verified-native list) —
   # renamed lv_linkedin_url.

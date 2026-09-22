@@ -401,9 +401,9 @@ def test_recency_manual_protected_field_unaffected():
 
 CONTACT_JOBTITLE_POLICY = {"class": "stale_refreshable", "min_confidence": 75,
                             "stale_after_days": 180,
-                            "system_correctable_sources": ["apollo", "lusha", "zoominfo", "claude_web"]}
+                            "system_correctable_sources": ["apollo", "lusha", "zoominfo", "claude_web", "waterfall"]}
 INDUSTRY_CORRECTABLE_POLICY = {**INDUSTRY_POLICY,
-                                "system_correctable_sources": ["apollo", "lusha", "zoominfo", "claude_web"]}
+                                "system_correctable_sources": ["apollo", "lusha", "zoominfo", "claude_web", "waterfall"]}
 
 
 def sc_provenance_entry(**overrides):
@@ -467,6 +467,39 @@ def test_sc_domain_create_seed_correction_under_manual_protected_is_unaffected_r
     # (260904-pav) must keep working unchanged after object_type-aware provenance-key
     # selection lands.
     assert pav_gate(json.dumps({"domain": pav_entry()}))["decision"] == "promote"
+
+
+# --- jobtitle-locked-after-create (debug session): "waterfall" is the PRODUCTION label --
+#
+# Mirrors tests/n8n/mergeRecencyGate.test.mjs's "waterfall" cases. Both production
+# contact merge callers stamp source "waterfall", never one of the four provider names
+# the fixtures above use -- before Option A, PROVIDER_SOURCES did not include it, so a
+# value the pipeline itself wrote was un-correctable through the lane. See
+# .planning/debug/resolved/jobtitle-locked-after-create.md.
+
+TWELVE_MIN_AGO = "2026-09-11T23:48:00+00:00"  # 12 minutes before NOW
+TWO_YEARS_AGO = "2024-09-12T00:00:00+00:00"   # ~2 years before NOW (Renée Quirk case)
+
+
+def test_sc_contact_provenance_waterfall_label_production_promotes_even_when_not_past_ttl():
+    # Deliberately FRESH history (12 min old) -- the TTL branch alone would refuse;
+    # only the system-correctable arm can promote.
+    entry = sc_provenance_entry(source="waterfall", verified_at=TWELVE_MIN_AGO, value="Old Title")
+    g = deterministic_gate(
+        contact_record(json.dumps({"jobtitle": entry})), "jobtitle", "Old Title",
+        [make_candidate("jobtitle", "waterfall", "New Title", 85)], CONTACT_JOBTITLE_POLICY, PRIORITY,
+        now=NOW, history_by_field={"jobtitle": TWELVE_MIN_AGO})
+    assert g["decision"] == "promote"
+
+
+def test_recency_contact_waterfall_label_two_year_stale_history_promotes():
+    # Renée Quirk case: no stored provenance entry at all, existing value ~2 years old,
+    # candidate carries the production "waterfall" label -- must win on recency alone.
+    g = deterministic_gate(
+        contact_record(None), "jobtitle", "Old Title",
+        [make_candidate("jobtitle", "waterfall", "New Title", 85)], CONTACT_JOBTITLE_POLICY, PRIORITY,
+        now=NOW, history_by_field={"jobtitle": TWO_YEARS_AGO})
+    assert g["decision"] == "promote"
 
 
 # --- Phase 72 Plan 05 (D-72-11/D-72-12): overflow-slot routing -----------------------

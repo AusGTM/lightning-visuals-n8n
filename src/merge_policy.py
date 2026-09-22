@@ -33,9 +33,12 @@ def is_blank(value):
 
 # Phase 72 Plan 04 (D-72-07): the ONLY two legitimate observation-time sources are the
 # run's own resolved `now` and HubSpot's own property-history timestamp. A candidate
-# whose provider is not one of these four live providers carries NO observation time
-# and can therefore never win a recency comparison (T-72-02, by construction).
-PROVIDER_SOURCES = {"apollo", "lusha", "zoominfo", "claude_web"}
+# whose provider is not one of these five provider-class names carries NO observation
+# time and can therefore never win a recency comparison (T-72-02, by construction).
+# "waterfall" (debug session jobtitle-locked-after-create, Option A, 2026-09-22): the
+# PRODUCTION label both contact merge callers actually stamp. JS twin:
+# mergeContacts.js's / mergeCompanies.js's identical _isProviderSource.
+PROVIDER_SOURCES = {"apollo", "lusha", "zoominfo", "claude_web", "waterfall"}
 
 
 def _parse_iso_or_none(ts):

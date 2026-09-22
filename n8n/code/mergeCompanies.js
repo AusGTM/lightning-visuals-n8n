@@ -51,7 +51,7 @@ const DEFAULT_COMPANY_POLICY = {
   // same four conjuncts. Adding this key to a fill_blank_only field would weaken that
   // class and is forbidden by SAFE-01.
   industry:                { class: "stale_refreshable", min_confidence: 75, stale_after_days: 365,
-                             system_correctable_sources: ["apollo", "lusha", "zoominfo", "claude_web"] },
+                             system_correctable_sources: ["apollo", "lusha", "zoominfo", "claude_web", "waterfall"] },
   // 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
   // 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
   // Scope: THIS lane only, blank-fill, provider-sourced values -- a non-blank existing
@@ -129,8 +129,13 @@ function _nowIso() {
 // Phase 72 Plan 04 (D-72-07): mirrors mergeContacts.js's identical constant/helper --
 // see that file's comment for the full T-72-02 rationale. Duplicated per this repo's
 // existing self-contained-per-Code-node pattern (_isBlank/_nowIso/stableStringify).
+// "waterfall" (debug session jobtitle-locked-after-create, Option A, 2026-09-22): see
+// mergeContacts.js's comment on this same function for the full rationale -- the
+// function BODY below must stay byte-identical to that copy (both inline into one Code
+// node; see the comment above _overflowSlot).
 function _isProviderSource(name) {
-  return name === "apollo" || name === "lusha" || name === "zoominfo" || name === "claude_web";
+  return name === "apollo" || name === "lusha" || name === "zoominfo" ||
+         name === "claude_web" || name === "waterfall";
 }
 
 // Phase 72 Plan 05 (D-72-11/D-72-12): closed map from a primary field to its single
