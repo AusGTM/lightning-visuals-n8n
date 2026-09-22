@@ -3678,10 +3678,14 @@ ingest lane's `source_by_field` map and the merge engines' provider vocabulary m
 Correction to a claim in that UAT: contacts DO carry provenance — the property is
 `lv_contact_enrichment_provenance` (live), not the companies' `lv_enrichment_provenance`.
 
-**Deployment state:** the regenerated `n8n/wf_*.json` bodies (jsCode strings only, node
-counts unchanged at 289/101/55/43/33/26) are committed and **NOT deployed** as of
-2026-09-22. Until the operator deploys + bounces disarmed, the live engines still refuse the
-correction. Nothing armed.
+**Deployment state — deployed 2026-09-22 (operator, disarmed), `[observed live]`.** All six
+cloud workflows PUT at 200 via `scripts/deploy_n8n_workflows.py` and bounced via
+`scripts/bounce_n8n_workflows.py` (exit 0): live nodes 33/101/289/55/43/26 = committed,
+`executionOrder: v1` on all six, `ALLOW_HUBSPOT_RECORD_WRITES` / `ALLOW_HUBSPOT_CREATE` /
+`ALLOW_HUBSPOT_RECOMPUTE_WRITES` all `false` on the four bodies that carry them. Committed
+and live are level. Nothing armed. The correction path itself (a `"waterfall"`-labelled
+candidate promoting a pipeline-written `jobtitle` through the ingest lane) is `[documented]`
+until the operator's next board-title send.
 
 ## 17.3 Minimal PATCH example
 

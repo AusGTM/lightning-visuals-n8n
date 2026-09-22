@@ -16,8 +16,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `companies.industry`** (debug `jobtitle-locked-after-create`, operator ruling Option A,
   `f7f1b4b7`; frozen `Merge Company` fixture re-baselined `b55ebf77`). Both production
   contact callers stamp that label, so the D-72-06..09 recency and system-correctable arms
-  had never fired live. Regenerated `n8n/wf_*.json` committed, **not deployed**; node counts
-  unchanged. CLAUDE.md §17.2.3.
+  had never fired live. Regenerated `n8n/wf_*.json` committed; node counts unchanged.
+  CLAUDE.md §17.2.3.
+
+### Verified live (2026-09-22)
+- All six cloud workflows deployed disarmed (six PUTs at 200) and bounced: live nodes
+  33/101/289/55/43/26 = committed, `executionOrder: v1`, every `ALLOW_HUBSPOT_*` flag `false`.
+  Committed and live level. Nothing armed.
 
 ## [0.22.0] - 2026-09-20
 
