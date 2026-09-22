@@ -1155,14 +1155,18 @@ whatever seven columns happened to be in the source file.
        except run_report.RunReportError:
            pass
    else:
-       # D-72-07/D-72-22 (Phase 72 Plan 03): a truthful, round-level `source_by_
-       # field` map — names a field ONLY when the waterfall answered it for EVERY
-       # answered row in this batch (`preingest.provider_sourced_fields`). This is
-       # the ingest lane's ONLY source of provider-grade confidence for a widened
-       # field (`mobilephone`, `linkedin_url`, ...): with no entry, the ingest
-       # lane's `MERGE_CONTACTS` wrapper falls back to the flat csv/80 confidence,
-       # which a `fill_blank_only@85` field can never clear even into a blank
-       # field. Under-claiming is the safe direction (D-72-07) — never per-row,
+       # D-72-07/D-72-22 (Phase 72 Plan 03; refined 2026-09-22,
+       # mobile-dropped-partial-batch): a truthful, round-level `source_by_field`
+       # map — names a field ONLY when, for EVERY row in this batch, either the
+       # waterfall answered it for that row or that row's own value is blank
+       # (`preingest.provider_sourced_fields`). A row with nothing but a blank CSV
+       # cell for the field has nothing to protect and no longer vetoes it just for
+       # being in a batch where some OTHER row was answered. This is the ingest
+       # lane's ONLY source of provider-grade confidence for a widened field
+       # (`mobilephone`, `linkedin_url`, ...): with no entry, the ingest lane's
+       # `MERGE_CONTACTS` wrapper falls back to the flat csv/80 confidence, which a
+       # `fill_blank_only@85` field can never clear even into a blank field.
+       # Under-claiming is still the safe direction (D-72-07) — never per-row,
        # since `extraction.write_dispatch_csv`'s STRUCT-01 allowlist forbids it.
        source_by_field = {
            field_name: "waterfall"

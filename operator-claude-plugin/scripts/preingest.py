@@ -990,24 +990,43 @@ def strip_enrichment_extras(rows, policy_path=None) -> list[dict]:
 def provider_sourced_fields(merge_result) -> set:
     """The round-level, truthful field set D-72-22's ingest-lane confidence override
     reads via `source_by_field` (`dispatch.py`'s `source_by_field=` kwarg): names a
-    field ONLY when the waterfall supplied it, and it passed the allowlist, for
-    EVERY answered row in `merge_result` — a field the provider answered for some
-    rows and not others is NOT named.
+    field ONLY when, for EVERY row in `merge_result.rows`, either the waterfall
+    supplied that field for that row (it passed the allowlist and appears in the
+    row's own `answered_fields` entry) OR the row's final merged value for the field
+    is blank.
 
-    Under-claiming is deliberate (D-72-07): `extraction.write_dispatch_csv`'s
-    STRUCT-01 allowlist forbids per-row provenance, so a round-level claim is honest
-    only when it holds for every row it would apply to. Naming a field the CSV
-    actually supplied would let a stale spreadsheet cell win a later recency
-    comparison it never earned — the exact vector D-72-07 exists to close.
+    A field the waterfall answered for some rows and left a CSV-supplied value
+    untouched on others is still under-claimed (D-72-07): `extraction.
+    write_dispatch_csv`'s STRUCT-01 allowlist forbids per-row provenance, so a
+    round-level claim is honest only when it holds for every row that actually has a
+    value. Naming a field a stale spreadsheet cell supplied would let that cell win a
+    later recency comparison it never earned — the exact vector D-72-07 exists to
+    close.
 
-    Returns an empty set when `merge_result.answered_fields` is empty — there is no
-    truthful claim to make about zero answered rows. Pure: reads only
+    Fixed 2026-09-22 (mobile-dropped-partial-batch): the original rule required
+    every ANSWERED row to name the field, so a row the waterfall answered WITHOUT
+    it — even one with nothing but a blank CSV cell for it, nothing to protect at
+    all — vetoed the field for the whole round. A row's own blank cell can never win
+    a recency comparison it has no value to bring, so a row is now only a veto when
+    it holds a real (non-blank), non-waterfall value.
+
+    Returns an empty set when nothing was answered — there is no truthful claim to
+    make about zero answered rows. Pure: reads only `merge_result.rows` and
     `merge_result.answered_fields`, no I/O.
     """
-    field_sets = [set(entry["fields"]) for entry in merge_result.answered_fields]
-    if not field_sets:
+    answered_by_row = {
+        entry["row_id"]: set(entry["fields"]) for entry in merge_result.answered_fields
+    }
+    if not answered_by_row:
         return set()
-    return set.intersection(*field_sets)
+    candidates = set().union(*answered_by_row.values())
+    return {
+        field for field in candidates
+        if all(
+            not _present(row.get(field)) or field in answered_by_row.get(row["row_id"], ())
+            for row in merge_result.rows
+        )
+    }
 
 
 def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests, *,
