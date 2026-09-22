@@ -6,6 +6,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`provider_sourced_fields` no longer lets a partial-coverage row veto a field for the
+  whole batch** (debug `mobile-dropped-partial-batch`, `157b02f8`). Live 2026-09-22: a 7-row
+  ingest where 2 rows had no waterfall mobile dropped `mobilephone` and `lv_linkedin_url` on
+  all 7. Rule now: claimed when every sent row is blank for the field or had it answered.
+- **`"waterfall"` admitted as a provider-class source in both merge engines, the Python
+  oracle and `field_policy.yaml`'s `system_correctable_sources` for `contacts.jobtitle` /
+  `companies.industry`** (debug `jobtitle-locked-after-create`, operator ruling Option A,
+  `f7f1b4b7`; frozen `Merge Company` fixture re-baselined `b55ebf77`). Both production
+  contact callers stamp that label, so the D-72-06..09 recency and system-correctable arms
+  had never fired live. Regenerated `n8n/wf_*.json` committed, **not deployed**; node counts
+  unchanged. CLAUDE.md §17.2.3.
+
 ## [0.22.0] - 2026-09-20
 
 ### Added

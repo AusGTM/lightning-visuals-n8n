@@ -16,6 +16,24 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-09-22
+
+### Fixed
+- **A row the waterfall answered without `mobilephone`/`linkedin_url` no longer strips those
+  fields from every other row in the batch** (`scripts/preingest.py::provider_sourced_fields`,
+  commits `e6a21c66`/`157b02f8`). Live 2026-09-22: 7-row AFA board ingest, 2 rows without a
+  waterfall mobile, all 5 others lost mobile + LinkedIn and needed a re-run. The round-level
+  `source_by_field` map now names a field when every sent row is either blank for it or had it
+  answered by the waterfall; a row with a CSV-supplied value still vetoes (D-72-07 under-claim
+  kept where it protects something). Regression pinned in the 7-row shape.
+
+### Changed
+- `skills/enrich-before-ingest/SKILL.md` D-72-07 comment restated for the refined rule. No
+  hand-built `source_by_field` maps are needed; never label a source the round did not use.
+- `config/field_policy.yaml` (shipped copy) synced with the repo copy: `waterfall` added to
+  `system_correctable_sources` for `contacts.jobtitle` / `companies.industry` (backend
+  change; the engines that read it are n8n-side and need the admin's deploy).
+
 ## [0.53.5] - 2026-09-22
 
 ### Fixed

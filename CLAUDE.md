@@ -3645,6 +3645,44 @@ gate.**
    the Python oracle; not separately re-exercised live by plan 72-12 (the gate's single CREATE
    returned no runner-up candidate), and no contradicting live evidence was observed.
 
+### 17.2.3 As-built delta — the recency and system-correctable arms were dead live until 2026-09-22
+
+Found in an operator UAT (American Football Australia board, 2026-09-22; debug sessions
+`.planning/debug/resolved/mobile-dropped-partial-batch.md` and
+`.planning/debug/resolved/jobtitle-locked-after-create.md`). Two defects, both in how the
+ingest lane's `source_by_field` map and the merge engines' provider vocabulary met:
+
+1. **`mobilephone` / `lv_linkedin_url` dropped for EVERY row when ANY row lacked them.**
+   `operator-claude-plugin/scripts/preingest.py::provider_sourced_fields` was a set
+   intersection over answered rows, so a row the waterfall answered without `mobilephone`
+   removed the field from the round-level map for the whole batch; `MERGE_CONTACTS` then
+   fell back to csv/80 and both `fill_blank_only@85` fields were withheld even into blank
+   values. Fixed (`157b02f8`): a field is claimed when every sent row is either blank for
+   it or had it answered by the waterfall — a blank row has no CSV value for D-72-07's
+   under-claim to protect. Regression pinned in the live 7-row shape.
+2. **A `stale_refreshable` value the pipeline itself wrote could never be corrected through
+   the lane.** Both production contact callers stamp provenance `source: "waterfall"` (the
+   ingest lane from the plugin's map; `ENRICH_MERGE` from its flat `opts.source`), but
+   `_isProviderSource` / `PROVIDER_SOURCES` / `system_correctable_sources` knew only
+   `apollo|lusha|zoominfo|claude_web`. So the D-72-08 system-correctable arm never matched
+   the stored entry, and a `"waterfall"` candidate carried no observation time, so it could
+   not beat even a 2-year-old value under D-72-06/07. Phase 72's own tests used
+   `zoominfo`/`claude_web` labels, never the production one. Live shape: 1 of 4 board-title
+   corrections landed (the one with a two-year-old value and a hand-labelled `claude_web`
+   candidate). Fixed by operator ruling (Option A, `f7f1b4b7`): `"waterfall"` is admitted as
+   a provider-class source in both JS engines, the Python oracle and both `field_policy.yaml`
+   copies (`contacts.jobtitle`, `companies.industry`) in one parity commit; regression cases
+   use the production label. Truthful because the label is assigned only to fields the
+   waterfall supplied (never a CSV value), and its observation time is the run time.
+
+Correction to a claim in that UAT: contacts DO carry provenance — the property is
+`lv_contact_enrichment_provenance` (live), not the companies' `lv_enrichment_provenance`.
+
+**Deployment state:** the regenerated `n8n/wf_*.json` bodies (jsCode strings only, node
+counts unchanged at 289/101/55/43/33/26) are committed and **NOT deployed** as of
+2026-09-22. Until the operator deploys + bounces disarmed, the live engines still refuse the
+correction. Nothing armed.
+
 ## 17.3 Minimal PATCH example
 
 ```json
